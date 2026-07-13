@@ -1,0 +1,1 @@
+CREATE INDEX `tasks_status_due_idx` ON `tasks` (`completed`,`due_date`);
