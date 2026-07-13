@@ -17,15 +17,19 @@ test("defines the Openjob task board", async () => {
 });
 
 test("keeps durable task storage and social metadata wired", async () => {
-  const [hosting, schema, layout, page] = await Promise.all([
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
-    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+  const [wrangler, storage, rules, layout, page] = await Promise.all([
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+    readFile(new URL("../db/firestore.ts", import.meta.url), "utf8"),
+    readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(hosting, /"d1": "DB"/);
-  assert.match(schema, /sqliteTable\(\s*"tasks"/);
+  assert.match(wrangler, /"FIREBASE_PROJECT_ID": "openjob-dev"/);
+  assert.match(wrangler, /"pattern": "openjob\.dev"/);
+  assert.match(storage, /firestore\.googleapis\.com/);
+  assert.match(rules, /allow read, write: if false/);
+  assert.doesNotMatch(storage, /D1Database/);
   assert.match(layout, /\/og\.png/);
   assert.match(page, /fetch\("\/api\/tasks"/);
   assert.match(page, /method: "PATCH"/);
