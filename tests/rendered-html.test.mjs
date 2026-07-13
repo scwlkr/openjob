@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("defines the Open List task board", async () => {
+test("defines the Openjob task board", async () => {
   const [page, layout] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /Open List — A shared team to-do list/);
+  assert.match(layout, /Openjob — A shared team to-do list/);
   assert.match(page, /What needs doing\?/);
   assert.match(page, /@shane/);
   assert.match(page, /Shared team board/);

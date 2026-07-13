@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host =
     requestHeaders.get("x-forwarded-host") ??
     requestHeaders.get("host") ??
-    "open-list.local";
+    "openjob.local";
   const protocol =
     requestHeaders.get("x-forwarded-proto") ??
     (host.startsWith("localhost") ? "http" : "https");
@@ -28,11 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: baseUrl,
-    title: "Open List — A shared team to-do list",
+    title: "Openjob — A shared team to-do list",
     description,
     icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
     openGraph: {
-      title: "Open List",
+      title: "Openjob",
       description: "A shared list for the whole team.",
       type: "website",
       images: [
@@ -40,13 +40,13 @@ export async function generateMetadata(): Promise<Metadata> {
           url: new URL("/og.png", baseUrl),
           width: 1200,
           height: 630,
-          alt: "Open List, a shared list for the whole team",
+          alt: "Openjob, a shared list for the whole team",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Open List",
+      title: "Openjob",
       description: "A shared list for the whole team.",
       images: [new URL("/og.png", baseUrl)],
     },

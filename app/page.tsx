@@ -175,8 +175,8 @@ export default function Home() {
   return (
     <main className="site-shell">
       <header className="masthead">
-        <a className="wordmark" href="#top" aria-label="Open List home">
-          OPEN LIST<span>.</span>
+        <a className="wordmark" href="#top" aria-label="Openjob home">
+          OPENJOB<span>.</span>
         </a>
         <div className="shared-status">
           <span aria-hidden="true" /> Shared team board
