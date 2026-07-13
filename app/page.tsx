@@ -46,8 +46,7 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const loadTasks = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
+  const loadTasks = useCallback(async () => {
     try {
       const response = await fetch("/api/tasks", { cache: "no-store" });
       const data = (await response.json()) as { tasks?: Task[]; error?: string };
@@ -59,16 +58,17 @@ export default function Home() {
         loadError instanceof Error ? loadError.message : "Could not load the list.",
       );
     } finally {
-      if (!quiet) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadTasks();
-    const refresh = window.setInterval(() => void loadTasks(true), 20_000);
-    const onFocus = () => void loadTasks(true);
+    const initialLoad = window.setTimeout(() => void loadTasks(), 0);
+    const refresh = window.setInterval(() => void loadTasks(), 20_000);
+    const onFocus = () => void loadTasks();
     window.addEventListener("focus", onFocus);
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(refresh);
       window.removeEventListener("focus", onFocus);
     };
@@ -82,9 +82,8 @@ export default function Home() {
     [tasks],
   );
 
-  useEffect(() => {
-    if (person !== "all" && !people.includes(person)) setPerson("all");
-  }, [people, person]);
+  const selectedPerson =
+    person === "all" || people.includes(person) ? person : "all";
 
   const openCount = tasks.filter((task) => !task.completed).length;
   const doneCount = tasks.length - openCount;
@@ -94,9 +93,9 @@ export default function Home() {
       tasks.filter((task) => {
         if (status === "open" && task.completed) return false;
         if (status === "done" && !task.completed) return false;
-        return person === "all" || task.assignee === person;
+        return selectedPerson === "all" || task.assignee === selectedPerson;
       }),
-    [person, status, tasks],
+    [selectedPerson, status, tasks],
   );
 
   async function addTask(event: FormEvent<HTMLFormElement>) {
@@ -224,7 +223,13 @@ export default function Home() {
       {error ? (
         <div className="error-banner" role="alert">
           <span>{error}</span>
-          <button type="button" onClick={() => void loadTasks()}>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              void loadTasks();
+            }}
+          >
             Try again
           </button>
         </div>
@@ -257,9 +262,9 @@ export default function Home() {
           <div className="people-filter" aria-label="Filter by person">
             <button
               type="button"
-              className={person === "all" ? "active" : ""}
+              className={selectedPerson === "all" ? "active" : ""}
               onClick={() => setPerson("all")}
-              aria-pressed={person === "all"}
+              aria-pressed={selectedPerson === "all"}
             >
               Everyone
             </button>
@@ -267,9 +272,9 @@ export default function Home() {
               <button
                 key={name}
                 type="button"
-                className={person === name ? "active" : ""}
+                className={selectedPerson === name ? "active" : ""}
                 onClick={() => setPerson(name)}
-                aria-pressed={person === name}
+                aria-pressed={selectedPerson === name}
               >
                 @{name}
               </button>

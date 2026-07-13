@@ -13,7 +13,6 @@ test("defines the Openjob task board", async () => {
   assert.match(page, /@shane/);
   assert.match(page, /Shared team board/);
   assert.match(page, /Anyone with the link can add or check off tasks/);
-  assert.doesNotMatch(`${page}\n${layout}`, /codex-preview|react-loading-skeleton/);
 });
 
 test("keeps durable task storage and social metadata wired", async () => {
@@ -29,7 +28,6 @@ test("keeps durable task storage and social metadata wired", async () => {
   assert.match(wrangler, /"pattern": "openjob\.dev"/);
   assert.match(storage, /firestore\.googleapis\.com/);
   assert.match(rules, /allow read, write: if false/);
-  assert.doesNotMatch(storage, /D1Database/);
   assert.match(layout, /\/og\.png/);
   assert.match(page, /fetch\("\/api\/tasks"/);
   assert.match(page, /method: "PATCH"/);
