@@ -35,3 +35,11 @@ _Avoid_: Collaborator, teammate
 **Admin**:
 A Member trusted with Group governance while retaining the same Task permissions as every other Member.
 _Avoid_: Owner, moderator
+
+**Kick**:
+Removal of a Member from a Group without preventing that User from rejoining.
+_Avoid_: Ban
+
+**Ban**:
+A Group-scoped restriction that removes a Member and prevents that User from rejoining until an Admin lifts it.
+_Avoid_: Kick, global block
