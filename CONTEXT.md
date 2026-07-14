@@ -16,6 +16,14 @@ _Avoid_: Project, Kanban board
 The smallest unit of work on a Task List, assignable to a Group Member by username.
 _Avoid_: Job, ticket, card
 
+**User**:
+A person with one OpenJob identity that can participate in multiple Groups.
+_Avoid_: Account, profile
+
+**Username**:
+A globally unique, first-come identifier for a User, used for assignment and recognition across Groups.
+_Avoid_: Display name, email address
+
 **Member**:
 A User participating in a Group.
 _Avoid_: Collaborator, teammate
