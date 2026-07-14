@@ -31,3 +31,7 @@ _Avoid_: Display name, email address
 **Member**:
 A User participating in a Group.
 _Avoid_: Collaborator, teammate
+
+**Admin**:
+A Member trusted with Group governance while retaining the same Task permissions as every other Member.
+_Avoid_: Moderator
