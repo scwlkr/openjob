@@ -8,6 +8,10 @@ OpenJob coordinates small working groups through one shared task list. It intent
 A membership boundary with exactly one Task List.
 _Avoid_: Workspace, organization
 
+**Invite Link**:
+A short-lived, Group-specific credential that lets a signed-in User become a Member.
+_Avoid_: Public link, invitation
+
 **Task List**:
 The single flat collection of work belonging to a Group.
 _Avoid_: Project, Kanban board
