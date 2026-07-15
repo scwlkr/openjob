@@ -14,6 +14,13 @@ npm run dev
 
 Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
+## v1 API contract
+
+The complete v1 backend contract lives in `openapi/openapi.yaml`. Run
+`npm run openapi:check` to validate the OpenAPI 3.1 document and its checked-in
+examples. The current browser and `/api/tasks` remain the legacy rollback
+surface while `/api/v1` is built.
+
 ## Where things live
 
 - `app/page.tsx` — task-board interface and interactions
@@ -22,6 +29,8 @@ Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 - `db/tasks.ts` — task storage adapter
 - `db/firestore.ts` — authenticated Firestore REST client
 - `firestore.rules` — browser access is denied; the Worker owns data access
+- `openapi/openapi.yaml` — machine-readable `/api/v1` contract
+- `tests/support/v1-harness.mjs` — isolated Worker HTTP acceptance seam
 
 ## Services
 

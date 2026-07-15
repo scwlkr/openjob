@@ -13,6 +13,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "deploy": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
+    "openapi:check": "node scripts/validate-openapi.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv",
     "typecheck": "npm run cf:typegen && tsc --noEmit",
@@ -24,6 +25,7 @@
     "react-dom": "19.2.6"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "12.1.0",
     "@cloudflare/vite-plugin": "1.37.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
@@ -31,6 +33,8 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "react-server-dom-webpack": "19.2.6",
@@ -38,7 +42,8 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.92.0",
+    "yaml": "2.9.0"
   },
   "type": "module"
 }

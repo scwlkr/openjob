@@ -1,0 +1,1721 @@
+openapi: 3.1.0
+info:
+  title: OpenJob API
+  version: 0.0.5
+  summary: Shared backend contract for equal web and CLI clients
+  description: |
+    OpenJob exposes one versioned JSON API. Firebase Authentication is the only
+    identity issuer, and every request is authorized against current service
+    state. The web and CLI are presentation clients; validation, authorization,
+    ordering, privacy, and domain transitions live in this service.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://openjob.dev
+    description: Hosted OpenJob service
+tags:
+  - name: Identity
+  - name: Groups
+  - name: Membership
+  - name: Invite Links
+  - name: Tasks
+security:
+  - firebaseBearer: []
+paths:
+  /api/v1/me:
+    get:
+      tags: [Identity]
+      summary: Get the current User
+      description: |
+        Returns the authenticated User and their accessible Groups. A User who
+        has not completed onboarding has a null username and usernameRequired
+        set to true. Google identity details are never exposed.
+      operationId: getMe
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/CurrentUserResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/me/username:
+    put:
+      tags: [Identity]
+      summary: Claim the current User's immutable Username
+      description: |
+        Claims one globally unique Username. Repeating the same claim succeeds
+        idempotently. A different claim after success returns
+        username_immutable; occupied or reserved values return a conflict.
+      operationId: claimUsername
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/ClaimUsernameRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/CurrentUserResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups:
+    get:
+      tags: [Groups]
+      summary: List the current User's Groups
+      description: Lists only Groups currently accessible to the authenticated User.
+      operationId: listGroups
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          $ref: "#/components/responses/GroupCollectionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    post:
+      tags: [Groups]
+      summary: Create a Group
+      description: |
+        Creates a Group and atomically makes the authenticated User its first
+        Member and Admin. Group creation is not safe for automatic retry.
+      operationId: createGroup
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/CreateGroupRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/GroupResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      tags: [Groups]
+      summary: Get an accessible Group
+      description: |
+        Returns the Group to a current Member. Unknown Groups and Groups that
+        the User cannot access return the same concealed 404 response.
+      operationId: getGroup
+      x-openjob-authorization: member
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/GroupResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    patch:
+      tags: [Groups]
+      summary: Rename a Group
+      description: |
+        Renames the Group without changing its ID. A known Member who is not an
+        Admin receives 403; inaccessible and unknown Groups remain concealed.
+      operationId: renameGroup
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/RenameGroupRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/GroupResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/actions/leave:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    post:
+      tags: [Groups]
+      summary: Leave a Group
+      description: |
+        Removes the current User's membership immediately. The transition
+        returns open_tasks_assigned while they own open Tasks and last_admin
+        when it would leave an active Group without an Admin.
+      operationId: leaveGroup
+      x-openjob-authorization: member
+      x-openjob-retryable: false
+      responses:
+        "204":
+          description: Membership removed; no response body.
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/actions/end:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    post:
+      tags: [Groups]
+      summary: Permanently end a Group
+      description: |
+        Permanently removes a Group and all Group-scoped data. Only an Admin who
+        is the sole remaining Member may do this. The submitted current name is
+        checked exactly; a mismatch returns confirmation_mismatch.
+      operationId: endGroup
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/EndGroupRequest"
+      responses:
+        "204":
+          description: Group permanently ended; no response body.
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/members:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      tags: [Membership]
+      summary: List current Group Members
+      description: |
+        Lists current Members and their Member or Admin role. Any current Member
+        may read the roster; inaccessible Groups use the concealed 404.
+      operationId: listGroupMembers
+      x-openjob-authorization: member
+      x-openjob-retryable: true
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          $ref: "#/components/responses/MemberCollectionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/members/{userId}/actions/kick:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Membership]
+      summary: Kick a current Member
+      description: |
+        Removes another Member without banning them. Open Tasks assigned to the
+        removed User become Unassigned atomically; done Tasks retain attribution.
+        Self-kick and removal of the final Admin are conflicts.
+      operationId: kickGroupMember
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      responses:
+        "204":
+          description: Member removed; no response body.
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/members/{userId}/actions/promote:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Membership]
+      summary: Promote a Member to Admin
+      description: |
+        Atomically verifies the actor's Admin role and the target's current
+        membership, then grants the Admin role.
+      operationId: promoteGroupMember
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      responses:
+        "200":
+          $ref: "#/components/responses/MemberResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/members/{userId}/actions/demote:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Membership]
+      summary: Demote an Admin to Member
+      description: |
+        Demotes the target, including the actor when requested, only when at
+        least one Admin remains. last_admin identifies the protected conflict.
+      operationId: demoteGroupMember
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      responses:
+        "200":
+          $ref: "#/components/responses/MemberResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/bans:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      tags: [Membership]
+      summary: List Group bans
+      description: |
+        Lists the Group-scoped ban records for Admins. A known non-Admin Member
+        receives 403; inaccessible Groups remain concealed.
+      operationId: listGroupBans
+      x-openjob-authorization: admin
+      x-openjob-retryable: true
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          $ref: "#/components/responses/BanCollectionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/bans/actions/ban:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    post:
+      tags: [Membership]
+      summary: Ban a current or former Member
+      description: |
+        Blocks a User who currently belongs or formerly belonged to this Group.
+        If currently a Member, removal and open-Task unassignment are atomic.
+        Self-ban, preemptive ban, and final-Admin removal are conflicts.
+      operationId: banGroupUser
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/BanGroupUserRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/BanResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrUserNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/bans/{userId}/actions/unban:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Membership]
+      summary: Lift a Group ban
+      description: |
+        Removes the ban without restoring membership or Admin status. The User
+        must explicitly rejoin through a valid Invite Link.
+      operationId: unbanGroupUser
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      responses:
+        "204":
+          description: Ban removed; no response body.
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrBanNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/invite-link:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      tags: [Invite Links]
+      summary: Get the current Invite Link
+      description: |
+        Returns the Admin-only active Invite Link, its UTC expiry, and remaining
+        successful joins. Non-Admins receive 403; Group privacy is preserved.
+      operationId: getGroupInviteLink
+      x-openjob-authorization: admin
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/InviteLinkResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/invite-link/actions/rotate:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    post:
+      tags: [Invite Links]
+      summary: Rotate the current Invite Link
+      description: |
+        Immediately invalidates the old Invite Link and returns a replacement
+        with a new seven-day lifetime and 25-join allowance. Do not retry
+        automatically because a retry would rotate the replacement again.
+      operationId: rotateGroupInviteLink
+      x-openjob-authorization: admin
+      x-openjob-retryable: false
+      responses:
+        "200":
+          $ref: "#/components/responses/InviteLinkResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/invites/{token}:
+    parameters:
+      - $ref: "#/components/parameters/InviteToken"
+    get:
+      tags: [Invite Links]
+      summary: Inspect an Invite Link
+      description: |
+        Returns only the Group Name needed for signed-in confirmation. Unknown,
+        expired, rotated, exhausted, and ended-Group links all return the same
+        generic 404 and reveal no membership or Task information.
+      operationId: inspectInviteLink
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/InvitePreviewResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/InvalidInviteResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/invites/{token}/actions/join:
+    parameters:
+      - $ref: "#/components/parameters/InviteToken"
+    post:
+      tags: [Invite Links]
+      summary: Join a Group through an Invite Link
+      description: |
+        Confirms joining. Repeating the request as an existing Member succeeds
+        without consuming another use. Invalid-link states share a generic 404;
+        banned Users receive generic membership_denied without ban details.
+      operationId: joinGroupWithInviteLink
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/GroupResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          $ref: "#/components/responses/MembershipDeniedResponse"
+        "404":
+          $ref: "#/components/responses/InvalidInviteResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      tags: [Tasks]
+      summary: List Group Tasks
+      description: |
+        Filters combine and are applied before stable service ordering. Open
+        Tasks precede done Tasks in an all-state view. Open Tasks with due dates
+        sort by dueDate ascending, followed by undated open Tasks; equal dates
+        and undated Tasks sort by createdAt ascending, then taskId ascending.
+        Done Tasks sort by completedAt descending, then createdAt ascending,
+        then taskId ascending. Omit assignee for all assignee states, pass
+        unassigned, or pass an exact Username. Every current Member has equal
+        Task permissions.
+      operationId: listGroupTasks
+      x-openjob-authorization: member
+      x-openjob-retryable: true
+      parameters:
+        - $ref: "#/components/parameters/TaskStatus"
+        - $ref: "#/components/parameters/TaskAssignee"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          $ref: "#/components/responses/TaskCollectionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    post:
+      tags: [Tasks]
+      summary: Create an open Task
+      description: |
+        Creates an open Task assigned by Username to a current Member. A Task
+        cannot be created Unassigned. assignee_not_member is a state conflict.
+      operationId: createGroupTask
+      x-openjob-authorization: member
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/CreateTaskRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/TaskResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/tasks/{taskId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      tags: [Tasks]
+      summary: Get one Task
+      description: Returns a Task to any current Member of its Group.
+      operationId: getGroupTask
+      x-openjob-authorization: member
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/TaskResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    patch:
+      tags: [Tasks]
+      summary: Edit an open Task
+      description: |
+        Updates any supplied text, dueDate, or assigneeUsername field using
+        last-accepted-write behavior. null clears dueDate. Assignees cannot be
+        cleared manually, and done Tasks return task_done until reopened.
+      operationId: updateGroupTask
+      x-openjob-authorization: member
+      x-openjob-retryable: false
+      requestBody:
+        $ref: "#/components/requestBodies/UpdateTaskRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/TaskResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
+        "409":
+          $ref: "#/components/responses/ConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    delete:
+      tags: [Tasks]
+      summary: Permanently delete a Task
+      description: |
+        Permanently deletes an open or done Task. Client-side confirmation must
+        already be complete. Deletion is not safe for automatic retry.
+      operationId: deleteGroupTask
+      x-openjob-authorization: member
+      x-openjob-retryable: false
+      responses:
+        "204":
+          description: Task permanently deleted; no response body.
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/groups/{groupId}/tasks/{taskId}/state:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/TaskId"
+    put:
+      tags: [Tasks]
+      summary: Set a Task's desired state
+      description: |
+        Sets open or done without toggle semantics. Repeated completion
+        preserves the original completedAt timestamp; reopening clears it.
+      operationId: setGroupTaskState
+      x-openjob-authorization: member
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/SetTaskStateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/TaskResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+components:
+  securitySchemes:
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: |
+        Short-lived Firebase ID token sent as Authorization: Bearer <token>.
+        The service verifies Firebase claims, requires the Google sign-in
+        provider, identifies the User by uid, and rechecks authorization on
+        every request.
+
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      description: Immutable, opaque, never-reused Group ID.
+      schema:
+        $ref: "#/components/schemas/GroupId"
+      example: grp_acme_ops
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Immutable, opaque Task ID.
+      schema:
+        $ref: "#/components/schemas/TaskId"
+      example: task_ship_docs
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: Canonical opaque OpenJob User ID.
+      schema:
+        $ref: "#/components/schemas/UserId"
+      example: user_maya
+    InviteToken:
+      name: token
+      in: path
+      required: true
+      description: Opaque Invite Link credential. It must never be logged.
+      schema:
+        type: string
+        minLength: 1
+      example: ivt_7R3mTn9pQ2vX8kL4sF6aB1cD5eG0hJ
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque continuation cursor returned as nextCursor.
+      schema:
+        $ref: "#/components/schemas/CursorToken"
+      example: cur_01J0NEXT
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size. Defaults to 100 and cannot exceed 500.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+      example: 100
+    TaskStatus:
+      name: status
+      in: query
+      required: false
+      description: Task state filter. The default view contains open Tasks.
+      schema:
+        type: string
+        enum: [open, done, all]
+        default: open
+      example: open
+    TaskAssignee:
+      name: assignee
+      in: query
+      required: false
+      description: |
+        Omit for all assignee states. Pass unassigned for recovery work or an
+        exact Username for one current or historical assignee.
+      schema:
+        anyOf:
+          - const: unassigned
+          - $ref: "#/components/schemas/Username"
+      example: maya
+
+  requestBodies:
+    ClaimUsernameRequest:
+      description: Immutable Username claim.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ClaimUsernameInput"
+          example:
+            username: shane
+    CreateGroupRequest:
+      description: Required human-facing Group Name.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GroupNameInput"
+          example:
+            name: Acme Operations
+    RenameGroupRequest:
+      description: Replacement human-facing Group Name.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GroupNameInput"
+          example:
+            name: Acme Field Operations
+    EndGroupRequest:
+      description: Exact current Group Name used as destructive confirmation.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EndGroupInput"
+          example:
+            confirmationName: Acme Operations
+    BanGroupUserRequest:
+      description: Canonical User ID of a current or former Member.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BanGroupUserInput"
+          example:
+            userId: user_maya
+    CreateTaskRequest:
+      description: New Task fields. assigneeUsername must resolve to a current Member.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreateTaskInput"
+          example:
+            text: |-
+              Publish the v1 API contract
+              Verify generated client types.
+            assigneeUsername: maya
+            dueDate: "2026-07-18"
+    UpdateTaskRequest:
+      description: One or more editable fields for an open Task.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UpdateTaskInput"
+          example:
+            text: Publish and review the v1 API contract
+            assigneeUsername: shane
+            dueDate: null
+    SetTaskStateRequest:
+      description: Desired Task state; this is not a toggle.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SetTaskStateInput"
+          example:
+            state: done
+
+  responses:
+    CurrentUserResponse:
+      description: Authenticated User and accessible Groups.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CurrentUserEnvelope"
+          example:
+            data:
+              userId: user_shane
+              username: shane
+              usernameRequired: false
+              groups:
+                - groupId: grp_acme_ops
+                  name: Acme Operations
+                  role: admin
+                  createdAt: "2026-07-15T14:30:00Z"
+    GroupResponse:
+      description: One Group in a single-resource success envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GroupEnvelope"
+          example:
+            data:
+              groupId: grp_acme_ops
+              name: Acme Operations
+              role: admin
+              createdAt: "2026-07-15T14:30:00Z"
+    GroupCollectionResponse:
+      description: Cursor-paginated accessible Groups.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/GroupCollectionEnvelope"
+          example:
+            data:
+              - groupId: grp_acme_ops
+                name: Acme Operations
+                role: admin
+                createdAt: "2026-07-15T14:30:00Z"
+            nextCursor: null
+    MemberResponse:
+      description: One current Group Member.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MemberEnvelope"
+          example:
+            data:
+              userId: user_maya
+              username: maya
+              role: admin
+              joinedAt: "2026-07-15T15:00:00Z"
+    MemberCollectionResponse:
+      description: Cursor-paginated current Group Members.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MemberCollectionEnvelope"
+          example:
+            data:
+              - userId: user_shane
+                username: shane
+                role: admin
+                joinedAt: "2026-07-15T14:30:00Z"
+              - userId: user_maya
+                username: maya
+                role: member
+                joinedAt: "2026-07-15T15:00:00Z"
+            nextCursor: null
+    BanResponse:
+      description: One Group-scoped ban.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BanEnvelope"
+          example:
+            data:
+              userId: user_maya
+              username: maya
+              bannedAt: "2026-07-15T17:00:00Z"
+    BanCollectionResponse:
+      description: Cursor-paginated Group-scoped bans.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BanCollectionEnvelope"
+          example:
+            data:
+              - userId: user_maya
+                username: maya
+                bannedAt: "2026-07-15T17:00:00Z"
+            nextCursor: null
+    InviteLinkResponse:
+      description: Current Admin-only Invite Link.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/InviteLinkEnvelope"
+          example:
+            data:
+              token: ivt_7R3mTn9pQ2vX8kL4sF6aB1cD5eG0hJ
+              url: https://openjob.dev/invites/ivt_7R3mTn9pQ2vX8kL4sF6aB1cD5eG0hJ
+              issuedAt: "2026-07-15T14:30:00Z"
+              expiresAt: "2026-07-22T14:30:00Z"
+              remainingJoins: 25
+    InvitePreviewResponse:
+      description: Privacy-limited Invite Link preview.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/InvitePreviewEnvelope"
+          example:
+            data:
+              groupName: Acme Operations
+    TaskResponse:
+      description: One Task in a single-resource success envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TaskEnvelope"
+          example:
+            data:
+              taskId: task_ship_docs
+              groupId: grp_acme_ops
+              text: Publish the v1 API contract
+              assignee:
+                state: assigned
+                userId: user_maya
+                username: maya
+              dueDate: "2026-07-18"
+              state: open
+              createdAt: "2026-07-15T16:00:00Z"
+              updatedAt: "2026-07-15T16:00:00Z"
+              completedAt: null
+    TaskCollectionResponse:
+      description: Filtered, stably ordered, cursor-paginated Tasks.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TaskCollectionEnvelope"
+          examples:
+            assigned:
+              summary: Open assigned Task
+              value:
+                data:
+                  - taskId: task_ship_docs
+                    groupId: grp_acme_ops
+                    text: Publish the v1 API contract
+                    assignee:
+                      state: assigned
+                      userId: user_maya
+                      username: maya
+                    dueDate: "2026-07-18"
+                    state: open
+                    createdAt: "2026-07-15T16:00:00Z"
+                    updatedAt: "2026-07-15T16:00:00Z"
+                    completedAt: null
+                nextCursor: cur_01J0NEXT
+            done:
+              summary: Completed Task with historical assignee attribution
+              value:
+                data:
+                  - taskId: task_review_contract
+                    groupId: grp_acme_ops
+                    text: Review the v1 API contract
+                    assignee:
+                      state: assigned
+                      userId: user_maya
+                      username: maya
+                    dueDate: "2026-07-17"
+                    state: done
+                    createdAt: "2026-07-15T15:00:00Z"
+                    updatedAt: "2026-07-16T10:00:00Z"
+                    completedAt: "2026-07-16T10:00:00Z"
+                nextCursor: null
+            unassigned:
+              summary: Removal-induced Unassigned Task
+              value:
+                data:
+                  - taskId: task_recover_work
+                    groupId: grp_acme_ops
+                    text: Reassign release checklist
+                    assignee:
+                      state: unassigned
+                    dueDate: null
+                    state: open
+                    createdAt: "2026-07-14T10:00:00Z"
+                    updatedAt: "2026-07-15T17:00:00Z"
+                    completedAt: null
+                nextCursor: null
+    ValidationErrorResponse:
+      description: Malformed JSON or field validation failure.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: invalid_request
+              message: One or more fields are invalid.
+              fields:
+                name: Must contain 1 to 80 characters.
+              requestId: req_01J0VALID
+    UnauthorizedResponse:
+      description: Bearer token is missing, invalid, expired, or not an allowed Google-backed Firebase identity.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: authentication_required
+              message: Authentication is required.
+              requestId: req_01J0AUTH
+    ForbiddenResponse:
+      description: The resource is visible to the User, but the requested Admin operation is forbidden.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: admin_required
+              message: Group Admin access is required.
+              requestId: req_01J0FORBID
+    MembershipDeniedResponse:
+      description: Membership is denied without disclosing Group ban details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: membership_denied
+              message: Membership could not be granted.
+              requestId: req_01J0DENY
+    ConcealedGroupNotFoundResponse:
+      description: |
+        Group was not found or is inaccessible. The same response deliberately
+        prevents discovery of private Groups.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: group_not_found
+              message: Group was not found.
+              requestId: req_01J0GROUP404
+    ConcealedGroupOrMemberNotFoundResponse:
+      description: Group is inaccessible or the target is not a current Member; no private Group details are disclosed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: member_not_found
+              message: Member was not found.
+              requestId: req_01J0MEMBER404
+    ConcealedGroupOrUserNotFoundResponse:
+      description: Group is inaccessible or the User has never belonged to it; no private Group details are disclosed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: user_not_found
+              message: User was not found.
+              requestId: req_01J0USER404
+    ConcealedGroupOrBanNotFoundResponse:
+      description: Group is inaccessible or no matching Group-scoped ban exists; no private Group details are disclosed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: ban_not_found
+              message: Ban was not found.
+              requestId: req_01J0BAN404
+    ConcealedGroupOrTaskNotFoundResponse:
+      description: Group is inaccessible or the Task does not exist; no private Group details are disclosed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: task_not_found
+              message: Task was not found.
+              requestId: req_01J0TASK404
+    InvalidInviteResponse:
+      description: |
+        Invite Link is unknown, expired, rotated, exhausted, or belongs to an
+        ended Group. Every invalid state uses this same privacy-preserving result.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: invite_not_found
+              message: Invite Link is not valid.
+              requestId: req_01J0INVITE404
+    ConflictResponse:
+      description: Current state or uniqueness conflict. Clients branch on the stable code.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            lastAdmin:
+              value:
+                error:
+                  code: last_admin
+                  message: At least one Admin must remain.
+                  requestId: req_01J0CONFLICT
+            taskDone:
+              value:
+                error:
+                  code: task_done
+                  message: Reopen the Task before editing it.
+                  requestId: req_01J0TASKDONE
+            usernameTaken:
+              value:
+                error:
+                  code: username_taken
+                  message: That Username is unavailable.
+                  requestId: req_01J0USERNAME
+    RateLimitedResponse:
+      description: Infrastructure throttling. OpenJob defines no product-level quota in v1.
+      headers:
+        Retry-After:
+          description: Seconds to wait before another attempt, when known.
+          schema:
+            type: integer
+            minimum: 0
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: rate_limited
+              message: Try again later.
+              requestId: req_01J0RATE
+    InternalErrorResponse:
+      description: Unexpected service failure. The requestId can be used for support correlation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: internal_error
+              message: An unexpected error occurred.
+              requestId: req_01J0INTERNAL
+
+  schemas:
+    UserId:
+      type: string
+      minLength: 1
+      description: Canonical opaque OpenJob User ID derived from verified Firebase identity.
+    GroupId:
+      type: string
+      minLength: 1
+      description: Immutable, opaque, never-reused Group ID.
+    TaskId:
+      type: string
+      minLength: 1
+      description: Immutable opaque Task ID.
+    CursorToken:
+      type: string
+      minLength: 1
+      description: Opaque continuation token with no client-visible ordering semantics.
+    UsernameSyntax:
+      type: string
+      minLength: 2
+      maxLength: 32
+      pattern: '^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])$'
+      description: Syntactically valid lowercase Username text.
+    Username:
+      allOf:
+        - $ref: "#/components/schemas/UsernameSyntax"
+        - not:
+            enum: [admin, support, openjob, unassigned, me]
+      description: |
+        Immutable lowercase Username. Period, underscore, and hyphen are allowed
+        only internally. admin, support, openjob, unassigned, and me are reserved.
+    GroupName:
+      type: string
+      minLength: 1
+      maxLength: 80
+      pattern: '^[^\u0000-\u001F\u007F-\u009F\r\n]+$'
+      description: |
+        Trimmed Unicode label whose case and spelling are preserved. Names are
+        not globally unique and are never URL handles.
+    Date:
+      type: string
+      format: date
+      description: Valid YYYY-MM-DD calendar date without a time or time zone.
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 timestamp representing a UTC instant.
+    TaskText:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      pattern: '^(?![\s\S]*[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F])[\s\S]+$'
+      description: |
+        UTF-8 multiline plain text, trimmed only at the outer edges. Internal
+        line breaks and blank lines remain; line endings are normalized and
+        other control characters are rejected.
+    Role:
+      type: string
+      enum: [member, admin]
+    TaskState:
+      type: string
+      enum: [open, done]
+
+    AssignedAssignee:
+      type: object
+      additionalProperties: false
+      required: [state, userId, username]
+      properties:
+        state:
+          const: assigned
+        userId:
+          $ref: "#/components/schemas/UserId"
+        username:
+          $ref: "#/components/schemas/Username"
+    UnassignedAssignee:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          const: unassigned
+    Assignee:
+      description: |
+        Assigned preserves canonical User identity and human attribution.
+        Unassigned is a state caused only by forced Member removal, never a User.
+      oneOf:
+        - $ref: "#/components/schemas/AssignedAssignee"
+        - $ref: "#/components/schemas/UnassignedAssignee"
+      discriminator:
+        propertyName: state
+        mapping:
+          assigned: "#/components/schemas/AssignedAssignee"
+          unassigned: "#/components/schemas/UnassignedAssignee"
+
+    Group:
+      type: object
+      additionalProperties: false
+      required: [groupId, name, role, createdAt]
+      properties:
+        groupId:
+          $ref: "#/components/schemas/GroupId"
+        name:
+          $ref: "#/components/schemas/GroupName"
+        role:
+          $ref: "#/components/schemas/Role"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+    Member:
+      type: object
+      additionalProperties: false
+      required: [userId, username, role, joinedAt]
+      properties:
+        userId:
+          $ref: "#/components/schemas/UserId"
+        username:
+          $ref: "#/components/schemas/Username"
+        role:
+          $ref: "#/components/schemas/Role"
+        joinedAt:
+          $ref: "#/components/schemas/Timestamp"
+    Ban:
+      type: object
+      additionalProperties: false
+      required: [userId, username, bannedAt]
+      properties:
+        userId:
+          $ref: "#/components/schemas/UserId"
+        username:
+          $ref: "#/components/schemas/Username"
+        bannedAt:
+          $ref: "#/components/schemas/Timestamp"
+    InviteLink:
+      type: object
+      additionalProperties: false
+      required: [token, url, issuedAt, expiresAt, remainingJoins]
+      properties:
+        token:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+        issuedAt:
+          $ref: "#/components/schemas/Timestamp"
+        expiresAt:
+          $ref: "#/components/schemas/Timestamp"
+        remainingJoins:
+          type: integer
+          minimum: 0
+          maximum: 25
+    InvitePreview:
+      type: object
+      additionalProperties: false
+      required: [groupName]
+      properties:
+        groupName:
+          $ref: "#/components/schemas/GroupName"
+    Task:
+      type: object
+      additionalProperties: false
+      required:
+        - taskId
+        - groupId
+        - text
+        - assignee
+        - dueDate
+        - state
+        - createdAt
+        - updatedAt
+        - completedAt
+      properties:
+        taskId:
+          $ref: "#/components/schemas/TaskId"
+        groupId:
+          $ref: "#/components/schemas/GroupId"
+        text:
+          $ref: "#/components/schemas/TaskText"
+        assignee:
+          $ref: "#/components/schemas/Assignee"
+        dueDate:
+          oneOf:
+            - $ref: "#/components/schemas/Date"
+            - type: "null"
+        state:
+          $ref: "#/components/schemas/TaskState"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        completedAt:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+      oneOf:
+        - properties:
+            state:
+              const: open
+            completedAt:
+              type: "null"
+        - properties:
+            state:
+              const: done
+            completedAt:
+              $ref: "#/components/schemas/Timestamp"
+      not:
+        required: [state, assignee]
+        properties:
+          state:
+            const: done
+          assignee:
+            $ref: "#/components/schemas/UnassignedAssignee"
+
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [userId, username, usernameRequired, groups]
+      properties:
+        userId:
+          $ref: "#/components/schemas/UserId"
+        username:
+          oneOf:
+            - $ref: "#/components/schemas/Username"
+            - type: "null"
+        usernameRequired:
+          type: boolean
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+      oneOf:
+        - properties:
+            username:
+              type: "null"
+            usernameRequired:
+              const: true
+        - properties:
+            username:
+              $ref: "#/components/schemas/Username"
+            usernameRequired:
+              const: false
+
+    ErrorCode:
+      type: string
+      enum:
+        - invalid_request
+        - authentication_required
+        - admin_required
+        - membership_denied
+        - group_not_found
+        - member_not_found
+        - user_not_found
+        - ban_not_found
+        - task_not_found
+        - invite_not_found
+        - username_taken
+        - username_immutable
+        - username_required
+        - last_admin
+        - open_tasks_assigned
+        - members_remain
+        - self_removal
+        - ban_not_allowed
+        - member_role_conflict
+        - task_done
+        - assignee_not_member
+        - confirmation_mismatch
+        - rate_limited
+        - internal_error
+      description: |
+        Complete v1 machine-readable error vocabulary. Clients branch on these
+        stable snake-case values and never on human-readable messages.
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        message:
+          type: string
+          minLength: 1
+          description: Human-readable, non-sensitive explanation.
+        fields:
+          type: object
+          description: Optional map from invalid input fields to safe explanations.
+          additionalProperties:
+            type: string
+        requestId:
+          type: string
+          minLength: 1
+          description: Correlation ID safe to include in support reports.
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
+
+    SuccessEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: {}
+      description: Shared shape for a successful single-resource response.
+    CollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items: {}
+        nextCursor:
+          oneOf:
+            - $ref: "#/components/schemas/CursorToken"
+            - type: "null"
+      description: |
+        Shared cursor collection shape. nextCursor is null at the final page;
+        default page size is 100 and maximum page size is 500.
+
+    CurrentUserEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/CurrentUser"
+    GroupEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Group"
+    MemberEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Member"
+    BanEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Ban"
+    InviteLinkEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/InviteLink"
+    InvitePreviewEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/InvitePreview"
+    TaskEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Task"
+
+    GroupCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+        nextCursor:
+          oneOf:
+            - $ref: "#/components/schemas/CursorToken"
+            - type: "null"
+    MemberCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        nextCursor:
+          oneOf:
+            - $ref: "#/components/schemas/CursorToken"
+            - type: "null"
+    BanCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ban"
+        nextCursor:
+          oneOf:
+            - $ref: "#/components/schemas/CursorToken"
+            - type: "null"
+    TaskCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        nextCursor:
+          oneOf:
+            - $ref: "#/components/schemas/CursorToken"
+            - type: "null"
+
+    ClaimUsernameInput:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username:
+          allOf:
+            - $ref: "#/components/schemas/UsernameSyntax"
+          description: Reserved but syntactically valid values return username_taken.
+    GroupNameInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: "#/components/schemas/GroupName"
+    EndGroupInput:
+      type: object
+      additionalProperties: false
+      required: [confirmationName]
+      properties:
+        confirmationName:
+          $ref: "#/components/schemas/GroupName"
+    BanGroupUserInput:
+      type: object
+      additionalProperties: false
+      required: [userId]
+      properties:
+        userId:
+          $ref: "#/components/schemas/UserId"
+    CreateTaskInput:
+      type: object
+      additionalProperties: false
+      required: [text, assigneeUsername]
+      properties:
+        text:
+          $ref: "#/components/schemas/TaskText"
+        assigneeUsername:
+          $ref: "#/components/schemas/Username"
+        dueDate:
+          $ref: "#/components/schemas/Date"
+    UpdateTaskInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        text:
+          $ref: "#/components/schemas/TaskText"
+        assigneeUsername:
+          $ref: "#/components/schemas/Username"
+        dueDate:
+          oneOf:
+            - $ref: "#/components/schemas/Date"
+            - type: "null"
+    SetTaskStateInput:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/TaskState"
