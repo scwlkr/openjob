@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "prototype:assignee-columns": "OPENJOB_ASSIGNEE_COLUMNS_PROTOTYPE=1 WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
+    "prototype:cli": "node prototypes/cli/openjob.mjs",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "deploy": "vinext deploy",

@@ -24,6 +24,7 @@ labels:
 - [Define Invite Rotation and Membership Governance](issues/04-define-invite-rotation-and-membership-governance.md) — One weekly or 25-join Invite Link admits confirmed Users; Admin actions govern membership and roles while preserving one Admin and safely unassigning forced-removal work.
 - [Define the Shared API and Authorization Contract](issues/05-define-the-shared-api-and-authorization-contract.md) — A versioned JSON API gives web and CLI one resource, action, error, privacy, pagination, and authorization contract backed by Firebase bearer identity.
 - [Prototype the Assignee-Column Web Experience](issues/06-prototype-the-assignee-column-web-experience.md) — The web uses an explicit Group picker, filterable horizontal assignee lanes with Unassigned last, direct Task actions, and reachable Admin controls across desktop and narrow screens.
+- [Prototype the Complete CLI Contract](issues/07-prototype-the-complete-cli-contract.md) — The resource-first CLI covers every web capability with local Group selection, browser-backed Firebase auth, explicit stream and file I/O, stable formats, confirmations, and exit statuses.
 
 ## Fog
 
