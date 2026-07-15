@@ -131,6 +131,19 @@ test("the black-box Group journey persists through the Firestore adapter", async
   await assertContract(throttled, "/api/v1/groups", "get");
   assert.equal((await throttled.json()).error.code, "rate_limited");
 
+  firestore.throttleNextRequest();
+  const throttledCurrentUser = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  assert.equal(throttledCurrentUser.status, 429);
+  await assertContract(throttledCurrentUser, "/api/v1/me", "get");
+  assert.equal(
+    (await throttledCurrentUser.json()).error.code,
+    "rate_limited",
+  );
+
   const renamedResponse = await harness.request({
     body: { name: "Acme Field Operations" },
     headers: shaneHeaders,

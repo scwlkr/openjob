@@ -3,7 +3,9 @@ import {
   defaultRequestId,
   errorResponse,
   internalErrorResponse,
+  isRateLimitError,
   jsonResponse,
+  rateLimitedErrorResponse,
 } from "./v1-http.ts";
 
 declare const usernameBrand: unique symbol;
@@ -147,7 +149,10 @@ export function createV1IdentityApi({
           message: "The requested resource was not found.",
           status: 404,
         });
-      } catch {
+      } catch (error) {
+        if (isRateLimitError(error)) {
+          return rateLimitedErrorResponse(requestId);
+        }
         return internalErrorResponse(requestId);
       }
     },
