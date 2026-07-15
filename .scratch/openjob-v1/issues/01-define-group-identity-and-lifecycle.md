@@ -5,7 +5,7 @@ status: open
 parent: openjob-v1-map
 labels:
   - wayfinder:grilling
-claimed: false
+claimed: true
 blocked_by: []
 ---
 
