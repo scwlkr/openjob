@@ -19,8 +19,8 @@ export async function createPrivateKey() {
 export function createFakeFirestore() {
   const database = "projects/openjob-dev/databases/(default)";
   const documents = new Map();
-  const commits = [];
   let revision = 0;
+  let throttleNextRequest = false;
 
   function error(httpStatus, status, message) {
     return Response.json(
@@ -103,8 +103,10 @@ export function createFakeFirestore() {
   }
 
   return {
-    commits,
     documents,
+    throttleNextRequest() {
+      throttleNextRequest = true;
+    },
     async fetch(input, init = {}) {
       const url = new URL(input);
       if (url.hostname === "oauth2.googleapis.com") {
@@ -118,9 +120,12 @@ export function createFakeFirestore() {
         new Headers(init.headers).get("authorization"),
         "Bearer test-service-access",
       );
+      if (throttleNextRequest) {
+        throttleNextRequest = false;
+        return error(429, "RESOURCE_EXHAUSTED", "Firestore rate limited.");
+      }
       if (url.pathname.endsWith("/documents:commit")) {
         const body = JSON.parse(init.body);
-        commits.push(body);
         return applyCommit(body);
       }
 

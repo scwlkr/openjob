@@ -1,6 +1,12 @@
-declare const usernameBrand: unique symbol;
-
 import type { GroupStore, OpenJobGroup } from "./v1-groups";
+import {
+  defaultRequestId,
+  errorResponse,
+  internalErrorResponse,
+  jsonResponse,
+} from "./v1-http.ts";
+
+declare const usernameBrand: unique symbol;
 
 export type Username = string & { readonly [usernameBrand]: true };
 
@@ -22,7 +28,7 @@ type UserStore = {
 };
 
 type IdentityApiOptions = {
-  groups?: Pick<GroupStore, "list">;
+  groups: Pick<GroupStore, "list">;
   requestId?: () => string;
   users: UserStore;
   verifyIdToken(request: Request): Promise<{ uid: string } | null>;
@@ -37,43 +43,17 @@ const RESERVED_USERNAMES = new Set([
   "me",
 ]);
 
-function response(body: unknown, status = 200) {
-  return Response.json(body, {
-    status,
-    headers: { "cache-control": "no-store" },
-  });
-}
-
-function defaultRequestId() {
-  return `req_${crypto.randomUUID().replaceAll("-", "")}`;
-}
-
-function internalErrorResponse(requestId: () => string) {
-  return response(
-    {
-      error: {
-        code: "internal_error",
-        message: "An unexpected error occurred.",
-        requestId: requestId(),
-      },
-    },
-    500,
-  );
-}
-
 async function currentUser(
   user: OpenJobUser,
-  groups?: Pick<GroupStore, "list">,
+  groups: Pick<GroupStore, "list">,
 ) {
   const accessibleGroups: OpenJobGroup[] = [];
-  if (groups) {
-    let cursor: string | null = null;
-    do {
-      const page = await groups.list(user.userId, { cursor, limit: 500 });
-      accessibleGroups.push(...page.groups);
-      cursor = page.nextCursor;
-    } while (cursor !== null);
-  }
+  let cursor: string | null = null;
+  do {
+    const page = await groups.list(user.userId, { cursor, limit: 500 });
+    accessibleGroups.push(...page.groups);
+    cursor = page.nextCursor;
+  } while (cursor !== null);
   return {
     userId: user.userId,
     username: user.username,
@@ -114,21 +94,16 @@ export function createV1IdentityApi({
         const url = new URL(request.url);
         const identity = await verifyIdToken(request);
         if (!identity) {
-          return response(
-            {
-              error: {
-                code: "authentication_required",
-                message: "Authentication is required.",
-                requestId: requestId(),
-              },
-            },
-            401,
-          );
+          return errorResponse(requestId, {
+            code: "authentication_required",
+            message: "Authentication is required.",
+            status: 401,
+          });
         }
 
         if (request.method === "GET" && url.pathname === "/api/v1/me") {
           const user = await users.getOrCreate(identity.uid);
-          return response({ data: await currentUser(user, groups) });
+          return jsonResponse({ data: await currentUser(user, groups) });
         }
 
         if (
@@ -137,61 +112,41 @@ export function createV1IdentityApi({
         ) {
           const username = await readUsername(request);
           if (username === null) {
-            return response(
-              {
-                error: {
-                  code: "invalid_request",
-                  message: "One or more fields are invalid.",
-                  fields: {
-                    username: "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
-                  },
-                  requestId: requestId(),
-                },
+            return errorResponse(requestId, {
+              code: "invalid_request",
+              message: "One or more fields are invalid.",
+              fields: {
+                username: "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
               },
-              400,
-            );
+              status: 400,
+            });
           }
           if (RESERVED_USERNAMES.has(username)) {
-            return response(
-              {
-                error: {
-                  code: "username_taken",
-                  message: "That Username is unavailable.",
-                  requestId: requestId(),
-                },
-              },
-              409,
-            );
+            return errorResponse(requestId, {
+              code: "username_taken",
+              message: "That Username is unavailable.",
+              status: 409,
+            });
           }
           const result = await users.claimUsername(identity.uid, username);
           if (result.kind === "claimed") {
-            return response({ data: await currentUser(result.user, groups) });
+            return jsonResponse({ data: await currentUser(result.user, groups) });
           }
           const immutable = result.kind === "immutable";
-          return response(
-            {
-              error: {
-                code: immutable ? "username_immutable" : "username_taken",
-                message: immutable
-                  ? "Username cannot be changed."
-                  : "That Username is unavailable.",
-                requestId: requestId(),
-              },
-            },
-            409,
-          );
+          return errorResponse(requestId, {
+            code: immutable ? "username_immutable" : "username_taken",
+            message: immutable
+              ? "Username cannot be changed."
+              : "That Username is unavailable.",
+            status: 409,
+          });
         }
 
-        return response(
-          {
-            error: {
-              code: "not_found",
-              message: "The requested resource was not found.",
-              requestId: requestId(),
-            },
-          },
-          404,
-        );
+        return errorResponse(requestId, {
+          code: "not_found",
+          message: "The requested resource was not found.",
+          status: 404,
+        });
       } catch {
         return internalErrorResponse(requestId);
       }

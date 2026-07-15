@@ -6,6 +6,7 @@ import {
 } from "./firestore-rest.ts";
 import {
   InvalidGroupCursorError,
+  type GroupId,
   type GroupRole,
   type GroupStore,
   type OpenJobGroup,
@@ -13,7 +14,7 @@ import {
 
 type StoredGroup = {
   createdAt: string;
-  groupId: string;
+  groupId: GroupId;
   name: string;
   path: string;
   updateTime: string;
@@ -31,7 +32,7 @@ type GroupStoreOptions = {
 };
 
 function parseGroup(document: FirestoreDocument, path: string): StoredGroup {
-  const groupId = document.fields?.groupId?.stringValue;
+  const groupId = document.fields?.groupId?.stringValue as GroupId | undefined;
   const name = document.fields?.name?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
   if (!groupId || !name || !createdAt || !document.updateTime) {
@@ -112,19 +113,19 @@ export function createFirestoreGroupStore(
     });
   }
 
-  function groupPath(groupId: string) {
+  function groupPath(groupId: GroupId) {
     return `v1Groups/${groupId}`;
   }
 
-  function membershipPath(groupId: string, userId: string) {
+  function membershipPath(groupId: GroupId, userId: string) {
     return `${groupPath(groupId)}/members/${userId}`;
   }
 
-  function accessPath(userId: string, groupId: string) {
+  function accessPath(userId: string, groupId: GroupId) {
     return `v1GroupAccess/${userId}/groups/${groupId}`;
   }
 
-  async function get(userId: string, groupId: string) {
+  async function get(userId: string, groupId: GroupId) {
     const membership = await readMembership(membershipPath(groupId, userId));
     if (!membership) return null;
     const group = await readGroup(groupPath(groupId));
@@ -134,7 +135,7 @@ export function createFirestoreGroupStore(
   return Object.freeze({
     async create(userId, name) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const groupId = `grp_${randomUUID().replaceAll("-", "")}`;
+        const groupId = `grp_${randomUUID().replaceAll("-", "")}` as GroupId;
         const createdAt = new Date(now()).toISOString();
         const groupDocumentPath = groupPath(groupId);
         const memberDocumentPath = membershipPath(groupId, userId);
@@ -215,7 +216,7 @@ export function createFirestoreGroupStore(
         if (!groupId) {
           throw new Error("Firestore returned an invalid Group access record.");
         }
-        return groupId;
+        return groupId as GroupId;
       });
       const groups = await Promise.all(
         groupIds.map(async (groupId) => {

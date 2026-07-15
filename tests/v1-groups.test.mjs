@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
-import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 import { createV1GroupsApi } from "../server/v1-groups.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
+import { createOpenApiResponseValidator } from "./support/openapi-response.mjs";
 import { createV1TestHarness } from "./support/v1-harness.mjs";
 
 function createMemoryGroupStore(controls, additionalMemberRole) {
@@ -312,6 +310,32 @@ test("Group privacy is resolved before Admin rename validation", async (t) => {
   );
 });
 
+test("malformed and path-shaped Group IDs remain concealed", async (t) => {
+  const harness = createGroupsHarness();
+  t.after(() => harness.close());
+
+  let expected;
+  for (const groupId of [
+    "grp_unknown",
+    "%ZZ",
+    "%E0%A4%A",
+    "grp_safe%2Fmembers",
+    "grp_safe%3Fcursor",
+    "grp_safe%23fragment",
+  ]) {
+    const response = await harness.request({
+      as: "shane",
+      method: "GET",
+      path: `/api/v1/groups/${groupId}`,
+    });
+    assert.equal(response.status, 404, groupId);
+    const body = await response.json();
+    assert.equal(body.error.code, "group_not_found", groupId);
+    expected ??= body;
+    assert.deepEqual(body, expected, groupId);
+  }
+});
+
 test("GET /me follows every Group page", async (t) => {
   const harness = createGroupsHarness();
   t.after(() => harness.close());
@@ -393,23 +417,7 @@ test("Group Names are trimmed, bounded Unicode labels and remain non-unique", as
 test("representative Group responses validate against OpenAPI", async (t) => {
   const harness = createGroupsHarness({ additionalMemberRole: "member" });
   t.after(() => harness.close());
-  const contract = await validateOpenApiContract();
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
-  addFormats(ajv);
-
-  async function assertContract(response, path, method) {
-    const schema =
-      contract.paths[path][method].responses[String(response.status)].content[
-        "application/json"
-      ].schema;
-    const validate = ajv.compile(schema);
-    const body = await response.clone().json();
-    assert.equal(
-      validate(body),
-      true,
-      `${method.toUpperCase()} ${path} ${response.status}: ${ajv.errorsText(validate.errors)}`,
-    );
-  }
+  const assertContract = await createOpenApiResponseValidator();
 
   const created = await harness.request({
     as: "shane",

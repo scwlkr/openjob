@@ -1,10 +1,22 @@
+import {
+  defaultRequestId,
+  errorResponse,
+  internalErrorResponse,
+  isRateLimitError,
+  jsonResponse,
+  rateLimitedErrorResponse,
+  type RequestIdFactory,
+} from "./v1-http.ts";
+
 declare const groupNameBrand: unique symbol;
+declare const groupIdBrand: unique symbol;
 
 export type GroupName = string & { readonly [groupNameBrand]: true };
+export type GroupId = string & { readonly [groupIdBrand]: true };
 export type GroupRole = "member" | "admin";
 
 export type OpenJobGroup = {
-  groupId: string;
+  groupId: GroupId;
   name: string;
   role: GroupRole;
   createdAt: string;
@@ -19,14 +31,14 @@ export class InvalidGroupCursorError extends Error {
 
 export type GroupStore = {
   create(userId: string, name: GroupName): Promise<OpenJobGroup>;
-  get(userId: string, groupId: string): Promise<OpenJobGroup | null>;
+  get(userId: string, groupId: GroupId): Promise<OpenJobGroup | null>;
   list(
     userId: string,
     options: { cursor: string | null; limit: number },
   ): Promise<{ groups: OpenJobGroup[]; nextCursor: string | null }>;
   rename(
     userId: string,
-    groupId: string,
+    groupId: GroupId,
     name: GroupName,
   ): Promise<
     | { kind: "renamed"; group: OpenJobGroup }
@@ -46,48 +58,46 @@ type GroupsApiOptions = {
   verifyIdToken(request: Request): Promise<{ uid: string } | null>;
 };
 
-function response(body: unknown, status = 200) {
-  return Response.json(body, {
-    status,
-    headers: { "cache-control": "no-store" },
+function groupNameError(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "invalid_request",
+    message: "One or more fields are invalid.",
+    fields: { name: "Must contain 1 to 80 characters." },
+    status: 400,
   });
 }
 
-function defaultRequestId() {
-  return `req_${crypto.randomUUID().replaceAll("-", "")}`;
+function paginationError(
+  field: "cursor" | "limit",
+  requestId: RequestIdFactory,
+) {
+  return errorResponse(requestId, {
+    code: "invalid_request",
+    message: "One or more fields are invalid.",
+    fields: {
+      [field]:
+        field === "limit"
+          ? "Use an integer from 1 to 500."
+          : "Use a cursor returned by this collection.",
+    },
+    status: 400,
+  });
 }
 
-function groupNameError(requestId: () => string) {
-  return response(
-    {
-      error: {
-        code: "invalid_request",
-        message: "One or more fields are invalid.",
-        fields: { name: "Must contain 1 to 80 characters." },
-        requestId: requestId(),
-      },
-    },
-    400,
-  );
+function groupNotFound(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "group_not_found",
+    message: "Group was not found.",
+    status: 404,
+  });
 }
 
-function paginationError(field: "cursor" | "limit", requestId: () => string) {
-  return response(
-    {
-      error: {
-        code: "invalid_request",
-        message: "One or more fields are invalid.",
-        fields: {
-          [field]:
-            field === "limit"
-              ? "Use an integer from 1 to 500."
-              : "Use a cursor returned by this collection.",
-        },
-        requestId: requestId(),
-      },
-    },
-    400,
-  );
+function adminRequired(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "admin_required",
+    message: "Group Admin access is required.",
+    status: 403,
+  });
 }
 
 function readPagination(
@@ -144,7 +154,16 @@ async function readGroupName(request: Request) {
 
 function groupIdFromPath(pathname: string) {
   const match = pathname.match(/^\/api\/v1\/groups\/([^/]+)$/);
-  return match ? decodeURIComponent(match[1]) : null;
+  if (!match) return { kind: "none" as const };
+  try {
+    const groupId = decodeURIComponent(match[1]);
+    if (!/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
+      return { kind: "invalid" as const };
+    }
+    return { kind: "valid" as const, groupId: groupId as GroupId };
+  } catch {
+    return { kind: "invalid" as const };
+  }
 }
 
 export function createV1GroupsApi({
@@ -158,16 +177,11 @@ export function createV1GroupsApi({
       try {
         const identity = await verifyIdToken(request);
         if (!identity) {
-          return response(
-            {
-              error: {
-                code: "authentication_required",
-                message: "Authentication is required.",
-                requestId: requestId(),
-              },
-            },
-            401,
-          );
+          return errorResponse(requestId, {
+            code: "authentication_required",
+            message: "Authentication is required.",
+            status: 401,
+          });
         }
 
         const user = await users.getOrCreate(identity.uid);
@@ -188,99 +202,60 @@ export function createV1GroupsApi({
               }
               throw error;
             }
-            return response({ data: page.groups, nextCursor: page.nextCursor });
+            return jsonResponse({
+              data: page.groups,
+              nextCursor: page.nextCursor,
+            });
           }
           if (request.method === "POST") {
             const name = await readGroupName(request);
             if (name === null) return groupNameError(requestId);
-            return response({ data: await groups.create(user.userId, name) }, 201);
+            return jsonResponse(
+              { data: await groups.create(user.userId, name) },
+              201,
+            );
           }
         }
 
-        const groupId = groupIdFromPath(url.pathname);
-        if (groupId !== null) {
+        const groupPath = groupIdFromPath(url.pathname);
+        if (groupPath.kind === "invalid") {
+          return groupNotFound(requestId);
+        }
+        if (groupPath.kind === "valid") {
+          const { groupId } = groupPath;
           if (request.method === "GET") {
             const group = await groups.get(user.userId, groupId);
-            if (group) return response({ data: group });
+            if (group) return jsonResponse({ data: group });
           }
           if (request.method === "PATCH") {
             const visibleGroup = await groups.get(user.userId, groupId);
-            if (!visibleGroup) {
-              return response(
-                {
-                  error: {
-                    code: "group_not_found",
-                    message: "Group was not found.",
-                    requestId: requestId(),
-                  },
-                },
-                404,
-              );
-            }
+            if (!visibleGroup) return groupNotFound(requestId);
             if (visibleGroup.role !== "admin") {
-              return response(
-                {
-                  error: {
-                    code: "admin_required",
-                    message: "Group Admin access is required.",
-                    requestId: requestId(),
-                  },
-                },
-                403,
-              );
+              return adminRequired(requestId);
             }
             const name = await readGroupName(request);
             if (name === null) return groupNameError(requestId);
             const result = await groups.rename(user.userId, groupId, name);
             if (result.kind === "renamed") {
-              return response({ data: result.group });
+              return jsonResponse({ data: result.group });
             }
             if (result.kind === "forbidden") {
-              return response(
-                {
-                  error: {
-                    code: "admin_required",
-                    message: "Group Admin access is required.",
-                    requestId: requestId(),
-                  },
-                },
-                403,
-              );
+              return adminRequired(requestId);
             }
           }
-          return response(
-            {
-              error: {
-                code: "group_not_found",
-                message: "Group was not found.",
-                requestId: requestId(),
-              },
-            },
-            404,
-          );
+          return groupNotFound(requestId);
         }
 
-        return response(
-          {
-            error: {
-              code: "not_found",
-              message: "The requested resource was not found.",
-              requestId: requestId(),
-            },
-          },
-          404,
-        );
-      } catch {
-        return response(
-          {
-            error: {
-              code: "internal_error",
-              message: "An unexpected error occurred.",
-              requestId: requestId(),
-            },
-          },
-          500,
-        );
+        return errorResponse(requestId, {
+          code: "not_found",
+          message: "The requested resource was not found.",
+          status: 404,
+        });
+      } catch (error) {
+        if (isRateLimitError(error)) {
+          return rateLimitedErrorResponse(requestId);
+        }
+        return internalErrorResponse(requestId);
       }
     },
   });
@@ -294,16 +269,7 @@ export function createV1GroupsHandler(
     try {
       return await getGroupsApi().fetch(request);
     } catch {
-      return response(
-        {
-          error: {
-            code: "internal_error",
-            message: "An unexpected error occurred.",
-            requestId: requestId(),
-          },
-        },
-        500,
-      );
+      return internalErrorResponse(requestId);
     }
   };
 }
