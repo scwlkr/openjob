@@ -102,6 +102,17 @@ export type GroupStore = {
       }
     | { kind: "not_found" }
   >;
+  promote(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUserId: string,
+  ): Promise<
+    | { kind: "promoted"; member: OpenJobMember }
+    | { kind: "forbidden" }
+    | { kind: "member_not_found" }
+    | { kind: "not_found" }
+    | { kind: "role_conflict" }
+  >;
   rename(
     userId: string,
     groupId: GroupId,
@@ -183,6 +194,22 @@ function adminRequired(requestId: RequestIdFactory) {
   });
 }
 
+function memberNotFound(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "member_not_found",
+    message: "Member was not found.",
+    status: 404,
+  });
+}
+
+function memberRoleConflict(requestId: RequestIdFactory, message: string) {
+  return errorResponse(requestId, {
+    code: "member_role_conflict",
+    message,
+    status: 409,
+  });
+}
+
 function usernameRequired(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "username_required",
@@ -258,6 +285,32 @@ function inviteResourceFromPath(pathname: string) {
       kind: "valid" as const,
       token: token as InviteToken,
       resource: match[2] ? ("join" as const) : ("inspect" as const),
+    };
+  } catch {
+    return { kind: "invalid" as const };
+  }
+}
+
+function promoteMemberFromPath(pathname: string) {
+  const match = pathname.match(
+    /^\/api\/v1\/groups\/([^/]+)\/members\/([^/]+)\/actions\/promote$/,
+  );
+  if (!match) return { kind: "none" as const };
+  try {
+    const groupId = decodeURIComponent(match[1]);
+    const userId = decodeURIComponent(match[2]);
+    if (
+      !isGroupId(groupId) ||
+      userId.length === 0 ||
+      userId.length > 1_500 ||
+      /[/?#]/.test(userId)
+    ) {
+      return { kind: "invalid" as const };
+    }
+    return {
+      kind: "valid" as const,
+      groupId: groupId as GroupId,
+      userId,
     };
   } catch {
     return { kind: "invalid" as const };
@@ -383,6 +436,33 @@ export function createV1GroupsApi({
             if (result.kind === "forbidden") return adminRequired(requestId);
             return groupNotFound(requestId);
           }
+        }
+
+        const promotePath = promoteMemberFromPath(url.pathname);
+        if (promotePath.kind === "invalid") return memberNotFound(requestId);
+        if (promotePath.kind === "valid" && request.method === "POST") {
+          const result = await groups.promote(
+            user.userId,
+            promotePath.groupId,
+            promotePath.userId,
+          );
+          if (result.kind === "promoted") {
+            const currentUser = await users.getById(result.member.userId);
+            return jsonResponse({
+              data: {
+                ...result.member,
+                username: currentUser?.username ?? result.member.username,
+              },
+            });
+          }
+          if (result.kind === "forbidden") return adminRequired(requestId);
+          if (result.kind === "role_conflict") {
+            return memberRoleConflict(
+              requestId,
+              "The Member is already an Admin.",
+            );
+          }
+          return memberNotFound(requestId);
         }
 
         const invitePath = inviteResourceFromPath(url.pathname);

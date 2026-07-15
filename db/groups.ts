@@ -27,6 +27,7 @@ type StoredGroup = {
   groupId: GroupId;
   name: string;
   path: string;
+  stateRevision: number;
   updateTime: string;
 };
 
@@ -65,7 +66,17 @@ function parseGroup(document: FirestoreDocument, path: string): StoredGroup {
   const groupId = document.fields?.groupId?.stringValue as GroupId | undefined;
   const name = document.fields?.name?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
-  if (!groupId || !name || !createdAt || !document.updateTime) {
+  const stateRevision = Number(
+    document.fields?.stateRevision?.integerValue ?? 0,
+  );
+  if (
+    !groupId ||
+    !name ||
+    !createdAt ||
+    !Number.isInteger(stateRevision) ||
+    stateRevision < 0 ||
+    !document.updateTime
+  ) {
     throw new Error("Firestore returned an invalid Group record.");
   }
   return {
@@ -73,6 +84,7 @@ function parseGroup(document: FirestoreDocument, path: string): StoredGroup {
     groupId,
     name,
     path,
+    stateRevision,
     updateTime: document.updateTime,
   };
 }
@@ -332,6 +344,19 @@ export function createFirestoreGroupStore(
     return group ? publicGroup(group, membership.role) : null;
   }
 
+  function stateRevisionWrite(group: StoredGroup) {
+    return {
+      update: {
+        name: firestore.documentName(group.path),
+        fields: {
+          stateRevision: { integerValue: String(group.stateRevision + 1) },
+        },
+      },
+      updateMask: { fieldPaths: ["stateRevision"] },
+      currentDocument: { updateTime: group.updateTime },
+    };
+  }
+
   async function rotateCurrentInvite(
     group: StoredGroup,
     member: StoredMembership,
@@ -380,6 +405,7 @@ export function createFirestoreGroupStore(
                   groupId: { stringValue: groupId },
                   name: { stringValue: name },
                   createdAt: { timestampValue: createdAt },
+                  stateRevision: { integerValue: "0" },
                 },
               },
               currentDocument: { exists: false },
@@ -663,6 +689,49 @@ export function createFirestoreGroupStore(
         members,
         nextCursor: result.nextPageToken ?? null,
       };
+    },
+
+    async promote(actorUserId, groupId, targetUserId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const [group, actor, target] = await Promise.all([
+          readGroup(groupPath(groupId)),
+          readMembership(membershipPath(groupId, actorUserId)),
+          readMembership(membershipPath(groupId, targetUserId)),
+        ]);
+        if (!group || !actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (!target) return { kind: "member_not_found" as const };
+        if (target.role === "admin") return { kind: "role_conflict" as const };
+
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            ...(actor.path === target.path
+              ? []
+              : [
+                  {
+                    verify: firestore.documentName(actor.path),
+                    currentDocument: { updateTime: actor.updateTime },
+                  },
+                ]),
+            {
+              update: {
+                name: firestore.documentName(target.path),
+                fields: { role: { stringValue: "admin" } },
+              },
+              updateMask: { fieldPaths: ["role"] },
+              currentDocument: { updateTime: target.updateTime },
+            },
+          ]);
+          return {
+            kind: "promoted" as const,
+            member: publicMember({ ...target, role: "admin" }),
+          };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Member promotion could not resolve concurrent writes.");
     },
 
     async rename(userId, groupId, name) {
