@@ -26,6 +26,7 @@ export function createFakeFirestore() {
   let commitAttemptCount = 0;
   let preconditionFailureCount = 0;
   let maxCommitWrites = Number.POSITIVE_INFINITY;
+  let pausedDocumentRead = null;
 
   function resolveCommitWaiters() {
     if (!commitBarrier) return;
@@ -136,6 +137,28 @@ export function createFakeFirestore() {
     preconditionFailures() {
       return preconditionFailureCount;
     },
+    pauseNextDocumentRead(path) {
+      if (typeof path !== "string" || path.length === 0 || pausedDocumentRead) {
+        throw new TypeError("A document read pause requires one unused path.");
+      }
+      let notifyPaused;
+      let releaseRead;
+      const paused = new Promise((resolve) => {
+        notifyPaused = resolve;
+      });
+      const released = new Promise((resolve) => {
+        releaseRead = resolve;
+      });
+      pausedDocumentRead = { path, notifyPaused, released };
+      return {
+        release() {
+          releaseRead();
+        },
+        waitUntilPaused() {
+          return paused;
+        },
+      };
+    },
     setMaxCommitWrites(maximum) {
       if (!Number.isInteger(maximum) || maximum < 1) {
         throw new TypeError("The maximum Commit write count must be positive.");
@@ -204,6 +227,12 @@ export function createFakeFirestore() {
       const path = decodeURIComponent(
         url.pathname.slice(url.pathname.indexOf(marker) + marker.length),
       );
+      if (pausedDocumentRead?.path === path) {
+        const paused = pausedDocumentRead;
+        pausedDocumentRead = null;
+        paused.notifyPaused();
+        await paused.released;
+      }
       if (
         path
           .split("/")

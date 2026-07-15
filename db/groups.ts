@@ -38,7 +38,7 @@ type StoredGroup = {
 
 type StoredMembership = {
   joinedAt: string | null;
-  membershipId: string;
+  membershipId: string | null;
   path: string;
   role: GroupRole;
   updateTime: string;
@@ -65,7 +65,6 @@ type StoredInvitePointer = {
 
 type GroupStoreOptions = {
   now?: () => number;
-  randomMembershipUUID?: () => string;
   randomUUID?: () => string;
 };
 
@@ -97,17 +96,12 @@ function parseMembership(
   path: string,
 ): StoredMembership {
   const role = document.fields?.role?.stringValue;
-  const membershipId = document.fields?.membershipId?.stringValue;
-  if (
-    (role !== "admin" && role !== "member") ||
-    !membershipId ||
-    !document.updateTime
-  ) {
+  if ((role !== "admin" && role !== "member") || !document.updateTime) {
     throw new Error("Firestore returned an invalid Group membership record.");
   }
   return {
     joinedAt: document.fields?.joinedAt?.timestampValue ?? null,
-    membershipId,
+    membershipId: document.fields?.membershipId?.stringValue ?? null,
     path,
     role,
     updateTime: document.updateTime,
@@ -198,7 +192,6 @@ export function createFirestoreGroupStore(
   fetchImplementation: typeof fetch = fetch,
   {
     now = Date.now,
-    randomMembershipUUID = () => crypto.randomUUID(),
     randomUUID = () => crypto.randomUUID(),
   }: GroupStoreOptions = {},
 ): GroupStore {
@@ -266,7 +259,7 @@ export function createFirestoreGroupStore(
   async function hasOpenTasksAssigned(
     groupId: GroupId,
     userId: string,
-    membershipId: string,
+    membershipId: string | null,
   ) {
     const documents = await readAllCollectionDocuments(
       `${groupPath(groupId)}/tasks`,
@@ -498,7 +491,7 @@ export function createFirestoreGroupStore(
         const memberDocumentPath = membershipPath(groupId, user.userId);
         const accessDocumentPath = accessPath(user.userId, groupId);
         const invite = freshInvite(groupId);
-        const membershipId = randomMembershipUUID().replaceAll("-", "");
+        const membershipId = crypto.randomUUID().replaceAll("-", "");
         try {
           await commit([
             {
@@ -642,7 +635,7 @@ export function createFirestoreGroupStore(
         }
 
         const joinedAt = new Date(now()).toISOString();
-        const membershipId = randomMembershipUUID().replaceAll("-", "");
+        const membershipId = crypto.randomUUID().replaceAll("-", "");
         const window = inviteWindow(current);
         const nextJoinCount = successfulJoinsInWindow(current, window) + 1;
         const replacement =

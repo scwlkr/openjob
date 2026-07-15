@@ -67,7 +67,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   } else {
     const userId = document.fields?.assigneeUserId?.stringValue;
     const username = document.fields?.assigneeUsername?.stringValue;
-    if (!userId || !username || !assigneeMembershipId) {
+    if (!userId || !username) {
       throw new Error("Firestore returned an incomplete Task assignee.");
     }
     assignee = {
@@ -109,7 +109,7 @@ function publicTask(task: PersistedTask): OpenJobTask {
 export function isOpenTaskAssignedTo(
   document: FirestoreDocument,
   userId: string,
-  membershipId: string,
+  membershipId: string | null,
 ) {
   const task = parseTask(document, document.name);
   return (
@@ -128,7 +128,13 @@ function taskFields(task: PersistedTask) {
     assigneeState: { stringValue: task.assignee.state },
     ...(task.assignee.state === "assigned"
       ? {
-          assigneeMembershipId: { stringValue: task.assigneeMembershipId! },
+          ...(task.assigneeMembershipId
+            ? {
+                assigneeMembershipId: {
+                  stringValue: task.assigneeMembershipId,
+                },
+              }
+            : {}),
           assigneeUserId: { stringValue: task.assignee.userId },
           assigneeUsername: { stringValue: task.assignee.username },
         }
@@ -193,20 +199,23 @@ export function createFirestoreTaskStore(
   }
 
   function membershipId(document: FirestoreDocument) {
-    const value = document.fields?.membershipId?.stringValue;
-    if (!value) {
-      throw new Error("Firestore returned an invalid Group membership record.");
-    }
-    return value;
+    return document.fields?.membershipId?.stringValue ?? null;
   }
 
-  async function resolveOpenTaskAssignee(task: StoredTask) {
+  async function resolveOpenTaskAssignee(
+    task: StoredTask,
+    membershipReads?: Map<string, Promise<FirestoreDocument | null>>,
+  ) {
     if (task.state !== "open" || task.assignee.state !== "assigned") {
       return task;
     }
-    const member = await readDocument(
-      membershipPath(task.groupId, task.assignee.userId),
-    );
+    const path = membershipPath(task.groupId, task.assignee.userId);
+    let memberRead = membershipReads?.get(path);
+    if (!memberRead) {
+      memberRead = readDocument(path);
+      membershipReads?.set(path, memberRead);
+    }
+    const member = await memberRead;
     return member && membershipId(member) === task.assigneeMembershipId
       ? task
       : {
@@ -535,6 +544,10 @@ export function createFirestoreTaskStore(
         return { kind: "not_found" as const };
       }
       const tasks: OpenJobTask[] = [];
+      const membershipReads = new Map<
+        string,
+        Promise<FirestoreDocument | null>
+      >();
       let pageToken: string | null = null;
       do {
         const parameters = new URLSearchParams({
@@ -552,7 +565,10 @@ export function createFirestoreTaskStore(
         const pageTasks = await Promise.all(
           (page.documents ?? []).map(async (document) =>
             publicTask(
-              await resolveOpenTaskAssignee(parseTask(document, document.name)),
+              await resolveOpenTaskAssignee(
+                parseTask(document, document.name),
+                membershipReads,
+              ),
             ),
           ),
         );

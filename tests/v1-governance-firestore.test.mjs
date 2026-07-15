@@ -648,11 +648,13 @@ test("Kick remains atomic independently of the removed Member's open Task count"
   }
 
   firestore.setMaxCommitWrites(4);
+  const commitsBeforeKick = firestore.commitAttempts();
   const kicked = await request("shane", {
     method: "POST",
     path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`,
   });
   assert.equal(kicked.status, 204);
+  assert.equal(firestore.commitAttempts(), commitsBeforeKick + 1);
 
   const listed = await request("shane", {
     method: "GET",
@@ -662,6 +664,92 @@ test("Kick remains atomic independently of the removed Member's open Task count"
   assert.deepEqual(
     (await listed.json()).data.map(({ taskId, assignee }) => ({ taskId, assignee })),
     tasks.map(({ taskId }) => ({ taskId, assignee: { state: "unassigned" } })),
+  );
+});
+
+test("Kick supports memberships and Tasks persisted before membership generations", async (t) => {
+  const { claim, createGroup, firestore, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("Compatible Kick");
+  await join("eli", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+  const created = await request("shane", {
+    body: { text: "Existing assigned work", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const task = (await created.json()).data;
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  for (const userId of [shane.userId, eli.userId]) {
+    delete firestore.documents.get(
+      `${database}/v1Groups/${group.groupId}/members/${userId}`,
+    ).fields.membershipId;
+  }
+  delete firestore.documents.get(
+    `${database}/v1Groups/${group.groupId}/tasks/${task.taskId}`,
+  ).fields.assigneeMembershipId;
+
+  const existingTask = await request("shane", {
+    method: "GET",
+    path: `${tasksPath}/${task.taskId}`,
+  });
+  assert.equal(existingTask.status, 200);
+  assert.equal((await existingTask.json()).data.assignee.userId, eli.userId);
+  const kicked = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`,
+  });
+  assert.equal(kicked.status, 204);
+  const unassigned = await request("shane", {
+    method: "GET",
+    path: `${tasksPath}/${task.taskId}`,
+  });
+  assert.deepEqual((await unassigned.json()).data.assignee, {
+    state: "unassigned",
+  });
+});
+
+test("a Task list racing Kick exposes one atomic assignee state", async (t) => {
+  const { claim, createGroup, firestore, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("List Kick Race");
+  await join("eli", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+  for (let index = 1; index <= 3; index += 1) {
+    const created = await request("shane", {
+      body: { text: `Racing work ${index}`, assigneeUsername: "eli" },
+      method: "POST",
+      path: tasksPath,
+    });
+    assert.equal(created.status, 201);
+  }
+
+  const pausedRead = firestore.pauseNextDocumentRead(
+    `v1Groups/${group.groupId}/members/${eli.userId}`,
+  );
+  const listing = request("shane", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  await pausedRead.waitUntilPaused();
+  const kicked = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`,
+  });
+  pausedRead.release();
+  assert.equal(kicked.status, 204);
+
+  const listed = await listing;
+  assert.equal(listed.status, 200);
+  assert.deepEqual(
+    (await listed.json()).data.map(({ assignee }) => assignee),
+    Array.from({ length: 3 }, () => ({ state: "unassigned" })),
   );
 });
 
