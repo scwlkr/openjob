@@ -192,6 +192,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const { responses, schemas } = contract.components;
 
   assert.equal(compileSchema(schemas.GroupName)("   "), false);
+  assert.equal(compileSchema(schemas.GroupName)("Alpha\u2028Beta"), false);
   assert.equal(compileSchema(schemas.TaskText)("\n\n"), false);
   assert.equal(Object.hasOwn(schemas.Task.properties, "updatedAt"), false);
   assert.equal(
@@ -215,17 +216,39 @@ test("contract schemas enforce normalized domain rules and status-specific error
     }),
     false,
   );
-  const conflictSchema = responses.ConflictResponse.content["application/json"].schema;
-  assert.equal(
-    compileSchema(conflictSchema)({
-      error: {
-        code: "internal_error",
-        message: "Wrong status mapping.",
-        requestId: "req_2",
-      },
-    }),
-    false,
+  const expectedConflictCodes = new Map([
+    ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
+    ["claimUsername", ["username_immutable", "username_taken"]],
+    ["createGroupTask", ["assignee_not_member"]],
+    ["demoteGroupMember", ["last_admin", "member_role_conflict"]],
+    ["endGroup", ["confirmation_mismatch", "members_remain"]],
+    ["joinGroupWithInviteLink", ["username_required"]],
+    ["kickGroupMember", ["last_admin", "self_removal"]],
+    ["leaveGroup", ["last_admin", "open_tasks_assigned"]],
+    ["promoteGroupMember", ["member_role_conflict"]],
+    ["updateGroupTask", ["assignee_not_member", "task_done"]],
+  ]);
+  const allConflictCodes = new Set([...expectedConflictCodes.values()].flat());
+  const conflictOperations = operations(contract).filter(
+    ({ operation }) => operation.responses["409"],
   );
+  assert.deepEqual(
+    conflictOperations.map(({ operation }) => operation.operationId).sort(),
+    [...expectedConflictCodes.keys()].sort(),
+  );
+  for (const { operation } of conflictOperations) {
+    const validate = compileSchema(
+      operation.responses["409"].content["application/json"].schema,
+    );
+    const allowed = expectedConflictCodes.get(operation.operationId);
+    for (const code of allConflictCodes) {
+      assert.equal(
+        validate({ error: { code, message: "Conflict.", requestId: "req_2" } }),
+        allowed.includes(code),
+        `${operation.operationId} maps ${code}`,
+      );
+    }
+  }
 });
 
 test("validation rejects broken operations and examples", async () => {

@@ -65,7 +65,7 @@ paths:
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/UsernameConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -187,7 +187,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/LeaveGroupConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -220,7 +220,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/EndGroupConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -279,7 +279,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/KickMemberConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -308,7 +308,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/PromoteMemberConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -337,7 +337,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/DemoteMemberConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -401,7 +401,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupOrUserNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/BanUserConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -535,7 +535,7 @@ paths:
         "404":
           $ref: "#/components/responses/InvalidInviteResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/JoinGroupConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -598,7 +598,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/CreateTaskConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -648,7 +648,7 @@ paths:
         "404":
           $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
         "409":
-          $ref: "#/components/responses/ConflictResponse"
+          $ref: "#/components/responses/UpdateTaskConflictResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -1175,31 +1175,116 @@ components:
               code: invite_not_found
               message: Invite Link is not valid.
               requestId: req_01J0INVITE404
-    ConflictResponse:
-      description: Current state or uniqueness conflict. Clients branch on the stable code.
+    UsernameConflictResponse:
+      description: Username is unavailable or the User already claimed a different one.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ConflictErrorEnvelope"
-          examples:
-            lastAdmin:
-              value:
-                error:
-                  code: last_admin
-                  message: At least one Admin must remain.
-                  requestId: req_01J0CONFLICT
-            taskDone:
-              value:
-                error:
-                  code: task_done
-                  message: Reopen the Task before editing it.
-                  requestId: req_01J0TASKDONE
-            usernameTaken:
-              value:
-                error:
-                  code: username_taken
-                  message: That Username is unavailable.
-                  requestId: req_01J0USERNAME
+            $ref: "#/components/schemas/UsernameConflictErrorEnvelope"
+          example:
+            error:
+              code: username_taken
+              message: That Username is unavailable.
+              requestId: req_01J0USERNAME
+    LeaveGroupConflictResponse:
+      description: Leaving would abandon open work or remove the final Admin.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LeaveGroupConflictErrorEnvelope"
+          example:
+            error:
+              code: open_tasks_assigned
+              message: Reassign or complete open Tasks before leaving.
+              requestId: req_01J0LEAVE
+    EndGroupConflictResponse:
+      description: Group ending is not confirmed or other Members remain.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EndGroupConflictErrorEnvelope"
+          example:
+            error:
+              code: confirmation_mismatch
+              message: The confirmation does not match the current Group Name.
+              requestId: req_01J0END
+    KickMemberConflictResponse:
+      description: The target cannot be removed by this action.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/KickMemberConflictErrorEnvelope"
+          example:
+            error:
+              code: self_removal
+              message: Use Leave Group to remove yourself.
+              requestId: req_01J0KICK
+    PromoteMemberConflictResponse:
+      description: The target already has the requested role.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PromoteMemberConflictErrorEnvelope"
+          example:
+            error:
+              code: member_role_conflict
+              message: The Member is already an Admin.
+              requestId: req_01J0PROMOTE
+    DemoteMemberConflictResponse:
+      description: The role change is invalid or would remove the final Admin.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DemoteMemberConflictErrorEnvelope"
+          example:
+            error:
+              code: last_admin
+              message: At least one Admin must remain.
+              requestId: req_01J0DEMOTE
+    BanUserConflictResponse:
+      description: The target cannot be banned under the current Group state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BanUserConflictErrorEnvelope"
+          example:
+            error:
+              code: ban_not_allowed
+              message: That User cannot be banned.
+              requestId: req_01J0BAN
+    JoinGroupConflictResponse:
+      description: The User must finish Username onboarding before joining.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/JoinGroupConflictErrorEnvelope"
+          example:
+            error:
+              code: username_required
+              message: Claim a Username before joining a Group.
+              requestId: req_01J0JOIN
+    CreateTaskConflictResponse:
+      description: The requested assignee is not a current Group Member.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreateTaskConflictErrorEnvelope"
+          example:
+            error:
+              code: assignee_not_member
+              message: Assign the Task to a current Member.
+              requestId: req_01J0CREATE
+    UpdateTaskConflictResponse:
+      description: The Task or requested assignee conflicts with current state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UpdateTaskConflictErrorEnvelope"
+          example:
+            error:
+              code: task_done
+              message: Reopen the Task before editing it.
+              requestId: req_01J0UPDATE
     RateLimitedResponse:
       description: Infrastructure throttling. OpenJob defines no product-level quota in v1.
       headers:
@@ -1264,7 +1349,7 @@ components:
       type: string
       minLength: 1
       maxLength: 80
-      pattern: '^(?=[\s\S]*\S)[^\u0000-\u001F\u007F-\u009F\r\n]+$'
+      pattern: '^(?=[\s\S]*\S)[^\u0000-\u001F\u007F-\u009F\u2028-\u2029\r\n]+$'
       description: |
         Trimmed Unicode label whose case and spelling are preserved. Names are
         not globally unique and are never URL handles.
@@ -1596,26 +1681,86 @@ components:
               properties:
                 code:
                   const: invite_not_found
-    ConflictErrorEnvelope:
+    UsernameConflictErrorEnvelope:
       allOf:
         - $ref: "#/components/schemas/ErrorEnvelope"
         - properties:
             error:
               properties:
                 code:
-                  enum:
-                    - username_taken
-                    - username_immutable
-                    - username_required
-                    - last_admin
-                    - open_tasks_assigned
-                    - members_remain
-                    - self_removal
-                    - ban_not_allowed
-                    - member_role_conflict
-                    - task_done
-                    - assignee_not_member
-                    - confirmation_mismatch
+                  enum: [username_taken, username_immutable]
+    LeaveGroupConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [last_admin, open_tasks_assigned]
+    EndGroupConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [confirmation_mismatch, members_remain]
+    KickMemberConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [last_admin, self_removal]
+    PromoteMemberConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: member_role_conflict
+    DemoteMemberConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [last_admin, member_role_conflict]
+    BanUserConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [ban_not_allowed, last_admin, self_removal]
+    JoinGroupConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: username_required
+    CreateTaskConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: assignee_not_member
+    UpdateTaskConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum: [assignee_not_member, task_done]
     RateLimitedErrorEnvelope:
       allOf:
         - $ref: "#/components/schemas/ErrorEnvelope"
