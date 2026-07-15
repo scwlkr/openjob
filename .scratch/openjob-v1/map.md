@@ -1,7 +1,7 @@
 ---
 id: openjob-v1-map
 title: Define OpenJob v1 as a group task system
-status: open
+status: resolved
 labels:
   - wayfinder:map
 ---
@@ -26,6 +26,7 @@ labels:
 - [Prototype the Assignee-Column Web Experience](issues/06-prototype-the-assignee-column-web-experience.md) — The web uses an explicit Group picker, filterable horizontal assignee lanes with Unassigned last, direct Task actions, and reachable Admin controls across desktop and narrow screens.
 - [Prototype the Complete CLI Contract](issues/07-prototype-the-complete-cli-contract.md) — The resource-first CLI covers every web capability with local Group selection, browser-backed Firebase auth, explicit stream and file I/O, stable formats, confirmations, and exit statuses.
 - [Plan the Global Board Data Migration](issues/08-plan-the-global-board-data-migration.md) — v1 starts empty after a frozen zero-record preflight, with legacy storage retained only through acceptance for rollback.
+- [Define the v1 Done Bar and Build Order](issues/09-define-the-v1-done-bar-and-build-order.md) — OpenJob ships its complete Firebase-backed `/api/v1` backend as v0.0.5, then the full web and installable command CLI together as v0.1.0 after two-User production proof.
 
 ## Fog
 
