@@ -250,6 +250,36 @@ export function createFirestoreGroupStore(
     return memberships;
   }
 
+  async function hasOpenTasksAssigned(groupId: GroupId, userId: string) {
+    let pageToken: string | null = null;
+    do {
+      const parameters = new URLSearchParams({
+        pageSize: "500",
+        orderBy: "__name__",
+      });
+      if (pageToken !== null) parameters.set("pageToken", pageToken);
+      const response = await firestore.request(
+        `${groupPath(groupId)}/tasks?${parameters}`,
+      );
+      const page = (await response.json()) as {
+        documents?: FirestoreDocument[];
+        nextPageToken?: string;
+      };
+      if (
+        (page.documents ?? []).some(
+          (document) =>
+            document.fields?.state?.stringValue === "open" &&
+            document.fields?.assigneeState?.stringValue === "assigned" &&
+            document.fields?.assigneeUserId?.stringValue === userId,
+        )
+      ) {
+        return true;
+      }
+      pageToken = page.nextPageToken ?? null;
+    } while (pageToken !== null);
+    return false;
+  }
+
   async function commit(writes: unknown[]) {
     return firestore.request(":commit", {
       method: "POST",
@@ -677,6 +707,41 @@ export function createFirestoreGroupStore(
         }
       }
       throw new Error("Invite Link join could not resolve concurrent writes.");
+    },
+
+    async leave(userId, groupId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const member = await readMembership(membershipPath(groupId, userId));
+        if (!member) return { kind: "not_found" as const };
+        if (member.role === "admin") {
+          const members = await readAllMemberships(groupId);
+          if (members.filter(({ role }) => role === "admin").length <= 1) {
+            return { kind: "last_admin" as const };
+          }
+        }
+        if (await hasOpenTasksAssigned(groupId, userId)) {
+          return { kind: "open_tasks_assigned" as const };
+        }
+
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            {
+              delete: firestore.documentName(member.path),
+              currentDocument: { updateTime: member.updateTime },
+            },
+            {
+              delete: firestore.documentName(accessPath(userId, groupId)),
+            },
+          ]);
+          return { kind: "left" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Group departure could not resolve concurrent writes.");
     },
 
     async list(userId, { cursor, limit }) {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirestoreGroupStore } from "../db/groups.ts";
+import { createFirestoreTaskStore } from "../db/v1-tasks.ts";
 import { createFirestoreUserStore } from "../db/users.ts";
 import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
 import { createV1GroupsApi } from "../server/v1-groups.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
+import { createV1TasksApi } from "../server/v1-tasks.ts";
 import { createTestFirebaseAuthority } from "./support/firebase-id-tokens.mjs";
 import {
   createFakeFirestore,
@@ -25,6 +27,7 @@ async function createGovernanceHarness(names) {
   const privateKey = await createPrivateKey();
   const userIds = names.map((_, index) => uuid(index + 1));
   const groupIds = Array.from({ length: 30 }, (_, index) => uuid(index + 501));
+  const taskIds = Array.from({ length: 30 }, (_, index) => uuid(index + 901));
   const tokens = new Map(
     await Promise.all(
       names.map(async (name) => [
@@ -49,6 +52,10 @@ async function createGovernanceHarness(names) {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => groupIds.shift(),
       });
+      const tasks = createFirestoreTaskStore(config, firestore.fetch, {
+        now: () => Date.parse(controls.clock.now()),
+        randomUUID: () => taskIds.shift(),
+      });
       const verifyIdToken = createFirebaseIdTokenVerifier({
         fetchImplementation: authority.fetch,
         now: () => Date.parse(controls.clock.now()),
@@ -61,9 +68,11 @@ async function createGovernanceHarness(names) {
         users,
         verifyIdToken,
       });
+      const tasksApi = createV1TasksApi({ tasks, users, verifyIdToken });
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname.includes("/tasks")) return tasksApi.fetch(request);
           return pathname.startsWith("/api/v1/groups") ||
             pathname.startsWith("/api/v1/invites")
             ? groupsApi.fetch(request)
@@ -269,4 +278,116 @@ test("Admins demote themselves and the creator only while another Admin remains"
   });
   assert.equal(selfDemoted.status, 200);
   assert.equal((await selfDemoted.json()).data.role, "member");
+});
+
+test("Leave Group protects open work and the final Admin while preserving done attribution", async (t) => {
+  const { claim, createGroup, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const assertContract = await createOpenApiResponseValidator();
+  await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup();
+  await join("eli", group.groupId);
+  const leavePath = `/api/v1/groups/${group.groupId}/actions/leave`;
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+
+  const created = await request("shane", {
+    body: { text: "Preserve historical attribution", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(created.status, 201);
+  const task = (await created.json()).data;
+
+  const blockedByTask = await request("eli", {
+    method: "POST",
+    path: leavePath,
+  });
+  assert.equal(blockedByTask.status, 409);
+  await assertContract(
+    blockedByTask,
+    "/api/v1/groups/{groupId}/actions/leave",
+    "post",
+  );
+  assert.equal(
+    (await blockedByTask.json()).error.code,
+    "open_tasks_assigned",
+  );
+
+  const completed = await request("eli", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${task.taskId}/state`,
+  });
+  assert.equal(completed.status, 200);
+
+  const left = await request("eli", {
+    method: "POST",
+    path: leavePath,
+  });
+  assert.equal(left.status, 204);
+  await assertContract(
+    left,
+    "/api/v1/groups/{groupId}/actions/leave",
+    "post",
+  );
+
+  const formerMemberRead = await request("eli", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}`,
+  });
+  assert.equal(formerMemberRead.status, 404);
+  assert.equal((await formerMemberRead.json()).error.code, "group_not_found");
+  const formerMemberGroups = await request("eli", {
+    method: "GET",
+    path: "/api/v1/groups",
+  });
+  assert.deepEqual(await formerMemberGroups.json(), {
+    data: [],
+    nextCursor: null,
+  });
+
+  const retainedTask = await request("shane", {
+    method: "GET",
+    path: `${tasksPath}/${task.taskId}`,
+  });
+  assert.equal(retainedTask.status, 200);
+  const retained = (await retainedTask.json()).data;
+  assert.equal(retained.state, "done");
+  assert.deepEqual(retained.assignee, {
+    state: "assigned",
+    userId: eli.userId,
+    username: "eli",
+  });
+
+  const adminTask = await request("shane", {
+    body: { text: "Final Admin work", assigneeUsername: "shane" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(adminTask.status, 201);
+  const finalAdmin = await request("shane", {
+    method: "POST",
+    path: leavePath,
+  });
+  assert.equal(finalAdmin.status, 409);
+  await assertContract(
+    finalAdmin,
+    "/api/v1/groups/{groupId}/actions/leave",
+    "post",
+  );
+  assert.equal((await finalAdmin.json()).error.code, "last_admin");
+
+  const repeated = await request("eli", {
+    method: "POST",
+    path: leavePath,
+  });
+  assert.equal(repeated.status, 404);
+  await assertContract(
+    repeated,
+    "/api/v1/groups/{groupId}/actions/leave",
+    "post",
+  );
+  assert.equal((await repeated.json()).error.code, "group_not_found");
 });

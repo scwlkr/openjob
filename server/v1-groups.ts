@@ -98,6 +98,15 @@ export type GroupStore = {
     | { kind: "not_found" }
     | { kind: "username_required" }
   >;
+  leave(
+    userId: string,
+    groupId: GroupId,
+  ): Promise<
+    | { kind: "left" }
+    | { kind: "last_admin" }
+    | { kind: "not_found" }
+    | { kind: "open_tasks_assigned" }
+  >;
   list(
     userId: string,
     options: { cursor: string | null; limit: number },
@@ -230,6 +239,14 @@ function lastAdminConflict(requestId: RequestIdFactory) {
   });
 }
 
+function openTasksAssignedConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "open_tasks_assigned",
+    message: "Reassign or complete open Tasks before leaving.",
+    status: 409,
+  });
+}
+
 function usernameRequired(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "username_required",
@@ -265,11 +282,16 @@ async function readGroupName(request: Request) {
   }
 }
 
-type GroupResource = "group" | "invite" | "members" | "rotate_invite";
+type GroupResource =
+  | "group"
+  | "invite"
+  | "leave"
+  | "members"
+  | "rotate_invite";
 
 function groupResourceFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)(\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
+    /^\/api\/v1\/groups\/([^/]+)(\/actions\/leave|\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -281,6 +303,7 @@ function groupResourceFromPath(pathname: string) {
       "": "group",
       "/invite-link": "invite",
       "/invite-link/actions/rotate": "rotate_invite",
+      "/actions/leave": "leave",
       "/members": "members",
     };
     return {
@@ -440,6 +463,22 @@ export function createV1GroupsApi({
               data: members,
               nextCursor: result.nextCursor,
             });
+          }
+          if (resource === "leave" && request.method === "POST") {
+            const result = await groups.leave(user.userId, groupId);
+            if (result.kind === "left") {
+              return new Response(null, {
+                status: 204,
+                headers: { "cache-control": "no-store" },
+              });
+            }
+            if (result.kind === "last_admin") {
+              return lastAdminConflict(requestId);
+            }
+            if (result.kind === "open_tasks_assigned") {
+              return openTasksAssignedConflict(requestId);
+            }
+            return groupNotFound(requestId);
           }
           if (resource === "invite" && request.method === "GET") {
             const result = await groups.getInvite(user.userId, groupId);
