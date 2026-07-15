@@ -179,6 +179,47 @@ function validDueDate(value: string) {
   return day >= 1 && day <= days[month - 1];
 }
 
+function taskTextField(value: unknown):
+  | { value: TaskText }
+  | { error: string } {
+  if (typeof value !== "string") {
+    return { error: "Must contain 1 to 2,000 characters." };
+  }
+  const normalized = value.replace(/\r\n?/g, "\n").trim();
+  if (
+    normalized.length === 0 ||
+    Array.from(normalized).length > 2_000 ||
+    TASK_TEXT_CONTROL_CHARACTERS.test(normalized)
+  ) {
+    return { error: "Must contain 1 to 2,000 plain-text characters." };
+  }
+  return { value: normalized as TaskText };
+}
+
+function assigneeUsernameField(value: unknown):
+  | { value: Username }
+  | { error: string } {
+  return typeof value === "string" &&
+    isUsernameSyntax(value) &&
+    !isReservedUsername(value)
+    ? { value: value as Username }
+    : { error: "Use a valid current Member Username." };
+}
+
+function dueDateField(
+  value: unknown,
+  allowNull: boolean,
+): { value: DueDate | null } | { error: string } {
+  if (value === null && allowNull) return { value: null };
+  return typeof value === "string" && validDueDate(value)
+    ? { value: value as DueDate }
+    : {
+        error: allowNull
+          ? "Use a valid YYYY-MM-DD calendar date or null."
+          : "Use a valid YYYY-MM-DD calendar date.",
+      };
+}
+
 async function readCreateTask(
   request: Request,
 ): Promise<
@@ -207,45 +248,34 @@ async function readCreateTask(
     }
 
     const fields: Record<string, string> = {};
-    let text: TaskText | null = null;
-    if (typeof input.text !== "string") {
-      fields.text = "Must contain 1 to 2,000 characters.";
-    } else {
-      const normalized = input.text.replace(/\r\n?/g, "\n").trim();
-      if (
-        normalized.length === 0 ||
-        Array.from(normalized).length > 2_000 ||
-        TASK_TEXT_CONTROL_CHARACTERS.test(normalized)
-      ) {
-        fields.text = "Must contain 1 to 2,000 plain-text characters.";
-      } else {
-        text = normalized as TaskText;
-      }
-    }
-
-    let assigneeUsername: Username | null = null;
-    if (
-      typeof input.assigneeUsername !== "string" ||
-      !isUsernameSyntax(input.assigneeUsername) ||
-      isReservedUsername(input.assigneeUsername)
-    ) {
-      fields.assigneeUsername = "Use a valid current Member Username.";
-    } else {
-      assigneeUsername = input.assigneeUsername as Username;
+    const parsedText = taskTextField(input.text);
+    if ("error" in parsedText) fields.text = parsedText.error;
+    const parsedAssignee = assigneeUsernameField(input.assigneeUsername);
+    if ("error" in parsedAssignee) {
+      fields.assigneeUsername = parsedAssignee.error;
     }
 
     let dueDate: DueDate | null = null;
     if ("dueDate" in input) {
-      if (typeof input.dueDate !== "string" || !validDueDate(input.dueDate)) {
-        fields.dueDate = "Use a valid YYYY-MM-DD calendar date.";
-      } else {
-        dueDate = input.dueDate as DueDate;
-      }
+      const parsedDueDate = dueDateField(input.dueDate, false);
+      if ("error" in parsedDueDate) fields.dueDate = parsedDueDate.error;
+      else dueDate = parsedDueDate.value;
     }
 
-    return Object.keys(fields).length > 0
-      ? { fields }
-      : { input: { text: text!, assigneeUsername: assigneeUsername!, dueDate } };
+    if (
+      "error" in parsedText ||
+      "error" in parsedAssignee ||
+      Object.keys(fields).length > 0
+    ) {
+      return { fields };
+    }
+    return {
+      input: {
+        text: parsedText.value,
+        assigneeUsername: parsedAssignee.value,
+        dueDate,
+      },
+    };
   } catch {
     return { fields: { text: "Send a JSON Task object." } };
   }
@@ -281,43 +311,19 @@ async function readUpdateTask(
       dueDate?: DueDate | null;
     } = {};
     if ("text" in input) {
-      if (typeof input.text !== "string") {
-        fields.text = "Must contain 1 to 2,000 characters.";
-      } else {
-        const normalized = input.text.replace(/\r\n?/g, "\n").trim();
-        if (
-          normalized.length === 0 ||
-          Array.from(normalized).length > 2_000 ||
-          TASK_TEXT_CONTROL_CHARACTERS.test(normalized)
-        ) {
-          fields.text = "Must contain 1 to 2,000 plain-text characters.";
-        } else {
-          update.text = normalized as TaskText;
-        }
-      }
+      const parsed = taskTextField(input.text);
+      if ("error" in parsed) fields.text = parsed.error;
+      else update.text = parsed.value;
     }
     if ("assigneeUsername" in input) {
-      if (
-        typeof input.assigneeUsername !== "string" ||
-        !isUsernameSyntax(input.assigneeUsername) ||
-        isReservedUsername(input.assigneeUsername)
-      ) {
-        fields.assigneeUsername = "Use a valid current Member Username.";
-      } else {
-        update.assigneeUsername = input.assigneeUsername as Username;
-      }
+      const parsed = assigneeUsernameField(input.assigneeUsername);
+      if ("error" in parsed) fields.assigneeUsername = parsed.error;
+      else update.assigneeUsername = parsed.value;
     }
     if ("dueDate" in input) {
-      if (input.dueDate === null) {
-        update.dueDate = null;
-      } else if (
-        typeof input.dueDate !== "string" ||
-        !validDueDate(input.dueDate)
-      ) {
-        fields.dueDate = "Use a valid YYYY-MM-DD calendar date or null.";
-      } else {
-        update.dueDate = input.dueDate as DueDate;
-      }
+      const parsed = dueDateField(input.dueDate, true);
+      if ("error" in parsed) fields.dueDate = parsed.error;
+      else update.dueDate = parsed.value;
     }
 
     return Object.keys(fields).length > 0 ? { fields } : { input: update };
@@ -340,7 +346,8 @@ async function readTaskState(
       Array.isArray(input) ||
       Object.keys(input).join(",") !== "state" ||
       !("state" in input) ||
-      !["open", "done"].includes(String(input.state))
+      typeof input.state !== "string" ||
+      !["open", "done"].includes(input.state)
     ) {
       return { fields: { state: "Use open or done." } };
     }

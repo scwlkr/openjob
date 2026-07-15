@@ -21,6 +21,9 @@ export function createFakeFirestore() {
   const documents = new Map();
   let revision = 0;
   let throttleNextRequest = false;
+  let commitBarrier = null;
+  let commitAttemptCount = 0;
+  let preconditionFailureCount = 0;
 
   function error(httpStatus, status, message) {
     return Response.json(
@@ -45,11 +48,13 @@ export function createFakeFirestore() {
   }
 
   function applyCommit(body) {
+    commitAttemptCount += 1;
     const snapshot = new Map(documents);
     for (const write of body.writes) {
       const name = write.update?.name ?? write.delete ?? write.verify;
       const failure = preconditionError(write, snapshot.get(name));
       if (failure) {
+        preconditionFailureCount += 1;
         return error(409, failure, "Commit precondition failed.");
       }
     }
@@ -109,6 +114,18 @@ export function createFakeFirestore() {
 
   return {
     documents,
+    commitAttempts() {
+      return commitAttemptCount;
+    },
+    preconditionFailures() {
+      return preconditionFailureCount;
+    },
+    synchronizeNextCommits(count = 2) {
+      if (!Number.isInteger(count) || count < 2 || commitBarrier) {
+        throw new TypeError("Commit synchronization requires an unused count of at least 2.");
+      }
+      commitBarrier = { count, queued: [] };
+    },
     throttleNextRequest() {
       throttleNextRequest = true;
     },
@@ -131,6 +148,18 @@ export function createFakeFirestore() {
       }
       if (url.pathname.endsWith("/documents:commit")) {
         const body = JSON.parse(init.body);
+        if (commitBarrier) {
+          const barrier = commitBarrier;
+          return new Promise((resolve) => {
+            barrier.queued.push({ body, resolve });
+            if (barrier.queued.length === barrier.count) {
+              commitBarrier = null;
+              for (const queued of barrier.queued) {
+                queued.resolve(applyCommit(queued.body));
+              }
+            }
+          });
+        }
         return applyCommit(body);
       }
 

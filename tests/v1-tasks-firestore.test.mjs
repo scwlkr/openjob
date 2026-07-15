@@ -215,6 +215,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   assert.equal(task.completedAt, "2026-07-15T12:10:00.000Z");
 
   harness.setNow("2026-07-15T12:20:00.000Z");
+  const commitsBeforeRepeatedCompletion = firestore.commitAttempts();
   const repeatedCompletion = await harness.request({
     body: { state: "done" },
     headers: shaneHeaders,
@@ -222,6 +223,10 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}/state`,
   });
   assert.deepEqual(await repeatedCompletion.json(), { data: task });
+  assert.equal(
+    firestore.commitAttempts(),
+    commitsBeforeRepeatedCompletion + 1,
+  );
 
   await harness.restart();
   const persistedCompletion = await harness.request({
@@ -241,6 +246,34 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   task = (await reopenedResponse.json()).data;
   assert.equal(task.state, "open");
   assert.equal(task.completedAt, null);
+
+  firestore.synchronizeNextCommits();
+  const acceptedEdits = [];
+  const concurrentStatuses = await Promise.all(
+    ["Concurrent Firestore edit A", "Concurrent Firestore edit B"].map((text) =>
+      harness
+        .request({
+          body: { text },
+          headers: shaneHeaders,
+          method: "PATCH",
+          path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`,
+        })
+        .then(async (response) => {
+          const body = await response.json();
+          acceptedEdits.push(body.data.text);
+          return response.status;
+        }),
+    ),
+  );
+  assert.deepEqual(concurrentStatuses, [200, 200]);
+  assert.equal(firestore.preconditionFailures(), 1);
+  const afterConcurrentEdits = await harness.request({
+    headers: eliHeaders,
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`,
+  });
+  task = (await afterConcurrentEdits.json()).data;
+  assert.equal(task.text, acceptedEdits.at(-1));
 
   const laterForEliResponse = await harness.request({
     body: {

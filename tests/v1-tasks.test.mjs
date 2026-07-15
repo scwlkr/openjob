@@ -494,7 +494,12 @@ test("Task mutation inputs reject unsupported fields and non-Member assignees", 
     assert.equal((await response.json()).error.code, "assignee_not_member");
   }
 
-  for (const body of [{}, { state: "closed" }, { state: "open", extra: true }]) {
+  for (const body of [
+    {},
+    { state: ["done"] },
+    { state: "closed" },
+    { state: "open", extra: true },
+  ]) {
     const response = await harness.request({
       as: "eli",
       body,
@@ -504,6 +509,39 @@ test("Task mutation inputs reject unsupported fields and non-Member assignees", 
     assert.equal(response.status, 400);
     assert.deepEqual(Object.keys((await response.json()).error.fields), ["state"]);
   }
+});
+
+test("a Member recovers an Unassigned open Task", async (t) => {
+  const unassigned = {
+    taskId: "task_recovery",
+    groupId: GROUP_ID,
+    text: "Recover release work",
+    assignee: { state: "unassigned" },
+    dueDate: "2026-07-18",
+    state: "open",
+    createdAt: "2026-07-15T11:00:00.000Z",
+    completedAt: null,
+  };
+  const harness = createTasksHarness({ seedTasks: [unassigned] });
+  t.after(() => harness.close());
+
+  const response = await harness.request({
+    as: "shane",
+    body: { assigneeUsername: "eli" },
+    method: "PATCH",
+    path: `/api/v1/groups/${GROUP_ID}/tasks/${unassigned.taskId}`,
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    data: {
+      ...unassigned,
+      assignee: {
+        state: "assigned",
+        userId: USERS.eli.userId,
+        username: USERS.eli.username,
+      },
+    },
+  });
 });
 
 test("Task mutations update ordering and concurrent edits use last-accepted-write", async (t) => {
