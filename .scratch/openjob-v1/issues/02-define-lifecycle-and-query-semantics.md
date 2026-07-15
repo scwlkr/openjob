@@ -17,14 +17,14 @@ What are the exact create, edit, reassign, complete, reopen, delete, retain, sor
 
 ### Shape and creation
 
-- A Task has an immutable opaque ID, multiline plain text, exactly one assignee, an optional due date, and an open or done state. Timestamps used for ordering are metadata rather than additional user-authored fields.
+- A Task has an immutable opaque ID, multiline plain text, an assignee state, an optional due date, and an open or done state. Creation requires one current-Member assignee; forced removal is the sole exception and follows [Define Invite Rotation and Membership Governance](04-define-invite-rotation-and-membership-governance.md). Timestamps used for ordering are metadata rather than additional user-authored fields.
 - Any Member may create a Task assigned to any current Member. The assignee is identified by Username; former Users and Users outside the Group cannot be assigned.
 - Task text is trimmed at its outer edges and must contain 1–2,000 Unicode characters. Internal line breaks and blank lines are preserved, line endings are normalized, and control characters other than line breaks are rejected. Tasks have no rich-text formatting or attachments.
 - A due date is optional and may be any valid past, present, or future calendar date. It has no time or timezone.
 
 ### Editing and reassignment
 
-- Any Member may edit any open Task's text, due date, or assignee, subject to the normal creation rules. The due date may be cleared, and reassignment is limited to current Members.
+- Any Member may edit any open Task's text, due date, or assignee, subject to the normal creation rules. The due date may be cleared, reassignment is limited to current Members, and an assignee cannot be manually cleared. Any Member may assign an Unassigned Task to a current Member.
 - Done Tasks are frozen. A Member must reopen one before changing its text, due date, or assignee; deleting it remains allowed.
 
 ### Completion and reopening
@@ -40,14 +40,14 @@ What are the exact create, edit, reassign, complete, reopen, delete, retain, sor
 
 ### Sorting
 
-- Assignee columns sort by Username ascending.
+- Username assignee columns sort by Username ascending. Unassigned Tasks form a separate assignee state whose presentation is left to the web-experience prototype.
 - Within each column, open Tasks with due dates sort by date ascending, followed by undated open Tasks. Equal dates and undated Tasks sort by creation time ascending, then Task ID ascending.
 - Done Tasks sort by completion time descending, then creation time ascending, then Task ID ascending.
 - An all-status view places open Tasks before done Tasks. Filtering happens before these stable ordering rules are applied.
 
 ### Filtering and due-date display
 
-- v1 supports only a status filter (`open`, `done`, or `all`) and an assignee filter (all assignees or exactly one Username). The filters combine, and the default view is open Tasks for all assignees.
+- v1 supports only a status filter (`open`, `done`, or `all`) and an assignee filter (all assignee states, Unassigned, or exactly one Username). The filters combine, and the default view is open Tasks for all assignee states.
 - v1 has no text search, multi-assignee selection, due-date filters, saved filters, or custom sorting.
 - A due date becomes overdue when the viewing User's local calendar date has passed it. Reopening retains the due date, so a reopened Task may immediately be overdue.
 

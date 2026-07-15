@@ -9,7 +9,7 @@ labels:
 ## Notes
 
 - OpenJob is company-first software that happens to be open source. Optimize for scwlkr's real company use, not hypothetical adoption.
-- Keep the product bare bones: one Group owns one flat Task List; assignee columns and ordinary filters organize it; every Task has one assignee and only text, optional due date, and open/done state.
+- Keep the product bare bones: one Group owns one flat Task List; assignee columns and ordinary filters organize it; every Task normally has one Member assignee, with Unassigned reserved for forced removal, and only text, optional due date, and open/done state.
 - Google is the only sign-in provider. Usernames are globally unique and first come. Groups are private and unlisted; weekly rotating Invite Links admit signed-in Users.
 - Members have equal Task permissions. Admins govern membership, bans, Invite Links, and Admin status. The creator is only the first Admin, and a Group must retain at least one Admin.
 - Web and CLI are equal clients of one hosted service. CLI can replace browser use after a one-time browser handoff for Google authentication; it has no local task database or offline mode.
@@ -19,8 +19,9 @@ labels:
 ## Decisions so far
 
 - [Define Group Identity and Lifecycle](issues/01-define-group-identity-and-lifecycle.md) — Groups use immutable opaque IDs with mutable non-unique names, client-local selection, Admin renaming, guarded leaving, and confirmed permanent ending.
-- [Define Task Lifecycle and Query Semantics](issues/02-define-lifecycle-and-query-semantics.md) — Tasks use bounded multiline text, one current-Member assignee, open/done transitions, permanent deletion, stable due-first ordering, and minimal status/assignee filters.
+- [Define Task Lifecycle and Query Semantics](issues/02-define-lifecycle-and-query-semantics.md) — Tasks use bounded multiline text, normally one current-Member assignee, removal-induced Unassigned handling, open/done transitions, permanent deletion, stable due-first ordering, and minimal filters.
 - [Research Google Authentication for Equal Web and CLI Clients](issues/03-research-google-authentication-for-equal-clients.md) — Firebase issues one bearer-token identity to both clients; web uses Google sign-in, while CLI uses a PKCE loopback flow and stores only Firebase refresh credentials.
+- [Define Invite Rotation and Membership Governance](issues/04-define-invite-rotation-and-membership-governance.md) — One weekly or 25-join Invite Link admits confirmed Users; Admin actions govern membership and roles while preserving one Admin and safely unassigning forced-removal work.
 
 ## Fog
 

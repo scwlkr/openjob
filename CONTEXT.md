@@ -25,8 +25,12 @@ The single flat collection of work belonging to a Group.
 _Avoid_: Project, Kanban board
 
 **Task**:
-A smallest unit of work on a Task List. An open Task is assigned to exactly one current Member by Username; a done Task keeps that User as historical attribution if they later leave the Group.
+A smallest unit of work on a Task List. An open Task is normally assigned to exactly one current Member by Username; forced removal of that Member can make it Unassigned. A done Task keeps its User as historical attribution if they later leave the Group.
 _Avoid_: Job, ticket, card
+
+**Unassigned**:
+The exceptional assignee state of an open Task whose Member was kicked or banned. It lasts until a Member reassigns the Task and cannot be chosen during ordinary Task creation or editing.
+_Avoid_: Group-owned, Group assignee
 
 **User**:
 A person with one OpenJob identity that can participate in multiple Groups.
