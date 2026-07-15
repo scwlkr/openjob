@@ -182,6 +182,27 @@ test("Task creation conceals an inaccessible Group before validating input", asy
   assert.equal(inaccessible.status, 404);
   assert.equal(unknown.status, 404);
   assert.deepEqual(await inaccessible.json(), await unknown.json());
+
+  const inaccessibleList = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  assert.equal(inaccessibleList.status, 404);
+  assert.equal((await inaccessibleList.json()).error.code, "group_not_found");
+
+  const inaccessibleTask = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks/task_private`,
+  });
+  const unknownTask = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: "/api/v1/groups/grp_unknown/tasks/task_private",
+  });
+  assert.equal(inaccessibleTask.status, 404);
+  assert.deepEqual(await inaccessibleTask.json(), await unknownTask.json());
 });
 
 test("Task listing defaults to open Tasks across every assignee state in stable order", async (t) => {
@@ -472,6 +493,82 @@ test("Task collection rejects invalid filters and page fields", async (t) => {
     assert.equal(response.status, 400, query);
     assert.deepEqual(Object.keys((await response.json()).error.fields), [field]);
   }
+});
+
+test("Task pages default to 100 records and allow at most 500", async (t) => {
+  const assignee = {
+    state: "assigned",
+    userId: USERS.eli.userId,
+    username: USERS.eli.username,
+  };
+  const seedTasks = Array.from({ length: 501 }, (_, index) => ({
+    taskId: `task_${String(index).padStart(4, "0")}`,
+    groupId: GROUP_ID,
+    text: `Task ${index}`,
+    assignee,
+    dueDate: null,
+    state: "open",
+    createdAt: "2026-07-15T12:00:00.000Z",
+    completedAt: null,
+  }));
+  const harness = createTasksHarness({ seedTasks });
+  t.after(() => harness.close());
+
+  const defaultResponse = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  const defaultPage = await defaultResponse.json();
+  assert.equal(defaultPage.data.length, 100);
+  assert.equal(typeof defaultPage.nextCursor, "string");
+
+  const maximumResponse = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks?limit=500`,
+  });
+  const maximumPage = await maximumResponse.json();
+  assert.equal(maximumPage.data.length, 500);
+  assert.equal(typeof maximumPage.nextCursor, "string");
+
+  const finalResponse = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks?limit=500&cursor=${encodeURIComponent(maximumPage.nextCursor)}`,
+  });
+  const finalPage = await finalResponse.json();
+  assert.equal(finalPage.data.length, 1);
+  assert.equal(finalPage.data[0].taskId, "task_0500");
+  assert.equal(finalPage.nextCursor, null);
+});
+
+test("Task creation accepts exact text and calendar boundaries", async (t) => {
+  const harness = createTasksHarness();
+  t.after(() => harness.close());
+
+  const response = await harness.request({
+    as: "shane",
+    body: {
+      text: "🧰".repeat(2_000),
+      assigneeUsername: "shane",
+      dueDate: "2028-02-29",
+    },
+    method: "POST",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  assert.equal(response.status, 201);
+  const task = (await response.json()).data;
+  assert.equal(Array.from(task.text).length, 2_000);
+  assert.equal(task.dueDate, "2028-02-29");
+
+  const optionalDate = await harness.request({
+    as: "eli",
+    body: { text: "No date", assigneeUsername: "eli" },
+    method: "POST",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  assert.equal((await optionalDate.json()).data.dueDate, null);
 });
 
 test("representative Task responses validate against OpenAPI", async (t) => {
