@@ -1,3 +1,10 @@
+import {
+  createFirestoreRestClient,
+  type FirebaseConfig,
+  type FirestoreDocument,
+  type FirestoreValue,
+} from "./firestore-rest.ts";
+
 export type TaskRecord = {
   id: string;
   assignee: string;
@@ -7,77 +14,6 @@ export type TaskRecord = {
   createdAt: string;
   updatedAt: string;
 };
-
-type FirestoreValue = {
-  booleanValue?: boolean;
-  stringValue?: string;
-  timestampValue?: string;
-};
-
-type FirestoreDocument = {
-  name: string;
-  fields?: Record<string, FirestoreValue>;
-};
-
-type FirebaseConfig = {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-};
-
-type CachedToken = {
-  value: string;
-  expiresAt: number;
-};
-
-function bytesToBase64Url(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function jsonToBase64Url(value: unknown) {
-  return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(value)));
-}
-
-function privateKeyBytes(privateKey: string) {
-  const base64 = privateKey
-    .replace(/-----BEGIN PRIVATE KEY-----/, "")
-    .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\s/g, "");
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
-async function createServiceAccountJwt(config: FirebaseConfig) {
-  const now = Math.floor(Date.now() / 1000);
-  const encodedHeader = jsonToBase64Url({ alg: "RS256", typ: "JWT" });
-  const encodedPayload = jsonToBase64Url({
-    iss: config.clientEmail,
-    scope: "https://www.googleapis.com/auth/datastore",
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-  });
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-  const keyBytes = privateKeyBytes(config.privateKey);
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    keyBytes.buffer as ArrayBuffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(unsignedToken),
-  );
-  return `${unsignedToken}.${bytesToBase64Url(new Uint8Array(signature))}`;
-}
 
 function fromFirestoreDocument(document: FirestoreDocument): TaskRecord {
   const fields = document.fields ?? {};
@@ -128,69 +64,7 @@ export function createFirestoreStore(
   config: FirebaseConfig,
   fetchImplementation: typeof fetch = fetch,
 ) {
-  const baseUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/databases/(default)/documents`;
-  let cachedToken: CachedToken | null = null;
-
-  async function getAccessToken() {
-    if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-      return cachedToken.value;
-    }
-
-    const assertion = await createServiceAccountJwt(config);
-    const response = await fetchImplementation(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-          assertion,
-        }),
-      },
-    );
-    const result = (await response.json()) as {
-      access_token?: string;
-      expires_in?: number;
-      error_description?: string;
-    };
-    if (!response.ok || !result.access_token) {
-      throw new Error(result.error_description ?? "Firebase authentication failed.");
-    }
-
-    cachedToken = {
-      value: result.access_token,
-      expiresAt: Date.now() + (result.expires_in ?? 3600) * 1000,
-    };
-    return cachedToken.value;
-  }
-
-  async function request(
-    path: string,
-    init: RequestInit = {},
-    retryAuthentication = true,
-    allowNotFound = false,
-  ): Promise<Response> {
-    const headers = new Headers(init.headers);
-    headers.set("authorization", `Bearer ${await getAccessToken()}`);
-    if (init.body) headers.set("content-type", "application/json");
-
-    const response = await fetchImplementation(`${baseUrl}/${path}`, {
-      ...init,
-      headers,
-    });
-    if (response.status === 401 && retryAuthentication) {
-      cachedToken = null;
-      return request(path, init, false, allowNotFound);
-    }
-    if (response.status === 404 && allowNotFound) return response;
-    if (!response.ok) {
-      const result = (await response.json().catch(() => null)) as {
-        error?: { message?: string };
-      } | null;
-      throw new Error(result?.error?.message ?? `Firestore request failed (${response.status}).`);
-    }
-    return response;
-  }
+  const { request } = createFirestoreRestClient(config, fetchImplementation);
 
   return {
     async listTasks() {
@@ -250,8 +124,7 @@ export function createFirestoreStore(
             },
           }),
         },
-        true,
-        true,
+        { allowNotFound: true },
       );
       if (response.status === 404) return null;
       return fromFirestoreDocument((await response.json()) as FirestoreDocument);
