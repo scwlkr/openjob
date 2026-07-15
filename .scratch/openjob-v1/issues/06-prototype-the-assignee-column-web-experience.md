@@ -18,7 +18,7 @@ What is the simplest usable browser experience for entering a Group, viewing ass
 
 ### Prototype and selected direction
 
-- The [three-variant browser prototype](../../../app/prototype/assignee-columns/prototype-board.tsx) runs locally at `/prototype/assignee-columns?variant=A`, with `B` and `C` selecting the alternatives. It uses in-memory sample state only and is explicitly throwaway.
+- Run `npm run prototype:assignee-columns`, then open `/prototype/assignee-columns?variant=A`; `B` and `C` select the alternatives. The [three-variant browser prototype](../../../app/prototype/assignee-columns/prototype-board.tsx) uses in-memory sample state only and is explicitly throwaway.
 - Variant A, **Group rail + lanes**, is the v1 direction. Desktop keeps a persistent Group rail beside horizontally arranged assignee columns. Narrow screens turn the Group rail into a compact horizontal picker and show one almost-full-width assignee column at a time through horizontal scrolling.
 - Variant B, **Due-date ledger**, makes cross-assignee comparisons dense but invents due-date buckets as the primary structure. Variant C, **Roster focus**, is calm on narrow screens but hides the whole-Group state behind one selected assignee. Both are less faithful to the deliberately flat Task List.
 

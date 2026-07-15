@@ -10,11 +10,15 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
+  const prototypeConfigPath = process.env.OPENJOB_ASSIGNEE_COLUMNS_PROTOTYPE
+    ? "app/prototype/assignee-columns/wrangler.prototype.jsonc"
+    : undefined;
 
   return {
     plugins: [
       vinext(),
       cloudflare({
+        configPath: prototypeConfigPath,
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
       }),
     ],
