@@ -23,7 +23,10 @@ test("the black-box Group journey persists through the Firestore adapter", async
     "11111111-1111-4111-8111-111111111111",
     "22222222-2222-4222-8222-222222222222",
   ];
-  const groupIds = ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"];
+  const groupIds = [
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  ];
   const config = {
     projectId: "openjob-dev",
     clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",

@@ -20,8 +20,9 @@ function createMemoryGroupStore(controls, additionalMemberRole) {
   }
 
   return Object.freeze({
-    async create(userId, name) {
+    async create(user, name) {
       return controls.state.transaction(async (state) => {
+        const { userId } = user;
         const groupId = `grp_${String(nextGroup).padStart(4, "0")}`;
         nextGroup += 1;
         const group = {

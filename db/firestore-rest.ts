@@ -6,6 +6,7 @@ export type FirebaseConfig = {
 
 export type FirestoreValue = {
   booleanValue?: boolean;
+  integerValue?: number | string;
   stringValue?: string;
   timestampValue?: string;
 };

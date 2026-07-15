@@ -10,9 +10,11 @@ import {
 
 declare const groupNameBrand: unique symbol;
 declare const groupIdBrand: unique symbol;
+declare const inviteTokenBrand: unique symbol;
 
 export type GroupName = string & { readonly [groupNameBrand]: true };
 export type GroupId = string & { readonly [groupIdBrand]: true };
+export type InviteToken = string & { readonly [inviteTokenBrand]: true };
 export type GroupRole = "member" | "admin";
 
 export type OpenJobGroup = {
@@ -22,6 +24,26 @@ export type OpenJobGroup = {
   createdAt: string;
 };
 
+export type OpenJobMember = {
+  userId: string;
+  username: string;
+  role: GroupRole;
+  joinedAt: string;
+};
+
+export type OpenJobInviteLink = {
+  token: InviteToken;
+  url: string;
+  issuedAt: string;
+  expiresAt: string;
+  remainingJoins: number;
+};
+
+export type GroupUser = {
+  userId: string;
+  username: string | null;
+};
+
 export class InvalidGroupCursorError extends Error {
   constructor() {
     super("The Group collection cursor is invalid.");
@@ -29,13 +51,52 @@ export class InvalidGroupCursorError extends Error {
   }
 }
 
+export class InvalidMemberCursorError extends Error {
+  constructor() {
+    super("The Member collection cursor is invalid.");
+    this.name = "InvalidMemberCursorError";
+  }
+}
+
 export type GroupStore = {
-  create(userId: string, name: GroupName): Promise<OpenJobGroup>;
+  create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
   get(userId: string, groupId: GroupId): Promise<OpenJobGroup | null>;
+  getInvite(
+    userId: string,
+    groupId: GroupId,
+  ): Promise<
+    | { kind: "found"; invite: OpenJobInviteLink }
+    | { kind: "forbidden" }
+    | { kind: "not_found" }
+  >;
+  inspectInvite(
+    token: InviteToken,
+  ): Promise<{ kind: "found"; groupName: string } | { kind: "not_found" }>;
+  joinInvite(
+    user: GroupUser,
+    token: InviteToken,
+  ): Promise<
+    | { kind: "joined"; group: OpenJobGroup }
+    | { kind: "membership_denied" }
+    | { kind: "not_found" }
+    | { kind: "username_required" }
+  >;
   list(
     userId: string,
     options: { cursor: string | null; limit: number },
   ): Promise<{ groups: OpenJobGroup[]; nextCursor: string | null }>;
+  listMembers(
+    userId: string,
+    groupId: GroupId,
+    options: { cursor: string | null; limit: number },
+  ): Promise<
+    | {
+        kind: "found";
+        members: OpenJobMember[];
+        nextCursor: string | null;
+      }
+    | { kind: "not_found" }
+  >;
   rename(
     userId: string,
     groupId: GroupId,
@@ -45,10 +106,18 @@ export type GroupStore = {
     | { kind: "forbidden" }
     | { kind: "not_found" }
   >;
+  rotateInvite(
+    userId: string,
+    groupId: GroupId,
+  ): Promise<
+    | { kind: "rotated"; invite: OpenJobInviteLink }
+    | { kind: "forbidden" }
+    | { kind: "not_found" }
+  >;
 };
 
 type UserStore = {
-  getOrCreate(firebaseUid: string): Promise<{ userId: string }>;
+  getOrCreate(firebaseUid: string): Promise<GroupUser>;
 };
 
 type GroupsApiOptions = {
@@ -88,6 +157,14 @@ function groupNotFound(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "group_not_found",
     message: "Group was not found.",
+    status: 404,
+  });
+}
+
+function inviteNotFound(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "invite_not_found",
+    message: "Invite Link is not valid.",
     status: 404,
   });
 }
@@ -152,15 +229,47 @@ async function readGroupName(request: Request) {
   }
 }
 
-function groupIdFromPath(pathname: string) {
-  const match = pathname.match(/^\/api\/v1\/groups\/([^/]+)$/);
+type GroupResource = "group" | "invite" | "members" | "rotate_invite";
+
+function groupResourceFromPath(pathname: string) {
+  const match = pathname.match(
+    /^\/api\/v1\/groups\/([^/]+)(\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
+  );
   if (!match) return { kind: "none" as const };
   try {
     const groupId = decodeURIComponent(match[1]);
     if (groupId.length > 1_500 || !/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
       return { kind: "invalid" as const };
     }
-    return { kind: "valid" as const, groupId: groupId as GroupId };
+    const resources: Record<string, GroupResource> = {
+      "": "group",
+      "/invite-link": "invite",
+      "/invite-link/actions/rotate": "rotate_invite",
+      "/members": "members",
+    };
+    return {
+      kind: "valid" as const,
+      groupId: groupId as GroupId,
+      resource: resources[match[2] ?? ""],
+    };
+  } catch {
+    return { kind: "invalid" as const };
+  }
+}
+
+function inviteResourceFromPath(pathname: string) {
+  const match = pathname.match(/^\/api\/v1\/invites\/([^/]+)(\/actions\/join)?$/);
+  if (!match) return { kind: "none" as const };
+  try {
+    const token = decodeURIComponent(match[1]);
+    if (token.length > 1_500 || !/^ivt_[A-Za-z0-9_-]+$/.test(token)) {
+      return { kind: "invalid" as const };
+    }
+    return {
+      kind: "valid" as const,
+      token: token as InviteToken,
+      resource: match[2] ? ("join" as const) : ("inspect" as const),
+    };
   } catch {
     return { kind: "invalid" as const };
   }
@@ -210,24 +319,22 @@ export function createV1GroupsApi({
           if (request.method === "POST") {
             const name = await readGroupName(request);
             if (name === null) return groupNameError(requestId);
-            return jsonResponse(
-              { data: await groups.create(user.userId, name) },
-              201,
-            );
+            return jsonResponse({ data: await groups.create(user, name) }, 201);
           }
         }
 
-        const groupPath = groupIdFromPath(url.pathname);
+        const groupPath = groupResourceFromPath(url.pathname);
         if (groupPath.kind === "invalid") {
           return groupNotFound(requestId);
         }
         if (groupPath.kind === "valid") {
-          const { groupId } = groupPath;
-          if (request.method === "GET") {
+          const { groupId, resource } = groupPath;
+          if (resource === "group" && request.method === "GET") {
             const group = await groups.get(user.userId, groupId);
             if (group) return jsonResponse({ data: group });
+            return groupNotFound(requestId);
           }
-          if (request.method === "PATCH") {
+          if (resource === "group" && request.method === "PATCH") {
             const visibleGroup = await groups.get(user.userId, groupId);
             if (!visibleGroup) return groupNotFound(requestId);
             if (visibleGroup.role !== "admin") {
@@ -239,11 +346,77 @@ export function createV1GroupsApi({
             if (result.kind === "renamed") {
               return jsonResponse({ data: result.group });
             }
-            if (result.kind === "forbidden") {
-              return adminRequired(requestId);
-            }
+            if (result.kind === "forbidden") return adminRequired(requestId);
+            return groupNotFound(requestId);
           }
-          return groupNotFound(requestId);
+          if (resource === "members" && request.method === "GET") {
+            const pagination = readPagination(url);
+            if ("error" in pagination) {
+              return paginationError(pagination.error, requestId);
+            }
+            let result;
+            try {
+              result = await groups.listMembers(user.userId, groupId, pagination);
+            } catch (error) {
+              if (error instanceof InvalidMemberCursorError) {
+                return paginationError("cursor", requestId);
+              }
+              throw error;
+            }
+            if (result.kind === "not_found") return groupNotFound(requestId);
+            return jsonResponse({
+              data: result.members,
+              nextCursor: result.nextCursor,
+            });
+          }
+          if (resource === "invite" && request.method === "GET") {
+            const result = await groups.getInvite(user.userId, groupId);
+            if (result.kind === "found") {
+              return jsonResponse({ data: result.invite });
+            }
+            if (result.kind === "forbidden") return adminRequired(requestId);
+            return groupNotFound(requestId);
+          }
+          if (resource === "rotate_invite" && request.method === "POST") {
+            const result = await groups.rotateInvite(user.userId, groupId);
+            if (result.kind === "rotated") {
+              return jsonResponse({ data: result.invite });
+            }
+            if (result.kind === "forbidden") return adminRequired(requestId);
+            return groupNotFound(requestId);
+          }
+        }
+
+        const invitePath = inviteResourceFromPath(url.pathname);
+        if (invitePath.kind === "invalid") return inviteNotFound(requestId);
+        if (invitePath.kind === "valid") {
+          if (invitePath.resource === "inspect" && request.method === "GET") {
+            const result = await groups.inspectInvite(invitePath.token);
+            return result.kind === "found"
+              ? jsonResponse({ data: { groupName: result.groupName } })
+              : inviteNotFound(requestId);
+          }
+          if (invitePath.resource === "join" && request.method === "POST") {
+            const result = await groups.joinInvite(user, invitePath.token);
+            if (result.kind === "joined") {
+              return jsonResponse({ data: result.group });
+            }
+            if (result.kind === "membership_denied") {
+              return errorResponse(requestId, {
+                code: "membership_denied",
+                message: "Membership could not be granted.",
+                status: 403,
+              });
+            }
+            if (result.kind === "username_required") {
+              return errorResponse(requestId, {
+                code: "username_required",
+                message: "Claim a Username before joining a Group.",
+                status: 409,
+              });
+            }
+            return inviteNotFound(requestId);
+          }
         }
 
         return errorResponse(requestId, {
