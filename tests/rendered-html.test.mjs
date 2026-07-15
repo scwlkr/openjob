@@ -18,7 +18,7 @@ test("defines the Openjob task board", async () => {
 test("keeps durable task storage and social metadata wired", async () => {
   const [wrangler, storage, rules, layout, page] = await Promise.all([
     readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
-    readFile(new URL("../db/firestore.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/firestore-rest.ts", import.meta.url), "utf8"),
     readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
