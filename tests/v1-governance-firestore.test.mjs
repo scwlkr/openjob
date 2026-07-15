@@ -127,6 +127,13 @@ async function createGovernanceHarness(names) {
   return { claim, createGroup, firestore, harness, join, request };
 }
 
+async function runOrderedCommitRace(firestore, firstRequest, secondRequest) {
+  firestore.synchronizeNextCommits();
+  const first = firstRequest();
+  await firestore.waitForPendingCommits();
+  return Promise.all([first, secondRequest()]);
+}
+
 test("an Admin promotes only a current Member through the stable API contract", async (t) => {
   const { claim, createGroup, harness, join, request } =
     await createGovernanceHarness(["shane", "eli", "maya"]);
@@ -396,7 +403,7 @@ test("concurrent departure and self-demotion cannot remove every Admin", async (
   const { claim, createGroup, firestore, harness, join, request } =
     await createGovernanceHarness(["shane", "eli"]);
   t.after(() => harness.close());
-  const shane = await claim("shane");
+  await claim("shane");
   const eli = await claim("eli");
   const group = await createGroup("Concurrent Admins");
   await join("eli", group.groupId);
@@ -406,20 +413,19 @@ test("concurrent departure and self-demotion cannot remove every Admin", async (
   });
   assert.equal(promoted.status, 200);
 
-  firestore.synchronizeNextCommits();
-  const departurePromise = request("shane", {
-    method: "POST",
-    path: `/api/v1/groups/${group.groupId}/actions/leave`,
-  });
-  await firestore.waitForPendingCommits();
-  const demotionPromise = request("eli", {
-    method: "POST",
-    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/demote`,
-  });
-  const [departure, demotion] = await Promise.all([
-    departurePromise,
-    demotionPromise,
-  ]);
+  const [departure, demotion] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        method: "POST",
+        path: `/api/v1/groups/${group.groupId}/actions/leave`,
+      }),
+    () =>
+      request("eli", {
+        method: "POST",
+        path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/demote`,
+      }),
+  );
   assert.equal(departure.status, 204);
   assert.equal(demotion.status, 409);
   assert.equal((await demotion.json()).error.code, "last_admin");
@@ -441,7 +447,6 @@ test("concurrent departure and self-demotion cannot remove every Admin", async (
     ],
     nextCursor: null,
   });
-  assert.notEqual(shane.userId, eli.userId);
 });
 
 test("Task assignment changes and departure cannot orphan open work", async (t) => {
@@ -455,21 +460,20 @@ test("Task assignment changes and departure cannot orphan open work", async (t) 
   await join("eli", createFirstGroup.groupId);
   const createFirstTasks = `/api/v1/groups/${createFirstGroup.groupId}/tasks`;
   const createFirstLeave = `/api/v1/groups/${createFirstGroup.groupId}/actions/leave`;
-  firestore.synchronizeNextCommits();
-  const creationPromise = request("shane", {
-    body: { text: "Created during departure", assigneeUsername: "eli" },
-    method: "POST",
-    path: createFirstTasks,
-  });
-  await firestore.waitForPendingCommits();
-  const createFirstDeparturePromise = request("eli", {
-    method: "POST",
-    path: createFirstLeave,
-  });
-  const [creation, createFirstDeparture] = await Promise.all([
-    creationPromise,
-    createFirstDeparturePromise,
-  ]);
+  const [creation, createFirstDeparture] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        body: { text: "Created during departure", assigneeUsername: "eli" },
+        method: "POST",
+        path: createFirstTasks,
+      }),
+    () =>
+      request("eli", {
+        method: "POST",
+        path: createFirstLeave,
+      }),
+  );
   assert.equal(creation.status, 201);
   assert.equal(createFirstDeparture.status, 409);
   assert.equal(
@@ -481,21 +485,20 @@ test("Task assignment changes and departure cannot orphan open work", async (t) 
   await join("eli", leaveFirstGroup.groupId);
   const leaveFirstTasks = `/api/v1/groups/${leaveFirstGroup.groupId}/tasks`;
   const leaveFirstPath = `/api/v1/groups/${leaveFirstGroup.groupId}/actions/leave`;
-  firestore.synchronizeNextCommits();
-  const leaveFirstDeparturePromise = request("eli", {
-    method: "POST",
-    path: leaveFirstPath,
-  });
-  await firestore.waitForPendingCommits();
-  const lateCreationPromise = request("shane", {
-    body: { text: "Too late to assign", assigneeUsername: "eli" },
-    method: "POST",
-    path: leaveFirstTasks,
-  });
-  const [leaveFirstDeparture, lateCreation] = await Promise.all([
-    leaveFirstDeparturePromise,
-    lateCreationPromise,
-  ]);
+  const [leaveFirstDeparture, lateCreation] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("eli", {
+        method: "POST",
+        path: leaveFirstPath,
+      }),
+    () =>
+      request("shane", {
+        body: { text: "Too late to assign", assigneeUsername: "eli" },
+        method: "POST",
+        path: leaveFirstTasks,
+      }),
+  );
   assert.equal(leaveFirstDeparture.status, 204);
   assert.equal(lateCreation.status, 409);
   assert.equal((await lateCreation.json()).error.code, "assignee_not_member");
@@ -509,21 +512,20 @@ test("Task assignment changes and departure cannot orphan open work", async (t) 
     path: reassignTasks,
   });
   const original = (await originalResponse.json()).data;
-  firestore.synchronizeNextCommits();
-  const reassignmentPromise = request("shane", {
-    body: { assigneeUsername: "eli" },
-    method: "PATCH",
-    path: `${reassignTasks}/${original.taskId}`,
-  });
-  await firestore.waitForPendingCommits();
-  const reassignDeparturePromise = request("eli", {
-    method: "POST",
-    path: `/api/v1/groups/${reassignGroup.groupId}/actions/leave`,
-  });
-  const [reassignment, reassignDeparture] = await Promise.all([
-    reassignmentPromise,
-    reassignDeparturePromise,
-  ]);
+  const [reassignment, reassignDeparture] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        body: { assigneeUsername: "eli" },
+        method: "PATCH",
+        path: `${reassignTasks}/${original.taskId}`,
+      }),
+    () =>
+      request("eli", {
+        method: "POST",
+        path: `/api/v1/groups/${reassignGroup.groupId}/actions/leave`,
+      }),
+  );
   assert.equal(reassignment.status, 200);
   assert.equal(reassignDeparture.status, 409);
   assert.equal(
@@ -546,21 +548,20 @@ test("Task assignment changes and departure cannot orphan open work", async (t) 
     path: `${reopenTasks}/${doneTask.taskId}/state`,
   });
   assert.equal(completed.status, 200);
-  firestore.synchronizeNextCommits();
-  const reopenPromise = request("shane", {
-    body: { state: "open" },
-    method: "PUT",
-    path: `${reopenTasks}/${doneTask.taskId}/state`,
-  });
-  await firestore.waitForPendingCommits();
-  const reopenDeparturePromise = request("eli", {
-    method: "POST",
-    path: `/api/v1/groups/${reopenGroup.groupId}/actions/leave`,
-  });
-  const [reopened, reopenDeparture] = await Promise.all([
-    reopenPromise,
-    reopenDeparturePromise,
-  ]);
+  const [reopened, reopenDeparture] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        body: { state: "open" },
+        method: "PUT",
+        path: `${reopenTasks}/${doneTask.taskId}/state`,
+      }),
+    () =>
+      request("eli", {
+        method: "POST",
+        path: `/api/v1/groups/${reopenGroup.groupId}/actions/leave`,
+      }),
+  );
   assert.equal(reopened.status, 200);
   assert.equal(reopenDeparture.status, 409);
   assert.equal(

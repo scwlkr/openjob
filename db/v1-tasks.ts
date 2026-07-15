@@ -4,6 +4,10 @@ import {
   type FirebaseConfig,
   type FirestoreDocument,
 } from "./firestore-rest.ts";
+import {
+  advanceGroupStateRevisionWrite,
+  readGroupStateRevision,
+} from "./group-state.ts";
 import type {
   DueDate,
   OpenJobTask,
@@ -94,6 +98,18 @@ function publicTask(task: StoredTask): OpenJobTask {
   };
 }
 
+export function isOpenTaskAssignedTo(
+  document: FirestoreDocument,
+  userId: string,
+) {
+  const task = parseTask(document, document.name);
+  return (
+    task.state === "open" &&
+    task.assignee.state === "assigned" &&
+    task.assignee.userId === userId
+  );
+}
+
 function taskFields(task: OpenJobTask) {
   return {
     taskId: { stringValue: task.taskId },
@@ -149,25 +165,14 @@ export function createFirestoreTaskStore(
   }
 
   function stateRevisionWrite(group: FirestoreDocument) {
-    const stateRevision = Number(group.fields?.stateRevision?.integerValue ?? 0);
-    if (
-      !group.name ||
-      !group.updateTime ||
-      !Number.isSafeInteger(stateRevision) ||
-      stateRevision < 0
-    ) {
+    if (!group.name || !group.updateTime) {
       throw new Error("Firestore returned an invalid Group record.");
     }
-    return {
-      update: {
-        name: group.name,
-        fields: {
-          stateRevision: { integerValue: String(stateRevision + 1) },
-        },
-      },
-      updateMask: { fieldPaths: ["stateRevision"] },
-      currentDocument: { updateTime: group.updateTime },
-    };
+    return advanceGroupStateRevisionWrite({
+      documentName: group.name,
+      revision: readGroupStateRevision(group),
+      updateTime: group.updateTime,
+    });
   }
 
   async function readDocument(path: string) {

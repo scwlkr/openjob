@@ -6,6 +6,11 @@ import {
   type FirestoreDocument,
 } from "./firestore-rest.ts";
 import {
+  advanceGroupStateRevisionWrite,
+  readGroupStateRevision,
+} from "./group-state.ts";
+import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
+import {
   InvalidGroupCursorError,
   InvalidMemberCursorError,
   type GroupId,
@@ -66,15 +71,11 @@ function parseGroup(document: FirestoreDocument, path: string): StoredGroup {
   const groupId = document.fields?.groupId?.stringValue as GroupId | undefined;
   const name = document.fields?.name?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
-  const stateRevision = Number(
-    document.fields?.stateRevision?.integerValue ?? 0,
-  );
+  const stateRevision = readGroupStateRevision(document);
   if (
     !groupId ||
     !name ||
     !createdAt ||
-    !Number.isInteger(stateRevision) ||
-    stateRevision < 0 ||
     !document.updateTime
   ) {
     throw new Error("Firestore returned an invalid Group record.");
@@ -224,8 +225,8 @@ export function createFirestoreGroupStore(
     return document ? parseInvitePointer(document, path) : null;
   }
 
-  async function readAllMemberships(groupId: GroupId) {
-    const memberships: StoredMembership[] = [];
+  async function readAllCollectionDocuments(path: string) {
+    const documents: FirestoreDocument[] = [];
     let pageToken: string | null = null;
     do {
       const parameters = new URLSearchParams({
@@ -233,51 +234,31 @@ export function createFirestoreGroupStore(
         orderBy: "__name__",
       });
       if (pageToken !== null) parameters.set("pageToken", pageToken);
-      const response = await firestore.request(
-        `${groupPath(groupId)}/members?${parameters}`,
-      );
+      const response = await firestore.request(`${path}?${parameters}`);
       const page = (await response.json()) as {
         documents?: FirestoreDocument[];
         nextPageToken?: string;
       };
-      memberships.push(
-        ...(page.documents ?? []).map((document) =>
-          parseMembership(document, document.name),
-        ),
-      );
+      documents.push(...(page.documents ?? []));
       pageToken = page.nextPageToken ?? null;
     } while (pageToken !== null);
-    return memberships;
+    return documents;
+  }
+
+  async function readAllMemberships(groupId: GroupId) {
+    const documents = await readAllCollectionDocuments(
+      `${groupPath(groupId)}/members`,
+    );
+    return documents.map((document) =>
+      parseMembership(document, document.name),
+    );
   }
 
   async function hasOpenTasksAssigned(groupId: GroupId, userId: string) {
-    let pageToken: string | null = null;
-    do {
-      const parameters = new URLSearchParams({
-        pageSize: "500",
-        orderBy: "__name__",
-      });
-      if (pageToken !== null) parameters.set("pageToken", pageToken);
-      const response = await firestore.request(
-        `${groupPath(groupId)}/tasks?${parameters}`,
-      );
-      const page = (await response.json()) as {
-        documents?: FirestoreDocument[];
-        nextPageToken?: string;
-      };
-      if (
-        (page.documents ?? []).some(
-          (document) =>
-            document.fields?.state?.stringValue === "open" &&
-            document.fields?.assigneeState?.stringValue === "assigned" &&
-            document.fields?.assigneeUserId?.stringValue === userId,
-        )
-      ) {
-        return true;
-      }
-      pageToken = page.nextPageToken ?? null;
-    } while (pageToken !== null);
-    return false;
+    const documents = await readAllCollectionDocuments(
+      `${groupPath(groupId)}/tasks`,
+    );
+    return documents.some((document) => isOpenTaskAssignedTo(document, userId));
   }
 
   async function commit(writes: unknown[]) {
@@ -401,16 +382,11 @@ export function createFirestoreGroupStore(
   }
 
   function stateRevisionWrite(group: StoredGroup) {
-    return {
-      update: {
-        name: firestore.documentName(group.path),
-        fields: {
-          stateRevision: { integerValue: String(group.stateRevision + 1) },
-        },
-      },
-      updateMask: { fieldPaths: ["stateRevision"] },
-      currentDocument: { updateTime: group.updateTime },
-    };
+    return advanceGroupStateRevisionWrite({
+      documentName: firestore.documentName(group.path),
+      revision: group.stateRevision,
+      updateTime: group.updateTime,
+    });
   }
 
   async function rotateCurrentInvite(
