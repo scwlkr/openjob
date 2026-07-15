@@ -11,6 +11,31 @@ export function defaultRequestId() {
   return `req_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
+export function readPagination(
+  url: URL,
+):
+  | { error: "cursor" | "limit" }
+  | { cursor: string | null; limit: number } {
+  const cursors = url.searchParams.getAll("cursor");
+  const limits = url.searchParams.getAll("limit");
+  if (cursors.length > 1 || cursors[0] === "") {
+    return { error: "cursor" };
+  }
+  if (
+    limits.length > 1 ||
+    (limits.length === 1 &&
+      (!/^\d+$/.test(limits[0]) ||
+        Number(limits[0]) < 1 ||
+        Number(limits[0]) > 500))
+  ) {
+    return { error: "limit" };
+  }
+  return {
+    cursor: cursors[0] ?? null,
+    limit: limits.length === 0 ? 100 : Number(limits[0]),
+  };
+}
+
 export function errorResponse(
   requestId: RequestIdFactory,
   {

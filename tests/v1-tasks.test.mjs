@@ -202,10 +202,18 @@ test("Task creation conceals an inaccessible Group before validating input", asy
     path: "/api/v1/groups/grp_unknown/tasks/task_private",
   });
   assert.equal(inaccessibleTask.status, 404);
-  assert.deepEqual(await inaccessibleTask.json(), await unknownTask.json());
+  const unknownTaskBody = await unknownTask.json();
+  assert.deepEqual(await inaccessibleTask.json(), unknownTaskBody);
+
+  const malformedGroupTask = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: "/api/v1/groups/not-a-group/tasks/task_private",
+  });
+  assert.deepEqual(await malformedGroupTask.json(), unknownTaskBody);
 });
 
-test("Task listing defaults to open Tasks across every assignee state in stable order", async (t) => {
+test("Task listing orders Username columns, Unassigned last, and Tasks within each column", async (t) => {
   const common = {
     groupId: GROUP_ID,
     completedAt: null,
@@ -215,6 +223,11 @@ test("Task listing defaults to open Tasks across every assignee state in stable 
     state: "assigned",
     userId: USERS.eli.userId,
     username: USERS.eli.username,
+  };
+  const assignedToShane = {
+    state: "assigned",
+    userId: USERS.shane.userId,
+    username: USERS.shane.username,
   };
   const tasks = [
     {
@@ -259,6 +272,14 @@ test("Task listing defaults to open Tasks across every assignee state in stable 
     },
     {
       ...common,
+      taskId: "task_shane_earliest",
+      text: "Shane due earliest",
+      assignee: assignedToShane,
+      dueDate: "2026-07-17",
+      createdAt: "2026-07-15T11:00:00.000Z",
+    },
+    {
+      ...common,
       taskId: "task_done",
       text: "Already done",
       assignee: assigned,
@@ -284,11 +305,12 @@ test("Task listing defaults to open Tasks across every assignee state in stable 
       "task_due_same_a",
       "task_due_same_b",
       "task_due_later",
-      "task_unassigned",
       "task_undated_later",
+      "task_shane_earliest",
+      "task_unassigned",
     ],
   );
-  assert.deepEqual(body.data[3].assignee, { state: "unassigned" });
+  assert.deepEqual(body.data.at(-1).assignee, { state: "unassigned" });
   assert.equal(body.nextCursor, null);
 });
 
@@ -376,6 +398,67 @@ test("status and one assignee filter combine before Task ordering", async (t) =>
   assert.deepEqual(
     (await unassigned.json()).data.map(({ taskId }) => taskId),
     ["task_unassigned_open"],
+  );
+});
+
+test("done Tasks use completion, creation, then Task ID tie-breakers", async (t) => {
+  const assignee = {
+    state: "assigned",
+    userId: USERS.eli.userId,
+    username: USERS.eli.username,
+  };
+  const common = {
+    groupId: GROUP_ID,
+    assignee,
+    dueDate: null,
+    state: "done",
+  };
+  const seedTasks = [
+    {
+      ...common,
+      taskId: "task_done_same_late_b",
+      text: "Same completion and creation B",
+      createdAt: "2026-07-15T11:00:00.000Z",
+      completedAt: "2026-07-15T14:00:00.000Z",
+    },
+    {
+      ...common,
+      taskId: "task_done_latest",
+      text: "Latest completion",
+      createdAt: "2026-07-15T12:00:00.000Z",
+      completedAt: "2026-07-15T15:00:00.000Z",
+    },
+    {
+      ...common,
+      taskId: "task_done_same_early",
+      text: "Same completion, earlier creation",
+      createdAt: "2026-07-15T10:00:00.000Z",
+      completedAt: "2026-07-15T14:00:00.000Z",
+    },
+    {
+      ...common,
+      taskId: "task_done_same_late_a",
+      text: "Same completion and creation A",
+      createdAt: "2026-07-15T11:00:00.000Z",
+      completedAt: "2026-07-15T14:00:00.000Z",
+    },
+  ];
+  const harness = createTasksHarness({ seedTasks });
+  t.after(() => harness.close());
+
+  const response = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=done&assignee=eli`,
+  });
+  assert.deepEqual(
+    (await response.json()).data.map(({ taskId }) => taskId),
+    [
+      "task_done_latest",
+      "task_done_same_early",
+      "task_done_same_late_a",
+      "task_done_same_late_b",
+    ],
   );
 });
 

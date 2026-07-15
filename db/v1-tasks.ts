@@ -5,11 +5,14 @@ import {
   type FirestoreDocument,
 } from "./firestore-rest.ts";
 import type {
+  DueDate,
   OpenJobTask,
   TaskId,
   TaskStore,
+  TaskText,
 } from "../server/v1-tasks.ts";
 import type { GroupId } from "../server/v1-groups.ts";
+import type { Username } from "../server/v1-identity.ts";
 
 type TaskStoreOptions = {
   now?: () => number;
@@ -55,15 +58,19 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     if (!userId || !username) {
       throw new Error("Firestore returned an incomplete Task assignee.");
     }
-    assignee = { state: "assigned", userId, username };
+    assignee = {
+      state: "assigned",
+      userId,
+      username: username as Username,
+    };
   }
 
   return {
     taskId: taskId as TaskId,
     groupId: groupId as GroupId,
-    text,
+    text: text as TaskText,
     assignee,
-    dueDate,
+    dueDate: dueDate as DueDate | null,
     state: state as OpenJobTask["state"],
     createdAt,
     completedAt,
@@ -73,8 +80,39 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
 }
 
 function publicTask(task: StoredTask): OpenJobTask {
-  const { path: _path, updateTime: _updateTime, ...result } = task;
-  return result;
+  return {
+    taskId: task.taskId,
+    groupId: task.groupId,
+    text: task.text,
+    assignee: task.assignee,
+    dueDate: task.dueDate,
+    state: task.state,
+    createdAt: task.createdAt,
+    completedAt: task.completedAt,
+  };
+}
+
+function taskFields(task: OpenJobTask) {
+  return {
+    taskId: { stringValue: task.taskId },
+    groupId: { stringValue: task.groupId },
+    text: { stringValue: task.text },
+    assigneeState: { stringValue: task.assignee.state },
+    ...(task.assignee.state === "assigned"
+      ? {
+          assigneeUserId: { stringValue: task.assignee.userId },
+          assigneeUsername: { stringValue: task.assignee.username },
+        }
+      : {}),
+    ...(task.dueDate !== null
+      ? { dueDate: { stringValue: task.dueDate } }
+      : {}),
+    state: { stringValue: task.state },
+    createdAt: { timestampValue: task.createdAt },
+    ...(task.completedAt !== null
+      ? { completedAt: { timestampValue: task.completedAt } }
+      : {}),
+  };
 }
 
 function isConcurrentWrite(error: unknown) {
@@ -122,6 +160,20 @@ export function createFirestoreTaskStore(
     return group && member ? { group, member } : null;
   }
 
+  async function readCreationAccess(
+    actorUserId: string,
+    groupId: GroupId,
+    assigneeUserId: string,
+  ) {
+    const [access, assigneeMember] = await Promise.all([
+      readAccess(actorUserId, groupId),
+      readDocument(membershipPath(groupId, assigneeUserId)),
+    ]);
+    if (!access) return { kind: "not_found" as const };
+    if (!assigneeMember) return { kind: "assignee_not_member" as const };
+    return { kind: "ready" as const, access, assigneeMember };
+  }
+
   async function commit(writes: unknown[]) {
     return firestore.request(":commit", {
       method: "POST",
@@ -136,12 +188,13 @@ export function createFirestoreTaskStore(
 
     async create(actorUserId, groupId, assignee, input) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const [access, assigneeMember] = await Promise.all([
-          readAccess(actorUserId, groupId),
-          readDocument(membershipPath(groupId, assignee.userId)),
-        ]);
-        if (!access) return { kind: "not_found" as const };
-        if (!assigneeMember) return { kind: "assignee_not_member" as const };
+        const creationAccess = await readCreationAccess(
+          actorUserId,
+          groupId,
+          assignee.userId,
+        );
+        if (creationAccess.kind !== "ready") return creationAccess;
+        const { access, assigneeMember } = creationAccess;
 
         const taskId = `task_${randomUUID().replaceAll("-", "")}` as TaskId;
         const createdAt = new Date(now()).toISOString();
@@ -185,19 +238,7 @@ export function createFirestoreTaskStore(
             {
               update: {
                 name: firestore.documentName(taskPath(groupId, taskId)),
-                fields: {
-                  taskId: { stringValue: taskId },
-                  groupId: { stringValue: groupId },
-                  text: { stringValue: input.text },
-                  assigneeState: { stringValue: "assigned" },
-                  assigneeUserId: { stringValue: assignee.userId },
-                  assigneeUsername: { stringValue: assignee.username },
-                  ...(input.dueDate
-                    ? { dueDate: { stringValue: input.dueDate } }
-                    : {}),
-                  state: { stringValue: "open" },
-                  createdAt: { timestampValue: createdAt },
-                },
+                fields: taskFields(task),
               },
               currentDocument: { exists: false },
             },
@@ -208,12 +249,12 @@ export function createFirestoreTaskStore(
         }
       }
 
-      const [access, assigneeMember] = await Promise.all([
-        readAccess(actorUserId, groupId),
-        readDocument(membershipPath(groupId, assignee.userId)),
-      ]);
-      if (!access) return { kind: "not_found" as const };
-      if (!assigneeMember) return { kind: "assignee_not_member" as const };
+      const creationAccess = await readCreationAccess(
+        actorUserId,
+        groupId,
+        assignee.userId,
+      );
+      if (creationAccess.kind !== "ready") return creationAccess;
       throw new Error("Task creation could not resolve concurrent writes.");
     },
 

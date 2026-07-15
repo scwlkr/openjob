@@ -20,6 +20,16 @@ const NOW = "2026-07-15T12:00:00.000Z";
 test("the black-box Task journey persists through the Group-scoped Firestore adapter", async (t) => {
   const authority = await createTestFirebaseAuthority({ now: NOW });
   const firestore = createFakeFirestore();
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  const legacyTaskName = `${database}/tasks/legacy_sentinel`;
+  const legacyTask = {
+    name: legacyTaskName,
+    fields: {
+      description: { stringValue: "Preserve the frozen legacy Task" },
+    },
+    updateTime: "2026-07-14T12:00:00.000000Z",
+  };
+  firestore.documents.set(legacyTaskName, structuredClone(legacyTask));
   const privateKey = await createPrivateKey();
   const assertContract = await createOpenApiResponseValidator();
   const userIds = [
@@ -32,7 +42,11 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   ];
-  const taskIds = ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"];
+  const taskIds = [
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  ];
   const config = {
     projectId: "openjob-dev",
     clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",
@@ -152,6 +166,32 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     completedAt: null,
   });
 
+  const laterForEliResponse = await harness.request({
+    body: {
+      text: "Eli later",
+      assigneeUsername: "eli",
+      dueDate: "2026-07-20",
+    },
+    headers: shaneHeaders,
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/tasks`,
+  });
+  assert.equal(laterForEliResponse.status, 201);
+  const laterForEli = (await laterForEliResponse.json()).data;
+
+  const soonerForEliResponse = await harness.request({
+    body: {
+      text: "Eli sooner",
+      assigneeUsername: "eli",
+      dueDate: "2026-07-17",
+    },
+    headers: shaneHeaders,
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/tasks`,
+  });
+  assert.equal(soonerForEliResponse.status, 201);
+  const soonerForEli = (await soonerForEliResponse.json()).data;
+
   await harness.restart();
   const retrieved = await harness.request({
     headers: shaneHeaders,
@@ -171,7 +211,10 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     path: `/api/v1/groups/${group.groupId}/tasks`,
   });
   await assertContract(listed, "/api/v1/groups/{groupId}/tasks", "get");
-  assert.deepEqual(await listed.json(), { data: [task], nextCursor: null });
+  assert.deepEqual(await listed.json(), {
+    data: [soonerForEli, laterForEli, task],
+    nextCursor: null,
+  });
 
   const inaccessible = await harness.request({
     body: { text: "Private", assigneeUsername: "shane" },
@@ -182,7 +225,6 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   assert.equal(inaccessible.status, 404);
   assert.equal((await inaccessible.json()).error.code, "group_not_found");
 
-  const database = "projects/openjob-dev/databases/(default)/documents";
   firestore.documents.delete(
     `${database}/v1Groups/${group.groupId}/members/${eli.userId}`,
   );
@@ -201,10 +243,11 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     ),
     true,
   );
-  assert.equal(
-    [...firestore.documents.keys()].some((name) =>
+  assert.deepEqual(
+    [...firestore.documents.keys()].filter((name) =>
       name.startsWith(`${database}/tasks/`),
     ),
-    false,
+    [legacyTaskName],
   );
+  assert.deepEqual(firestore.documents.get(legacyTaskName), legacyTask);
 });

@@ -548,7 +548,8 @@ paths:
       tags: [Tasks]
       summary: List Group Tasks
       description: |
-        Filters combine and are applied before stable service ordering. Open
+        Filters combine and are applied before stable service ordering. Assignee
+        columns sort by Username, with Unassigned last. Within each column, open
         Tasks precede done Tasks in an all-state view. Open Tasks with due dates
         sort by dueDate ascending, followed by undated open Tasks; equal dates
         and undated Tasks sort by createdAt ascending, then taskId ascending.

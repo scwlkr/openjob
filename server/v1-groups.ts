@@ -4,6 +4,7 @@ import {
   internalErrorResponse,
   isRateLimitError,
   jsonResponse,
+  readPagination,
   rateLimitedErrorResponse,
   type RequestIdFactory,
 } from "./v1-http.ts";
@@ -184,31 +185,6 @@ function usernameRequired(requestId: RequestIdFactory) {
     message: "Claim a Username before joining a Group.",
     status: 409,
   });
-}
-
-function readPagination(
-  url: URL,
-):
-  | { error: "cursor" | "limit" }
-  | { cursor: string | null; limit: number } {
-  const cursors = url.searchParams.getAll("cursor");
-  const limits = url.searchParams.getAll("limit");
-  if (cursors.length > 1 || cursors[0] === "") {
-    return { error: "cursor" as const };
-  }
-  if (
-    limits.length > 1 ||
-    (limits.length === 1 &&
-      (!/^\d+$/.test(limits[0]) ||
-        Number(limits[0]) < 1 ||
-        Number(limits[0]) > 500))
-  ) {
-    return { error: "limit" as const };
-  }
-  return {
-    cursor: cursors[0] ?? null,
-    limit: limits.length === 0 ? 100 : Number(limits[0]),
-  };
 }
 
 async function readGroupName(request: Request) {

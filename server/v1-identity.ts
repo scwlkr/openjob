@@ -45,6 +45,14 @@ const RESERVED_USERNAMES = new Set([
   "me",
 ]);
 
+export function isUsernameSyntax(value: unknown): value is Username {
+  return typeof value === "string" && USERNAME_PATTERN.test(value);
+}
+
+export function isReservedUsername(value: string) {
+  return RESERVED_USERNAMES.has(value);
+}
+
 async function currentUser(
   user: OpenJobUser,
   groups: Pick<GroupStore, "list">,
@@ -73,8 +81,7 @@ async function readUsername(request: Request) {
       Array.isArray(input) ||
       Object.keys(input).length !== 1 ||
       !("username" in input) ||
-      typeof input.username !== "string" ||
-      !USERNAME_PATTERN.test(input.username)
+      !isUsernameSyntax(input.username)
     ) {
       return null;
     }
@@ -123,7 +130,7 @@ export function createV1IdentityApi({
               status: 400,
             });
           }
-          if (RESERVED_USERNAMES.has(username)) {
+          if (isReservedUsername(username)) {
             return errorResponse(requestId, {
               code: "username_taken",
               message: "That Username is unavailable.",

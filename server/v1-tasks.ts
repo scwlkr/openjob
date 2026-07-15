@@ -1,11 +1,17 @@
 import type { GroupId } from "./v1-groups.ts";
-import type { OpenJobUser, Username } from "./v1-identity.ts";
+import {
+  isReservedUsername,
+  isUsernameSyntax,
+  type OpenJobUser,
+  type Username,
+} from "./v1-identity.ts";
 import {
   defaultRequestId,
   errorResponse,
   internalErrorResponse,
   isRateLimitError,
   jsonResponse,
+  readPagination,
   rateLimitedErrorResponse,
   type RequestIdFactory,
 } from "./v1-http.ts";
@@ -18,14 +24,20 @@ export type TaskId = string & { readonly [taskIdBrand]: true };
 export type TaskText = string & { readonly [taskTextBrand]: true };
 export type DueDate = string & { readonly [dueDateBrand]: true };
 
+export type AssignedTaskAssignee = {
+  state: "assigned";
+  userId: string;
+  username: Username;
+};
+
+export type TaskAssignee = AssignedTaskAssignee | { state: "unassigned" };
+
 export type OpenJobTask = {
   taskId: TaskId;
   groupId: GroupId;
-  text: string;
-  assignee:
-    | { state: "assigned"; userId: string; username: string }
-    | { state: "unassigned" };
-  dueDate: string | null;
+  text: TaskText;
+  assignee: TaskAssignee;
+  dueDate: DueDate | null;
   state: "open" | "done";
   createdAt: string;
   completedAt: string | null;
@@ -36,7 +48,7 @@ export type TaskStore = {
   create(
     actorUserId: string,
     groupId: GroupId,
-    assignee: { userId: string; username: string },
+    assignee: { userId: string; username: Username },
     input: { text: TaskText; dueDate: DueDate | null },
   ): Promise<
     | { kind: "created"; task: OpenJobTask }
@@ -73,14 +85,6 @@ type TasksApiOptions = {
   verifyIdToken(request: Request): Promise<{ uid: string } | null>;
 };
 
-const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])$/;
-const RESERVED_USERNAMES = new Set([
-  "admin",
-  "support",
-  "openjob",
-  "unassigned",
-  "me",
-]);
 const TASK_TEXT_CONTROL_CHARACTERS =
   /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/u;
 
@@ -179,8 +183,8 @@ async function readCreateTask(
     let assigneeUsername: Username | null = null;
     if (
       typeof input.assigneeUsername !== "string" ||
-      !USERNAME_PATTERN.test(input.assigneeUsername) ||
-      RESERVED_USERNAMES.has(input.assigneeUsername)
+      !isUsernameSyntax(input.assigneeUsername) ||
+      isReservedUsername(input.assigneeUsername)
     ) {
       fields.assigneeUsername = "Use a valid current Member Username.";
     } else {
@@ -213,7 +217,9 @@ function taskResourceFromPath(pathname: string) {
     const groupId = decodeURIComponent(match[1]);
     const taskId = match[2] === undefined ? null : decodeURIComponent(match[2]);
     if (groupId.length > 1_500 || !/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
-      return { kind: "invalid_group" as const };
+      return taskId === null
+        ? { kind: "invalid_group" as const }
+        : { kind: "invalid_task" as const };
     }
     if (
       taskId !== null &&
@@ -245,8 +251,6 @@ function readTaskListOptions(url: URL):
   | TaskListOptions {
   const statuses = url.searchParams.getAll("status");
   const assignees = url.searchParams.getAll("assignee");
-  const cursors = url.searchParams.getAll("cursor");
-  const limits = url.searchParams.getAll("limit");
   if (
     statuses.length > 1 ||
     (statuses.length === 1 && !["open", "done", "all"].includes(statuses[0]))
@@ -260,27 +264,26 @@ function readTaskListOptions(url: URL):
   if (
     assignee !== null &&
     assignee !== "unassigned" &&
-    (!USERNAME_PATTERN.test(assignee) || RESERVED_USERNAMES.has(assignee))
+    (!isUsernameSyntax(assignee) || isReservedUsername(assignee))
   ) {
     return { fields: { assignee: "Use one Username or unassigned." } };
   }
-  if (cursors.length > 1 || cursors[0] === "") {
-    return { fields: { cursor: "Use a cursor returned by this collection." } };
-  }
-  if (
-    limits.length > 1 ||
-    (limits.length === 1 &&
-      (!/^\d+$/.test(limits[0]) ||
-        Number(limits[0]) < 1 ||
-        Number(limits[0]) > 500))
-  ) {
-    return { fields: { limit: "Use an integer from 1 to 500." } };
+  const pagination = readPagination(url);
+  if ("error" in pagination) {
+    return {
+      fields: {
+        [pagination.error]:
+          pagination.error === "cursor"
+            ? "Use a cursor returned by this collection."
+            : "Use an integer from 1 to 500.",
+      },
+    };
   }
   return {
     status: (statuses[0] ?? "open") as "open" | "done" | "all",
     assignee: assignee as Username | "unassigned" | null,
-    cursor: cursors[0] ?? null,
-    limit: limits.length === 0 ? 100 : Number(limits[0]),
+    cursor: pagination.cursor,
+    limit: pagination.limit,
   };
 }
 
@@ -346,6 +349,16 @@ function decodeTaskCursor(value: string): TaskCursor | null {
 }
 
 function compareTasks(left: OpenJobTask, right: OpenJobTask) {
+  if (left.assignee.state !== right.assignee.state) {
+    return left.assignee.state === "unassigned" ? 1 : -1;
+  }
+  if (
+    left.assignee.state === "assigned" &&
+    right.assignee.state === "assigned" &&
+    left.assignee.username !== right.assignee.username
+  ) {
+    return left.assignee.username < right.assignee.username ? -1 : 1;
+  }
   if (left.state !== right.state) return left.state === "open" ? -1 : 1;
   if (left.state === "open" && right.state === "open") {
     if (left.dueDate === null && right.dueDate !== null) return 1;
@@ -401,7 +414,7 @@ export function createV1TasksApi({
           if (!assignee?.username) return assigneeNotMember(requestId);
           const result = await tasks.create(user.userId, path.groupId, {
             userId: assignee.userId,
-            username: assignee.username,
+            username: assignee.username as Username,
           }, parsed.input);
           if (result.kind === "created") {
             return jsonResponse({ data: result.task }, 201);
