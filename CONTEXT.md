@@ -37,7 +37,7 @@ A person with one OpenJob identity that can participate in multiple Groups.
 _Avoid_: Account, profile
 
 **Username**:
-A globally unique, first-come identifier chosen once after a User's first Google sign-in, used for assignment and recognition across Groups. A Username is immutable after it is claimed.
+A globally unique, first-come identifier chosen once after a User's first Google sign-in, used for assignment and recognition across Groups. It contains 2–32 lowercase ASCII letters or numbers, may contain `.`, `_`, or `-` internally, and begins and ends with a letter or number. OpenJob reserves `admin`, `support`, `openjob`, `unassigned`, and `me`. A Username is immutable after it is claimed.
 _Avoid_: Display name, email address
 
 **Member**:
