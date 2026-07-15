@@ -1,5 +1,7 @@
 declare const usernameBrand: unique symbol;
 
+import type { GroupStore, OpenJobGroup } from "./v1-groups";
+
 export type Username = string & { readonly [usernameBrand]: true };
 
 export type OpenJobUser = {
@@ -20,6 +22,7 @@ type UserStore = {
 };
 
 type IdentityApiOptions = {
+  groups?: Pick<GroupStore, "list">;
   requestId?: () => string;
   users: UserStore;
   verifyIdToken(request: Request): Promise<{ uid: string } | null>;
@@ -58,12 +61,21 @@ function internalErrorResponse(requestId: () => string) {
   );
 }
 
-function currentUser(user: OpenJobUser) {
+async function currentUser(
+  user: OpenJobUser,
+  groups?: Pick<GroupStore, "list">,
+) {
+  let accessibleGroups: OpenJobGroup[] = [];
+  if (groups) {
+    accessibleGroups = (
+      await groups.list(user.userId, { cursor: null, limit: 500 })
+    ).groups;
+  }
   return {
     userId: user.userId,
     username: user.username,
     usernameRequired: user.username === null,
-    groups: [],
+    groups: accessibleGroups,
   };
 }
 
@@ -88,6 +100,7 @@ async function readUsername(request: Request) {
 }
 
 export function createV1IdentityApi({
+  groups,
   requestId = defaultRequestId,
   users,
   verifyIdToken,
@@ -112,7 +125,7 @@ export function createV1IdentityApi({
 
         if (request.method === "GET" && url.pathname === "/api/v1/me") {
           const user = await users.getOrCreate(identity.uid);
-          return response({ data: currentUser(user) });
+          return response({ data: await currentUser(user, groups) });
         }
 
         if (
@@ -149,7 +162,7 @@ export function createV1IdentityApi({
           }
           const result = await users.claimUsername(identity.uid, username);
           if (result.kind === "claimed") {
-            return response({ data: currentUser(result.user) });
+            return response({ data: await currentUser(result.user, groups) });
           }
           const immutable = result.kind === "immutable";
           return response(
