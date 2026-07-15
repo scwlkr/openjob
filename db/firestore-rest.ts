@@ -37,7 +37,7 @@ export class FirestoreRequestError extends Error {
   }
 }
 
-function bytesToBase64Url(bytes: Uint8Array) {
+export function bytesToBase64Url(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary)

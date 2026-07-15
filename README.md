@@ -27,7 +27,11 @@ surface while `/api/v1` is built.
 - `app/globals.css` — all styling
 - `app/api/tasks/route.ts` — task API
 - `db/tasks.ts` — task storage adapter
-- `db/firestore.ts` — authenticated Firestore REST client
+- `db/firestore-rest.ts` — authenticated Firestore REST client
+- `db/firestore.ts` — legacy public-board Task storage adapter
+- `db/users.ts` — isolated v1 User and Username persistence
+- `server/firebase-id-token.ts` — Google-backed Firebase ID-token verification
+- `server/v1-identity.ts` — `/api/v1/me` identity behavior and envelopes
 - `firestore.rules` — browser access is denied; the Worker owns data access
 - `openapi/openapi.yaml` — machine-readable `/api/v1` contract
 - `tests/support/v1-harness.mjs` — isolated Worker HTTP acceptance seam

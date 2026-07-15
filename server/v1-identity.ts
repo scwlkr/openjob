@@ -1,4 +1,8 @@
-type OpenJobUser = {
+declare const usernameBrand: unique symbol;
+
+export type Username = string & { readonly [usernameBrand]: true };
+
+export type OpenJobUser = {
   userId: string;
   username: string | null;
 };
@@ -6,7 +10,7 @@ type OpenJobUser = {
 type UserStore = {
   claimUsername(
     firebaseUid: string,
-    username: string,
+    username: Username,
   ): Promise<
     | { kind: "claimed"; user: OpenJobUser }
     | { kind: "immutable" }
@@ -60,7 +64,7 @@ async function readUsername(request: Request) {
     ) {
       return null;
     }
-    return input.username;
+    return input.username as Username;
   } catch {
     return null;
   }
@@ -73,87 +77,100 @@ export function createV1IdentityApi({
 }: IdentityApiOptions) {
   return Object.freeze({
     async fetch(request: Request) {
-      const url = new URL(request.url);
-      const identity = await verifyIdToken(request);
-      if (!identity) {
-        return response(
-          {
-            error: {
-              code: "authentication_required",
-              message: "Authentication is required.",
-              requestId: requestId(),
-            },
-          },
-          401,
-        );
-      }
-
-      if (request.method === "GET" && url.pathname === "/api/v1/me") {
-        const user = await users.getOrCreate(identity.uid);
-        return response({ data: currentUser(user) });
-      }
-
-      if (
-        request.method === "PUT" &&
-        url.pathname === "/api/v1/me/username"
-      ) {
-        const username = await readUsername(request);
-        if (username === null) {
+      try {
+        const url = new URL(request.url);
+        const identity = await verifyIdToken(request);
+        if (!identity) {
           return response(
             {
               error: {
-                code: "invalid_request",
-                message: "One or more fields are invalid.",
-                fields: {
-                  username: "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
-                },
+                code: "authentication_required",
+                message: "Authentication is required.",
                 requestId: requestId(),
               },
             },
-            400,
+            401,
           );
         }
-        if (RESERVED_USERNAMES.has(username)) {
+
+        if (request.method === "GET" && url.pathname === "/api/v1/me") {
+          const user = await users.getOrCreate(identity.uid);
+          return response({ data: currentUser(user) });
+        }
+
+        if (
+          request.method === "PUT" &&
+          url.pathname === "/api/v1/me/username"
+        ) {
+          const username = await readUsername(request);
+          if (username === null) {
+            return response(
+              {
+                error: {
+                  code: "invalid_request",
+                  message: "One or more fields are invalid.",
+                  fields: {
+                    username: "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
+                  },
+                  requestId: requestId(),
+                },
+              },
+              400,
+            );
+          }
+          if (RESERVED_USERNAMES.has(username)) {
+            return response(
+              {
+                error: {
+                  code: "username_taken",
+                  message: "That Username is unavailable.",
+                  requestId: requestId(),
+                },
+              },
+              409,
+            );
+          }
+          const result = await users.claimUsername(identity.uid, username);
+          if (result.kind === "claimed") {
+            return response({ data: currentUser(result.user) });
+          }
+          const immutable = result.kind === "immutable";
           return response(
             {
               error: {
-                code: "username_taken",
-                message: "That Username is unavailable.",
+                code: immutable ? "username_immutable" : "username_taken",
+                message: immutable
+                  ? "Username cannot be changed."
+                  : "That Username is unavailable.",
                 requestId: requestId(),
               },
             },
             409,
           );
         }
-        const result = await users.claimUsername(identity.uid, username);
-        if (result.kind === "claimed") {
-          return response({ data: currentUser(result.user) });
-        }
-        const immutable = result.kind === "immutable";
+
         return response(
           {
             error: {
-              code: immutable ? "username_immutable" : "username_taken",
-              message: immutable
-                ? "Username cannot be changed."
-                : "That Username is unavailable.",
+              code: "not_found",
+              message: "The requested resource was not found.",
               requestId: requestId(),
             },
           },
-          409,
+          404,
+        );
+      } catch {
+        return response(
+          {
+            error: {
+              code: "internal_error",
+              message: "An unexpected error occurred.",
+              requestId: requestId(),
+            },
+          },
+          500,
         );
       }
-
-      return response(
-        {
-          error: {
-            code: "not_found",
-            message: "The requested resource was not found.",
-            requestId: requestId(),
-          },
-        },
-        404,
-      );
     },
   });
 }

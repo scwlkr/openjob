@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirestoreUserStore } from "../db/users.ts";
+import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
+import { createV1IdentityApi } from "../server/v1-identity.ts";
+import { createTestFirebaseAuthority } from "./support/firebase-id-tokens.mjs";
+import { createV1TestHarness } from "./support/v1-harness.mjs";
 
 async function createPrivateKey() {
   const pair = await crypto.subtle.generateKey(
@@ -146,4 +150,79 @@ test("Firestore persists Users and atomically reserves immutable Usernames", asy
   const storedData = JSON.stringify([...firestore.documents.values()]);
   assert.doesNotMatch(storedData, /firebase_shane|firebase_eli|example\.test|Google Name/);
   assert.doesNotMatch(storedData, /authorization|Bearer|privateKey|tasks/);
+});
+
+test("the black-box identity journey persists through the Firestore adapter", async (t) => {
+  const now = "2026-07-15T12:00:00.000Z";
+  const authority = await createTestFirebaseAuthority({ now });
+  const firestore = createFakeFirestore();
+  const privateKey = await createPrivateKey();
+  const ids = [
+    "33333333-3333-4333-8333-333333333333",
+    "44444444-4444-4444-8444-444444444444",
+  ];
+  const harness = createV1TestHarness({
+    initialNow: now,
+    createWorker(controls) {
+      return createV1IdentityApi({
+        users: createFirestoreUserStore(
+          {
+            projectId: "openjob-dev",
+            clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",
+            privateKey,
+          },
+          firestore.fetch,
+          {
+            now: () => Date.parse(controls.clock.now()),
+            randomUUID: () => ids.shift(),
+          },
+        ),
+        verifyIdToken: createFirebaseIdTokenVerifier({
+          fetchImplementation: authority.fetch,
+          now: () => Date.parse(controls.clock.now()),
+          projectId: "openjob-dev",
+        }),
+      });
+    },
+  });
+  t.after(() => harness.close());
+  const shaneHeaders = {
+    authorization: `Bearer ${await authority.issue({ uid: "firebase_shane" })}`,
+  };
+  const eliHeaders = {
+    authorization: `Bearer ${await authority.issue({ uid: "firebase_eli" })}`,
+  };
+
+  const beforeClaim = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  assert.equal((await beforeClaim.json()).data.usernameRequired, true);
+
+  const claim = await harness.request({
+    body: { username: "shane" },
+    headers: shaneHeaders,
+    method: "PUT",
+    path: "/api/v1/me/username",
+  });
+  assert.equal(claim.status, 200);
+  const shane = (await claim.json()).data;
+
+  await harness.restart();
+  const persisted = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  assert.deepEqual((await persisted.json()).data, shane);
+
+  const taken = await harness.request({
+    body: { username: "shane" },
+    headers: eliHeaders,
+    method: "PUT",
+    path: "/api/v1/me/username",
+  });
+  assert.equal(taken.status, 409);
+  assert.equal((await taken.json()).error.code, "username_taken");
 });

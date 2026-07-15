@@ -1,5 +1,6 @@
 const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const UNKNOWN_KEY_REFRESH_COOLDOWN_MS = 60_000;
 
 type FirebaseTokenIdentity = {
   uid: string;
@@ -75,19 +76,40 @@ export function createFirebaseIdTokenVerifier({
   projectId,
 }: FirebaseTokenVerifierOptions) {
   let cachedKeys: { expiresAt: number; keys: Map<string, FirebaseJwk> } | null = null;
+  let lastRefreshAt = Number.NEGATIVE_INFINITY;
+  let refreshPromise: Promise<Map<string, FirebaseJwk>> | null = null;
 
   async function refreshKeys() {
-    const response = await fetchImplementation(FIREBASE_JWKS_URL, {
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) throw new Error("Firebase signing keys are unavailable.");
-    const body = (await response.json()) as { keys?: FirebaseJwk[] };
-    const keys = new Map<string, FirebaseJwk>();
-    for (const key of body.keys ?? []) {
-      if (typeof key.kid === "string") keys.set(key.kid, key);
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        try {
+          const response = await fetchImplementation(FIREBASE_JWKS_URL, {
+            headers: { accept: "application/json" },
+          });
+          if (!response.ok) throw new Error("Signing-key request failed.");
+          const body = (await response.json()) as { keys?: FirebaseJwk[] };
+          if (!Array.isArray(body.keys)) throw new Error("Signing-key response is invalid.");
+          const keys = new Map<string, FirebaseJwk>();
+          for (const key of body.keys) {
+            if (typeof key.kid === "string") keys.set(key.kid, key);
+          }
+          const refreshedAt = now();
+          lastRefreshAt = refreshedAt;
+          cachedKeys = {
+            expiresAt: refreshedAt + cacheLifetime(response),
+            keys,
+          };
+          return keys;
+        } catch {
+          throw new Error("Firebase signing keys are unavailable.");
+        }
+      })();
     }
-    cachedKeys = { expiresAt: now() + cacheLifetime(response), keys };
-    return keys;
+    try {
+      return await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
   }
 
   async function signingKey(kid: string) {
@@ -95,7 +117,12 @@ export function createFirebaseIdTokenVerifier({
       cachedKeys && cachedKeys.expiresAt > now()
         ? cachedKeys.keys
         : await refreshKeys();
-    if (!keys.has(kid)) keys = await refreshKeys();
+    if (
+      !keys.has(kid) &&
+      now() - lastRefreshAt >= UNKNOWN_KEY_REFRESH_COOLDOWN_MS
+    ) {
+      keys = await refreshKeys();
+    }
     return keys.get(kid) ?? null;
   }
 
@@ -106,25 +133,37 @@ export function createFirebaseIdTokenVerifier({
     const match = authorization?.match(/^Bearer ([^\s]+)$/);
     if (!match) return null;
 
+    let segments: string[];
+    let header: { alg?: unknown; kid?: unknown };
     try {
-      const segments = match[1].split(".");
+      segments = match[1].split(".");
       if (segments.length !== 3) return null;
-      const [encodedHeader, encodedPayload, encodedSignature] = segments;
-      const header = decodeJson(encodedHeader) as {
+      header = decodeJson(segments[0]) as {
         alg?: unknown;
         kid?: unknown;
       };
       if (header.alg !== "RS256" || typeof header.kid !== "string") return null;
+    } catch {
+      return null;
+    }
 
-      const jwk = await signingKey(header.kid);
-      if (!jwk) return null;
-      const key = await crypto.subtle.importKey(
+    const [encodedHeader, encodedPayload, encodedSignature] = segments;
+    const jwk = await signingKey(header.kid);
+    if (!jwk) return null;
+    let key: CryptoKey;
+    try {
+      key = await crypto.subtle.importKey(
         "jwk",
         jwk,
         { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
         false,
         ["verify"],
       );
+    } catch {
+      throw new Error("Firebase signing keys are unavailable.");
+    }
+
+    try {
       const validSignature = await crypto.subtle.verify(
         "RSASSA-PKCS1-v1_5",
         key,

@@ -1,14 +1,11 @@
 import {
+  bytesToBase64Url,
   createFirestoreRestClient,
   FirestoreRequestError,
   type FirebaseConfig,
   type FirestoreDocument,
 } from "./firestore-rest.ts";
-
-export type OpenJobUser = {
-  userId: string;
-  username: string | null;
-};
+import type { OpenJobUser, Username } from "../server/v1-identity.ts";
 
 type StoredUser = OpenJobUser & {
   path: string;
@@ -19,15 +16,6 @@ type UserStoreOptions = {
   now?: () => number;
   randomUUID?: () => string;
 };
-
-function bytesToBase64Url(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
 
 async function firebaseIdentityKey(firebaseUid: string) {
   const digest = await crypto.subtle.digest(
@@ -64,7 +52,7 @@ export function createFirestoreUserStore(
   fetchImplementation: typeof fetch = fetch,
   {
     now = Date.now,
-    randomUUID = crypto.randomUUID,
+    randomUUID = () => crypto.randomUUID(),
   }: UserStoreOptions = {},
 ) {
   const firestore = createFirestoreRestClient(config, fetchImplementation);
@@ -129,7 +117,7 @@ export function createFirestoreUserStore(
       return publicUser(await getOrCreateStored(firebaseUid));
     },
 
-    async claimUsername(firebaseUid: string, username: string) {
+    async claimUsername(firebaseUid: string, username: Username) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const user = await getOrCreateStored(firebaseUid);
         if (user.username === username) {

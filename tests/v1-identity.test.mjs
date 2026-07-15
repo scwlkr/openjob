@@ -44,15 +44,28 @@ function createHarnessUserStore(controls) {
   };
 }
 
-async function createIdentityHarness() {
+async function createIdentityHarness({ failKeyFetch = false, failUsers = false } = {}) {
   const authority = await createTestFirebaseAuthority({ now: NOW });
   const harness = createV1TestHarness({
     initialNow: NOW,
     createWorker(controls) {
       return createV1IdentityApi({
-        users: createHarnessUserStore(controls),
+        users: failUsers
+          ? {
+              async getOrCreate() {
+                throw new Error("Test storage outage.");
+              },
+              async claimUsername() {
+                throw new Error("Test storage outage.");
+              },
+            }
+          : createHarnessUserStore(controls),
         verifyIdToken: createFirebaseIdTokenVerifier({
-          fetchImplementation: authority.fetch,
+          fetchImplementation: failKeyFetch
+            ? async () => {
+                throw new Error("Test signing-key outage.");
+              }
+            : authority.fetch,
           now: () => Date.parse(controls.clock.now()),
           projectId: "openjob-dev",
         }),
@@ -146,6 +159,24 @@ test("the Worker rejects every invalid or non-Google Firebase identity", async (
     });
     assert.equal(response.status, 401);
     assert.equal((await response.json()).error.code, "authentication_required");
+  }
+  assert.equal(authority.keyRequests.length, 1);
+});
+
+test("infrastructure failures return the settled internal error envelope", async (t) => {
+  for (const options of [{ failKeyFetch: true }, { failUsers: true }]) {
+    const { authority, harness } = await createIdentityHarness(options);
+    t.after(() => harness.close());
+    const token = await authority.issue({ uid: "firebase_shane" });
+    const response = await harness.request({
+      headers: authorization(token),
+      method: "GET",
+      path: "/api/v1/me",
+    });
+    assert.equal(response.status, 500);
+    const error = (await response.json()).error;
+    assert.equal(error.code, "internal_error");
+    assert.deepEqual(Object.keys(error).sort(), ["code", "message", "requestId"]);
   }
 });
 
