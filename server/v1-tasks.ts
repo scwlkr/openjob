@@ -1,4 +1,4 @@
-import type { GroupId } from "./v1-groups.ts";
+import { isGroupId, type GroupId } from "./v1-groups.ts";
 import {
   isReservedUsername,
   isUsernameSyntax,
@@ -216,7 +216,7 @@ function taskResourceFromPath(pathname: string) {
   try {
     const groupId = decodeURIComponent(match[1]);
     const taskId = match[2] === undefined ? null : decodeURIComponent(match[2]);
-    if (groupId.length > 1_500 || !/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
+    if (!isGroupId(groupId)) {
       return taskId === null
         ? { kind: "invalid_group" as const }
         : { kind: "invalid_task" as const };

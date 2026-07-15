@@ -18,6 +18,10 @@ export type GroupId = string & { readonly [groupIdBrand]: true };
 export type InviteToken = string & { readonly [inviteTokenBrand]: true };
 export type GroupRole = "member" | "admin";
 
+export function isGroupId(value: string): value is GroupId {
+  return value.length <= 1_500 && /^grp_[A-Za-z0-9_-]+$/.test(value);
+}
+
 export type OpenJobGroup = {
   groupId: GroupId;
   name: string;
@@ -223,7 +227,7 @@ function groupResourceFromPath(pathname: string) {
   if (!match) return { kind: "none" as const };
   try {
     const groupId = decodeURIComponent(match[1]);
-    if (groupId.length > 1_500 || !/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
+    if (!isGroupId(groupId)) {
       return { kind: "invalid" as const };
     }
     const resources: Record<string, GroupResource> = {
