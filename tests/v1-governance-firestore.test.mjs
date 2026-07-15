@@ -399,6 +399,122 @@ test("Leave Group protects open work and the final Admin while preserving done a
   assert.equal((await repeated.json()).error.code, "group_not_found");
 });
 
+test("Kick removes access, preserves work atomically, and allows ordinary rejoin", async (t) => {
+  const { claim, createGroup, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli", "maya"]);
+  t.after(() => harness.close());
+  const assertContract = await createOpenApiResponseValidator();
+  await claim("shane");
+  const eli = await claim("eli");
+  const maya = await claim("maya");
+  const group = await createGroup("Kick Recovery");
+  await join("eli", group.groupId);
+  await join("maya", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+  const kickPath = `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`;
+
+  const inviteResponse = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/invite-link`,
+  });
+  const invite = (await inviteResponse.json()).data;
+  const promoted = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
+  });
+  assert.equal(promoted.status, 200);
+
+  const openResponse = await request("shane", {
+    body: { text: "Recover this work", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const openTask = (await openResponse.json()).data;
+  const doneResponse = await request("shane", {
+    body: { text: "Keep historical credit", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const doneTask = (await doneResponse.json()).data;
+  const completed = await request("maya", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${doneTask.taskId}/state`,
+  });
+  assert.equal(completed.status, 200);
+
+  const kicked = await request("shane", { method: "POST", path: kickPath });
+  assert.equal(kicked.status, 204);
+  assert.equal(await kicked.text(), "");
+  await assertContract(
+    kicked,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/kick",
+    "post",
+  );
+
+  const formerMemberRead = await request("eli", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}`,
+  });
+  assert.equal(formerMemberRead.status, 404);
+  assert.equal((await formerMemberRead.json()).error.code, "group_not_found");
+
+  const listed = await request("maya", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  assert.equal(listed.status, 200);
+  const tasks = (await listed.json()).data;
+  assert.deepEqual(
+    tasks.find(({ taskId }) => taskId === openTask.taskId).assignee,
+    { state: "unassigned" },
+  );
+  assert.deepEqual(
+    tasks.find(({ taskId }) => taskId === doneTask.taskId).assignee,
+    { state: "assigned", userId: eli.userId, username: "eli" },
+  );
+
+  const recovered = await request("maya", {
+    body: { assigneeUsername: "maya" },
+    method: "PATCH",
+    path: `${tasksPath}/${openTask.taskId}`,
+  });
+  assert.equal(recovered.status, 200);
+  assert.deepEqual((await recovered.json()).data.assignee, {
+    state: "assigned",
+    userId: maya.userId,
+    username: "maya",
+  });
+
+  const manualClear = await request("maya", {
+    body: { assigneeUsername: "unassigned" },
+    method: "PATCH",
+    path: `${tasksPath}/${openTask.taskId}`,
+  });
+  assert.equal(manualClear.status, 400);
+  assert.equal((await manualClear.json()).error.code, "invalid_request");
+  const manualCreate = await request("maya", {
+    body: { text: "Invalid recovery", assigneeUsername: "unassigned" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(manualCreate.status, 400);
+  assert.equal((await manualCreate.json()).error.code, "invalid_request");
+
+  const rejoined = await request("eli", {
+    method: "POST",
+    path: `/api/v1/invites/${invite.token}/actions/join`,
+  });
+  assert.equal(rejoined.status, 200);
+  assert.equal((await rejoined.json()).data.role, "member");
+  const roster = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/members`,
+  });
+  const members = (await roster.json()).data;
+  assert.equal(members.find(({ userId }) => userId === eli.userId).role, "member");
+});
+
 test("concurrent departure and self-demotion cannot remove every Admin", async (t) => {
   const { claim, createGroup, firestore, harness, join, request } =
     await createGovernanceHarness(["shane", "eli"]);

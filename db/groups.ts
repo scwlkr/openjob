@@ -9,7 +9,10 @@ import {
   advanceGroupStateRevisionWrite,
   readGroupStateRevision,
 } from "./group-state.ts";
-import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
+import {
+  isOpenTaskAssignedTo,
+  openTaskUnassignmentWrite,
+} from "./v1-tasks.ts";
 import {
   InvalidGroupCursorError,
   InvalidMemberCursorError,
@@ -702,6 +705,57 @@ export function createFirestoreGroupStore(
         }
       }
       throw new Error("Invite Link join could not resolve concurrent writes.");
+    },
+
+    async kick(actorUserId, groupId, targetUserId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const [actor, target] = await Promise.all([
+          readMembership(membershipPath(groupId, actorUserId)),
+          readMembership(membershipPath(groupId, targetUserId)),
+        ]);
+        if (!actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (!target) return { kind: "member_not_found" as const };
+        if (actorUserId === targetUserId) {
+          return { kind: "self_removal" as const };
+        }
+        if (target.role === "admin") {
+          const members = await readAllMemberships(groupId);
+          if (members.filter(({ role }) => role === "admin").length <= 1) {
+            return { kind: "last_admin" as const };
+          }
+        }
+        const taskDocuments = await readAllCollectionDocuments(
+          `${groupPath(groupId)}/tasks`,
+        );
+        const taskWrites = taskDocuments
+          .map((document) => openTaskUnassignmentWrite(document, targetUserId))
+          .filter((write) => write !== null);
+
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            {
+              verify: firestore.documentName(actor.path),
+              currentDocument: { updateTime: actor.updateTime },
+            },
+            {
+              delete: firestore.documentName(target.path),
+              currentDocument: { updateTime: target.updateTime },
+            },
+            {
+              delete: firestore.documentName(accessPath(targetUserId, groupId)),
+            },
+            ...taskWrites,
+          ]);
+          return { kind: "kicked" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Member Kick could not resolve concurrent writes.");
     },
 
     async leave(userId, groupId) {

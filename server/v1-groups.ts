@@ -98,6 +98,18 @@ export type GroupStore = {
     | { kind: "not_found" }
     | { kind: "username_required" }
   >;
+  kick(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUserId: string,
+  ): Promise<
+    | { kind: "kicked" }
+    | { kind: "forbidden" }
+    | { kind: "last_admin" }
+    | { kind: "member_not_found" }
+    | { kind: "not_found" }
+    | { kind: "self_removal" }
+  >;
   leave(
     userId: string,
     groupId: GroupId,
@@ -239,6 +251,14 @@ function lastAdminConflict(requestId: RequestIdFactory) {
   });
 }
 
+function selfRemovalConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "self_removal",
+    message: "Use Leave Group to remove yourself.",
+    status: 409,
+  });
+}
+
 function openTasksAssignedConflict(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "open_tasks_assigned",
@@ -336,7 +356,7 @@ function inviteResourceFromPath(pathname: string) {
 
 function memberActionFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)\/members\/([^/]+)\/actions\/(promote|demote)$/,
+    /^\/api\/v1\/groups\/([^/]+)\/members\/([^/]+)\/actions\/(promote|demote|kick)$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -354,7 +374,7 @@ function memberActionFromPath(pathname: string) {
       kind: "valid" as const,
       groupId: groupId as GroupId,
       userId,
-      action: match[3] as "promote" | "demote",
+      action: match[3] as "promote" | "demote" | "kick",
     };
   } catch {
     return { kind: "invalid" as const };
@@ -506,6 +526,12 @@ export function createV1GroupsApi({
             memberActionPath.groupId,
             memberActionPath.userId,
           );
+          if (result.kind === "kicked") {
+            return new Response(null, {
+              status: 204,
+              headers: { "cache-control": "no-store" },
+            });
+          }
           if (result.kind === "promoted" || result.kind === "demoted") {
             const currentUser = await users.getById(result.member.userId);
             return jsonResponse({
@@ -518,6 +544,9 @@ export function createV1GroupsApi({
           if (result.kind === "forbidden") return adminRequired(requestId);
           if (result.kind === "last_admin") {
             return lastAdminConflict(requestId);
+          }
+          if (result.kind === "self_removal") {
+            return selfRemovalConflict(requestId);
           }
           if (result.kind === "role_conflict") {
             return memberRoleConflict(

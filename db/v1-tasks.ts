@@ -110,6 +110,31 @@ export function isOpenTaskAssignedTo(
   );
 }
 
+export function openTaskUnassignmentWrite(
+  document: FirestoreDocument,
+  userId: string,
+) {
+  const task = parseTask(document, document.name);
+  if (
+    task.state !== "open" ||
+    task.assignee.state !== "assigned" ||
+    task.assignee.userId !== userId
+  ) {
+    return null;
+  }
+  const unassigned: StoredTask = {
+    ...task,
+    assignee: { state: "unassigned" },
+  };
+  return {
+    update: {
+      name: task.path,
+      fields: taskFields(unassigned),
+    },
+    currentDocument: { updateTime: task.updateTime },
+  };
+}
+
 function taskFields(task: OpenJobTask) {
   return {
     taskId: { stringValue: task.taskId },
