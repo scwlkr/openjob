@@ -121,6 +121,15 @@ test("the black-box Group journey persists through the Firestore adapter", async
     "get",
   );
 
+  const overlongId = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: `/api/v1/groups/grp_${"a".repeat(1_501)}`,
+  });
+  assert.equal(overlongId.status, 404);
+  await assertContract(overlongId, "/api/v1/groups/{groupId}", "get");
+  assert.equal((await overlongId.json()).error.code, "group_not_found");
+
   firestore.throttleNextRequest();
   const throttled = await harness.request({
     headers: shaneHeaders,

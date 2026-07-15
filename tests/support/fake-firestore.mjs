@@ -133,6 +133,13 @@ export function createFakeFirestore() {
       const path = decodeURIComponent(
         url.pathname.slice(url.pathname.indexOf(marker) + marker.length),
       );
+      if (
+        path
+          .split("/")
+          .some((segment) => Buffer.byteLength(segment, "utf8") > 1_500)
+      ) {
+        return error(400, "INVALID_ARGUMENT", "Document ID is too long.");
+      }
       if (url.searchParams.has("pageSize")) {
         return listDocuments(path, url);
       }

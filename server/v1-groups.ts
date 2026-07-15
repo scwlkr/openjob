@@ -157,7 +157,7 @@ function groupIdFromPath(pathname: string) {
   if (!match) return { kind: "none" as const };
   try {
     const groupId = decodeURIComponent(match[1]);
-    if (!/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
+    if (groupId.length > 1_500 || !/^grp_[A-Za-z0-9_-]+$/.test(groupId)) {
       return { kind: "invalid" as const };
     }
     return { kind: "valid" as const, groupId: groupId as GroupId };
