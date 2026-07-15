@@ -1005,7 +1005,6 @@ components:
               dueDate: "2026-07-18"
               state: open
               createdAt: "2026-07-15T16:00:00Z"
-              updatedAt: "2026-07-15T16:00:00Z"
               completedAt: null
     TaskCollectionResponse:
       description: Filtered, stably ordered, cursor-paginated Tasks.
@@ -1028,7 +1027,6 @@ components:
                     dueDate: "2026-07-18"
                     state: open
                     createdAt: "2026-07-15T16:00:00Z"
-                    updatedAt: "2026-07-15T16:00:00Z"
                     completedAt: null
                 nextCursor: cur_01J0NEXT
             done:
@@ -1045,7 +1043,6 @@ components:
                     dueDate: "2026-07-17"
                     state: done
                     createdAt: "2026-07-15T15:00:00Z"
-                    updatedAt: "2026-07-16T10:00:00Z"
                     completedAt: "2026-07-16T10:00:00Z"
                 nextCursor: null
             unassigned:
@@ -1060,7 +1057,6 @@ components:
                     dueDate: null
                     state: open
                     createdAt: "2026-07-14T10:00:00Z"
-                    updatedAt: "2026-07-15T17:00:00Z"
                     completedAt: null
                 nextCursor: null
     ValidationErrorResponse:
@@ -1068,7 +1064,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/InvalidRequestErrorEnvelope"
           example:
             error:
               code: invalid_request
@@ -1081,7 +1077,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/AuthenticationErrorEnvelope"
           example:
             error:
               code: authentication_required
@@ -1092,7 +1088,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/AdminRequiredErrorEnvelope"
           example:
             error:
               code: admin_required
@@ -1103,7 +1099,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/MembershipDeniedErrorEnvelope"
           example:
             error:
               code: membership_denied
@@ -1116,7 +1112,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/GroupNotFoundErrorEnvelope"
           example:
             error:
               code: group_not_found
@@ -1127,7 +1123,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/MemberNotFoundErrorEnvelope"
           example:
             error:
               code: member_not_found
@@ -1138,7 +1134,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/UserNotFoundErrorEnvelope"
           example:
             error:
               code: user_not_found
@@ -1149,7 +1145,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/BanNotFoundErrorEnvelope"
           example:
             error:
               code: ban_not_found
@@ -1160,7 +1156,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/TaskNotFoundErrorEnvelope"
           example:
             error:
               code: task_not_found
@@ -1173,7 +1169,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/InviteNotFoundErrorEnvelope"
           example:
             error:
               code: invite_not_found
@@ -1184,7 +1180,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/ConflictErrorEnvelope"
           examples:
             lastAdmin:
               value:
@@ -1215,7 +1211,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/RateLimitedErrorEnvelope"
           example:
             error:
               code: rate_limited
@@ -1226,7 +1222,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: "#/components/schemas/InternalErrorEnvelope"
           example:
             error:
               code: internal_error
@@ -1268,7 +1264,7 @@ components:
       type: string
       minLength: 1
       maxLength: 80
-      pattern: '^[^\u0000-\u001F\u007F-\u009F\r\n]+$'
+      pattern: '^(?=[\s\S]*\S)[^\u0000-\u001F\u007F-\u009F\r\n]+$'
       description: |
         Trimmed Unicode label whose case and spelling are preserved. Names are
         not globally unique and are never URL handles.
@@ -1284,7 +1280,7 @@ components:
       type: string
       minLength: 1
       maxLength: 2000
-      pattern: '^(?![\s\S]*[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F])[\s\S]+$'
+      pattern: '^(?=[\s\S]*\S)(?![\s\S]*[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F])[\s\S]+$'
       description: |
         UTF-8 multiline plain text, trimmed only at the outer edges. Internal
         line breaks and blank lines remain; line endings are normalized and
@@ -1401,7 +1397,6 @@ components:
         - dueDate
         - state
         - createdAt
-        - updatedAt
         - completedAt
       properties:
         taskId:
@@ -1420,8 +1415,6 @@ components:
           $ref: "#/components/schemas/TaskState"
         createdAt:
           $ref: "#/components/schemas/Timestamp"
-        updatedAt:
-          $ref: "#/components/schemas/Timestamp"
         completedAt:
           oneOf:
             - $ref: "#/components/schemas/Timestamp"
@@ -1437,14 +1430,6 @@ components:
               const: done
             completedAt:
               $ref: "#/components/schemas/Timestamp"
-      not:
-        required: [state, assignee]
-        properties:
-          state:
-            const: done
-          assignee:
-            $ref: "#/components/schemas/UnassignedAssignee"
-
     CurrentUser:
       type: object
       additionalProperties: false
@@ -1531,29 +1516,122 @@ components:
       properties:
         error:
           $ref: "#/components/schemas/Error"
-
-    SuccessEnvelope:
-      type: object
-      additionalProperties: false
-      required: [data]
-      properties:
-        data: {}
-      description: Shared shape for a successful single-resource response.
-    CollectionEnvelope:
-      type: object
-      additionalProperties: false
-      required: [data, nextCursor]
-      properties:
-        data:
-          type: array
-          items: {}
-        nextCursor:
-          oneOf:
-            - $ref: "#/components/schemas/CursorToken"
-            - type: "null"
-      description: |
-        Shared cursor collection shape. nextCursor is null at the final page;
-        default page size is 100 and maximum page size is 500.
+    InvalidRequestErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: invalid_request
+    AuthenticationErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: authentication_required
+    AdminRequiredErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: admin_required
+    MembershipDeniedErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: membership_denied
+    GroupNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: group_not_found
+    MemberNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: member_not_found
+    UserNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: user_not_found
+    BanNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: ban_not_found
+    TaskNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: task_not_found
+    InviteNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: invite_not_found
+    ConflictErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  enum:
+                    - username_taken
+                    - username_immutable
+                    - username_required
+                    - last_admin
+                    - open_tasks_assigned
+                    - members_remain
+                    - self_removal
+                    - ban_not_allowed
+                    - member_role_conflict
+                    - task_done
+                    - assignee_not_member
+                    - confirmation_mismatch
+    RateLimitedErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: rate_limited
+    InternalErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: internal_error
 
     CurrentUserEnvelope:
       type: object

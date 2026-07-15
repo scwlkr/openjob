@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 
@@ -60,6 +62,12 @@ function mediaTypeHasExample(mediaType) {
   );
 }
 
+function compileSchema(schema) {
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  addFormats(ajv);
+  return ajv.compile(schema);
+}
+
 test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const contract = await validateOpenApiContract(contractUrl);
   const actualOperations = operations(contract);
@@ -111,8 +119,25 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
     [100, 500],
   );
   assert.equal(parameters.Cursor.name, "cursor");
-  assert.deepEqual(schemas.SuccessEnvelope.required, ["data"]);
-  assert.deepEqual(schemas.CollectionEnvelope.required, ["data", "nextCursor"]);
+  for (const name of [
+    "BanEnvelope",
+    "CurrentUserEnvelope",
+    "GroupEnvelope",
+    "InviteLinkEnvelope",
+    "InvitePreviewEnvelope",
+    "MemberEnvelope",
+    "TaskEnvelope",
+  ]) {
+    assert.deepEqual(schemas[name].required, ["data"], name);
+  }
+  for (const name of [
+    "BanCollectionEnvelope",
+    "GroupCollectionEnvelope",
+    "MemberCollectionEnvelope",
+    "TaskCollectionEnvelope",
+  ]) {
+    assert.deepEqual(schemas[name].required, ["data", "nextCursor"], name);
+  }
 
   assert.equal(schemas.Date.format, "date");
   assert.equal(schemas.Timestamp.format, "date-time");
@@ -159,6 +184,47 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
         .examples,
     ).sort(),
     ["assigned", "done", "unassigned"],
+  );
+});
+
+test("contract schemas enforce normalized domain rules and status-specific errors", async () => {
+  const contract = await validateOpenApiContract(contractUrl);
+  const { responses, schemas } = contract.components;
+
+  assert.equal(compileSchema(schemas.GroupName)("   "), false);
+  assert.equal(compileSchema(schemas.TaskText)("\n\n"), false);
+  assert.equal(Object.hasOwn(schemas.Task.properties, "updatedAt"), false);
+  assert.equal(
+    compileSchema(schemas.Task)({
+      taskId: "task_recovery_done",
+      groupId: "grp_acme_ops",
+      text: "Finish recovered work",
+      assignee: { state: "unassigned" },
+      dueDate: null,
+      state: "done",
+      createdAt: "2026-07-15T16:00:00Z",
+      completedAt: "2026-07-16T10:00:00Z",
+    }),
+    true,
+  );
+
+  const unauthorizedSchema = responses.UnauthorizedResponse.content["application/json"].schema;
+  assert.equal(
+    compileSchema(unauthorizedSchema)({
+      error: { code: "task_done", message: "Wrong status mapping.", requestId: "req_1" },
+    }),
+    false,
+  );
+  const conflictSchema = responses.ConflictResponse.content["application/json"].schema;
+  assert.equal(
+    compileSchema(conflictSchema)({
+      error: {
+        code: "internal_error",
+        message: "Wrong status mapping.",
+        requestId: "req_2",
+      },
+    }),
+    false,
   );
 });
 
