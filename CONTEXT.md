@@ -17,7 +17,7 @@ The single flat collection of work belonging to a Group.
 _Avoid_: Project, Kanban board
 
 **Task**:
-The smallest unit of work on a Task List, assignable to a Group Member by username.
+The smallest unit of work on a Task List, assigned to exactly one Group Member by username.
 _Avoid_: Job, ticket, card
 
 **User**:
