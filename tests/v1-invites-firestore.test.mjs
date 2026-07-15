@@ -119,6 +119,17 @@ test("Invite Links admit a confirmed User, rotate safely, and expose the current
   ]);
   t.after(() => harness.close());
   const assertContract = await createOpenApiResponseValidator();
+  const usernameRequiredToCreate = await request("newuser", {
+    body: { name: "Premature Group" },
+    method: "POST",
+    path: "/api/v1/groups",
+  });
+  assert.equal(usernameRequiredToCreate.status, 409);
+  await assertContract(usernameRequiredToCreate, "/api/v1/groups", "post");
+  assert.equal(
+    (await usernameRequiredToCreate.json()).error.code,
+    "username_required",
+  );
   const shane = await claimUsername(request, "shane");
   const eli = await claimUsername(request, "eli");
   const group = await createGroup(request);
@@ -316,6 +327,18 @@ test("Invite Links admit a confirmed User, rotate safely, and expose the current
   assert.deepEqual(await invalidRotated.json(), invalidUnknownBody);
 
   harness.advance(7 * 24 * 60 * 60 * 1000);
+  const invalidExpired = await request("eli", {
+    method: "GET",
+    path: `/api/v1/invites/${secondInvite.token}`,
+  });
+  assert.equal(invalidExpired.status, 404);
+  assert.deepEqual(await invalidExpired.json(), invalidUnknownBody);
+  assert.equal(
+    [...firestore.documents.keys()].some((path) =>
+      path.endsWith(`/v1Invites/${secondInvite.token}`),
+    ),
+    false,
+  );
   const automaticallyRotated = await request("shane", {
     method: "GET",
     path: invitePath,
@@ -330,12 +353,6 @@ test("Invite Links admit a confirmed User, rotate safely, and expose the current
     ).length,
     1,
   );
-  const invalidExpired = await request("eli", {
-    method: "GET",
-    path: `/api/v1/invites/${secondInvite.token}`,
-  });
-  assert.equal(invalidExpired.status, 404);
-  assert.deepEqual(await invalidExpired.json(), invalidUnknownBody);
 
   const groupDocument = [...firestore.documents.keys()].find((path) =>
     path.endsWith(`/v1Groups/${group.groupId}`),

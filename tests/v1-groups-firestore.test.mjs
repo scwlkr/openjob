@@ -67,6 +67,14 @@ test("the black-box Group journey persists through the Firestore adapter", async
     authorization: `Bearer ${await authority.issue({ uid: "firebase_eli" })}`,
   };
 
+  const claimedUsername = await harness.request({
+    body: { username: "shane" },
+    headers: shaneHeaders,
+    method: "PUT",
+    path: "/api/v1/me/username",
+  });
+  assert.equal(claimedUsername.status, 200);
+
   const createdResponse = await harness.request({
     body: { name: "Acme Operations" },
     headers: shaneHeaders,

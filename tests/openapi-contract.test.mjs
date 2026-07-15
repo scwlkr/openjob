@@ -219,6 +219,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const expectedConflictCodes = new Map([
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
     ["claimUsername", ["username_immutable", "username_taken"]],
+    ["createGroup", ["username_required"]],
     ["createGroupTask", ["assignee_not_member"]],
     ["demoteGroupMember", ["last_admin", "member_role_conflict"]],
     ["endGroup", ["confirmation_mismatch", "members_remain"]],

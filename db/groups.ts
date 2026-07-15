@@ -10,8 +10,8 @@ import {
   type GroupId,
   type GroupRole,
   type GroupStore,
-  type GroupUser,
   type InviteToken,
+  type OnboardedGroupUser,
   type OpenJobGroup,
   type OpenJobInviteLink,
   type OpenJobMember,
@@ -329,8 +329,34 @@ export function createFirestoreGroupStore(
     return publicInvite(fresh);
   }
 
+  async function refreshInactiveInvite(
+    group: StoredGroup,
+    current: StoredInvite,
+    pointer: StoredInvitePointer,
+  ) {
+    const fresh = freshInvite(group.groupId);
+    await commit([
+      {
+        verify: firestore.documentName(group.path),
+        currentDocument: { updateTime: group.updateTime },
+      },
+      {
+        update: {
+          name: firestore.documentName(current.path),
+          fields: inviteFields(fresh),
+        },
+        currentDocument: { updateTime: current.updateTime },
+      },
+      {
+        delete: firestore.documentName(pointer.path),
+        currentDocument: { updateTime: pointer.updateTime },
+      },
+      invitePointerWrite(fresh),
+    ]);
+  }
+
   return Object.freeze({
-    async create(user: GroupUser, name) {
+    async create(user: OnboardedGroupUser, name) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const groupId = `grp_${randomUUID().replaceAll("-", "")}` as GroupId;
         const createdAt = new Date(now()).toISOString();
@@ -356,9 +382,7 @@ export function createFirestoreGroupStore(
                 name: firestore.documentName(memberDocumentPath),
                 fields: {
                   userId: { stringValue: user.userId },
-                  ...(user.username
-                    ? { username: { stringValue: user.username } }
-                    : {}),
+                  username: { stringValue: user.username },
                   role: { stringValue: "admin" },
                   joinedAt: { timestampValue: createdAt },
                 },
@@ -415,21 +439,27 @@ export function createFirestoreGroupStore(
     },
 
     async inspectInvite(token) {
-      const pointer = await readInvitePointer(invitePointerPath(token));
-      if (!pointer) return { kind: "not_found" as const };
-      const [group, current] = await Promise.all([
-        readGroup(groupPath(pointer.groupId)),
-        readInvite(currentInvitePath(pointer.groupId)),
-      ]);
-      if (
-        !group ||
-        !current ||
-        current.token !== token ||
-        !inviteIsActive(current)
-      ) {
-        return { kind: "not_found" as const };
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const pointer = await readInvitePointer(invitePointerPath(token));
+        if (!pointer) return { kind: "not_found" as const };
+        const [group, current] = await Promise.all([
+          readGroup(groupPath(pointer.groupId)),
+          readInvite(currentInvitePath(pointer.groupId)),
+        ]);
+        if (!group || !current || current.token !== token) {
+          return { kind: "not_found" as const };
+        }
+        if (inviteIsActive(current)) {
+          return { kind: "found" as const, groupName: group.name };
+        }
+        try {
+          await refreshInactiveInvite(group, current, pointer);
+          return { kind: "not_found" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
       }
-      return { kind: "found" as const, groupName: group.name };
+      throw new Error("Invite Link refresh could not resolve concurrent writes.");
     },
 
     async joinInvite(user, token) {
@@ -440,13 +470,17 @@ export function createFirestoreGroupStore(
           readGroup(groupPath(pointer.groupId)),
           readInvite(currentInvitePath(pointer.groupId)),
         ]);
-        if (
-          !group ||
-          !current ||
-          current.token !== token ||
-          !inviteIsActive(current)
-        ) {
+        if (!group || !current || current.token !== token) {
           return { kind: "not_found" as const };
+        }
+        if (!inviteIsActive(current)) {
+          try {
+            await refreshInactiveInvite(group, current, pointer);
+            return { kind: "not_found" as const };
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            continue;
+          }
         }
 
         const memberDocumentPath = membershipPath(group.groupId, user.userId);

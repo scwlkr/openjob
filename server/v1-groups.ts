@@ -44,6 +44,8 @@ export type GroupUser = {
   username: string | null;
 };
 
+export type OnboardedGroupUser = GroupUser & { username: string };
+
 export class InvalidGroupCursorError extends Error {
   constructor() {
     super("The Group collection cursor is invalid.");
@@ -59,7 +61,7 @@ export class InvalidMemberCursorError extends Error {
 }
 
 export type GroupStore = {
-  create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
+  create(user: OnboardedGroupUser, name: GroupName): Promise<OpenJobGroup>;
   get(userId: string, groupId: GroupId): Promise<OpenJobGroup | null>;
   getInvite(
     userId: string,
@@ -174,6 +176,14 @@ function adminRequired(requestId: RequestIdFactory) {
     code: "admin_required",
     message: "Group Admin access is required.",
     status: 403,
+  });
+}
+
+function usernameRequired(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "username_required",
+    message: "Claim a Username before joining a Group.",
+    status: 409,
   });
 }
 
@@ -319,7 +329,16 @@ export function createV1GroupsApi({
           if (request.method === "POST") {
             const name = await readGroupName(request);
             if (name === null) return groupNameError(requestId);
-            return jsonResponse({ data: await groups.create(user, name) }, 201);
+            if (!user.username) return usernameRequired(requestId);
+            return jsonResponse(
+              {
+                data: await groups.create(
+                  { userId: user.userId, username: user.username },
+                  name,
+                ),
+              },
+              201,
+            );
           }
         }
 
@@ -409,11 +428,7 @@ export function createV1GroupsApi({
               });
             }
             if (result.kind === "username_required") {
-              return errorResponse(requestId, {
-                code: "username_required",
-                message: "Claim a Username before joining a Group.",
-                status: 409,
-              });
+              return usernameRequired(requestId);
             }
             return inviteNotFound(requestId);
           }

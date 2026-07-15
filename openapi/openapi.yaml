@@ -98,7 +98,8 @@ paths:
       summary: Create a Group
       description: |
         Creates a Group and atomically makes the authenticated User its first
-        Member and Admin. Group creation is not safe for automatic retry.
+        Member and Admin after Username onboarding. Group creation is not safe
+        for automatic retry.
       operationId: createGroup
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
@@ -111,6 +112,8 @@ paths:
           $ref: "#/components/responses/ValidationErrorResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
+        "409":
+          $ref: "#/components/responses/UsernameRequiredResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -535,7 +538,7 @@ paths:
         "404":
           $ref: "#/components/responses/InvalidInviteResponse"
         "409":
-          $ref: "#/components/responses/JoinGroupConflictResponse"
+          $ref: "#/components/responses/UsernameRequiredResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -1252,8 +1255,8 @@ components:
               code: ban_not_allowed
               message: That User cannot be banned.
               requestId: req_01J0BAN
-    JoinGroupConflictResponse:
-      description: The User must finish Username onboarding before joining.
+    UsernameRequiredResponse:
+      description: The User must finish Username onboarding before becoming a Group Member.
       content:
         application/json:
           schema:
