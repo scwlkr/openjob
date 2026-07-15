@@ -28,6 +28,12 @@ const DEFAULT_IDENTITIES = {
   },
 };
 
+export const emptyGroupStore = Object.freeze({
+  async list() {
+    return { groups: [], nextCursor: null };
+  },
+});
+
 export class LegacyTaskCollectionAccessError extends Error {
   constructor() {
     super("The v1 test harness cannot access the legacy top-level Task collection.");

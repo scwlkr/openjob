@@ -4,13 +4,10 @@ import { createFirestoreUserStore } from "../db/users.ts";
 import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
 import { createTestFirebaseAuthority } from "./support/firebase-id-tokens.mjs";
-import { createV1TestHarness } from "./support/v1-harness.mjs";
-
-const emptyGroups = {
-  async list() {
-    return { groups: [], nextCursor: null };
-  },
-};
+import {
+  createV1TestHarness,
+  emptyGroupStore,
+} from "./support/v1-harness.mjs";
 
 async function createPrivateKey() {
   const pair = await crypto.subtle.generateKey(
@@ -171,7 +168,7 @@ test("the black-box identity journey persists through the Firestore adapter", as
     initialNow: now,
     createWorker(controls) {
       return createV1IdentityApi({
-        groups: emptyGroups,
+        groups: emptyGroupStore,
         users: createFirestoreUserStore(
           {
             projectId: "openjob-dev",

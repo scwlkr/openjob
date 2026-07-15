@@ -6,14 +6,12 @@ import {
   createV1IdentityHandler,
 } from "../server/v1-identity.ts";
 import { createTestFirebaseAuthority } from "./support/firebase-id-tokens.mjs";
-import { createV1TestHarness } from "./support/v1-harness.mjs";
+import {
+  createV1TestHarness,
+  emptyGroupStore,
+} from "./support/v1-harness.mjs";
 
 const NOW = "2026-07-15T12:00:00.000Z";
-const emptyGroups = {
-  async list() {
-    return { groups: [], nextCursor: null };
-  },
-};
 
 function createHarnessUserStore(controls) {
   function newUser() {
@@ -58,7 +56,7 @@ async function createIdentityHarness({ failKeyFetch = false, failUsers = false }
     initialNow: NOW,
     createWorker(controls) {
       return createV1IdentityApi({
-        groups: emptyGroups,
+        groups: emptyGroupStore,
         users: failUsers
           ? {
               async getOrCreate() {
