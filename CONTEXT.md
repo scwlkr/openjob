@@ -8,6 +8,14 @@ OpenJob coordinates small working groups through one shared task list. It intent
 A membership boundary with exactly one Task List.
 _Avoid_: Workspace, organization
 
+**Group Name**:
+A required, mutable, non-unique label by which Users recognize a Group.
+_Avoid_: Group ID, handle
+
+**Group ID**:
+The immutable, opaque identity assigned to a Group when it is created.
+_Avoid_: Group Name, URL handle
+
 **Invite Link**:
 A short-lived, Group-specific credential that lets a signed-in User become a Member.
 _Avoid_: Public link, invitation
