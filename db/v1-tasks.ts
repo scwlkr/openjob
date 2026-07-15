@@ -19,6 +19,8 @@ type TaskStoreOptions = {
   randomUUID?: () => string;
 };
 
+type TaskUpdateInput = Parameters<TaskStore["update"]>[3];
+
 type StoredTask = OpenJobTask & {
   path: string;
   updateTime: string;
@@ -118,7 +120,7 @@ function taskFields(task: OpenJobTask) {
 function isConcurrentWrite(error: unknown) {
   return (
     error instanceof FirestoreRequestError &&
-    ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION"].includes(
+    ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION", "NOT_FOUND"].includes(
       error.code ?? "",
     )
   );
@@ -172,6 +174,43 @@ export function createFirestoreTaskStore(
     if (!access) return { kind: "not_found" as const };
     if (!assigneeMember) return { kind: "assignee_not_member" as const };
     return { kind: "ready" as const, access, assigneeMember };
+  }
+
+  async function readTaskAccess(
+    actorUserId: string,
+    groupId: GroupId,
+    taskId: TaskId,
+  ) {
+    const [access, taskDocument] = await Promise.all([
+      readAccess(actorUserId, groupId),
+      readDocument(taskPath(groupId, taskId)),
+    ]);
+    if (!access) return { kind: "group_not_found" as const };
+    if (!taskDocument) return { kind: "task_not_found" as const };
+    const task = parseTask(taskDocument, taskDocument.name);
+    return { kind: "ready" as const, access, task };
+  }
+
+  async function readUpdateAccess(
+    actorUserId: string,
+    groupId: GroupId,
+    taskId: TaskId,
+    input: TaskUpdateInput,
+  ) {
+    const [taskAccess, assigneeMember] = await Promise.all([
+      readTaskAccess(actorUserId, groupId, taskId),
+      input.assignee
+        ? readDocument(membershipPath(groupId, input.assignee.userId))
+        : Promise.resolve(null),
+    ]);
+    if (taskAccess.kind !== "ready") return taskAccess;
+    if (taskAccess.task.state === "done") {
+      return { kind: "task_done" as const };
+    }
+    if (input.assignee && !assigneeMember) {
+      return { kind: "assignee_not_member" as const };
+    }
+    return { ...taskAccess, assigneeMember };
   }
 
   async function commit(writes: unknown[]) {
@@ -269,6 +308,148 @@ export function createFirestoreTaskStore(
             task: publicTask(parseTask(document, document.name)),
           }
         : { kind: "task_not_found" as const };
+    },
+
+    async update(actorUserId, groupId, taskId, input) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const updateAccess = await readUpdateAccess(
+          actorUserId,
+          groupId,
+          taskId,
+          input,
+        );
+        if (updateAccess.kind !== "ready") return updateAccess;
+        const { access, assigneeMember, task } = updateAccess;
+        const updated: StoredTask = {
+          ...task,
+          ...(input.text !== undefined ? { text: input.text } : {}),
+          ...(input.assignee
+            ? {
+                assignee: {
+                  state: "assigned" as const,
+                  userId: input.assignee.userId,
+                  username: input.assignee.username,
+                },
+              }
+            : {}),
+          ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
+        };
+        const actorMemberName = access.member.name;
+        const assigneeMemberName = assigneeMember?.name;
+        try {
+          await commit([
+            {
+              verify: access.group.name,
+              currentDocument: { updateTime: access.group.updateTime },
+            },
+            {
+              verify: actorMemberName,
+              currentDocument: { updateTime: access.member.updateTime },
+            },
+            ...(assigneeMemberName && assigneeMemberName !== actorMemberName
+              ? [
+                  {
+                    verify: assigneeMemberName,
+                    currentDocument: { updateTime: assigneeMember!.updateTime },
+                  },
+                ]
+              : []),
+            {
+              update: {
+                name: task.path,
+                fields: taskFields(updated),
+              },
+              currentDocument: { updateTime: task.updateTime },
+            },
+          ]);
+          return { kind: "updated" as const, task: publicTask(updated) };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+
+      const updateAccess = await readUpdateAccess(
+        actorUserId,
+        groupId,
+        taskId,
+        input,
+      );
+      if (updateAccess.kind !== "ready") return updateAccess;
+      throw new Error("Task update could not resolve concurrent writes.");
+    },
+
+    async setState(actorUserId, groupId, taskId, desiredState) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const taskAccess = await readTaskAccess(actorUserId, groupId, taskId);
+        if (taskAccess.kind !== "ready") return taskAccess;
+        const { access, task } = taskAccess;
+        if (task.state === desiredState) {
+          return { kind: "updated" as const, task: publicTask(task) };
+        }
+        const updated: StoredTask = {
+          ...task,
+          state: desiredState,
+          completedAt:
+            desiredState === "done" ? new Date(now()).toISOString() : null,
+        };
+        try {
+          await commit([
+            {
+              verify: access.group.name,
+              currentDocument: { updateTime: access.group.updateTime },
+            },
+            {
+              verify: access.member.name,
+              currentDocument: { updateTime: access.member.updateTime },
+            },
+            {
+              update: {
+                name: task.path,
+                fields: taskFields(updated),
+              },
+              currentDocument: { updateTime: task.updateTime },
+            },
+          ]);
+          return { kind: "updated" as const, task: publicTask(updated) };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+
+      const taskAccess = await readTaskAccess(actorUserId, groupId, taskId);
+      if (taskAccess.kind !== "ready") return taskAccess;
+      throw new Error("Task state update could not resolve concurrent writes.");
+    },
+
+    async delete(actorUserId, groupId, taskId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const taskAccess = await readTaskAccess(actorUserId, groupId, taskId);
+        if (taskAccess.kind !== "ready") return taskAccess;
+        const { access, task } = taskAccess;
+        try {
+          await commit([
+            {
+              verify: access.group.name,
+              currentDocument: { updateTime: access.group.updateTime },
+            },
+            {
+              verify: access.member.name,
+              currentDocument: { updateTime: access.member.updateTime },
+            },
+            {
+              delete: task.path,
+              currentDocument: { updateTime: task.updateTime },
+            },
+          ]);
+          return { kind: "deleted" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+
+      const taskAccess = await readTaskAccess(actorUserId, groupId, taskId);
+      if (taskAccess.kind !== "ready") return taskAccess;
+      throw new Error("Task deletion could not resolve concurrent writes.");
     },
 
     async list(actorUserId, groupId) {

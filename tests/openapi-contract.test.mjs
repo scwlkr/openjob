@@ -168,6 +168,19 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   );
   assert.equal(taskList.parameters[0].schema.default, "open");
   assert.match(taskList.description, /taskId ascending/);
+  const taskItem = contract.paths["/api/v1/groups/{groupId}/tasks/{taskId}"];
+  const taskState =
+    contract.paths["/api/v1/groups/{groupId}/tasks/{taskId}/state"].put;
+  assert.deepEqual(
+    {
+      get: taskItem.get["x-openjob-retryable"],
+      patch: taskItem.patch["x-openjob-retryable"],
+      delete: taskItem.delete["x-openjob-retryable"],
+      state: taskState["x-openjob-retryable"],
+    },
+    { get: true, patch: false, delete: false, state: true },
+  );
+  assert.equal(taskItem.delete.responses["204"].content, undefined);
   assert.equal(
     contract.components.responses.InvalidInviteResponse.content["application/json"].example
       .error.code,

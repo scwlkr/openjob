@@ -9,10 +9,13 @@ export async function createOpenApiResponseValidator() {
   addFormats(ajv);
 
   return async function assertContract(response, path, method) {
-    const schema =
-      contract.paths[path][method].responses[String(response.status)].content[
-        "application/json"
-      ].schema;
+    const responseContract =
+      contract.paths[path][method].responses[String(response.status)];
+    if (!responseContract.content) {
+      assert.equal(await response.clone().text(), "");
+      return;
+    }
+    const schema = responseContract.content["application/json"].schema;
     const validate = ajv.compile(schema);
     const body = await response.clone().json();
     assert.equal(

@@ -64,6 +64,41 @@ export type TaskStore = {
     | { kind: "group_not_found" }
     | { kind: "task_not_found" }
   >;
+  update(
+    actorUserId: string,
+    groupId: GroupId,
+    taskId: TaskId,
+    input: {
+      text?: TaskText;
+      assignee?: { userId: string; username: Username };
+      dueDate?: DueDate | null;
+    },
+  ): Promise<
+    | { kind: "updated"; task: OpenJobTask }
+    | { kind: "assignee_not_member" }
+    | { kind: "group_not_found" }
+    | { kind: "task_not_found" }
+    | { kind: "task_done" }
+  >;
+  setState(
+    actorUserId: string,
+    groupId: GroupId,
+    taskId: TaskId,
+    state: "open" | "done",
+  ): Promise<
+    | { kind: "updated"; task: OpenJobTask }
+    | { kind: "group_not_found" }
+    | { kind: "task_not_found" }
+  >;
+  delete(
+    actorUserId: string,
+    groupId: GroupId,
+    taskId: TaskId,
+  ): Promise<
+    | { kind: "deleted" }
+    | { kind: "group_not_found" }
+    | { kind: "task_not_found" }
+  >;
   list(
     actorUserId: string,
     groupId: GroupId,
@@ -108,6 +143,14 @@ function assigneeNotMember(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "assignee_not_member",
     message: "Assign the Task to a current Member.",
+    status: 409,
+  });
+}
+
+function taskDone(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "task_done",
+    message: "Reopen the Task before changing its content.",
     status: 409,
   });
 }
@@ -208,9 +251,108 @@ async function readCreateTask(
   }
 }
 
+async function readUpdateTask(
+  request: Request,
+): Promise<
+  | { fields: Record<string, string> }
+  | {
+      input: {
+        text?: TaskText;
+        assigneeUsername?: Username;
+        dueDate?: DueDate | null;
+      };
+    }
+> {
+  try {
+    const input = (await request.json()) as unknown;
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return { fields: { text: "Send a JSON Task object." } };
+    }
+    const keys = Object.keys(input);
+    const allowedKeys = new Set(["text", "assigneeUsername", "dueDate"]);
+    if (keys.length === 0 || keys.some((key) => !allowedKeys.has(key))) {
+      return { fields: { text: "Send at least one documented Task field." } };
+    }
+
+    const fields: Record<string, string> = {};
+    const update: {
+      text?: TaskText;
+      assigneeUsername?: Username;
+      dueDate?: DueDate | null;
+    } = {};
+    if ("text" in input) {
+      if (typeof input.text !== "string") {
+        fields.text = "Must contain 1 to 2,000 characters.";
+      } else {
+        const normalized = input.text.replace(/\r\n?/g, "\n").trim();
+        if (
+          normalized.length === 0 ||
+          Array.from(normalized).length > 2_000 ||
+          TASK_TEXT_CONTROL_CHARACTERS.test(normalized)
+        ) {
+          fields.text = "Must contain 1 to 2,000 plain-text characters.";
+        } else {
+          update.text = normalized as TaskText;
+        }
+      }
+    }
+    if ("assigneeUsername" in input) {
+      if (
+        typeof input.assigneeUsername !== "string" ||
+        !isUsernameSyntax(input.assigneeUsername) ||
+        isReservedUsername(input.assigneeUsername)
+      ) {
+        fields.assigneeUsername = "Use a valid current Member Username.";
+      } else {
+        update.assigneeUsername = input.assigneeUsername as Username;
+      }
+    }
+    if ("dueDate" in input) {
+      if (input.dueDate === null) {
+        update.dueDate = null;
+      } else if (
+        typeof input.dueDate !== "string" ||
+        !validDueDate(input.dueDate)
+      ) {
+        fields.dueDate = "Use a valid YYYY-MM-DD calendar date or null.";
+      } else {
+        update.dueDate = input.dueDate as DueDate;
+      }
+    }
+
+    return Object.keys(fields).length > 0 ? { fields } : { input: update };
+  } catch {
+    return { fields: { text: "Send a JSON Task object." } };
+  }
+}
+
+async function readTaskState(
+  request: Request,
+): Promise<
+  | { fields: Record<string, string> }
+  | { state: "open" | "done" }
+> {
+  try {
+    const input = (await request.json()) as unknown;
+    if (
+      !input ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.keys(input).join(",") !== "state" ||
+      !("state" in input) ||
+      !["open", "done"].includes(String(input.state))
+    ) {
+      return { fields: { state: "Use open or done." } };
+    }
+    return { state: input.state as "open" | "done" };
+  } catch {
+    return { fields: { state: "Send a JSON state object." } };
+  }
+}
+
 function taskResourceFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)\/tasks(?:\/([^/]+))?$/,
+    /^\/api\/v1\/groups\/([^/]+)\/tasks(?:\/([^/]+)(?:\/(state))?)?$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -231,6 +373,7 @@ function taskResourceFromPath(pathname: string) {
       kind: "valid" as const,
       groupId: groupId as GroupId,
       taskId: taskId as TaskId | null,
+      state: match[3] === "state",
     };
   } catch {
     return match[2] === undefined
@@ -480,9 +623,107 @@ export function createV1TasksApi({
           });
         }
 
-        if (path.kind === "valid" && path.taskId !== null && request.method === "GET") {
+        if (
+          path.kind === "valid" &&
+          path.taskId !== null &&
+          !path.state &&
+          request.method === "GET"
+        ) {
           const result = await tasks.get(user.userId, path.groupId, path.taskId);
           return result.kind === "found"
+            ? jsonResponse({ data: result.task })
+            : taskNotFound(requestId);
+        }
+
+        if (
+          path.kind === "valid" &&
+          path.taskId !== null &&
+          !path.state &&
+          request.method === "DELETE"
+        ) {
+          const result = await tasks.delete(
+            user.userId,
+            path.groupId,
+            path.taskId,
+          );
+          return result.kind === "deleted"
+            ? new Response(null, {
+                status: 204,
+                headers: { "cache-control": "no-store" },
+              })
+            : taskNotFound(requestId);
+        }
+
+        if (
+          path.kind === "valid" &&
+          path.taskId !== null &&
+          !path.state &&
+          request.method === "PATCH"
+        ) {
+          const current = await tasks.get(
+            user.userId,
+            path.groupId,
+            path.taskId,
+          );
+          if (current.kind !== "found") {
+            return taskNotFound(requestId);
+          }
+          if (current.task.state === "done") return taskDone(requestId);
+          const parsed = await readUpdateTask(request);
+          if ("fields" in parsed) {
+            return invalidTaskInput(requestId, parsed.fields);
+          }
+          let assignee: { userId: string; username: Username } | undefined;
+          if (parsed.input.assigneeUsername !== undefined) {
+            const assigneeUser = await users.getByUsername(
+              parsed.input.assigneeUsername,
+            );
+            if (!assigneeUser?.username) return assigneeNotMember(requestId);
+            assignee = {
+              userId: assigneeUser.userId,
+              username: assigneeUser.username as Username,
+            };
+          }
+          const result = await tasks.update(user.userId, path.groupId, path.taskId, {
+            ...(parsed.input.text !== undefined ? { text: parsed.input.text } : {}),
+            ...(assignee ? { assignee } : {}),
+            ...("dueDate" in parsed.input ? { dueDate: parsed.input.dueDate } : {}),
+          });
+          if (result.kind === "updated") {
+            return jsonResponse({ data: result.task });
+          }
+          if (result.kind === "assignee_not_member") {
+            return assigneeNotMember(requestId);
+          }
+          if (result.kind === "task_done") return taskDone(requestId);
+          return taskNotFound(requestId);
+        }
+
+        if (
+          path.kind === "valid" &&
+          path.taskId !== null &&
+          path.state &&
+          request.method === "PUT"
+        ) {
+          const current = await tasks.get(
+            user.userId,
+            path.groupId,
+            path.taskId,
+          );
+          if (current.kind !== "found") {
+            return taskNotFound(requestId);
+          }
+          const parsed = await readTaskState(request);
+          if ("fields" in parsed) {
+            return invalidTaskInput(requestId, parsed.fields);
+          }
+          const result = await tasks.setState(
+            user.userId,
+            path.groupId,
+            path.taskId,
+            parsed.state,
+          );
+          return result.kind === "updated"
             ? jsonResponse({ data: result.task })
             : taskNotFound(requestId);
         }

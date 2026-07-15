@@ -150,7 +150,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     "/api/v1/groups/{groupId}/tasks",
     "post",
   );
-  const task = (await createdResponse.json()).data;
+  let task = (await createdResponse.json()).data;
   assert.deepEqual(task, {
     taskId: "task_dddddddddddd4ddd8ddddddddddddddd",
     groupId: group.groupId,
@@ -165,6 +165,82 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     createdAt: NOW,
     completedAt: null,
   });
+
+  const editedResponse = await harness.request({
+    body: {
+      text: "Publish release notes",
+      assigneeUsername: "eli",
+      dueDate: null,
+    },
+    headers: shaneHeaders,
+    method: "PATCH",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`,
+  });
+  assert.equal(editedResponse.status, 200);
+  await assertContract(
+    editedResponse,
+    "/api/v1/groups/{groupId}/tasks/{taskId}",
+    "patch",
+  );
+  task = (await editedResponse.json()).data;
+  assert.deepEqual(task, {
+    taskId: "task_dddddddddddd4ddd8ddddddddddddddd",
+    groupId: group.groupId,
+    text: "Publish release notes",
+    assignee: {
+      state: "assigned",
+      userId: eli.userId,
+      username: "eli",
+    },
+    dueDate: null,
+    state: "open",
+    createdAt: NOW,
+    completedAt: null,
+  });
+
+  harness.setNow("2026-07-15T12:10:00.000Z");
+  const completedResponse = await harness.request({
+    body: { state: "done" },
+    headers: eliHeaders,
+    method: "PUT",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}/state`,
+  });
+  assert.equal(completedResponse.status, 200);
+  await assertContract(
+    completedResponse,
+    "/api/v1/groups/{groupId}/tasks/{taskId}/state",
+    "put",
+  );
+  task = (await completedResponse.json()).data;
+  assert.equal(task.completedAt, "2026-07-15T12:10:00.000Z");
+
+  harness.setNow("2026-07-15T12:20:00.000Z");
+  const repeatedCompletion = await harness.request({
+    body: { state: "done" },
+    headers: shaneHeaders,
+    method: "PUT",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}/state`,
+  });
+  assert.deepEqual(await repeatedCompletion.json(), { data: task });
+
+  await harness.restart();
+  const persistedCompletion = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`,
+  });
+  assert.deepEqual(await persistedCompletion.json(), { data: task });
+
+  const reopenedResponse = await harness.request({
+    body: { state: "open" },
+    headers: shaneHeaders,
+    method: "PUT",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}/state`,
+  });
+  assert.equal(reopenedResponse.status, 200);
+  task = (await reopenedResponse.json()).data;
+  assert.equal(task.state, "open");
+  assert.equal(task.completedAt, null);
 
   const laterForEliResponse = await harness.request({
     body: {
@@ -215,6 +291,40 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     data: [soonerForEli, laterForEli, task],
     nextCursor: null,
   });
+
+  const completedForDeletion = await harness.request({
+    body: { state: "done" },
+    headers: eliHeaders,
+    method: "PUT",
+    path: `/api/v1/groups/${group.groupId}/tasks/${soonerForEli.taskId}/state`,
+  });
+  assert.equal(completedForDeletion.status, 200);
+
+  for (const deletedTask of [laterForEli, soonerForEli]) {
+    const deleted = await harness.request({
+      headers: shaneHeaders,
+      method: "DELETE",
+      path: `/api/v1/groups/${group.groupId}/tasks/${deletedTask.taskId}`,
+    });
+    assert.equal(deleted.status, 204);
+    assert.equal(await deleted.text(), "");
+    await assertContract(
+      deleted,
+      "/api/v1/groups/{groupId}/tasks/{taskId}",
+      "delete",
+    );
+  }
+
+  await harness.restart();
+  for (const deletedTask of [laterForEli, soonerForEli]) {
+    const missing = await harness.request({
+      headers: shaneHeaders,
+      method: "GET",
+      path: `/api/v1/groups/${group.groupId}/tasks/${deletedTask.taskId}`,
+    });
+    assert.equal(missing.status, 404);
+    assert.equal((await missing.json()).error.code, "task_not_found");
+  }
 
   const inaccessible = await harness.request({
     body: { text: "Private", assigneeUsername: "shane" },
