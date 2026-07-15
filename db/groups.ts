@@ -419,6 +419,61 @@ export function createFirestoreGroupStore(
     return publicInvite(fresh);
   }
 
+  async function changeRole(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUserId: string,
+    desiredRole: GroupRole,
+  ) {
+    for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+      const group = await readGroup(groupPath(groupId));
+      if (!group) return { kind: "not_found" as const };
+      const [actor, target] = await Promise.all([
+        readMembership(membershipPath(groupId, actorUserId)),
+        readMembership(membershipPath(groupId, targetUserId)),
+      ]);
+      if (!actor) return { kind: "not_found" as const };
+      if (actor.role !== "admin") return { kind: "forbidden" as const };
+      if (!target) return { kind: "member_not_found" as const };
+      if (target.role === desiredRole) return { kind: "role_conflict" as const };
+      if (desiredRole === "member") {
+        const members = await readAllMemberships(groupId);
+        if (members.filter(({ role }) => role === "admin").length <= 1) {
+          return { kind: "last_admin" as const };
+        }
+      }
+
+      try {
+        await commit([
+          stateRevisionWrite(group),
+          ...(actor.path === target.path
+            ? []
+            : [
+                {
+                  verify: firestore.documentName(actor.path),
+                  currentDocument: { updateTime: actor.updateTime },
+                },
+              ]),
+          {
+            update: {
+              name: firestore.documentName(target.path),
+              fields: { role: { stringValue: desiredRole } },
+            },
+            updateMask: { fieldPaths: ["role"] },
+            currentDocument: { updateTime: target.updateTime },
+          },
+        ]);
+        return {
+          kind: "changed" as const,
+          member: publicMember({ ...target, role: desiredRole }),
+        };
+      } catch (error) {
+        if (!isConcurrentWrite(error)) throw error;
+      }
+    }
+    throw new Error("Member role change could not resolve concurrent writes.");
+  }
+
   return Object.freeze({
     async create(user: GroupUser, name) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
@@ -481,51 +536,15 @@ export function createFirestoreGroupStore(
     },
 
     async demote(actorUserId, groupId, targetUserId) {
-      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const group = await readGroup(groupPath(groupId));
-        if (!group) return { kind: "not_found" as const };
-        const [actor, target] = await Promise.all([
-          readMembership(membershipPath(groupId, actorUserId)),
-          readMembership(membershipPath(groupId, targetUserId)),
-        ]);
-        if (!actor) return { kind: "not_found" as const };
-        if (actor.role !== "admin") return { kind: "forbidden" as const };
-        if (!target) return { kind: "member_not_found" as const };
-        if (target.role !== "admin") return { kind: "role_conflict" as const };
-        const members = await readAllMemberships(groupId);
-        if (members.filter(({ role }) => role === "admin").length <= 1) {
-          return { kind: "last_admin" as const };
-        }
-
-        try {
-          await commit([
-            stateRevisionWrite(group),
-            ...(actor.path === target.path
-              ? []
-              : [
-                  {
-                    verify: firestore.documentName(actor.path),
-                    currentDocument: { updateTime: actor.updateTime },
-                  },
-                ]),
-            {
-              update: {
-                name: firestore.documentName(target.path),
-                fields: { role: { stringValue: "member" } },
-              },
-              updateMask: { fieldPaths: ["role"] },
-              currentDocument: { updateTime: target.updateTime },
-            },
-          ]);
-          return {
-            kind: "demoted" as const,
-            member: publicMember({ ...target, role: "member" }),
-          };
-        } catch (error) {
-          if (!isConcurrentWrite(error)) throw error;
-        }
-      }
-      throw new Error("Member demotion could not resolve concurrent writes.");
+      const result = await changeRole(
+        actorUserId,
+        groupId,
+        targetUserId,
+        "member",
+      );
+      return result.kind === "changed"
+        ? { kind: "demoted" as const, member: result.member }
+        : result;
     },
 
     get,
@@ -807,46 +826,18 @@ export function createFirestoreGroupStore(
     },
 
     async promote(actorUserId, groupId, targetUserId) {
-      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const [group, actor, target] = await Promise.all([
-          readGroup(groupPath(groupId)),
-          readMembership(membershipPath(groupId, actorUserId)),
-          readMembership(membershipPath(groupId, targetUserId)),
-        ]);
-        if (!group || !actor) return { kind: "not_found" as const };
-        if (actor.role !== "admin") return { kind: "forbidden" as const };
-        if (!target) return { kind: "member_not_found" as const };
-        if (target.role === "admin") return { kind: "role_conflict" as const };
-
-        try {
-          await commit([
-            stateRevisionWrite(group),
-            ...(actor.path === target.path
-              ? []
-              : [
-                  {
-                    verify: firestore.documentName(actor.path),
-                    currentDocument: { updateTime: actor.updateTime },
-                  },
-                ]),
-            {
-              update: {
-                name: firestore.documentName(target.path),
-                fields: { role: { stringValue: "admin" } },
-              },
-              updateMask: { fieldPaths: ["role"] },
-              currentDocument: { updateTime: target.updateTime },
-            },
-          ]);
-          return {
-            kind: "promoted" as const,
-            member: publicMember({ ...target, role: "admin" }),
-          };
-        } catch (error) {
-          if (!isConcurrentWrite(error)) throw error;
-        }
+      const result = await changeRole(
+        actorUserId,
+        groupId,
+        targetUserId,
+        "admin",
+      );
+      if (result.kind === "last_admin") {
+        throw new Error("Admin promotion returned a final-Admin conflict.");
       }
-      throw new Error("Member promotion could not resolve concurrent writes.");
+      return result.kind === "changed"
+        ? { kind: "promoted" as const, member: result.member }
+        : result;
     },
 
     async rename(userId, groupId, name) {
