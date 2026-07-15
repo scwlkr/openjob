@@ -404,7 +404,7 @@ test("Kick removes access, preserves work atomically, and allows ordinary rejoin
     await createGovernanceHarness(["shane", "eli", "maya"]);
   t.after(() => harness.close());
   const assertContract = await createOpenApiResponseValidator();
-  await claim("shane");
+  const shane = await claim("shane");
   const eli = await claim("eli");
   const maya = await claim("maya");
   const group = await createGroup("Kick Recovery");
@@ -418,6 +418,28 @@ test("Kick removes access, preserves work atomically, and allows ordinary rejoin
     path: `/api/v1/groups/${group.groupId}/invite-link`,
   });
   const invite = (await inviteResponse.json()).data;
+  const memberAttempt = await request("maya", {
+    method: "POST",
+    path: kickPath,
+  });
+  assert.equal(memberAttempt.status, 403);
+  await assertContract(
+    memberAttempt,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/kick",
+    "post",
+  );
+  assert.equal((await memberAttempt.json()).error.code, "admin_required");
+  const selfKick = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${shane.userId}/actions/kick`,
+  });
+  assert.equal(selfKick.status, 409);
+  await assertContract(
+    selfKick,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/kick",
+    "post",
+  );
+  assert.equal((await selfKick.json()).error.code, "self_removal");
   const promoted = await request("shane", {
     method: "POST",
     path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
@@ -513,6 +535,133 @@ test("Kick removes access, preserves work atomically, and allows ordinary rejoin
   });
   const members = (await roster.json()).data;
   assert.equal(members.find(({ userId }) => userId === eli.userId).role, "member");
+});
+
+test("concurrent Task assignment and Kick cannot leave an invalid assignee", async (t) => {
+  const { claim, createGroup, firestore, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+
+  const assignmentFirstGroup = await createGroup("Assignment First");
+  await join("eli", assignmentFirstGroup.groupId);
+  const assignmentFirstTasks = `/api/v1/groups/${assignmentFirstGroup.groupId}/tasks`;
+  const assignmentFirstTaskResponse = await request("shane", {
+    body: { text: "Race to Eli", assigneeUsername: "shane" },
+    method: "POST",
+    path: assignmentFirstTasks,
+  });
+  const assignmentFirstTask = (await assignmentFirstTaskResponse.json()).data;
+  const [assignment, laterKick] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        body: { assigneeUsername: "eli" },
+        method: "PATCH",
+        path: `${assignmentFirstTasks}/${assignmentFirstTask.taskId}`,
+      }),
+    () =>
+      request("shane", {
+        method: "POST",
+        path: `/api/v1/groups/${assignmentFirstGroup.groupId}/members/${eli.userId}/actions/kick`,
+      }),
+  );
+  assert.equal(assignment.status, 200);
+  assert.equal(laterKick.status, 204);
+  const unassignedResponse = await request("shane", {
+    method: "GET",
+    path: `${assignmentFirstTasks}/${assignmentFirstTask.taskId}`,
+  });
+  assert.deepEqual((await unassignedResponse.json()).data.assignee, {
+    state: "unassigned",
+  });
+
+  const kickFirstGroup = await createGroup("Kick First");
+  await join("eli", kickFirstGroup.groupId);
+  const kickFirstTasks = `/api/v1/groups/${kickFirstGroup.groupId}/tasks`;
+  const kickFirstTaskResponse = await request("shane", {
+    body: { text: "Keep a valid assignee", assigneeUsername: "shane" },
+    method: "POST",
+    path: kickFirstTasks,
+  });
+  const kickFirstTask = (await kickFirstTaskResponse.json()).data;
+  const [firstKick, lateAssignment] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        method: "POST",
+        path: `/api/v1/groups/${kickFirstGroup.groupId}/members/${eli.userId}/actions/kick`,
+      }),
+    () =>
+      request("shane", {
+        body: { assigneeUsername: "eli" },
+        method: "PATCH",
+        path: `${kickFirstTasks}/${kickFirstTask.taskId}`,
+      }),
+  );
+  assert.equal(firstKick.status, 204);
+  assert.equal(lateAssignment.status, 409);
+  assert.equal((await lateAssignment.json()).error.code, "assignee_not_member");
+  const stillAssignedResponse = await request("shane", {
+    method: "GET",
+    path: `${kickFirstTasks}/${kickFirstTask.taskId}`,
+  });
+  assert.deepEqual((await stillAssignedResponse.json()).data.assignee, {
+    state: "assigned",
+    userId: shane.userId,
+    username: "shane",
+  });
+  assert.equal(firestore.preconditionFailures() >= 2, true);
+});
+
+test("concurrent Kick and demotion cannot remove every Admin", async (t) => {
+  const { claim, createGroup, firestore, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("Kick Role Race");
+  await join("eli", group.groupId);
+  const promoted = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
+  });
+  assert.equal(promoted.status, 200);
+
+  const [kick, demotion] = await runOrderedCommitRace(
+    firestore,
+    () =>
+      request("shane", {
+        method: "POST",
+        path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`,
+      }),
+    () =>
+      request("eli", {
+        method: "POST",
+        path: `/api/v1/groups/${group.groupId}/members/${shane.userId}/actions/demote`,
+      }),
+  );
+  assert.equal(kick.status, 204);
+  assert.equal(demotion.status, 404);
+  assert.equal((await demotion.json()).error.code, "member_not_found");
+  assert.equal(firestore.preconditionFailures() >= 1, true);
+
+  const roster = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/members`,
+  });
+  assert.deepEqual(await roster.json(), {
+    data: [
+      {
+        userId: shane.userId,
+        username: "shane",
+        role: "admin",
+        joinedAt: NOW,
+      },
+    ],
+    nextCursor: null,
+  });
 });
 
 test("concurrent departure and self-demotion cannot remove every Admin", async (t) => {
