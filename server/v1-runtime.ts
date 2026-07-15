@@ -1,9 +1,11 @@
 import { env } from "cloudflare:workers";
 import { createFirestoreGroupStore } from "@/db/groups";
+import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestoreUserStore } from "@/db/users";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
 import { createV1GroupsApi, createV1GroupsHandler } from "./v1-groups";
 import { createV1IdentityApi, createV1IdentityHandler } from "./v1-identity";
+import { createV1TasksApi, createV1TasksHandler } from "./v1-tasks";
 
 type FirebaseBindings = {
   FIREBASE_CLIENT_EMAIL?: string;
@@ -14,6 +16,7 @@ type FirebaseBindings = {
 type V1Runtime = {
   groupsApi: ReturnType<typeof createV1GroupsApi>;
   identityApi: ReturnType<typeof createV1IdentityApi>;
+  tasksApi: ReturnType<typeof createV1TasksApi>;
 };
 
 let runtime: V1Runtime | null = null;
@@ -38,10 +41,12 @@ function getRuntime() {
   };
   const users = createFirestoreUserStore(firebase);
   const groups = createFirestoreGroupStore(firebase);
+  const tasks = createFirestoreTaskStore(firebase);
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId });
   runtime = {
     groupsApi: createV1GroupsApi({ groups, users, verifyIdToken }),
     identityApi: createV1IdentityApi({ groups, users, verifyIdToken }),
+    tasksApi: createV1TasksApi({ tasks, users, verifyIdToken }),
   };
   return runtime;
 }
@@ -54,5 +59,10 @@ function getGroupsApi() {
   return getRuntime().groupsApi;
 }
 
+function getTasksApi() {
+  return getRuntime().tasksApi;
+}
+
 export const handleV1IdentityRequest = createV1IdentityHandler(getIdentityApi);
 export const handleV1GroupsRequest = createV1GroupsHandler(getGroupsApi);
+export const handleV1TasksRequest = createV1TasksHandler(getTasksApi);

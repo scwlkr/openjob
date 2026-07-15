@@ -188,6 +188,20 @@ export function createFirestoreUserStore(
       return user ? { userId: user.userId, username: user.username } : null;
     },
 
+    async getByUsername(username: Username) {
+      const claim = await readDocument(`v1Usernames/${username}`);
+      if (!claim) return null;
+      const userId = claim.fields?.userId?.stringValue;
+      if (!userId) {
+        throw new Error("Firestore returned an invalid Username claim record.");
+      }
+      const user = await readUserDirectory(userId);
+      if (!user || user.username !== username) {
+        throw new Error("Firestore returned an inconsistent Username claim record.");
+      }
+      return { userId: user.userId, username: user.username };
+    },
+
     async getOrCreate(firebaseUid: string) {
       return publicUser(await getOrCreateStored(firebaseUid));
     },

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createV1TasksApi } from "../server/v1-tasks.ts";
+import { createOpenApiResponseValidator } from "./support/openapi-response.mjs";
 import { createV1TestHarness } from "./support/v1-harness.mjs";
 
 const GROUP_ID = "grp_tasks";
@@ -471,4 +472,81 @@ test("Task collection rejects invalid filters and page fields", async (t) => {
     assert.equal(response.status, 400, query);
     assert.deepEqual(Object.keys((await response.json()).error.fields), [field]);
   }
+});
+
+test("representative Task responses validate against OpenAPI", async (t) => {
+  const harness = createTasksHarness();
+  t.after(() => harness.close());
+  const assertContract = await createOpenApiResponseValidator();
+
+  const created = await harness.request({
+    as: "shane",
+    body: { text: "Contract Task", assigneeUsername: "eli" },
+    method: "POST",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  await assertContract(created, "/api/v1/groups/{groupId}/tasks", "post");
+  const taskId = (await created.json()).data.taskId;
+
+  const listed = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  await assertContract(listed, "/api/v1/groups/{groupId}/tasks", "get");
+
+  const retrieved = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks/${taskId}`,
+  });
+  await assertContract(
+    retrieved,
+    "/api/v1/groups/{groupId}/tasks/{taskId}",
+    "get",
+  );
+
+  const invalid = await harness.request({
+    as: "shane",
+    body: { text: "", assigneeUsername: "eli" },
+    method: "POST",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  await assertContract(invalid, "/api/v1/groups/{groupId}/tasks", "post");
+
+  const conflict = await harness.request({
+    as: "shane",
+    body: { text: "Outside", assigneeUsername: "maya" },
+    method: "POST",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  await assertContract(conflict, "/api/v1/groups/{groupId}/tasks", "post");
+
+  const unauthenticated = await harness.request({
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  await assertContract(
+    unauthenticated,
+    "/api/v1/groups/{groupId}/tasks",
+    "get",
+  );
+
+  const concealed = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: "/api/v1/groups/grp_unknown/tasks",
+  });
+  await assertContract(concealed, "/api/v1/groups/{groupId}/tasks", "get");
+
+  const missing = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: `/api/v1/groups/${GROUP_ID}/tasks/task_unknown`,
+  });
+  await assertContract(
+    missing,
+    "/api/v1/groups/{groupId}/tasks/{taskId}",
+    "get",
+  );
 });
