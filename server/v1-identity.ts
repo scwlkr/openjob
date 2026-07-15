@@ -65,11 +65,14 @@ async function currentUser(
   user: OpenJobUser,
   groups?: Pick<GroupStore, "list">,
 ) {
-  let accessibleGroups: OpenJobGroup[] = [];
+  const accessibleGroups: OpenJobGroup[] = [];
   if (groups) {
-    accessibleGroups = (
-      await groups.list(user.userId, { cursor: null, limit: 500 })
-    ).groups;
+    let cursor: string | null = null;
+    do {
+      const page = await groups.list(user.userId, { cursor, limit: 500 });
+      accessibleGroups.push(...page.groups);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
   }
   return {
     userId: user.userId,

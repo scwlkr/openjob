@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
+import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 import { createV1GroupsApi } from "../server/v1-groups.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
 import { createV1TestHarness } from "./support/v1-harness.mjs";
@@ -307,4 +310,164 @@ test("Group privacy is resolved before Admin rename validation", async (t) => {
     (await unauthenticated.json()).error.code,
     "authentication_required",
   );
+});
+
+test("GET /me follows every Group page", async (t) => {
+  const harness = createGroupsHarness();
+  t.after(() => harness.close());
+
+  const responses = await Promise.all(
+    Array.from({ length: 501 }, (_, index) =>
+      harness.request({
+        as: "shane",
+        body: { name: `Group ${index + 1}` },
+        method: "POST",
+        path: "/api/v1/groups",
+      }),
+    ),
+  );
+  assert.equal(responses.every(({ status }) => status === 201), true);
+
+  const currentUser = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  assert.equal(currentUser.status, 200);
+  const groups = (await currentUser.json()).data.groups;
+  assert.equal(groups.length, 501);
+  assert.equal(new Set(groups.map(({ groupId }) => groupId)).size, 501);
+});
+
+test("Group Names are trimmed, bounded Unicode labels and remain non-unique", async (t) => {
+  const harness = createGroupsHarness();
+  t.after(() => harness.close());
+
+  for (const body of [
+    undefined,
+    {},
+    { name: null },
+    { name: "" },
+    { name: "   " },
+    { name: "a".repeat(81) },
+    { name: "Line\nBreak" },
+    { name: "Control\u0000Character" },
+    { name: "Line\u2028Separator" },
+    { name: "Valid", ignored: true },
+  ]) {
+    const response = await harness.request({
+      as: "shane",
+      body,
+      method: "POST",
+      path: "/api/v1/groups",
+    });
+    assert.equal(response.status, 400, JSON.stringify(body));
+    const error = (await response.json()).error;
+    assert.equal(error.code, "invalid_request");
+    assert.deepEqual(Object.keys(error.fields), ["name"]);
+  }
+
+  const unicodeName = "🧭".repeat(80);
+  const firstResponse = await harness.request({
+    as: "shane",
+    body: { name: `  ${unicodeName}  ` },
+    method: "POST",
+    path: "/api/v1/groups",
+  });
+  assert.equal(firstResponse.status, 201);
+  const first = (await firstResponse.json()).data;
+  assert.equal(first.name, unicodeName);
+
+  const duplicateResponse = await harness.request({
+    as: "shane",
+    body: { name: unicodeName },
+    method: "POST",
+    path: "/api/v1/groups",
+  });
+  assert.equal(duplicateResponse.status, 201);
+  const duplicate = (await duplicateResponse.json()).data;
+  assert.equal(duplicate.name, unicodeName);
+  assert.notEqual(duplicate.groupId, first.groupId);
+});
+
+test("representative Group responses validate against OpenAPI", async (t) => {
+  const harness = createGroupsHarness({ additionalMemberRole: "member" });
+  t.after(() => harness.close());
+  const contract = await validateOpenApiContract();
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  addFormats(ajv);
+
+  async function assertContract(response, path, method) {
+    const schema =
+      contract.paths[path][method].responses[String(response.status)].content[
+        "application/json"
+      ].schema;
+    const validate = ajv.compile(schema);
+    const body = await response.clone().json();
+    assert.equal(
+      validate(body),
+      true,
+      `${method.toUpperCase()} ${path} ${response.status}: ${ajv.errorsText(validate.errors)}`,
+    );
+  }
+
+  const created = await harness.request({
+    as: "shane",
+    body: { name: "Contract Group" },
+    method: "POST",
+    path: "/api/v1/groups",
+  });
+  await assertContract(created, "/api/v1/groups", "post");
+  const groupId = (await created.json()).data.groupId;
+
+  const listed = await harness.request({
+    as: "shane",
+    method: "GET",
+    path: "/api/v1/groups?limit=1",
+  });
+  await assertContract(listed, "/api/v1/groups", "get");
+
+  const read = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: `/api/v1/groups/${groupId}`,
+  });
+  await assertContract(read, "/api/v1/groups/{groupId}", "get");
+
+  const renamed = await harness.request({
+    as: "shane",
+    body: { name: "Renamed Contract Group" },
+    method: "PATCH",
+    path: `/api/v1/groups/${groupId}`,
+  });
+  await assertContract(renamed, "/api/v1/groups/{groupId}", "patch");
+
+  const invalid = await harness.request({
+    as: "shane",
+    body: { name: "" },
+    method: "POST",
+    path: "/api/v1/groups",
+  });
+  await assertContract(invalid, "/api/v1/groups", "post");
+
+  const unauthenticated = await harness.request({
+    method: "GET",
+    path: "/api/v1/groups",
+  });
+  await assertContract(unauthenticated, "/api/v1/groups", "get");
+
+  const forbidden = await harness.request({
+    as: "eli",
+    body: { name: "Members Cannot Rename" },
+    method: "PATCH",
+    path: `/api/v1/groups/${groupId}`,
+  });
+  await assertContract(forbidden, "/api/v1/groups/{groupId}", "patch");
+
+  const concealed = await harness.request({
+    as: "eli",
+    method: "GET",
+    path: "/api/v1/groups/grp_unknown",
+  });
+  await assertContract(concealed, "/api/v1/groups/{groupId}", "get");
 });

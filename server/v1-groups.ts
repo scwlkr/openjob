@@ -10,6 +10,13 @@ export type OpenJobGroup = {
   createdAt: string;
 };
 
+export class InvalidGroupCursorError extends Error {
+  constructor() {
+    super("The Group collection cursor is invalid.");
+    this.name = "InvalidGroupCursorError";
+  }
+}
+
 export type GroupStore = {
   create(userId: string, name: GroupName): Promise<OpenJobGroup>;
   get(userId: string, groupId: string): Promise<OpenJobGroup | null>;
@@ -172,7 +179,15 @@ export function createV1GroupsApi({
             if ("error" in pagination) {
               return paginationError(pagination.error, requestId);
             }
-            const page = await groups.list(user.userId, pagination);
+            let page;
+            try {
+              page = await groups.list(user.userId, pagination);
+            } catch (error) {
+              if (error instanceof InvalidGroupCursorError) {
+                return paginationError("cursor", requestId);
+              }
+              throw error;
+            }
             return response({ data: page.groups, nextCursor: page.nextCursor });
           }
           if (request.method === "POST") {
@@ -269,4 +284,26 @@ export function createV1GroupsApi({
       }
     },
   });
+}
+
+export function createV1GroupsHandler(
+  getGroupsApi: () => ReturnType<typeof createV1GroupsApi>,
+  requestId = defaultRequestId,
+) {
+  return async function handleV1GroupsRequest(request: Request) {
+    try {
+      return await getGroupsApi().fetch(request);
+    } catch {
+      return response(
+        {
+          error: {
+            code: "internal_error",
+            message: "An unexpected error occurred.",
+            requestId: requestId(),
+          },
+        },
+        500,
+      );
+    }
+  };
 }
