@@ -20,6 +20,7 @@ labels:
 
 - [Define Group Identity and Lifecycle](issues/01-define-group-identity-and-lifecycle.md) — Groups use immutable opaque IDs with mutable non-unique names, client-local selection, Admin renaming, guarded leaving, and confirmed permanent ending.
 - [Define Task Lifecycle and Query Semantics](issues/02-define-lifecycle-and-query-semantics.md) — Tasks use bounded multiline text, one current-Member assignee, open/done transitions, permanent deletion, stable due-first ordering, and minimal status/assignee filters.
+- [Research Google Authentication for Equal Web and CLI Clients](issues/03-research-google-authentication-for-equal-clients.md) — Firebase issues one bearer-token identity to both clients; web uses Google sign-in, while CLI uses a PKCE loopback flow and stores only Firebase refresh credentials.
 
 ## Fog
 
