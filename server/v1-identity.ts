@@ -41,6 +41,23 @@ function response(body: unknown, status = 200) {
   });
 }
 
+function defaultRequestId() {
+  return `req_${crypto.randomUUID().replaceAll("-", "")}`;
+}
+
+function internalErrorResponse(requestId: () => string) {
+  return response(
+    {
+      error: {
+        code: "internal_error",
+        message: "An unexpected error occurred.",
+        requestId: requestId(),
+      },
+    },
+    500,
+  );
+}
+
 function currentUser(user: OpenJobUser) {
   return {
     userId: user.userId,
@@ -71,7 +88,7 @@ async function readUsername(request: Request) {
 }
 
 export function createV1IdentityApi({
-  requestId = () => `req_${crypto.randomUUID().replaceAll("-", "")}`,
+  requestId = defaultRequestId,
   users,
   verifyIdToken,
 }: IdentityApiOptions) {
@@ -160,17 +177,21 @@ export function createV1IdentityApi({
           404,
         );
       } catch {
-        return response(
-          {
-            error: {
-              code: "internal_error",
-              message: "An unexpected error occurred.",
-              requestId: requestId(),
-            },
-          },
-          500,
-        );
+        return internalErrorResponse(requestId);
       }
     },
   });
+}
+
+export function createV1IdentityHandler(
+  getIdentityApi: () => ReturnType<typeof createV1IdentityApi>,
+  requestId = defaultRequestId,
+) {
+  return async function handleV1IdentityRequest(request: Request) {
+    try {
+      return await getIdentityApi().fetch(request);
+    } catch {
+      return internalErrorResponse(requestId);
+    }
+  };
 }

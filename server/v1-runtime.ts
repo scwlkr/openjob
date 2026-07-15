@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { createFirestoreUserStore } from "@/db/users";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
-import { createV1IdentityApi } from "./v1-identity";
+import { createV1IdentityApi, createV1IdentityHandler } from "./v1-identity";
 
 type FirebaseBindings = {
   FIREBASE_CLIENT_EMAIL?: string;
@@ -36,6 +36,4 @@ function getIdentityApi() {
   return identityApi;
 }
 
-export function handleV1IdentityRequest(request: Request) {
-  return getIdentityApi().fetch(request);
-}
+export const handleV1IdentityRequest = createV1IdentityHandler(getIdentityApi);

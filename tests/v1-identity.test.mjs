@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
-import { createV1IdentityApi } from "../server/v1-identity.ts";
+import {
+  createV1IdentityApi,
+  createV1IdentityHandler,
+} from "../server/v1-identity.ts";
 import { createTestFirebaseAuthority } from "./support/firebase-id-tokens.mjs";
 import { createV1TestHarness } from "./support/v1-harness.mjs";
 
@@ -178,6 +181,25 @@ test("infrastructure failures return the settled internal error envelope", async
     assert.equal(error.code, "internal_error");
     assert.deepEqual(Object.keys(error).sort(), ["code", "message", "requestId"]);
   }
+});
+
+test("runtime initialization failures return the settled internal error envelope", async () => {
+  const handle = createV1IdentityHandler(
+    () => {
+      throw new Error("Test missing binding.");
+    },
+    () => "req_runtime_failure",
+  );
+
+  const response = await handle(new Request("https://openjob.test/api/v1/me"));
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    error: {
+      code: "internal_error",
+      message: "An unexpected error occurred.",
+      requestId: "req_runtime_failure",
+    },
+  });
 });
 
 test("PUT /me/username persists one idempotent Username claim", async (t) => {
