@@ -184,3 +184,89 @@ test("an Admin promotes only a current Member through the stable API contract", 
   );
   assert.equal((await outsideMember.json()).error.code, "member_not_found");
 });
+
+test("Admins demote themselves and the creator only while another Admin remains", async (t) => {
+  const { claim, createGroup, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli", "maya"]);
+  t.after(() => harness.close());
+  const assertContract = await createOpenApiResponseValidator();
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  await claim("maya");
+  const group = await createGroup();
+  await join("eli", group.groupId);
+  await join("maya", group.groupId);
+  const memberPath = (userId, action) =>
+    `/api/v1/groups/${group.groupId}/members/${userId}/actions/${action}`;
+
+  const promoted = await request("shane", {
+    method: "POST",
+    path: memberPath(eli.userId, "promote"),
+  });
+  assert.equal(promoted.status, 200);
+
+  const memberAttempt = await request("maya", {
+    method: "POST",
+    path: memberPath(shane.userId, "demote"),
+  });
+  assert.equal(memberAttempt.status, 403);
+  await assertContract(
+    memberAttempt,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/demote",
+    "post",
+  );
+  assert.equal((await memberAttempt.json()).error.code, "admin_required");
+
+  const creatorDemoted = await request("eli", {
+    method: "POST",
+    path: memberPath(shane.userId, "demote"),
+  });
+  assert.equal(creatorDemoted.status, 200);
+  await assertContract(
+    creatorDemoted,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/demote",
+    "post",
+  );
+  assert.deepEqual((await creatorDemoted.json()).data, {
+    userId: shane.userId,
+    username: "shane",
+    role: "member",
+    joinedAt: NOW,
+  });
+
+  const repeated = await request("eli", {
+    method: "POST",
+    path: memberPath(shane.userId, "demote"),
+  });
+  assert.equal(repeated.status, 409);
+  await assertContract(
+    repeated,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/demote",
+    "post",
+  );
+  assert.equal((await repeated.json()).error.code, "member_role_conflict");
+
+  const lastAdmin = await request("eli", {
+    method: "POST",
+    path: memberPath(eli.userId, "demote"),
+  });
+  assert.equal(lastAdmin.status, 409);
+  await assertContract(
+    lastAdmin,
+    "/api/v1/groups/{groupId}/members/{userId}/actions/demote",
+    "post",
+  );
+  assert.equal((await lastAdmin.json()).error.code, "last_admin");
+
+  const restored = await request("eli", {
+    method: "POST",
+    path: memberPath(shane.userId, "promote"),
+  });
+  assert.equal(restored.status, 200);
+  const selfDemoted = await request("eli", {
+    method: "POST",
+    path: memberPath(eli.userId, "demote"),
+  });
+  assert.equal(selfDemoted.status, 200);
+  assert.equal((await selfDemoted.json()).data.role, "member");
+});

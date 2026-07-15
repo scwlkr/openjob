@@ -224,6 +224,32 @@ export function createFirestoreGroupStore(
     return document ? parseInvitePointer(document, path) : null;
   }
 
+  async function readAllMemberships(groupId: GroupId) {
+    const memberships: StoredMembership[] = [];
+    let pageToken: string | null = null;
+    do {
+      const parameters = new URLSearchParams({
+        pageSize: "500",
+        orderBy: "__name__",
+      });
+      if (pageToken !== null) parameters.set("pageToken", pageToken);
+      const response = await firestore.request(
+        `${groupPath(groupId)}/members?${parameters}`,
+      );
+      const page = (await response.json()) as {
+        documents?: FirestoreDocument[];
+        nextPageToken?: string;
+      };
+      memberships.push(
+        ...(page.documents ?? []).map((document) =>
+          parseMembership(document, document.name),
+        ),
+      );
+      pageToken = page.nextPageToken ?? null;
+    } while (pageToken !== null);
+    return memberships;
+  }
+
   async function commit(writes: unknown[]) {
     return firestore.request(":commit", {
       method: "POST",
@@ -446,6 +472,54 @@ export function createFirestoreGroupStore(
         }
       }
       throw new Error("A unique Group ID and Invite Link could not be allocated.");
+    },
+
+    async demote(actorUserId, groupId, targetUserId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const [actor, target] = await Promise.all([
+          readMembership(membershipPath(groupId, actorUserId)),
+          readMembership(membershipPath(groupId, targetUserId)),
+        ]);
+        if (!actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (!target) return { kind: "member_not_found" as const };
+        if (target.role !== "admin") return { kind: "role_conflict" as const };
+        const members = await readAllMemberships(groupId);
+        if (members.filter(({ role }) => role === "admin").length <= 1) {
+          return { kind: "last_admin" as const };
+        }
+
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            ...(actor.path === target.path
+              ? []
+              : [
+                  {
+                    verify: firestore.documentName(actor.path),
+                    currentDocument: { updateTime: actor.updateTime },
+                  },
+                ]),
+            {
+              update: {
+                name: firestore.documentName(target.path),
+                fields: { role: { stringValue: "member" } },
+              },
+              updateMask: { fieldPaths: ["role"] },
+              currentDocument: { updateTime: target.updateTime },
+            },
+          ]);
+          return {
+            kind: "demoted" as const,
+            member: publicMember({ ...target, role: "member" }),
+          };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Member demotion could not resolve concurrent writes.");
     },
 
     get,

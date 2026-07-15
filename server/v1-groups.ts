@@ -65,6 +65,18 @@ export class InvalidMemberCursorError extends Error {
 
 export type GroupStore = {
   create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
+  demote(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUserId: string,
+  ): Promise<
+    | { kind: "demoted"; member: OpenJobMember }
+    | { kind: "forbidden" }
+    | { kind: "last_admin" }
+    | { kind: "member_not_found" }
+    | { kind: "not_found" }
+    | { kind: "role_conflict" }
+  >;
   get(userId: string, groupId: GroupId): Promise<OpenJobGroup | null>;
   getInvite(
     userId: string,
@@ -210,6 +222,14 @@ function memberRoleConflict(requestId: RequestIdFactory, message: string) {
   });
 }
 
+function lastAdminConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "last_admin",
+    message: "At least one Admin must remain.",
+    status: 409,
+  });
+}
+
 function usernameRequired(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "username_required",
@@ -291,9 +311,9 @@ function inviteResourceFromPath(pathname: string) {
   }
 }
 
-function promoteMemberFromPath(pathname: string) {
+function memberActionFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)\/members\/([^/]+)\/actions\/promote$/,
+    /^\/api\/v1\/groups\/([^/]+)\/members\/([^/]+)\/actions\/(promote|demote)$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -311,6 +331,7 @@ function promoteMemberFromPath(pathname: string) {
       kind: "valid" as const,
       groupId: groupId as GroupId,
       userId,
+      action: match[3] as "promote" | "demote",
     };
   } catch {
     return { kind: "invalid" as const };
@@ -438,15 +459,15 @@ export function createV1GroupsApi({
           }
         }
 
-        const promotePath = promoteMemberFromPath(url.pathname);
-        if (promotePath.kind === "invalid") return memberNotFound(requestId);
-        if (promotePath.kind === "valid" && request.method === "POST") {
-          const result = await groups.promote(
+        const memberActionPath = memberActionFromPath(url.pathname);
+        if (memberActionPath.kind === "invalid") return memberNotFound(requestId);
+        if (memberActionPath.kind === "valid" && request.method === "POST") {
+          const result = await groups[memberActionPath.action](
             user.userId,
-            promotePath.groupId,
-            promotePath.userId,
+            memberActionPath.groupId,
+            memberActionPath.userId,
           );
-          if (result.kind === "promoted") {
+          if (result.kind === "promoted" || result.kind === "demoted") {
             const currentUser = await users.getById(result.member.userId);
             return jsonResponse({
               data: {
@@ -456,10 +477,15 @@ export function createV1GroupsApi({
             });
           }
           if (result.kind === "forbidden") return adminRequired(requestId);
+          if (result.kind === "last_admin") {
+            return lastAdminConflict(requestId);
+          }
           if (result.kind === "role_conflict") {
             return memberRoleConflict(
               requestId,
-              "The Member is already an Admin.",
+              memberActionPath.action === "promote"
+                ? "The Member is already an Admin."
+                : "The Member is not an Admin.",
             );
           }
           return memberNotFound(requestId);
