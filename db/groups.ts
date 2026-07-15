@@ -9,10 +9,7 @@ import {
   advanceGroupStateRevisionWrite,
   readGroupStateRevision,
 } from "./group-state.ts";
-import {
-  isOpenTaskAssignedTo,
-  openTaskUnassignmentWrite,
-} from "./v1-tasks.ts";
+import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
 import {
   InvalidGroupCursorError,
   InvalidMemberCursorError,
@@ -41,6 +38,7 @@ type StoredGroup = {
 
 type StoredMembership = {
   joinedAt: string | null;
+  membershipId: string;
   path: string;
   role: GroupRole;
   updateTime: string;
@@ -67,6 +65,7 @@ type StoredInvitePointer = {
 
 type GroupStoreOptions = {
   now?: () => number;
+  randomMembershipUUID?: () => string;
   randomUUID?: () => string;
 };
 
@@ -98,11 +97,17 @@ function parseMembership(
   path: string,
 ): StoredMembership {
   const role = document.fields?.role?.stringValue;
-  if ((role !== "admin" && role !== "member") || !document.updateTime) {
+  const membershipId = document.fields?.membershipId?.stringValue;
+  if (
+    (role !== "admin" && role !== "member") ||
+    !membershipId ||
+    !document.updateTime
+  ) {
     throw new Error("Firestore returned an invalid Group membership record.");
   }
   return {
     joinedAt: document.fields?.joinedAt?.timestampValue ?? null,
+    membershipId,
     path,
     role,
     updateTime: document.updateTime,
@@ -193,6 +198,7 @@ export function createFirestoreGroupStore(
   fetchImplementation: typeof fetch = fetch,
   {
     now = Date.now,
+    randomMembershipUUID = () => crypto.randomUUID(),
     randomUUID = () => crypto.randomUUID(),
   }: GroupStoreOptions = {},
 ): GroupStore {
@@ -257,11 +263,17 @@ export function createFirestoreGroupStore(
     );
   }
 
-  async function hasOpenTasksAssigned(groupId: GroupId, userId: string) {
+  async function hasOpenTasksAssigned(
+    groupId: GroupId,
+    userId: string,
+    membershipId: string,
+  ) {
     const documents = await readAllCollectionDocuments(
       `${groupPath(groupId)}/tasks`,
     );
-    return documents.some((document) => isOpenTaskAssignedTo(document, userId));
+    return documents.some((document) =>
+      isOpenTaskAssignedTo(document, userId, membershipId),
+    );
   }
 
   async function commit(writes: unknown[]) {
@@ -486,6 +498,7 @@ export function createFirestoreGroupStore(
         const memberDocumentPath = membershipPath(groupId, user.userId);
         const accessDocumentPath = accessPath(user.userId, groupId);
         const invite = freshInvite(groupId);
+        const membershipId = randomMembershipUUID().replaceAll("-", "");
         try {
           await commit([
             {
@@ -508,6 +521,7 @@ export function createFirestoreGroupStore(
                   ...(user.username
                     ? { username: { stringValue: user.username } }
                     : {}),
+                  membershipId: { stringValue: membershipId },
                   role: { stringValue: "admin" },
                   joinedAt: { timestampValue: createdAt },
                 },
@@ -628,6 +642,7 @@ export function createFirestoreGroupStore(
         }
 
         const joinedAt = new Date(now()).toISOString();
+        const membershipId = randomMembershipUUID().replaceAll("-", "");
         const window = inviteWindow(current);
         const nextJoinCount = successfulJoinsInWindow(current, window) + 1;
         const replacement =
@@ -658,6 +673,7 @@ export function createFirestoreGroupStore(
               fields: {
                 userId: { stringValue: user.userId },
                 username: { stringValue: user.username },
+                membershipId: { stringValue: membershipId },
                 role: { stringValue: "member" },
                 joinedAt: { timestampValue: joinedAt },
               },
@@ -727,13 +743,6 @@ export function createFirestoreGroupStore(
             return { kind: "last_admin" as const };
           }
         }
-        const taskDocuments = await readAllCollectionDocuments(
-          `${groupPath(groupId)}/tasks`,
-        );
-        const taskWrites = taskDocuments
-          .map((document) => openTaskUnassignmentWrite(document, targetUserId))
-          .filter((write) => write !== null);
-
         try {
           await commit([
             stateRevisionWrite(group),
@@ -748,7 +757,6 @@ export function createFirestoreGroupStore(
             {
               delete: firestore.documentName(accessPath(targetUserId, groupId)),
             },
-            ...taskWrites,
           ]);
           return { kind: "kicked" as const };
         } catch (error) {
@@ -770,7 +778,7 @@ export function createFirestoreGroupStore(
             return { kind: "last_admin" as const };
           }
         }
-        if (await hasOpenTasksAssigned(groupId, userId)) {
+        if (await hasOpenTasksAssigned(groupId, userId, member.membershipId)) {
           return { kind: "open_tasks_assigned" as const };
         }
 

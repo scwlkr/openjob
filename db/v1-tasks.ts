@@ -25,7 +25,11 @@ type TaskStoreOptions = {
 
 type TaskUpdateInput = Parameters<TaskStore["update"]>[3];
 
-type StoredTask = OpenJobTask & {
+type PersistedTask = OpenJobTask & {
+  assigneeMembershipId: string | null;
+};
+
+type StoredTask = PersistedTask & {
   path: string;
   updateTime: string;
 };
@@ -37,6 +41,8 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   const groupId = document.fields?.groupId?.stringValue;
   const text = document.fields?.text?.stringValue;
   const assigneeState = document.fields?.assigneeState?.stringValue;
+  const assigneeMembershipId =
+    document.fields?.assigneeMembershipId?.stringValue ?? null;
   const dueDate = document.fields?.dueDate?.stringValue ?? null;
   const state = document.fields?.state?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
@@ -61,7 +67,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   } else {
     const userId = document.fields?.assigneeUserId?.stringValue;
     const username = document.fields?.assigneeUsername?.stringValue;
-    if (!userId || !username) {
+    if (!userId || !username || !assigneeMembershipId) {
       throw new Error("Firestore returned an incomplete Task assignee.");
     }
     assignee = {
@@ -76,6 +82,8 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     groupId: groupId as GroupId,
     text: text as TaskText,
     assignee,
+    assigneeMembershipId:
+      assigneeState === "assigned" ? assigneeMembershipId : null,
     dueDate: dueDate as DueDate | null,
     state: state as OpenJobTask["state"],
     createdAt,
@@ -85,7 +93,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   };
 }
 
-function publicTask(task: StoredTask): OpenJobTask {
+function publicTask(task: PersistedTask): OpenJobTask {
   return {
     taskId: task.taskId,
     groupId: task.groupId,
@@ -101,41 +109,18 @@ function publicTask(task: StoredTask): OpenJobTask {
 export function isOpenTaskAssignedTo(
   document: FirestoreDocument,
   userId: string,
+  membershipId: string,
 ) {
   const task = parseTask(document, document.name);
   return (
     task.state === "open" &&
     task.assignee.state === "assigned" &&
-    task.assignee.userId === userId
+    task.assignee.userId === userId &&
+    task.assigneeMembershipId === membershipId
   );
 }
 
-export function openTaskUnassignmentWrite(
-  document: FirestoreDocument,
-  userId: string,
-) {
-  const task = parseTask(document, document.name);
-  if (
-    task.state !== "open" ||
-    task.assignee.state !== "assigned" ||
-    task.assignee.userId !== userId
-  ) {
-    return null;
-  }
-  const unassigned: StoredTask = {
-    ...task,
-    assignee: { state: "unassigned" },
-  };
-  return {
-    update: {
-      name: task.path,
-      fields: taskFields(unassigned),
-    },
-    currentDocument: { updateTime: task.updateTime },
-  };
-}
-
-function taskFields(task: OpenJobTask) {
+function taskFields(task: PersistedTask) {
   return {
     taskId: { stringValue: task.taskId },
     groupId: { stringValue: task.groupId },
@@ -143,6 +128,7 @@ function taskFields(task: OpenJobTask) {
     assigneeState: { stringValue: task.assignee.state },
     ...(task.assignee.state === "assigned"
       ? {
+          assigneeMembershipId: { stringValue: task.assigneeMembershipId! },
           assigneeUserId: { stringValue: task.assignee.userId },
           assigneeUsername: { stringValue: task.assignee.username },
         }
@@ -206,6 +192,30 @@ export function createFirestoreTaskStore(
     return (await response.json()) as FirestoreDocument;
   }
 
+  function membershipId(document: FirestoreDocument) {
+    const value = document.fields?.membershipId?.stringValue;
+    if (!value) {
+      throw new Error("Firestore returned an invalid Group membership record.");
+    }
+    return value;
+  }
+
+  async function resolveOpenTaskAssignee(task: StoredTask) {
+    if (task.state !== "open" || task.assignee.state !== "assigned") {
+      return task;
+    }
+    const member = await readDocument(
+      membershipPath(task.groupId, task.assignee.userId),
+    );
+    return member && membershipId(member) === task.assigneeMembershipId
+      ? task
+      : {
+          ...task,
+          assignee: { state: "unassigned" as const },
+          assigneeMembershipId: null,
+        };
+  }
+
   async function readAccess(userId: string, groupId: GroupId) {
     const [group, member] = await Promise.all([
       readDocument(groupPath(groupId)),
@@ -239,7 +249,9 @@ export function createFirestoreTaskStore(
     ]);
     if (!access) return { kind: "group_not_found" as const };
     if (!taskDocument) return { kind: "task_not_found" as const };
-    const task = parseTask(taskDocument, taskDocument.name);
+    const task = await resolveOpenTaskAssignee(
+      parseTask(taskDocument, taskDocument.name),
+    );
     return { kind: "ready" as const, access, task };
   }
 
@@ -349,7 +361,7 @@ export function createFirestoreTaskStore(
 
         const taskId = `task_${randomUUID().replaceAll("-", "")}` as TaskId;
         const createdAt = new Date(now()).toISOString();
-        const task: OpenJobTask = {
+        const task: PersistedTask = {
           taskId,
           groupId,
           text: input.text,
@@ -358,6 +370,7 @@ export function createFirestoreTaskStore(
             userId: assignee.userId,
             username: assignee.username,
           },
+          assigneeMembershipId: membershipId(assigneeMember),
           dueDate: input.dueDate,
           state: "open",
           createdAt,
@@ -391,7 +404,7 @@ export function createFirestoreTaskStore(
               currentDocument: { exists: false },
             },
           ]);
-          return { kind: "created" as const, task };
+          return { kind: "created" as const, task: publicTask(task) };
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
         }
@@ -411,12 +424,11 @@ export function createFirestoreTaskStore(
         return { kind: "group_not_found" as const };
       }
       const document = await readDocument(taskPath(groupId, taskId));
-      return document
-        ? {
-            kind: "found" as const,
-            task: publicTask(parseTask(document, document.name)),
-          }
-        : { kind: "task_not_found" as const };
+      if (!document) return { kind: "task_not_found" as const };
+      const task = await resolveOpenTaskAssignee(
+        parseTask(document, document.name),
+      );
+      return { kind: "found" as const, task: publicTask(task) };
     },
 
     async update(actorUserId, groupId, taskId, input) {
@@ -433,6 +445,7 @@ export function createFirestoreTaskStore(
                     userId: input.assignee.userId,
                     username: input.assignee.username,
                   },
+                  assigneeMembershipId: membershipId(assigneeMember!),
                 }
               : {}),
             ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
@@ -477,12 +490,13 @@ export function createFirestoreTaskStore(
             ]);
             return { kind: "updated" as const, task: publicTask(task) };
           }
-          const updated: StoredTask = {
+          const transitioned: StoredTask = {
             ...task,
             state: desiredState,
             completedAt:
               desiredState === "done" ? new Date(now()).toISOString() : null,
           };
+          const updated = await resolveOpenTaskAssignee(transitioned);
           await commit([
             ...guardedAccessWrites(access),
             {
@@ -535,11 +549,14 @@ export function createFirestoreTaskStore(
           documents?: FirestoreDocument[];
           nextPageToken?: string;
         };
-        tasks.push(
-          ...(page.documents ?? []).map((document) =>
-            publicTask(parseTask(document, document.name)),
+        const pageTasks = await Promise.all(
+          (page.documents ?? []).map(async (document) =>
+            publicTask(
+              await resolveOpenTaskAssignee(parseTask(document, document.name)),
+            ),
           ),
         );
+        tasks.push(...pageTasks);
         pageToken = page.nextPageToken ?? null;
       } while (pageToken !== null);
       return { kind: "found" as const, tasks };

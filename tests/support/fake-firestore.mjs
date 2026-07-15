@@ -25,6 +25,7 @@ export function createFakeFirestore() {
   let commitWaiters = [];
   let commitAttemptCount = 0;
   let preconditionFailureCount = 0;
+  let maxCommitWrites = Number.POSITIVE_INFINITY;
 
   function resolveCommitWaiters() {
     if (!commitBarrier) return;
@@ -61,6 +62,9 @@ export function createFakeFirestore() {
 
   function applyCommit(body) {
     commitAttemptCount += 1;
+    if (body.writes.length > maxCommitWrites) {
+      return error(400, "INVALID_ARGUMENT", "Commit request is too large.");
+    }
     const snapshot = new Map(documents);
     for (const write of body.writes) {
       const name = write.update?.name ?? write.delete ?? write.verify;
@@ -131,6 +135,12 @@ export function createFakeFirestore() {
     },
     preconditionFailures() {
       return preconditionFailureCount;
+    },
+    setMaxCommitWrites(maximum) {
+      if (!Number.isInteger(maximum) || maximum < 1) {
+        throw new TypeError("The maximum Commit write count must be positive.");
+      }
+      maxCommitWrites = maximum;
     },
     synchronizeNextCommits(count = 2) {
       if (!Number.isInteger(count) || count < 2 || commitBarrier) {

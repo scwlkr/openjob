@@ -496,6 +496,31 @@ test("Kick removes access, preserves work atomically, and allows ordinary rejoin
     { state: "assigned", userId: eli.userId, username: "eli" },
   );
 
+  const rejoined = await request("eli", {
+    method: "POST",
+    path: `/api/v1/invites/${invite.token}/actions/join`,
+  });
+  assert.equal(rejoined.status, 200);
+  assert.equal((await rejoined.json()).data.role, "member");
+  const roster = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/members`,
+  });
+  const members = (await roster.json()).data;
+  assert.equal(members.find(({ userId }) => userId === eli.userId).role, "member");
+  const stillUnassigned = await request("eli", {
+    method: "GET",
+    path: `${tasksPath}/${openTask.taskId}`,
+  });
+  assert.deepEqual((await stillUnassigned.json()).data.assignee, {
+    state: "unassigned",
+  });
+  const leftAfterRejoin = await request("eli", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/actions/leave`,
+  });
+  assert.equal(leftAfterRejoin.status, 204);
+
   const recovered = await request("maya", {
     body: { assigneeUsername: "maya" },
     method: "PATCH",
@@ -522,19 +547,6 @@ test("Kick removes access, preserves work atomically, and allows ordinary rejoin
   });
   assert.equal(manualCreate.status, 400);
   assert.equal((await manualCreate.json()).error.code, "invalid_request");
-
-  const rejoined = await request("eli", {
-    method: "POST",
-    path: `/api/v1/invites/${invite.token}/actions/join`,
-  });
-  assert.equal(rejoined.status, 200);
-  assert.equal((await rejoined.json()).data.role, "member");
-  const roster = await request("shane", {
-    method: "GET",
-    path: `/api/v1/groups/${group.groupId}/members`,
-  });
-  const members = (await roster.json()).data;
-  assert.equal(members.find(({ userId }) => userId === eli.userId).role, "member");
 });
 
 test("concurrent Task assignment and Kick cannot leave an invalid assignee", async (t) => {
@@ -613,6 +625,44 @@ test("concurrent Task assignment and Kick cannot leave an invalid assignee", asy
     username: "shane",
   });
   assert.equal(firestore.preconditionFailures() >= 2, true);
+});
+
+test("Kick remains atomic independently of the removed Member's open Task count", async (t) => {
+  const { claim, createGroup, firestore, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("Bounded Kick");
+  await join("eli", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+  const tasks = [];
+  for (let index = 1; index <= 6; index += 1) {
+    const created = await request("shane", {
+      body: { text: `Bounded work ${index}`, assigneeUsername: "eli" },
+      method: "POST",
+      path: tasksPath,
+    });
+    assert.equal(created.status, 201);
+    tasks.push((await created.json()).data);
+  }
+
+  firestore.setMaxCommitWrites(4);
+  const kicked = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/kick`,
+  });
+  assert.equal(kicked.status, 204);
+
+  const listed = await request("shane", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  assert.equal(listed.status, 200);
+  assert.deepEqual(
+    (await listed.json()).data.map(({ taskId, assignee }) => ({ taskId, assignee })),
+    tasks.map(({ taskId }) => ({ taskId, assignee: { state: "unassigned" } })),
+  );
 });
 
 test("concurrent Kick and demotion cannot remove every Admin", async (t) => {
