@@ -12,6 +12,11 @@ type StoredUser = OpenJobUser & {
   updateTime: string;
 };
 
+type StoredUserDirectory = OpenJobUser & {
+  path: string;
+  updateTime: string;
+};
+
 type UserStoreOptions = {
   now?: () => number;
   randomUUID?: () => string;
@@ -36,6 +41,18 @@ function parseUser(document: FirestoreDocument, path: string): StoredUser {
 
 function publicUser(user: StoredUser): OpenJobUser {
   return { userId: user.userId, username: user.username };
+}
+
+function parseUserDirectory(
+  document: FirestoreDocument,
+  path: string,
+): StoredUserDirectory {
+  const userId = document.fields?.userId?.stringValue;
+  const username = document.fields?.username?.stringValue ?? null;
+  if (!userId || !document.updateTime) {
+    throw new Error("Firestore returned an invalid User directory record.");
+  }
+  return { path, updateTime: document.updateTime, userId, username };
 }
 
 function isConcurrentWrite(error: unknown) {
@@ -76,6 +93,16 @@ export function createFirestoreUserStore(
     return document ? parseUser(document, path) : null;
   }
 
+  function userDirectoryPath(userId: string) {
+    return `v1UserDirectory/${userId}`;
+  }
+
+  async function readUserDirectory(userId: string) {
+    const path = userDirectoryPath(userId);
+    const document = await readDocument(path);
+    return document ? parseUserDirectory(document, path) : null;
+  }
+
   async function commit(writes: unknown[]) {
     return firestore.request(":commit", {
       method: "POST",
@@ -83,13 +110,48 @@ export function createFirestoreUserStore(
     });
   }
 
+  function userDirectoryFields(user: OpenJobUser) {
+    return {
+      userId: { stringValue: user.userId },
+      ...(user.username ? { username: { stringValue: user.username } } : {}),
+    };
+  }
+
+  async function ensureUserDirectory(user: StoredUser) {
+    const existing = await readUserDirectory(user.userId);
+    if (existing) return existing;
+    const path = userDirectoryPath(user.userId);
+    try {
+      await commit([
+        {
+          update: {
+            name: firestore.documentName(path),
+            fields: userDirectoryFields(user),
+          },
+          currentDocument: { exists: false },
+        },
+      ]);
+    } catch (error) {
+      if (!isConcurrentWrite(error)) throw error;
+    }
+    const persisted = await readUserDirectory(user.userId);
+    if (!persisted) {
+      throw new Error("Firestore did not persist the User directory record.");
+    }
+    return persisted;
+  }
+
   async function getOrCreateStored(firebaseUid: string): Promise<StoredUser> {
     const path = await userPath(firebaseUid);
     const existing = await readUser(path);
-    if (existing) return existing;
+    if (existing) {
+      await ensureUserDirectory(existing);
+      return existing;
+    }
 
     const createdAt = new Date(now()).toISOString();
     const userId = `user_${randomUUID().replaceAll("-", "")}`;
+    const directoryPath = userDirectoryPath(userId);
     try {
       await commit([
         {
@@ -102,6 +164,13 @@ export function createFirestoreUserStore(
           },
           currentDocument: { exists: false },
         },
+        {
+          update: {
+            name: firestore.documentName(directoryPath),
+            fields: userDirectoryFields({ userId, username: null }),
+          },
+          currentDocument: { exists: false },
+        },
       ]);
     } catch (error) {
       if (!isConcurrentWrite(error)) throw error;
@@ -109,10 +178,16 @@ export function createFirestoreUserStore(
 
     const persisted = await readUser(path);
     if (!persisted) throw new Error("Firestore did not persist the User record.");
+    await ensureUserDirectory(persisted);
     return persisted;
   }
 
   return Object.freeze({
+    async getById(userId: string) {
+      const user = await readUserDirectory(userId);
+      return user ? { userId: user.userId, username: user.username } : null;
+    },
+
     async getOrCreate(firebaseUid: string) {
       return publicUser(await getOrCreateStored(firebaseUid));
     },
@@ -127,6 +202,7 @@ export function createFirestoreUserStore(
 
         const usernamePath = `v1Usernames/${username}`;
         const claimedAt = new Date(now()).toISOString();
+        const directory = await ensureUserDirectory(user);
         try {
           await commit([
             {
@@ -146,6 +222,14 @@ export function createFirestoreUserStore(
               },
               updateMask: { fieldPaths: ["username"] },
               currentDocument: { updateTime: user.updateTime },
+            },
+            {
+              update: {
+                name: firestore.documentName(directory.path),
+                fields: { username: { stringValue: username } },
+              },
+              updateMask: { fieldPaths: ["username"] },
+              currentDocument: { updateTime: directory.updateTime },
             },
           ]);
           return {

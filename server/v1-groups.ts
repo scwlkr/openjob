@@ -26,7 +26,7 @@ export type OpenJobGroup = {
 
 export type OpenJobMember = {
   userId: string;
-  username: string;
+  username: string | null;
   role: GroupRole;
   joinedAt: string;
 };
@@ -44,8 +44,6 @@ export type GroupUser = {
   username: string | null;
 };
 
-export type OnboardedGroupUser = GroupUser & { username: string };
-
 export class InvalidGroupCursorError extends Error {
   constructor() {
     super("The Group collection cursor is invalid.");
@@ -61,7 +59,7 @@ export class InvalidMemberCursorError extends Error {
 }
 
 export type GroupStore = {
-  create(user: OnboardedGroupUser, name: GroupName): Promise<OpenJobGroup>;
+  create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
   get(userId: string, groupId: GroupId): Promise<OpenJobGroup | null>;
   getInvite(
     userId: string,
@@ -119,6 +117,7 @@ export type GroupStore = {
 };
 
 type UserStore = {
+  getById(userId: string): Promise<GroupUser | null>;
   getOrCreate(firebaseUid: string): Promise<GroupUser>;
 };
 
@@ -329,16 +328,7 @@ export function createV1GroupsApi({
           if (request.method === "POST") {
             const name = await readGroupName(request);
             if (name === null) return groupNameError(requestId);
-            if (!user.username) return usernameRequired(requestId);
-            return jsonResponse(
-              {
-                data: await groups.create(
-                  { userId: user.userId, username: user.username },
-                  name,
-                ),
-              },
-              201,
-            );
+            return jsonResponse({ data: await groups.create(user, name) }, 201);
           }
         }
 
@@ -383,8 +373,17 @@ export function createV1GroupsApi({
               throw error;
             }
             if (result.kind === "not_found") return groupNotFound(requestId);
+            const members = await Promise.all(
+              result.members.map(async (member) => {
+                const currentUser = await users.getById(member.userId);
+                return {
+                  ...member,
+                  username: currentUser?.username ?? member.username,
+                };
+              }),
+            );
             return jsonResponse({
-              data: result.members,
+              data: members,
               nextCursor: result.nextCursor,
             });
           }

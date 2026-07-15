@@ -192,6 +192,15 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const { responses, schemas } = contract.components;
 
   assert.equal(compileSchema(schemas.GroupName)("   "), false);
+  assert.equal(
+    compileSchema(schemas.Member)({
+      userId: "user_onboarding",
+      username: null,
+      role: "admin",
+      joinedAt: "2026-07-15T12:00:00Z",
+    }),
+    true,
+  );
   assert.equal(compileSchema(schemas.GroupName)("Alpha\u2028Beta"), false);
   assert.equal(compileSchema(schemas.TaskText)("\n\n"), false);
   assert.equal(Object.hasOwn(schemas.Task.properties, "updatedAt"), false);
@@ -219,7 +228,6 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const expectedConflictCodes = new Map([
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
     ["claimUsername", ["username_immutable", "username_taken"]],
-    ["createGroup", ["username_required"]],
     ["createGroupTask", ["assignee_not_member"]],
     ["demoteGroupMember", ["last_admin", "member_role_conflict"]],
     ["endGroup", ["confirmation_mismatch", "members_remain"]],

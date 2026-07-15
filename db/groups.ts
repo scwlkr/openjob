@@ -1,4 +1,5 @@
 import {
+  bytesToBase64Url,
   createFirestoreRestClient,
   FirestoreRequestError,
   type FirebaseConfig,
@@ -10,8 +11,8 @@ import {
   type GroupId,
   type GroupRole,
   type GroupStore,
+  type GroupUser,
   type InviteToken,
-  type OnboardedGroupUser,
   type OpenJobGroup,
   type OpenJobInviteLink,
   type OpenJobMember,
@@ -39,12 +40,13 @@ type StoredMembership = {
 };
 
 type StoredInvite = {
-  expiresAt: string;
+  baseIssuedAt: string;
   groupId: GroupId;
-  issuedAt: string;
+  joinWindow: number;
   path: string;
+  routeId: string;
+  secret: string;
   successfulJoins: number;
-  token: InviteToken;
   updateTime: string;
 };
 
@@ -95,15 +97,18 @@ function parseMembership(
 
 function parseInvite(document: FirestoreDocument, path: string): StoredInvite {
   const groupId = document.fields?.groupId?.stringValue as GroupId | undefined;
-  const token = document.fields?.token?.stringValue as InviteToken | undefined;
-  const issuedAt = document.fields?.issuedAt?.timestampValue;
-  const expiresAt = document.fields?.expiresAt?.timestampValue;
+  const baseIssuedAt = document.fields?.baseIssuedAt?.timestampValue;
+  const joinWindow = Number(document.fields?.joinWindow?.integerValue);
+  const routeId = document.fields?.routeId?.stringValue;
+  const secret = document.fields?.secret?.stringValue;
   const successfulJoins = Number(document.fields?.successfulJoins?.integerValue);
   if (
     !groupId ||
-    !token ||
-    !issuedAt ||
-    !expiresAt ||
+    !baseIssuedAt ||
+    !Number.isInteger(joinWindow) ||
+    joinWindow < 0 ||
+    !routeId ||
+    !secret ||
     !Number.isInteger(successfulJoins) ||
     successfulJoins < 0 ||
     successfulJoins > INVITE_JOIN_LIMIT ||
@@ -112,12 +117,13 @@ function parseInvite(document: FirestoreDocument, path: string): StoredInvite {
     throw new Error("Firestore returned an invalid Invite Link record.");
   }
   return {
-    expiresAt,
+    baseIssuedAt,
     groupId,
-    issuedAt,
+    joinWindow,
     path,
+    routeId,
+    secret,
     successfulJoins,
-    token,
     updateTime: document.updateTime,
   };
 }
@@ -143,7 +149,7 @@ function publicGroup(group: StoredGroup, role: GroupRole): OpenJobGroup {
 }
 
 function publicMember(member: StoredMembership): OpenJobMember {
-  if (!member.userId || !member.username || !member.joinedAt) {
+  if (!member.userId || !member.joinedAt) {
     throw new Error("Firestore returned an incomplete Group membership record.");
   }
   return {
@@ -151,16 +157,6 @@ function publicMember(member: StoredMembership): OpenJobMember {
     username: member.username,
     role: member.role,
     joinedAt: member.joinedAt,
-  };
-}
-
-function publicInvite(invite: StoredInvite): OpenJobInviteLink {
-  return {
-    token: invite.token,
-    url: `https://openjob.dev/invites/${invite.token}`,
-    issuedAt: invite.issuedAt,
-    expiresAt: invite.expiresAt,
-    remainingJoins: INVITE_JOIN_LIMIT - invite.successfulJoins,
   };
 }
 
@@ -243,48 +239,90 @@ export function createFirestoreGroupStore(
     return `${groupPath(groupId)}/invite/current`;
   }
 
-  function invitePointerPath(token: InviteToken) {
-    return `v1Invites/${token}`;
+  function inviteRoutePath(routeId: string) {
+    return `v1InviteRoutes/${routeId}`;
   }
 
-  function freshInvite(groupId: GroupId): StoredInvite {
+  function inviteRouteFromToken(token: InviteToken) {
+    return token.match(/^ivt_([a-f0-9]{32})_[0-9a-z]+_[A-Za-z0-9_-]+$/)?.[1] ?? null;
+  }
+
+  function freshInvite(groupId: GroupId, routeId?: string): StoredInvite {
     const issuedAtMs = now();
     return {
-      expiresAt: new Date(issuedAtMs + INVITE_LIFETIME_MS).toISOString(),
+      baseIssuedAt: new Date(issuedAtMs).toISOString(),
       groupId,
-      issuedAt: new Date(issuedAtMs).toISOString(),
+      joinWindow: 0,
       path: currentInvitePath(groupId),
+      routeId: routeId ?? randomUUID().replaceAll("-", ""),
+      secret: randomUUID().replaceAll("-", ""),
       successfulJoins: 0,
-      token: `ivt_${randomUUID().replaceAll("-", "")}` as InviteToken,
       updateTime: "",
+    };
+  }
+
+  function inviteWindow(invite: StoredInvite) {
+    return Math.max(
+      0,
+      Math.floor((now() - Date.parse(invite.baseIssuedAt)) / INVITE_LIFETIME_MS),
+    );
+  }
+
+  function successfulJoinsInWindow(invite: StoredInvite, window: number) {
+    return invite.joinWindow === window ? invite.successfulJoins : 0;
+  }
+
+  async function inviteToken(invite: StoredInvite, window: number) {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(invite.secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(`${invite.routeId}:${window}`),
+    );
+    return `ivt_${invite.routeId}_${window.toString(36)}_${bytesToBase64Url(
+      new Uint8Array(signature),
+    )}` as InviteToken;
+  }
+
+  async function publicInvite(invite: StoredInvite): Promise<OpenJobInviteLink> {
+    const window = inviteWindow(invite);
+    const issuedAtMs = Date.parse(invite.baseIssuedAt) + window * INVITE_LIFETIME_MS;
+    const token = await inviteToken(invite, window);
+    return {
+      token,
+      url: `https://openjob.dev/invites/${token}`,
+      issuedAt: new Date(issuedAtMs).toISOString(),
+      expiresAt: new Date(issuedAtMs + INVITE_LIFETIME_MS).toISOString(),
+      remainingJoins:
+        INVITE_JOIN_LIMIT - successfulJoinsInWindow(invite, window),
     };
   }
 
   function inviteFields(invite: StoredInvite) {
     return {
+      baseIssuedAt: { timestampValue: invite.baseIssuedAt },
       groupId: { stringValue: invite.groupId },
-      token: { stringValue: invite.token },
-      issuedAt: { timestampValue: invite.issuedAt },
-      expiresAt: { timestampValue: invite.expiresAt },
+      joinWindow: { integerValue: String(invite.joinWindow) },
+      routeId: { stringValue: invite.routeId },
+      secret: { stringValue: invite.secret },
       successfulJoins: { integerValue: String(invite.successfulJoins) },
     };
   }
 
-  function invitePointerWrite(invite: StoredInvite) {
+  function inviteRouteWrite(invite: StoredInvite) {
     return {
       update: {
-        name: firestore.documentName(invitePointerPath(invite.token)),
+        name: firestore.documentName(inviteRoutePath(invite.routeId)),
         fields: { groupId: { stringValue: invite.groupId } },
       },
       currentDocument: { exists: false },
     };
-  }
-
-  function inviteIsActive(invite: StoredInvite) {
-    return (
-      Date.parse(invite.expiresAt) > now() &&
-      invite.successfulJoins < INVITE_JOIN_LIMIT
-    );
   }
 
   async function get(userId: string, groupId: GroupId) {
@@ -299,7 +337,7 @@ export function createFirestoreGroupStore(
     member: StoredMembership,
     current: StoredInvite | null,
   ) {
-    const fresh = freshInvite(group.groupId);
+    const fresh = freshInvite(group.groupId, current?.routeId);
     const writes: unknown[] = [
       {
         verify: firestore.documentName(member.path),
@@ -319,44 +357,13 @@ export function createFirestoreGroupStore(
           : { exists: false },
       },
     ];
-    if (current) {
-      writes.push({
-        delete: firestore.documentName(invitePointerPath(current.token)),
-      });
-    }
-    writes.push(invitePointerWrite(fresh));
+    if (!current) writes.push(inviteRouteWrite(fresh));
     await commit(writes);
     return publicInvite(fresh);
   }
 
-  async function refreshInactiveInvite(
-    group: StoredGroup,
-    current: StoredInvite,
-    pointer: StoredInvitePointer,
-  ) {
-    const fresh = freshInvite(group.groupId);
-    await commit([
-      {
-        verify: firestore.documentName(group.path),
-        currentDocument: { updateTime: group.updateTime },
-      },
-      {
-        update: {
-          name: firestore.documentName(current.path),
-          fields: inviteFields(fresh),
-        },
-        currentDocument: { updateTime: current.updateTime },
-      },
-      {
-        delete: firestore.documentName(pointer.path),
-        currentDocument: { updateTime: pointer.updateTime },
-      },
-      invitePointerWrite(fresh),
-    ]);
-  }
-
   return Object.freeze({
-    async create(user: OnboardedGroupUser, name) {
+    async create(user: GroupUser, name) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const groupId = `grp_${randomUUID().replaceAll("-", "")}` as GroupId;
         const createdAt = new Date(now()).toISOString();
@@ -382,7 +389,9 @@ export function createFirestoreGroupStore(
                 name: firestore.documentName(memberDocumentPath),
                 fields: {
                   userId: { stringValue: user.userId },
-                  username: { stringValue: user.username },
+                  ...(user.username
+                    ? { username: { stringValue: user.username } }
+                    : {}),
                   role: { stringValue: "admin" },
                   joinedAt: { timestampValue: createdAt },
                 },
@@ -403,7 +412,7 @@ export function createFirestoreGroupStore(
               },
               currentDocument: { exists: false },
             },
-            invitePointerWrite(invite),
+            inviteRouteWrite(invite),
           ]);
           return { groupId, name, role: "admin", createdAt };
         } catch (error) {
@@ -423,8 +432,11 @@ export function createFirestoreGroupStore(
         if (!group) return { kind: "not_found" as const };
         if (member.role !== "admin") return { kind: "forbidden" as const };
         const current = await readInvite(currentInvitePath(groupId));
-        if (current && inviteIsActive(current)) {
-          return { kind: "found" as const, invite: publicInvite(current) };
+        if (current) {
+          return {
+            kind: "found" as const,
+            invite: await publicInvite(current),
+          };
         }
         try {
           return {
@@ -439,49 +451,38 @@ export function createFirestoreGroupStore(
     },
 
     async inspectInvite(token) {
-      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const pointer = await readInvitePointer(invitePointerPath(token));
-        if (!pointer) return { kind: "not_found" as const };
-        const [group, current] = await Promise.all([
-          readGroup(groupPath(pointer.groupId)),
-          readInvite(currentInvitePath(pointer.groupId)),
-        ]);
-        if (!group || !current || current.token !== token) {
-          return { kind: "not_found" as const };
-        }
-        if (inviteIsActive(current)) {
-          return { kind: "found" as const, groupName: group.name };
-        }
-        try {
-          await refreshInactiveInvite(group, current, pointer);
-          return { kind: "not_found" as const };
-        } catch (error) {
-          if (!isConcurrentWrite(error)) throw error;
-        }
+      const routeId = inviteRouteFromToken(token);
+      if (!routeId) return { kind: "not_found" as const };
+      const pointer = await readInvitePointer(inviteRoutePath(routeId));
+      if (!pointer) return { kind: "not_found" as const };
+      const [group, current] = await Promise.all([
+        readGroup(groupPath(pointer.groupId)),
+        readInvite(currentInvitePath(pointer.groupId)),
+      ]);
+      if (!group || !current || current.routeId !== routeId) {
+        return { kind: "not_found" as const };
       }
-      throw new Error("Invite Link refresh could not resolve concurrent writes.");
+      const active = await publicInvite(current);
+      return active.token === token
+        ? { kind: "found" as const, groupName: group.name }
+        : { kind: "not_found" as const };
     },
 
     async joinInvite(user, token) {
+      const routeId = inviteRouteFromToken(token);
+      if (!routeId) return { kind: "not_found" as const };
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const pointer = await readInvitePointer(invitePointerPath(token));
+        const pointer = await readInvitePointer(inviteRoutePath(routeId));
         if (!pointer) return { kind: "not_found" as const };
         const [group, current] = await Promise.all([
           readGroup(groupPath(pointer.groupId)),
           readInvite(currentInvitePath(pointer.groupId)),
         ]);
-        if (!group || !current || current.token !== token) {
+        if (!group || !current || current.routeId !== routeId) {
           return { kind: "not_found" as const };
         }
-        if (!inviteIsActive(current)) {
-          try {
-            await refreshInactiveInvite(group, current, pointer);
-            return { kind: "not_found" as const };
-          } catch (error) {
-            if (!isConcurrentWrite(error)) throw error;
-            continue;
-          }
-        }
+        const active = await publicInvite(current);
+        if (active.token !== token) return { kind: "not_found" as const };
 
         const memberDocumentPath = membershipPath(group.groupId, user.userId);
         const existing = await readMembership(memberDocumentPath);
@@ -499,26 +500,22 @@ export function createFirestoreGroupStore(
         }
 
         const joinedAt = new Date(now()).toISOString();
-        const nextJoinCount = current.successfulJoins + 1;
+        const window = inviteWindow(current);
+        const nextJoinCount = successfulJoinsInWindow(current, window) + 1;
         const replacement =
           nextJoinCount === INVITE_JOIN_LIMIT
-            ? freshInvite(group.groupId)
+            ? freshInvite(group.groupId, current.routeId)
             : null;
         const nextInvite = replacement ?? {
           ...current,
+          joinWindow: window,
           successfulJoins: nextJoinCount,
         };
-        const pointerWrite = replacement
-          ? {
-              delete: firestore.documentName(pointer.path),
-              currentDocument: { updateTime: pointer.updateTime },
-            }
-          : {
-              verify: firestore.documentName(pointer.path),
-              currentDocument: { updateTime: pointer.updateTime },
-            };
         const writes: unknown[] = [
-          pointerWrite,
+          {
+            verify: firestore.documentName(pointer.path),
+            currentDocument: { updateTime: pointer.updateTime },
+          },
           {
             verify: firestore.documentName(group.path),
             currentDocument: { updateTime: group.updateTime },
@@ -552,6 +549,7 @@ export function createFirestoreGroupStore(
               fields: replacement
                 ? inviteFields(nextInvite)
                 : {
+                    joinWindow: { integerValue: String(window) },
                     successfulJoins: {
                       integerValue: String(nextInvite.successfulJoins),
                     },
@@ -559,11 +557,14 @@ export function createFirestoreGroupStore(
             },
             ...(replacement
               ? {}
-              : { updateMask: { fieldPaths: ["successfulJoins"] } }),
+              : {
+                  updateMask: {
+                    fieldPaths: ["joinWindow", "successfulJoins"],
+                  },
+                }),
             currentDocument: { updateTime: current.updateTime },
           },
         ];
-        if (replacement) writes.push(invitePointerWrite(replacement));
 
         try {
           await commit(writes);

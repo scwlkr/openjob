@@ -47,7 +47,7 @@ export function createFakeFirestore() {
   function applyCommit(body) {
     const snapshot = new Map(documents);
     for (const write of body.writes) {
-      const name = write.update?.name ?? write.verify ?? write.delete;
+      const name = write.update?.name ?? write.verify;
       const failure = preconditionError(write, snapshot.get(name));
       if (failure) {
         return error(409, failure, "Commit precondition failed.");
@@ -55,11 +55,6 @@ export function createFakeFirestore() {
     }
 
     for (const write of body.writes) {
-      if (write.delete) {
-        documents.delete(write.delete);
-        snapshot.delete(write.delete);
-        continue;
-      }
       if (!write.update) continue;
       const current = snapshot.get(write.update.name);
       const masked = write.updateMask?.fieldPaths;

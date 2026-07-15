@@ -127,6 +127,7 @@ test("Firestore persists Users and atomically reserves immutable Usernames", asy
     userId: "user_11111111111141118111111111111111",
     username: null,
   });
+  assert.deepEqual(await users.getById(shane.userId), shane);
   assert.deepEqual(await users.getOrCreate("firebase_shane"), shane);
 
   const claimed = await users.claimUsername("firebase_shane", "shane");
@@ -134,6 +135,7 @@ test("Firestore persists Users and atomically reserves immutable Usernames", asy
     kind: "claimed",
     user: { ...shane, username: "shane" },
   });
+  assert.deepEqual(await users.getById(shane.userId), claimed.user);
   assert.deepEqual(await users.claimUsername("firebase_shane", "shane"), claimed);
   assert.deepEqual(await users.claimUsername("firebase_shane", "other"), {
     kind: "immutable",
@@ -144,11 +146,15 @@ test("Firestore persists Users and atomically reserves immutable Usernames", asy
     kind: "taken",
   });
 
-  const claimCommit = firestore.commits.find(({ writes }) => writes.length === 2);
+  const claimCommit = firestore.commits.find(({ writes }) =>
+    writes[0].update.name.endsWith("/v1Usernames/shane"),
+  );
   assert.equal(claimCommit.writes[0].currentDocument.exists, false);
   assert.match(claimCommit.writes[0].update.name, /\/v1Usernames\/shane$/);
   assert.deepEqual(claimCommit.writes[1].updateMask.fieldPaths, ["username"]);
   assert.equal(typeof claimCommit.writes[1].currentDocument.updateTime, "string");
+  assert.match(claimCommit.writes[2].update.name, /\/v1UserDirectory\/user_/);
+  assert.deepEqual(claimCommit.writes[2].updateMask.fieldPaths, ["username"]);
 
   const storedData = JSON.stringify([...firestore.documents.values()]);
   assert.doesNotMatch(storedData, /firebase_shane|firebase_eli|example\.test|Google Name/);
