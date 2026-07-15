@@ -18,7 +18,7 @@ labels:
 
 ## Decisions so far
 
-<!-- Empty until a child issue is resolved. -->
+- [Define Group Identity and Lifecycle](issues/01-define-group-identity-and-lifecycle.md) — Groups use immutable opaque IDs with mutable non-unique names, client-local selection, Admin renaming, guarded leaving, and confirmed permanent ending.
 
 ## Fog
 

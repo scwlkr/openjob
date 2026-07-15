@@ -25,7 +25,7 @@ The single flat collection of work belonging to a Group.
 _Avoid_: Project, Kanban board
 
 **Task**:
-The smallest unit of work on a Task List, assigned to exactly one Group Member by username.
+A smallest unit of work on a Task List. An open Task is assigned to exactly one current Member by Username; a done Task keeps that User as historical attribution if they later leave the Group.
 _Avoid_: Job, ticket, card
 
 **User**:
@@ -39,6 +39,14 @@ _Avoid_: Display name, email address
 **Member**:
 A User participating in a Group.
 _Avoid_: Collaborator, teammate
+
+**Leave Group**:
+The voluntary end of a User's membership in a Group.
+_Avoid_: Kick, Ban
+
+**End Group**:
+The permanent conclusion of a Group and its Task List after every Member except one Admin has left or been removed.
+_Avoid_: Archive Group, Delete workspace
 
 **Admin**:
 A Member trusted with Group governance while retaining the same Task permissions as every other Member.
