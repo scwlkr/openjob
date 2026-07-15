@@ -148,6 +148,28 @@ export function createFirestoreTaskStore(
     return `${groupPath(groupId)}/tasks/${taskId}`;
   }
 
+  function stateRevisionWrite(group: FirestoreDocument) {
+    const stateRevision = Number(group.fields?.stateRevision?.integerValue ?? 0);
+    if (
+      !group.name ||
+      !group.updateTime ||
+      !Number.isSafeInteger(stateRevision) ||
+      stateRevision < 0
+    ) {
+      throw new Error("Firestore returned an invalid Group record.");
+    }
+    return {
+      update: {
+        name: group.name,
+        fields: {
+          stateRevision: { integerValue: String(stateRevision + 1) },
+        },
+      },
+      updateMask: { fieldPaths: ["stateRevision"] },
+      currentDocument: { updateTime: group.updateTime },
+    };
+  }
+
   async function readDocument(path: string) {
     const response = await firestore.request(path, {}, { allowNotFound: true });
     if (response.status === 404) return null;
@@ -236,6 +258,19 @@ export function createFirestoreTaskStore(
     ];
   }
 
+  function guardedAccessWrites(access: {
+    group: FirestoreDocument;
+    member: FirestoreDocument;
+  }) {
+    return [
+      stateRevisionWrite(access.group),
+      {
+        verify: access.member.name,
+        currentDocument: { updateTime: access.member.updateTime },
+      },
+    ];
+  }
+
   async function retryTaskMutation<
     TCurrent extends { kind: string },
     TResult,
@@ -316,10 +351,7 @@ export function createFirestoreTaskStore(
         ];
         try {
           await commit([
-            {
-              verify: access.group.name,
-              currentDocument: { updateTime: access.group.updateTime },
-            },
+            stateRevisionWrite(access.group),
             ...membershipVerifies,
             {
               update: {
@@ -378,7 +410,7 @@ export function createFirestoreTaskStore(
           const actorMemberName = access.member.name;
           const assigneeMemberName = assigneeMember?.name;
           await commit([
-            ...accessVerifies(access),
+            ...guardedAccessWrites(access),
             ...(assigneeMemberName && assigneeMemberName !== actorMemberName
               ? [
                   {
@@ -422,7 +454,7 @@ export function createFirestoreTaskStore(
               desiredState === "done" ? new Date(now()).toISOString() : null,
           };
           await commit([
-            ...accessVerifies(access),
+            ...guardedAccessWrites(access),
             {
               update: {
                 name: task.path,
@@ -442,7 +474,7 @@ export function createFirestoreTaskStore(
         () => readTaskAccess(actorUserId, groupId, taskId),
         async ({ access, task }) => {
           await commit([
-            ...accessVerifies(access),
+            ...guardedAccessWrites(access),
             {
               delete: task.path,
               currentDocument: { updateTime: task.updateTime },

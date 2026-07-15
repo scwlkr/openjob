@@ -22,8 +22,20 @@ export function createFakeFirestore() {
   let revision = 0;
   let throttleNextRequest = false;
   let commitBarrier = null;
+  let commitWaiters = [];
   let commitAttemptCount = 0;
   let preconditionFailureCount = 0;
+
+  function resolveCommitWaiters() {
+    if (!commitBarrier) return;
+    const queued = commitBarrier.queued.length;
+    const pending = [];
+    for (const waiter of commitWaiters) {
+      if (queued >= waiter.count) waiter.resolve();
+      else pending.push(waiter);
+    }
+    commitWaiters = pending;
+  }
 
   function error(httpStatus, status, message) {
     return Response.json(
@@ -126,6 +138,20 @@ export function createFakeFirestore() {
       }
       commitBarrier = { count, queued: [] };
     },
+    waitForPendingCommits(count = 1) {
+      if (
+        !commitBarrier ||
+        !Number.isInteger(count) ||
+        count < 1 ||
+        count >= commitBarrier.count
+      ) {
+        throw new TypeError(
+          "Pending commit waits require an active barrier and a count below its target.",
+        );
+      }
+      if (commitBarrier.queued.length >= count) return Promise.resolve();
+      return new Promise((resolve) => commitWaiters.push({ count, resolve }));
+    },
     throttleNextRequest() {
       throttleNextRequest = true;
     },
@@ -152,6 +178,7 @@ export function createFakeFirestore() {
           const barrier = commitBarrier;
           return new Promise((resolve) => {
             barrier.queued.push({ body, resolve });
+            resolveCommitWaiters();
             if (barrier.queued.length === barrier.count) {
               commitBarrier = null;
               for (const queued of barrier.queued) {
