@@ -90,6 +90,12 @@ test("production CLI exposes the executable contract separately from the simulat
   assert.match(groupHelp.stdout, /openjob group show \[--group <group-id>\]/);
   assert.match(groupHelp.stdout, /openjob group use <group-id>/);
   assert.match(groupHelp.stdout, /openjob group current/);
+
+  const taskHelp = runCli(["help", "task"]);
+  assert.equal(taskHelp.status, 0, taskHelp.stderr);
+  for (const command of ["list", "create", "show", "edit", "done", "reopen", "delete"]) {
+    assert.match(taskHelp.stdout, new RegExp(`openjob task ${command}`));
+  }
 });
 
 test("group current resolves explicit flag, environment, then local config", () => {
