@@ -388,7 +388,7 @@ function usernameRequired(requestId: RequestIdFactory) {
   });
 }
 
-async function readGroupName(request: Request) {
+async function readSingleStringField(request: Request, field: string) {
   try {
     const input = (await request.json()) as unknown;
     if (
@@ -396,45 +396,38 @@ async function readGroupName(request: Request) {
       typeof input !== "object" ||
       Array.isArray(input) ||
       Object.keys(input).length !== 1 ||
-      !("name" in input) ||
-      typeof input.name !== "string"
+      !(field in input) ||
+      typeof (input as Record<string, unknown>)[field] !== "string"
     ) {
       return null;
     }
-    const name = input.name.trim();
-    if (
-      name.length === 0 ||
-      Array.from(name).length > 80 ||
-      /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(input.name)
-    ) {
-      return null;
-    }
-    return name as GroupName;
+    return (input as Record<string, string>)[field];
   } catch {
     return null;
   }
 }
 
+function isValidGroupName(name: string) {
+  return (
+    name.trim().length > 0 &&
+    Array.from(name).length <= 80 &&
+    !/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(name)
+  );
+}
+
+async function readGroupName(request: Request) {
+  const name = await readSingleStringField(request, "name");
+  if (name === null) return null;
+  const trimmed = name.trim();
+  return isValidGroupName(trimmed) ? (trimmed as GroupName) : null;
+}
+
 async function readGroupConfirmation(request: Request) {
-  try {
-    const input = (await request.json()) as unknown;
-    if (
-      !input ||
-      typeof input !== "object" ||
-      Array.isArray(input) ||
-      Object.keys(input).length !== 1 ||
-      !("confirmationName" in input) ||
-      typeof input.confirmationName !== "string" ||
-      input.confirmationName.trim().length === 0 ||
-      Array.from(input.confirmationName).length > 80 ||
-      /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(input.confirmationName)
-    ) {
-      return null;
-    }
-    return input.confirmationName;
-  } catch {
+  const name = await readSingleStringField(request, "confirmationName");
+  if (name === null || !isValidGroupName(name)) {
     return null;
   }
+  return name;
 }
 
 async function readBanTarget(request: Request) {

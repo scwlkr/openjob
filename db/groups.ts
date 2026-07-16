@@ -328,7 +328,7 @@ export function createFirestoreGroupStore(
     return `v1Groups/${groupId}`;
   }
 
-  function groupIdPath(groupId: GroupId) {
+  function groupIdReservationPath(groupId: GroupId) {
     return `v1GroupIds/${groupId}`;
   }
 
@@ -472,7 +472,7 @@ export function createFirestoreGroupStore(
   function groupIdReservationWrite(groupId: GroupId) {
     return {
       update: {
-        name: firestore.documentName(groupIdPath(groupId)),
+        name: firestore.documentName(groupIdReservationPath(groupId)),
         fields: { groupId: { stringValue: groupId } },
       },
       currentDocument: { exists: false },
@@ -761,7 +761,7 @@ export function createFirestoreGroupStore(
         );
         const [access, reservation, ...routePointers] = await Promise.all([
           readDocument(accessPath(actorUserId, groupId)),
-          readDocument(groupIdPath(groupId)),
+          readDocument(groupIdReservationPath(groupId)),
           ...inviteRoutes.map((path) => readDocument(path)),
         ]);
         const scopedDocuments = Object.values(groupDocuments).flat();

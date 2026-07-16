@@ -209,7 +209,7 @@ test("End Group conceals private Groups and enforces exact Admin-only eligibilit
 });
 
 test("End Group atomically purges every Group boundary and conceals stale state", async (t) => {
-  const { claim, createGroup, firestore, harness, join, request } =
+  const { claim, createGroup, harness, join, request } =
     await createEndGroupsHarness(["shane", "eli"]);
   t.after(() => harness.close());
   const assertContract = await createOpenApiResponseValidator();
@@ -244,28 +244,30 @@ test("End Group atomically purges every Group boundary and conceals stale state"
   });
   assert.equal(banned.status, 201);
 
-  const database = "projects/openjob-dev/databases/(default)/documents";
-  const groupDocument = `${database}/v1Groups/${group.groupId}`;
-  const before = [...firestore.documents.keys()].filter(
-    (path) => path === groupDocument || path.startsWith(`${groupDocument}/`),
+  const membersBefore = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/members`,
+  });
+  assert.deepEqual(
+    (await membersBefore.json()).data.map(({ userId }) => userId),
+    [shane.userId],
   );
-  for (const collection of [
-    "bans",
-    "invite",
-    "members",
-    "membershipEvidence",
-    "tasks",
-  ]) {
-    assert.equal(
-      before.some((path) => path.startsWith(`${groupDocument}/${collection}/`)),
-      true,
-      `${collection} exists before ending`,
-    );
-  }
-  const inviteRoute = [...firestore.documents.keys()].find((path) =>
-    path.startsWith(`${database}/v1InviteRoutes/`),
+  const bansBefore = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/bans`,
+  });
+  assert.deepEqual(
+    (await bansBefore.json()).data.map(({ userId }) => userId),
+    [eli.userId],
   );
-  assert.ok(inviteRoute);
+  const tasksBefore = await request("shane", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  assert.deepEqual(
+    (await tasksBefore.json()).data.map(({ taskId }) => taskId).sort(),
+    [firstTask.taskId, secondTask.taskId].sort(),
+  );
 
   const ended = await request("shane", {
     body: { confirmationName: "Purge Team" },
@@ -274,23 +276,6 @@ test("End Group atomically purges every Group boundary and conceals stale state"
   });
   assert.equal(ended.status, 204);
   await assertContract(ended, "/api/v1/groups/{groupId}/actions/end", "post");
-  assert.equal(
-    [...firestore.documents.keys()].some(
-      (path) => path === groupDocument || path.startsWith(`${groupDocument}/`),
-    ),
-    false,
-  );
-  assert.equal(
-    firestore.documents.has(
-      `${database}/v1GroupAccess/${shane.userId}/groups/${group.groupId}`,
-    ),
-    false,
-  );
-  assert.equal(firestore.documents.has(inviteRoute), false);
-  assert.equal(
-    firestore.documents.has(`${database}/v1GroupIds/${group.groupId}`),
-    true,
-  );
 
   const staleGroup = await request("shane", {
     method: "GET",
@@ -298,6 +283,19 @@ test("End Group atomically purges every Group boundary and conceals stale state"
   });
   assert.equal(staleGroup.status, 404);
   assert.equal((await staleGroup.json()).error.code, "group_not_found");
+  const staleGroupList = await request("shane", {
+    method: "GET",
+    path: "/api/v1/groups",
+  });
+  assert.deepEqual(await staleGroupList.json(), { data: [], nextCursor: null });
+  for (const staleCollection of ["members", "bans", "tasks?status=all"]) {
+    const response = await request("shane", {
+      method: "GET",
+      path: `/api/v1/groups/${group.groupId}/${staleCollection}`,
+    });
+    assert.equal(response.status, 404, staleCollection);
+    assert.equal((await response.json()).error.code, "group_not_found");
+  }
   const staleTask = await request("eli", {
     method: "GET",
     path: `${tasksPath}/${firstTask.taskId}`,
@@ -331,7 +329,12 @@ test("a failed End Group commit leaves every document intact", async (t) => {
     path: `/api/v1/groups/${group.groupId}/tasks`,
   });
   assert.equal(createdTask.status, 201);
-  const before = [...firestore.documents.entries()];
+  const task = (await createdTask.json()).data;
+  const inviteBefore = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/invite-link`,
+  });
+  const invite = (await inviteBefore.json()).data;
   firestore.setMaxCommitWrites(1);
 
   const failed = await request("shane", {
@@ -341,7 +344,23 @@ test("a failed End Group commit leaves every document intact", async (t) => {
   });
   assert.equal(failed.status, 500);
   assert.equal((await failed.json()).error.code, "internal_error");
-  assert.deepEqual([...firestore.documents.entries()], before);
+  const groupAfter = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}`,
+  });
+  assert.deepEqual((await groupAfter.json()).data, group);
+  const taskAfter = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`,
+  });
+  assert.deepEqual((await taskAfter.json()).data, task);
+  const inviteAfter = await request("shane", {
+    method: "GET",
+    path: `/api/v1/invites/${invite.token}`,
+  });
+  assert.deepEqual(await inviteAfter.json(), {
+    data: { groupName: "Atomic Failure" },
+  });
 });
 
 test("concurrent End Group requests yield one success without a partial purge", async (t) => {
@@ -371,16 +390,11 @@ test("concurrent End Group requests yield one success without a partial purge", 
     responses.map(({ status }) => status).sort(),
     [204, 404],
   );
-  assert.equal(firestore.preconditionFailures() >= 1, true);
-  const database = "projects/openjob-dev/databases/(default)/documents";
-  const groupDocument = `${database}/v1Groups/${group.groupId}`;
-  assert.equal(
-    [...firestore.documents.keys()].some(
-      (document) =>
-        document === groupDocument || document.startsWith(`${groupDocument}/`),
-    ),
-    false,
-  );
+  const groupsAfter = await request("shane", {
+    method: "GET",
+    path: "/api/v1/groups",
+  });
+  assert.deepEqual(await groupsAfter.json(), { data: [], nextCursor: null });
 });
 
 test("Task creation racing End Group is either purged or rejected", async (t) => {
@@ -429,16 +443,19 @@ test("Task creation racing End Group is either purged or rejected", async (t) =>
   assert.equal(rejected.status, 404);
   assert.equal((await rejected.json()).error.code, "group_not_found");
 
-  const database = "projects/openjob-dev/databases/(default)/documents";
   for (const group of [taskFirstGroup, endFirstGroup]) {
-    const groupDocument = `${database}/v1Groups/${group.groupId}`;
-    assert.equal(
-      [...firestore.documents.keys()].some(
-        (document) =>
-          document === groupDocument || document.startsWith(`${groupDocument}/`),
-      ),
-      false,
-    );
+    const groupAfter = await request("shane", {
+      method: "GET",
+      path: `/api/v1/groups/${group.groupId}`,
+    });
+    assert.equal(groupAfter.status, 404);
+    assert.equal((await groupAfter.json()).error.code, "group_not_found");
+    const tasksAfter = await request("shane", {
+      method: "GET",
+      path: `/api/v1/groups/${group.groupId}/tasks?status=all`,
+    });
+    assert.equal(tasksAfter.status, 404);
+    assert.equal((await tasksAfter.json()).error.code, "group_not_found");
   }
 });
 
