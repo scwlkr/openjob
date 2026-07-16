@@ -49,7 +49,11 @@ export type OpenJobApi = {
   getGroup(token: string, groupId: string): Promise<Group>;
   createGroup(token: string, name: string): Promise<Group>;
   listMembers(token: string, groupId: string): Promise<Member[]>;
-  listTasks(token: string, groupId: string): Promise<Task[]>;
+  listTasks(
+    token: string,
+    groupId: string,
+    filters: { status: "open" | "done" | "all"; assignee?: string },
+  ): Promise<Task[]>;
   createTask(
     token: string,
     groupId: string,

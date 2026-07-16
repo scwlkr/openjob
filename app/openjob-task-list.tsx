@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   type AuthSession,
@@ -12,11 +12,22 @@ import {
 import styles from "./openjob.module.css";
 
 type StatusFilter = "open" | "done" | "all";
-type AssigneeFilter = "all" | "unassigned" | string;
+type AssigneeFilter =
+  | { kind: "all" }
+  | { kind: "unassigned" }
+  | { kind: "member"; username: string };
 type NamedMember = Member & { username: string };
+type EditorMode = "new" | "edit" | "assign";
 type Editor =
   | { mode: "new"; username: string }
   | { mode: "edit" | "assign"; task: Task };
+type TaskFormInput = { text: string; assigneeUsername: string; dueDate: string };
+
+const TASK_FORM_COPY: Record<EditorMode, { kicker: string; title: string; submit: string }> = {
+  new: { kicker: "New Task", title: "New Task", submit: "Create Task" },
+  edit: { kicker: "Task details", title: "Edit Task", submit: "Save Task" },
+  assign: { kicker: "Unassigned recovery", title: "Assign Task", submit: "Assign Task" },
+};
 
 function localDateKey(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -67,20 +78,20 @@ function TaskForm({
   initialDueDate?: string;
   initialText?: string;
   members: NamedMember[];
-  mode: "new" | "edit" | "assign";
+  mode: EditorMode;
   onCancel: () => void;
-  onSave: (input: { text: string; assigneeUsername: string; dueDate: string }) => void;
+  onSave: (input: TaskFormInput) => void;
   saving: boolean;
 }) {
   const [text, setText] = useState(initialText);
   const [assignee, setAssignee] = useState(initialAssignee);
   const [dueDate, setDueDate] = useState(initialDueDate);
-  const submitLabel = mode === "new" ? "Create Task" : mode === "assign" ? "Assign Task" : "Save Task";
+  const copy = TASK_FORM_COPY[mode];
 
   return (
     <form
       className={styles.taskForm}
-      aria-label={mode === "new" ? "New Task" : mode === "assign" ? "Assign Task" : "Edit Task"}
+      aria-label={copy.title}
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         onSave({ text, assigneeUsername: assignee, dueDate });
@@ -106,7 +117,7 @@ function TaskForm({
       {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
       <div className={styles.taskFormActions}>
         <button type="button" onClick={onCancel}>Cancel</button>
-        <button className={styles.primaryButton} type="submit" disabled={saving}>{saving ? "Saving…" : submitLabel}</button>
+        <button className={styles.primaryButton} type="submit" disabled={saving}>{saving ? "Saving…" : copy.submit}</button>
       </div>
     </form>
   );
@@ -126,31 +137,46 @@ export function TaskList({
   const [members, setMembers] = useState<Member[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [status, setStatus] = useState<StatusFilter>("open");
-  const [assignee, setAssignee] = useState<AssigneeFilter>("all");
+  const [assignee, setAssignee] = useState<AssigneeFilter>({ kind: "all" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
+  const loadRequest = useRef(0);
+
+  const taskFilters = useMemo(
+    () => ({
+      status,
+      ...(assignee.kind === "all"
+        ? {}
+        : { assignee: assignee.kind === "unassigned" ? "unassigned" : assignee.username }),
+    }),
+    [assignee, status],
+  );
 
   const load = useCallback(async () => {
+    const request = ++loadRequest.current;
     try {
       const token = await session.getIdToken();
+      if (request !== loadRequest.current) return;
       setLoading(true);
       setError("");
       setActionError("");
       const [nextMembers, nextTasks] = await Promise.all([
         api.listMembers(token, group.groupId),
-        api.listTasks(token, group.groupId),
+        api.listTasks(token, group.groupId, taskFilters),
       ]);
+      if (request !== loadRequest.current) return;
       setMembers(nextMembers);
       setTasks(nextTasks);
     } catch (loadError) {
+      if (request !== loadRequest.current) return;
       if (!(await onSessionExpired(loadError))) setError(loadMessage(loadError));
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
-  }, [api, group.groupId, onSessionExpired, session]);
+  }, [api, group.groupId, onSessionExpired, session, taskFilters]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 0);
@@ -161,28 +187,16 @@ export function TaskList({
     () =>
       members
         .filter((member): member is NamedMember => member.username !== null)
-        .sort((left, right) => left.username.localeCompare(right.username)),
+        .sort((left, right) => left.username === right.username ? 0 : left.username < right.username ? -1 : 1),
     [members],
-  );
-
-  const visibleTasks = useMemo(
-    () =>
-      tasks.filter((task) => {
-        if (status !== "all" && task.state !== status) return false;
-        if (assignee === "all") return true;
-        return assignee === "unassigned"
-          ? task.assignee.state === "unassigned"
-          : task.assignee.state === "assigned" && task.assignee.username === assignee;
-      }),
-    [assignee, status, tasks],
   );
 
   const lanes = useMemo(() => {
     const memberLanes = namedMembers
-      .filter((member) => assignee === "all" || assignee === member.username)
+      .filter((member) => assignee.kind === "all" || (assignee.kind === "member" && assignee.username === member.username))
       .map((member) => ({ key: member.username, label: `@${member.username}` }));
     const hasUnassigned = tasks.some((task) => task.assignee.state === "unassigned");
-    if (hasUnassigned && (assignee === "all" || assignee === "unassigned")) {
+    if (assignee.kind === "unassigned" || (assignee.kind === "all" && hasUnassigned)) {
       memberLanes.push({ key: "unassigned", label: "Unassigned" });
     }
     return memberLanes;
@@ -194,7 +208,7 @@ export function TaskList({
     try {
       const token = await session.getIdToken();
       await action(token);
-      setTasks(await api.listTasks(token, group.groupId));
+      setTasks(await api.listTasks(token, group.groupId, taskFilters));
       setEditor(null);
     } catch (mutationError) {
       if (!(await onSessionExpired(mutationError))) setActionError(mutationMessage(mutationError));
@@ -203,7 +217,7 @@ export function TaskList({
     }
   }
 
-  function saveEditor(input: { text: string; assigneeUsername: string; dueDate: string }) {
+  function saveEditor(input: TaskFormInput) {
     if (!editor) return;
     if (editor.mode === "new") {
       void runMutation((token) => api.createTask(token, group.groupId, {
@@ -243,7 +257,13 @@ export function TaskList({
       <div className={styles.taskToolbar}>
         <label>
           Task status
-          <select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}>
+          <select
+            value={status}
+            onChange={(event) => {
+              setLoading(true);
+              setStatus(event.target.value as StatusFilter);
+            }}
+          >
             <option value="open">Open</option>
             <option value="done">Done</option>
             <option value="all">All</option>
@@ -251,21 +271,37 @@ export function TaskList({
         </label>
         <label>
           Assignee filter
-          <select value={assignee} onChange={(event) => setAssignee(event.target.value)}>
-            <option value="all">All assignees</option>
+          <select
+            value={
+              assignee.kind === "all"
+                ? ""
+                : assignee.kind === "unassigned"
+                  ? "unassigned"
+                  : `member:${assignee.username}`
+            }
+            onChange={(event) => {
+              setLoading(true);
+              setAssignee(
+                event.target.value === ""
+                  ? { kind: "all" }
+                  : event.target.value === "unassigned"
+                    ? { kind: "unassigned" }
+                    : { kind: "member", username: event.target.value.slice("member:".length) },
+              );
+            }}
+          >
+            <option value="">All assignees</option>
             {namedMembers.map((member) => (
-              <option key={member.userId} value={member.username}>@{member.username}</option>
+              <option key={member.userId} value={`member:${member.username}`}>@{member.username}</option>
             ))}
-            {tasks.some((task) => task.assignee.state === "unassigned") ? (
-              <option value="unassigned">Unassigned</option>
-            ) : null}
+            <option value="unassigned">Unassigned</option>
           </select>
         </label>
       </div>
 
       <div className={styles.taskLanes}>
         {lanes.map((lane) => {
-          const laneTasks = visibleTasks.filter((task) =>
+          const laneTasks = tasks.filter((task) =>
             lane.key === "unassigned"
               ? task.assignee.state === "unassigned"
               : task.assignee.state === "assigned" && task.assignee.username === lane.key,
@@ -356,8 +392,8 @@ export function TaskList({
             aria-modal="true"
             aria-labelledby="task-editor-title"
           >
-            <p className={styles.kicker}>{editor.mode === "assign" ? "Unassigned recovery" : "Task details"}</p>
-            <h2 id="task-editor-title">{editor.mode === "assign" ? "Assign Task" : "Edit Task"}</h2>
+            <p className={styles.kicker}>{TASK_FORM_COPY[editor.mode].kicker}</p>
+            <h2 id="task-editor-title">{TASK_FORM_COPY[editor.mode].title}</h2>
             <TaskForm
               error={actionError}
               initialAssignee={

@@ -32,6 +32,7 @@ type ApiState = {
   groups: Group[];
   members: Member[];
   tasks: Task[];
+  taskQueries: string[];
   concealedGroupIds: Set<string>;
   authorizationHeaders: string[];
   meFailureStatus: number | null;
@@ -84,6 +85,7 @@ async function installApi(
     groups: [...(initial.groups ?? [])],
     members: [...(initial.members ?? [])],
     tasks: [...(initial.tasks ?? [])],
+    taskQueries: [],
     concealedGroupIds: new Set(),
     authorizationHeaders: [],
     meFailureStatus: initial.meFailureStatus ?? null,
@@ -216,7 +218,17 @@ async function installApi(
         await error(state.taskFailureStatus, code, "The Task List is unavailable.");
         return;
       }
-      await reply(200, { data: state.tasks, nextCursor: null });
+      state.taskQueries.push(url.searchParams.toString());
+      const status = url.searchParams.get("status") ?? "open";
+      const assignee = url.searchParams.get("assignee");
+      const tasks = state.tasks.filter((task) => {
+        if (status !== "all" && task.state !== status) return false;
+        if (assignee === null) return true;
+        return assignee === "unassigned"
+          ? task.assignee.state === "unassigned"
+          : task.assignee.state === "assigned" && task.assignee.username === assignee;
+      });
+      await reply(200, { data: tasks, nextCursor: null });
       return;
     }
     if (tasksMatch && request.method() === "POST") {
@@ -522,7 +534,7 @@ test("recovers when a session expires while selecting a Group", async ({ page })
 test("renders ordered assignee lanes with combined status and assignee filters", async ({ page }) => {
   await startSignedIn(page);
   await page.clock.setFixedTime(new Date("2026-07-16T17:00:00-05:00"));
-  await installApi(page, {
+  const state = await installApi(page, {
     user: signedInUser,
     groups: [walkerLabs],
     members: [
@@ -596,11 +608,12 @@ test("renders ordered assignee lanes with combined status and assignee filters",
   await expect(page.getByText("Confirm patio measurements").locator("..")).toContainText("Overdue");
 
   await page.getByLabel("Task status").selectOption("all");
-  await page.getByLabel("Assignee filter").selectOption("morgan");
+  await page.getByLabel("Assignee filter").selectOption({ label: "@morgan" });
   await expect(lanes).toHaveCount(1);
   const morganCards = lanes.getByTestId("task-card");
   await expect(morganCards.nth(0)).toContainText("Order menu stands");
   await expect(morganCards.nth(1)).toContainText("Archive spring campaign");
+  expect(state.taskQueries.some((query) => query.includes("status=all") && query.includes("assignee=morgan"))).toBe(true);
 });
 
 test("runs the complete Task lifecycle through assignee lanes", async ({ page }) => {
@@ -818,4 +831,78 @@ test("returns Task List authentication failures to a working sign-in path", asyn
   state.taskFailureStatus = null;
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByTestId("task-lane")).toHaveCount(1);
+});
+
+test("filters a Member whose valid Username is all", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_all", username: "all", role: "member", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_all",
+        groupId: walkerLabs.groupId,
+        text: "Work assigned to all",
+        assignee: { state: "assigned", userId: "user_all", username: "all" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_shane",
+        groupId: walkerLabs.groupId,
+        text: "Work assigned to shane",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-02T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByLabel("Assignee filter").selectOption({ label: "@all" });
+
+  const lanes = page.getByTestId("task-lane");
+  await expect(lanes).toHaveCount(1);
+  await expect(lanes.getByRole("heading")).toHaveText("@all");
+  await expect(page.getByText("Work assigned to all")).toBeVisible();
+  await expect(page.getByText("Work assigned to shane")).toHaveCount(0);
+});
+
+test("keeps an empty Unassigned lane visible after the final recovery", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_unassigned_last",
+        groupId: walkerLabs.groupId,
+        text: "Recover the last Task",
+        assignee: { state: "unassigned" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByLabel("Assignee filter").selectOption("unassigned");
+  await page.getByRole("button", { name: "Assign" }).click();
+  await page.getByRole("dialog", { name: "Assign Task" }).getByRole("button", { name: "Assign Task" }).click();
+
+  const lane = page.getByTestId("task-lane");
+  await expect(lane).toHaveCount(1);
+  await expect(lane.getByRole("heading")).toHaveText("Unassigned");
+  await expect(lane.getByText("No Tasks here.")).toBeVisible();
 });
