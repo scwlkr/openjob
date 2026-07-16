@@ -1094,3 +1094,119 @@ test("task show and edit expose server state through explicit edit inputs", asyn
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task state commands are explicit and deletion requires confirmation", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-state-"));
+  const credentialPath = join(directory, "credential");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const states = [];
+  const deleted = [];
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    const stateMatch = request.url.match(
+      /^\/api\/v1\/groups\/grp_tasks\/tasks\/([^/]+)\/state$/,
+    );
+    if (stateMatch) {
+      assert.equal(request.method, "PUT");
+      const state = JSON.parse(body).state;
+      states.push(state);
+      response.end(
+        JSON.stringify({
+          data: { taskId: stateMatch[1], groupId: "grp_tasks", state },
+        }),
+      );
+      return;
+    }
+    const deleteMatch = request.url.match(
+      /^\/api\/v1\/groups\/grp_tasks\/tasks\/([^/]+)$/,
+    );
+    if (deleteMatch && request.method === "DELETE") {
+      deleted.push(deleteMatch[1]);
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    for (const [command, expected] of [
+      ["done", "done"],
+      ["reopen", "open"],
+    ]) {
+      const result = await runCliAsync(
+        ["task", command, "task_state", "--group", "grp_tasks", "--format", "json"],
+        { env: environment },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(JSON.parse(result.stdout).data.state, expected);
+    }
+    assert.deepEqual(states, ["done", "open"]);
+
+    const refused = await runCliAsync(
+      ["task", "delete", "task_refused", "--group", "grp_tasks", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(refused.status, 2);
+    assert.equal(refused.stdout, "");
+    assert.deepEqual(JSON.parse(refused.stderr), {
+      error: {
+        code: "confirmation_required",
+        message: "Non-interactive deletion requires --yes.",
+      },
+    });
+
+    const declined = await runCliAsync(
+      ["task", "delete", "task_declined", "--group", "grp_tasks", "--format", "json"],
+      {
+        env: { ...environment, OPENJOB_TEST_INTERACTIVE: "1" },
+        input: "no\n",
+      },
+    );
+    assert.equal(declined.status, 2);
+    assert.equal(declined.stdout, "");
+    assert.match(declined.stderr, /^Delete Task task_declined\? \[y\/N\] /);
+    assert.match(declined.stderr, /"code":"confirmation_declined"/);
+
+    const approved = await runCliAsync(
+      [
+        "task",
+        "delete",
+        "task_deleted",
+        "--group",
+        "grp_tasks",
+        "--yes",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(approved.status, 0, approved.stderr);
+    assert.deepEqual(JSON.parse(approved.stdout), {
+      data: { taskId: "task_deleted", deleted: true },
+    });
+    assert.equal(approved.stderr, "");
+    assert.deepEqual(deleted, ["task_deleted"]);
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
