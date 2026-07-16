@@ -11,6 +11,7 @@ import {
 } from "./group-state.ts";
 import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
 import {
+  InvalidBanCursorError,
   InvalidGroupCursorError,
   InvalidMemberCursorError,
   type GroupId,
@@ -19,6 +20,7 @@ import {
   type GroupUser,
   type InviteToken,
   type OpenJobGroup,
+  type OpenJobBan,
   type OpenJobInviteLink,
   type OpenJobMember,
 } from "../server/v1-groups.ts";
@@ -44,6 +46,11 @@ type StoredMembership = {
   updateTime: string;
   userId: string | null;
   username: string | null;
+};
+
+type StoredBan = OpenJobBan & {
+  path: string;
+  updateTime: string;
 };
 
 type StoredInvite = {
@@ -108,6 +115,16 @@ function parseMembership(
     userId: document.fields?.userId?.stringValue ?? null,
     username: document.fields?.username?.stringValue ?? null,
   };
+}
+
+function parseBan(document: FirestoreDocument, path: string): StoredBan {
+  const userId = document.fields?.userId?.stringValue;
+  const username = document.fields?.username?.stringValue;
+  const bannedAt = document.fields?.bannedAt?.timestampValue;
+  if (!userId || !username || !bannedAt || !document.updateTime) {
+    throw new Error("Firestore returned an invalid Group ban record.");
+  }
+  return { bannedAt, path, updateTime: document.updateTime, userId, username };
 }
 
 function parseInvite(document: FirestoreDocument, path: string): StoredInvite {
@@ -175,6 +192,14 @@ function publicMember(member: StoredMembership): OpenJobMember {
   };
 }
 
+function publicBan(ban: StoredBan): OpenJobBan {
+  return {
+    userId: ban.userId,
+    username: ban.username,
+    bannedAt: ban.bannedAt,
+  };
+}
+
 function isConcurrentWrite(error: unknown) {
   return (
     error instanceof FirestoreRequestError &&
@@ -215,6 +240,11 @@ export function createFirestoreGroupStore(
   async function readMembership(path: string) {
     const document = await readDocument(path);
     return document ? parseMembership(document, path) : null;
+  }
+
+  async function readBan(path: string) {
+    const document = await readDocument(path);
+    return document ? parseBan(document, path) : null;
   }
 
   async function readInvite(path: string) {
@@ -286,6 +316,25 @@ export function createFirestoreGroupStore(
 
   function banPath(groupId: GroupId, userId: string) {
     return `${groupPath(groupId)}/bans/${userId}`;
+  }
+
+  function memberRecordPath(groupId: GroupId, userId: string) {
+    return `${groupPath(groupId)}/memberRecords/${userId}`;
+  }
+
+  function memberRecordWrite(groupId: GroupId, user: GroupUser) {
+    return {
+      update: {
+        name: firestore.documentName(memberRecordPath(groupId, user.userId)),
+        fields: {
+          userId: { stringValue: user.userId },
+          ...(user.username
+            ? { username: { stringValue: user.username } }
+            : {}),
+        },
+      },
+      currentDocument: { exists: false },
+    };
   }
 
   function accessPath(userId: string, groupId: GroupId) {
@@ -483,6 +532,85 @@ export function createFirestoreGroupStore(
   }
 
   return Object.freeze({
+    async ban(actorUserId, groupId, targetUser) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const targetUserId = targetUser.userId;
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const [actor, target, existingBan, memberRecord] = await Promise.all([
+          readMembership(membershipPath(groupId, actorUserId)),
+          readMembership(membershipPath(groupId, targetUserId)),
+          readBan(banPath(groupId, targetUserId)),
+          readDocument(memberRecordPath(groupId, targetUserId)),
+        ]);
+        if (!actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (actorUserId === targetUserId) {
+          return { kind: "self_removal" as const };
+        }
+        if (existingBan) return { kind: "ban_not_allowed" as const };
+        if ((!target && !memberRecord) || !targetUser.username) {
+          return { kind: "user_not_found" as const };
+        }
+        if (target?.role === "admin") {
+          const members = await readAllMemberships(groupId);
+          if (members.filter(({ role }) => role === "admin").length <= 1) {
+            return { kind: "last_admin" as const };
+          }
+        }
+        const ban: OpenJobBan = {
+          userId: targetUserId,
+          username: targetUser.username,
+          bannedAt: new Date(now()).toISOString(),
+        };
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            {
+              verify: firestore.documentName(actor.path),
+              currentDocument: { updateTime: actor.updateTime },
+            },
+            {
+              update: {
+                name: firestore.documentName(banPath(groupId, targetUserId)),
+                fields: {
+                  userId: { stringValue: ban.userId },
+                  username: { stringValue: ban.username },
+                  bannedAt: { timestampValue: ban.bannedAt },
+                },
+              },
+              currentDocument: { exists: false },
+            },
+            ...(target
+              ? [
+                  {
+                    delete: firestore.documentName(target.path),
+                    currentDocument: { updateTime: target.updateTime },
+                  },
+                  {
+                    delete: firestore.documentName(
+                      accessPath(targetUserId, groupId),
+                    ),
+                  },
+                ]
+              : [
+                  {
+                    verify: firestore.documentName(
+                      membershipPath(groupId, targetUserId),
+                    ),
+                    currentDocument: { exists: false },
+                  },
+                ]),
+            ...(memberRecord ? [] : [memberRecordWrite(groupId, targetUser)]),
+          ]);
+          return { kind: "banned" as const, ban };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Member Ban could not resolve concurrent writes.");
+    },
+
     async create(user: GroupUser, name) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const groupId = `grp_${randomUUID().replaceAll("-", "")}` as GroupId;
@@ -521,6 +649,7 @@ export function createFirestoreGroupStore(
               },
               currentDocument: { exists: false },
             },
+            memberRecordWrite(groupId, user),
             {
               update: {
                 name: firestore.documentName(accessDocumentPath),
@@ -620,7 +749,13 @@ export function createFirestoreGroupStore(
         if (active.token !== token) return { kind: "not_found" as const };
 
         const memberDocumentPath = membershipPath(group.groupId, user.userId);
-        const existing = await readMembership(memberDocumentPath);
+        const userBanPath = banPath(group.groupId, user.userId);
+        const recordPath = memberRecordPath(group.groupId, user.userId);
+        const [existing, existingBan, memberRecord] = await Promise.all([
+          readMembership(memberDocumentPath),
+          readBan(userBanPath),
+          readDocument(recordPath),
+        ]);
         if (existing) {
           return {
             kind: "joined" as const,
@@ -628,9 +763,7 @@ export function createFirestoreGroupStore(
           };
         }
         if (!user.username) return { kind: "username_required" as const };
-
-        const userBanPath = banPath(group.groupId, user.userId);
-        if (await readDocument(userBanPath)) {
+        if (existingBan) {
           return { kind: "membership_denied" as const };
         }
 
@@ -673,6 +806,7 @@ export function createFirestoreGroupStore(
             },
             currentDocument: { exists: false },
           },
+          ...(memberRecord ? [] : [memberRecordWrite(group.groupId, user)]),
           {
             update: {
               name: firestore.documentName(accessPath(user.userId, group.groupId)),
@@ -720,9 +854,10 @@ export function createFirestoreGroupStore(
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const group = await readGroup(groupPath(groupId));
         if (!group) return { kind: "not_found" as const };
-        const [actor, target] = await Promise.all([
+        const [actor, target, memberRecord] = await Promise.all([
           readMembership(membershipPath(groupId, actorUserId)),
           readMembership(membershipPath(groupId, targetUserId)),
+          readDocument(memberRecordPath(groupId, targetUserId)),
         ]);
         if (!actor) return { kind: "not_found" as const };
         if (actor.role !== "admin") return { kind: "forbidden" as const };
@@ -750,6 +885,14 @@ export function createFirestoreGroupStore(
             {
               delete: firestore.documentName(accessPath(targetUserId, groupId)),
             },
+            ...(memberRecord
+              ? []
+              : [
+                  memberRecordWrite(groupId, {
+                    userId: targetUserId,
+                    username: target.username,
+                  }),
+                ]),
           ]);
           return { kind: "kicked" as const };
         } catch (error) {
@@ -763,7 +906,10 @@ export function createFirestoreGroupStore(
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const group = await readGroup(groupPath(groupId));
         if (!group) return { kind: "not_found" as const };
-        const member = await readMembership(membershipPath(groupId, userId));
+        const [member, memberRecord] = await Promise.all([
+          readMembership(membershipPath(groupId, userId)),
+          readDocument(memberRecordPath(groupId, userId)),
+        ]);
         if (!member) return { kind: "not_found" as const };
         if (member.role === "admin") {
           const members = await readAllMemberships(groupId);
@@ -785,6 +931,14 @@ export function createFirestoreGroupStore(
             {
               delete: firestore.documentName(accessPath(userId, groupId)),
             },
+            ...(memberRecord
+              ? []
+              : [
+                  memberRecordWrite(groupId, {
+                    userId,
+                    username: member.username,
+                  }),
+                ]),
           ]);
           return { kind: "left" as const };
         } catch (error) {
@@ -836,6 +990,46 @@ export function createFirestoreGroupStore(
       );
       return {
         groups,
+        nextCursor: result.nextPageToken ?? null,
+      };
+    },
+
+    async listBans(userId, groupId, { cursor, limit }) {
+      const [member, group] = await Promise.all([
+        readMembership(membershipPath(groupId, userId)),
+        readGroup(groupPath(groupId)),
+      ]);
+      if (!member || !group) return { kind: "not_found" as const };
+      if (member.role !== "admin") return { kind: "forbidden" as const };
+
+      const parameters = new URLSearchParams({
+        pageSize: String(limit),
+        orderBy: "__name__",
+      });
+      if (cursor !== null) parameters.set("pageToken", cursor);
+      let response;
+      try {
+        response = await firestore.request(
+          `${groupPath(groupId)}/bans?${parameters}`,
+        );
+      } catch (error) {
+        if (
+          error instanceof FirestoreRequestError &&
+          error.code === "INVALID_ARGUMENT"
+        ) {
+          throw new InvalidBanCursorError();
+        }
+        throw error;
+      }
+      const result = (await response.json()) as {
+        documents?: FirestoreDocument[];
+        nextPageToken?: string;
+      };
+      return {
+        kind: "found" as const,
+        bans: (result.documents ?? []).map((document) =>
+          publicBan(parseBan(document, document.name)),
+        ),
         nextCursor: result.nextPageToken ?? null,
       };
     },
@@ -953,6 +1147,37 @@ export function createFirestoreGroupStore(
         }
       }
       throw new Error("Invite Link rotation could not resolve concurrent writes.");
+    },
+
+    async unban(actorUserId, groupId, targetUserId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const [actor, ban] = await Promise.all([
+          readMembership(membershipPath(groupId, actorUserId)),
+          readBan(banPath(groupId, targetUserId)),
+        ]);
+        if (!actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (!ban) return { kind: "ban_not_found" as const };
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            {
+              verify: firestore.documentName(actor.path),
+              currentDocument: { updateTime: actor.updateTime },
+            },
+            {
+              delete: firestore.documentName(ban.path),
+              currentDocument: { updateTime: ban.updateTime },
+            },
+          ]);
+          return { kind: "unbanned" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Member unban could not resolve concurrent writes.");
     },
   });
 }

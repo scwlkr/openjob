@@ -36,6 +36,12 @@ export type OpenJobMember = {
   joinedAt: string;
 };
 
+export type OpenJobBan = {
+  userId: string;
+  username: string;
+  bannedAt: string;
+};
+
 export type OpenJobInviteLink = {
   token: InviteToken;
   url: string;
@@ -56,6 +62,13 @@ export class InvalidGroupCursorError extends Error {
   }
 }
 
+export class InvalidBanCursorError extends Error {
+  constructor() {
+    super("The Ban collection cursor is invalid.");
+    this.name = "InvalidBanCursorError";
+  }
+}
+
 export class InvalidMemberCursorError extends Error {
   constructor() {
     super("The Member collection cursor is invalid.");
@@ -64,6 +77,19 @@ export class InvalidMemberCursorError extends Error {
 }
 
 export type GroupStore = {
+  ban(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUser: GroupUser,
+  ): Promise<
+    | { kind: "banned"; ban: OpenJobBan }
+    | { kind: "ban_not_allowed" }
+    | { kind: "forbidden" }
+    | { kind: "last_admin" }
+    | { kind: "not_found" }
+    | { kind: "self_removal" }
+    | { kind: "user_not_found" }
+  >;
   create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
   demote(
     actorUserId: string,
@@ -123,6 +149,19 @@ export type GroupStore = {
     userId: string,
     options: { cursor: string | null; limit: number },
   ): Promise<{ groups: OpenJobGroup[]; nextCursor: string | null }>;
+  listBans(
+    userId: string,
+    groupId: GroupId,
+    options: { cursor: string | null; limit: number },
+  ): Promise<
+    | {
+        kind: "found";
+        bans: OpenJobBan[];
+        nextCursor: string | null;
+      }
+    | { kind: "forbidden" }
+    | { kind: "not_found" }
+  >;
   listMembers(
     userId: string,
     groupId: GroupId,
@@ -160,6 +199,16 @@ export type GroupStore = {
     groupId: GroupId,
   ): Promise<
     | { kind: "rotated"; invite: OpenJobInviteLink }
+    | { kind: "forbidden" }
+    | { kind: "not_found" }
+  >;
+  unban(
+    actorUserId: string,
+    groupId: GroupId,
+    targetUserId: string,
+  ): Promise<
+    | { kind: "unbanned" }
+    | { kind: "ban_not_found" }
     | { kind: "forbidden" }
     | { kind: "not_found" }
   >;
@@ -235,6 +284,22 @@ function memberNotFound(requestId: RequestIdFactory) {
   });
 }
 
+function userNotFound(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "user_not_found",
+    message: "User was not found.",
+    status: 404,
+  });
+}
+
+function banNotFound(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "ban_not_found",
+    message: "Ban was not found.",
+    status: 404,
+  });
+}
+
 function memberRoleConflict(requestId: RequestIdFactory, message: string) {
   return errorResponse(requestId, {
     code: "member_role_conflict",
@@ -255,6 +320,14 @@ function selfRemovalConflict(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "self_removal",
     message: "Use Leave Group to remove yourself.",
+    status: 409,
+  });
+}
+
+function banNotAllowedConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "ban_not_allowed",
+    message: "That User cannot be banned.",
     status: 409,
   });
 }
@@ -302,7 +375,39 @@ async function readGroupName(request: Request) {
   }
 }
 
+async function readBanTarget(request: Request) {
+  try {
+    const input = (await request.json()) as unknown;
+    if (
+      !input ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.keys(input).length !== 1 ||
+      !("userId" in input) ||
+      typeof input.userId !== "string" ||
+      input.userId.length === 0 ||
+      input.userId.length > 1_500 ||
+      /[/?#]/.test(input.userId)
+    ) {
+      return null;
+    }
+    return input.userId;
+  } catch {
+    return null;
+  }
+}
+
+function banTargetError(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "invalid_request",
+    message: "One or more fields are invalid.",
+    fields: { userId: "Provide one canonical User ID." },
+    status: 400,
+  });
+}
+
 type GroupResource =
+  | "bans"
   | "group"
   | "invite"
   | "leave"
@@ -311,7 +416,7 @@ type GroupResource =
 
 function groupResourceFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)(\/actions\/leave|\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
+    /^\/api\/v1\/groups\/([^/]+)(\/actions\/leave|\/bans|\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -321,6 +426,7 @@ function groupResourceFromPath(pathname: string) {
     }
     const resources: Record<string, GroupResource> = {
       "": "group",
+      "/bans": "bans",
       "/invite-link": "invite",
       "/invite-link/actions/rotate": "rotate_invite",
       "/actions/leave": "leave",
@@ -375,6 +481,32 @@ function memberActionFromPath(pathname: string) {
       groupId: groupId as GroupId,
       userId,
       action: match[3] as "promote" | "demote" | "kick",
+    };
+  } catch {
+    return { kind: "invalid" as const };
+  }
+}
+
+function banActionFromPath(pathname: string) {
+  const match = pathname.match(
+    /^\/api\/v1\/groups\/([^/]+)\/bans(?:\/actions\/(ban)|\/([^/]+)\/actions\/(unban))$/,
+  );
+  if (!match) return { kind: "none" as const };
+  try {
+    const groupId = decodeURIComponent(match[1]);
+    const userId = match[3] ? decodeURIComponent(match[3]) : null;
+    if (
+      !isGroupId(groupId) ||
+      (userId !== null &&
+        (userId.length === 0 || userId.length > 1_500 || /[/?#]/.test(userId)))
+    ) {
+      return { kind: "invalid" as const };
+    }
+    return {
+      kind: "valid" as const,
+      action: (match[2] ?? match[4]) as "ban" | "unban",
+      groupId: groupId as GroupId,
+      userId,
     };
   } catch {
     return { kind: "invalid" as const };
@@ -484,6 +616,27 @@ export function createV1GroupsApi({
               nextCursor: result.nextCursor,
             });
           }
+          if (resource === "bans" && request.method === "GET") {
+            const pagination = readPagination(url);
+            if ("error" in pagination) {
+              return paginationError(pagination.error, requestId);
+            }
+            let result;
+            try {
+              result = await groups.listBans(user.userId, groupId, pagination);
+            } catch (error) {
+              if (error instanceof InvalidBanCursorError) {
+                return paginationError("cursor", requestId);
+              }
+              throw error;
+            }
+            if (result.kind === "forbidden") return adminRequired(requestId);
+            if (result.kind === "not_found") return groupNotFound(requestId);
+            return jsonResponse({
+              data: result.bans,
+              nextCursor: result.nextCursor,
+            });
+          }
           if (resource === "leave" && request.method === "POST") {
             const result = await groups.leave(user.userId, groupId);
             if (result.kind === "left") {
@@ -516,6 +669,60 @@ export function createV1GroupsApi({
             if (result.kind === "forbidden") return adminRequired(requestId);
             return groupNotFound(requestId);
           }
+        }
+
+        const banActionPath = banActionFromPath(url.pathname);
+        if (banActionPath.kind === "invalid") return userNotFound(requestId);
+        if (
+          banActionPath.kind === "valid" &&
+          banActionPath.action === "ban" &&
+          request.method === "POST"
+        ) {
+          const visibleGroup = await groups.get(user.userId, banActionPath.groupId);
+          if (!visibleGroup) return userNotFound(requestId);
+          if (visibleGroup.role !== "admin") return adminRequired(requestId);
+          const targetUserId = await readBanTarget(request);
+          if (targetUserId === null) return banTargetError(requestId);
+          const targetUser = await users.getById(targetUserId);
+          if (!targetUser) return userNotFound(requestId);
+          const result = await groups.ban(
+            user.userId,
+            banActionPath.groupId,
+            targetUser,
+          );
+          if (result.kind === "banned") {
+            return jsonResponse({ data: result.ban }, 201);
+          }
+          if (result.kind === "forbidden") return adminRequired(requestId);
+          if (result.kind === "last_admin") {
+            return lastAdminConflict(requestId);
+          }
+          if (result.kind === "self_removal") {
+            return selfRemovalConflict(requestId);
+          }
+          if (result.kind === "ban_not_allowed") {
+            return banNotAllowedConflict(requestId);
+          }
+          return userNotFound(requestId);
+        }
+        if (
+          banActionPath.kind === "valid" &&
+          banActionPath.action === "unban" &&
+          request.method === "POST"
+        ) {
+          const result = await groups.unban(
+            user.userId,
+            banActionPath.groupId,
+            banActionPath.userId!,
+          );
+          if (result.kind === "unbanned") {
+            return new Response(null, {
+              status: 204,
+              headers: { "cache-control": "no-store" },
+            });
+          }
+          if (result.kind === "forbidden") return adminRequired(requestId);
+          return banNotFound(requestId);
         }
 
         const memberActionPath = memberActionFromPath(url.pathname);
