@@ -2,6 +2,7 @@ import { CliError } from "./errors.mjs";
 
 const VALUE_OPTIONS = new Set([
   "--assignee",
+  "--due",
   "--format",
   "--group",
   "--input",
@@ -9,6 +10,8 @@ const VALUE_OPTIONS = new Set([
   "--name",
   "--out",
   "--status",
+  "--text",
+  "--text-file",
 ]);
 
 const BOOLEAN_OPTIONS = new Set([

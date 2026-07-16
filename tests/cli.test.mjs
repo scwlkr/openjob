@@ -876,3 +876,114 @@ test("task list applies filters, follows cursors, and honors a total limit", asy
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task create accepts exactly one explicit named or JSON input mode", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-create-"));
+  const credentialPath = join(directory, "credential");
+  const textPath = join(directory, "task.txt");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(textPath, "Line one\n\nLine two\n");
+  const bodies = [];
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_tasks/tasks") {
+      assert.equal(request.method, "POST");
+      bodies.push(JSON.parse(body));
+      response.statusCode = 201;
+      response.end(
+        JSON.stringify({
+          data: {
+            taskId: `task_${bodies.length}`,
+            groupId: "grp_tasks",
+            ...bodies.at(-1),
+            state: "open",
+          },
+        }),
+      );
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const named = await runCliAsync(
+      [
+        "task",
+        "create",
+        "--group",
+        "grp_tasks",
+        "--text-file",
+        textPath,
+        "--assignee",
+        "@scwlkr",
+        "--due",
+        "2026-07-18",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(named.status, 0, named.stderr);
+    assert.deepEqual(bodies[0], {
+      text: "Line one\n\nLine two",
+      assigneeUsername: "scwlkr",
+      dueDate: "2026-07-18",
+    });
+
+    const input = { text: "From stdin", assigneeUsername: "maya" };
+    const json = await runCliAsync(
+      ["task", "create", "--group", "grp_tasks", "--input", "-", "--format", "json"],
+      { env: environment, input: JSON.stringify(input) },
+    );
+    assert.equal(json.status, 0, json.stderr);
+    assert.deepEqual(bodies[1], input);
+
+    const mixed = runCli(
+      [
+        "task",
+        "create",
+        "--group",
+        "grp_tasks",
+        "--input",
+        "-",
+        "--text",
+        "Do not read stdin",
+        "--assignee",
+        "maya",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(mixed.status, 2);
+    assert.equal(mixed.stdout, "");
+    assert.deepEqual(JSON.parse(mixed.stderr), {
+      error: {
+        code: "usage_error",
+        message: "task create accepts --input or named field flags, never both.",
+      },
+    });
+    assert.equal(bodies.length, 2);
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

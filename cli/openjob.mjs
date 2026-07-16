@@ -6,7 +6,7 @@ import { loginWithGoogle } from "./lib/auth.mjs";
 import { resolveGroup, writeCurrentGroup } from "./lib/config.mjs";
 import { deleteRefreshCredential } from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
-import { readInputObject } from "./lib/input.mjs";
+import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 
 const VERSION = "0.0.5";
@@ -48,7 +48,9 @@ const RESOURCE_HELP = {
   openjob group use <group-id>
   openjob group current`,
   task: `Usage:
-  openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]`,
+  openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
+  openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--due <YYYY-MM-DD>]
+  openjob task create --input <path|->`,
 };
 
 async function main(raw) {
@@ -146,6 +148,52 @@ async function main(raw) {
     if (assignee !== "all") parameters.set("assignee", assignee);
     const path = `/groups/${encodeURIComponent(groupId)}/tasks?${parameters}`;
     writeResult(await apiCollection(path, { limit }));
+    return;
+  }
+  if (resource === "task" && command === "create" && rest.length === 0) {
+    const inputPath = parsed.options.get("--input");
+    const namedFields = ["--text", "--text-file", "--assignee", "--due"];
+    const hasNamedFields = namedFields.some((option) => parsed.options.has(option));
+    if (inputPath && hasNamedFields) {
+      throw new CliError(
+        "usage_error",
+        "task create accepts --input or named field flags, never both.",
+        2,
+      );
+    }
+    let body;
+    if (inputPath) {
+      body = readInputObject(inputPath);
+    } else {
+      const textSources = ["--text", "--text-file"].filter((option) =>
+        parsed.options.has(option),
+      );
+      if (textSources.length !== 1 || !parsed.options.has("--assignee")) {
+        throw new CliError(
+          "usage_error",
+          "task create requires one text source and --assignee.",
+          2,
+        );
+      }
+      const text = parsed.options.has("--text-file")
+        ? readTextSource(parsed.options.get("--text-file"))
+        : parsed.options.get("--text");
+      const assignee = parsed.options.get("--assignee").replace(/^@/, "");
+      body = {
+        text,
+        assigneeUsername: assignee,
+        ...(parsed.options.has("--due")
+          ? { dueDate: parsed.options.get("--due") }
+          : {}),
+      };
+    }
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(`/groups/${encodeURIComponent(groupId)}/tasks`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
     return;
   }
   if (resource === "group" && command === "create" && rest.length === 0) {
