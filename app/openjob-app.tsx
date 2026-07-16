@@ -220,7 +220,7 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
         setSelectedGroup(null);
         window.localStorage.removeItem(SELECTED_GROUP_KEY);
         setNotice("That Group is no longer accessible.");
-      } else {
+      } else if (!(await recoverExpiredSession(selectError))) {
         setError(readableError(selectError));
       }
     } finally {
