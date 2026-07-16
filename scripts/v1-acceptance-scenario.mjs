@@ -110,6 +110,13 @@ export async function runV1AcceptanceScenario({
   if (secondGroupPage.data.length !== 1 || secondGroupPage.nextCursor !== null) {
     throw new Error("Group pagination did not terminate after the second row.");
   }
+  const pagedGroupIds = [...firstGroupPage.data, ...secondGroupPage.data].map(
+    ({ groupId }) => groupId,
+  );
+  const expectedGroupIds = [group.groupId, paginationGroup.groupId].sort();
+  if (pagedGroupIds.join(",") !== expectedGroupIds.join(",")) {
+    throw new Error("Group pagination skipped or duplicated a Group.");
+  }
   await expectSuccess({
     actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}",
@@ -168,6 +175,13 @@ export async function runV1AcceptanceScenario({
   if (secondMemberPage.data.length !== 1 || secondMemberPage.nextCursor !== null) {
     throw new Error("Member pagination did not terminate after the second row.");
   }
+  const pagedMemberIds = [...firstMemberPage.data, ...secondMemberPage.data].map(
+    ({ userId }) => userId,
+  );
+  const expectedMemberIds = [initialAdmin.userId, memberUser.userId].sort();
+  if (pagedMemberIds.join(",") !== expectedMemberIds.join(",")) {
+    throw new Error("Member pagination skipped or duplicated a Member.");
+  }
 
   const tasksPath = `${groupPath}/tasks`;
   await expectSuccess({
@@ -213,6 +227,12 @@ export async function runV1AcceptanceScenario({
     status: 201,
   });
   await checkpoint();
+  const initialAdminTasks = [task, undatedTask];
+  const memberUserTasks = [earlierDueTask];
+  const expectedTaskOrder =
+    initialAdmin.username < memberUser.username
+      ? [...initialAdminTasks, ...memberUserTasks]
+      : [...memberUserTasks, ...initialAdminTasks];
   const firstTaskPage = await expectSuccess({
     actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/tasks",
@@ -223,7 +243,7 @@ export async function runV1AcceptanceScenario({
   });
   if (
     firstTaskPage.data.map(({ taskId }) => taskId).join(",") !==
-      [earlierDueTask.taskId, task.taskId].join(",") ||
+      expectedTaskOrder.slice(0, 2).map(({ taskId }) => taskId).join(",") ||
     !firstTaskPage.nextCursor
   ) {
     throw new Error("Open Task pagination did not preserve due-date ordering.");
@@ -237,7 +257,8 @@ export async function runV1AcceptanceScenario({
     status: 200,
   });
   if (
-    secondTaskPage.data.map(({ taskId }) => taskId).join(",") !== undatedTask.taskId ||
+    secondTaskPage.data.map(({ taskId }) => taskId).join(",") !==
+      expectedTaskOrder[2].taskId ||
     secondTaskPage.nextCursor !== null
   ) {
     throw new Error("Open Task pagination did not terminate with the undated Task.");
