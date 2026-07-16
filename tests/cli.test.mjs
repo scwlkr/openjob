@@ -799,3 +799,80 @@ test("existing output is rejected before a non-idempotent request", async () => 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task list applies filters, follows cursors, and honors a total limit", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-list-"));
+  const credentialPath = join(directory, "credential");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const tasks = [
+    { taskId: "task_1", text: "First", state: "open" },
+    { taskId: "task_2", text: "Second", state: "done" },
+  ];
+  const taskRequests = [];
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    const url = new URL(request.url, service.baseUrl);
+    if (url.pathname === "/api/v1/groups/grp_tasks/tasks") {
+      taskRequests.push(url);
+      assert.equal(request.method, "GET");
+      assert.equal(url.searchParams.get("status"), "all");
+      assert.equal(url.searchParams.get("assignee"), "scwlkr");
+      if (!url.searchParams.has("cursor")) {
+        assert.equal(url.searchParams.get("limit"), "2");
+        response.end(JSON.stringify({ data: [tasks[0]], nextCursor: "page_2" }));
+        return;
+      }
+      assert.equal(url.searchParams.get("cursor"), "page_2");
+      assert.equal(url.searchParams.get("limit"), "1");
+      response.end(JSON.stringify({ data: [tasks[1]], nextCursor: "page_3" }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+
+  try {
+    const result = await runCliAsync(
+      [
+        "task",
+        "list",
+        "--group",
+        "grp_tasks",
+        "--status",
+        "all",
+        "--assignee",
+        "@scwlkr",
+        "--limit",
+        "2",
+        "--format",
+        "json",
+      ],
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+          OPENJOB_TEST_AUTH_URL: service.baseUrl,
+          OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+          OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+        },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { data: tasks, nextCursor: null });
+    assert.equal(result.stderr, "");
+    assert.equal(taskRequests.length, 2);
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

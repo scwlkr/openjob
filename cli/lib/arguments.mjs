@@ -1,11 +1,14 @@
 import { CliError } from "./errors.mjs";
 
 const VALUE_OPTIONS = new Set([
+  "--assignee",
   "--format",
   "--group",
   "--input",
+  "--limit",
   "--name",
   "--out",
+  "--status",
 ]);
 
 const BOOLEAN_OPTIONS = new Set([
