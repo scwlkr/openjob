@@ -12,6 +12,8 @@ import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 
 const VERSION = "0.0.5";
 
+process.once("SIGINT", () => process.exit(130));
+
 const HELP = `OpenJob
 
 Usage:
