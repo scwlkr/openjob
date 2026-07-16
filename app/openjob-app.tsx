@@ -51,6 +51,14 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const recoverExpiredSession = useCallback(async (candidate: unknown) => {
+    if (!(candidate instanceof ApiError) || candidate.status !== 401) return false;
+    setError(readableError(candidate));
+    await auth.signOut().catch(() => undefined);
+    setSession(null);
+    return true;
+  }, [auth]);
+
   const loadGroups = useCallback(async (activeSession: AuthSession) => {
     const token = await activeSession.getIdToken();
     const accessibleGroups = await api.listGroups(token);
@@ -102,15 +110,11 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
       setUser(currentUser);
       if (!currentUser.usernameRequired) await loadGroups(activeSession);
     } catch (loadError) {
-      setError(readableError(loadError));
-      if (loadError instanceof ApiError && loadError.status === 401) {
-        await auth.signOut().catch(() => undefined);
-        setSession(null);
-      }
+      if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [api, auth, loadGroups]);
+  }, [api, loadGroups, recoverExpiredSession]);
 
   useEffect(
     () =>
@@ -172,7 +176,7 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
     try {
       await action(await session.getIdToken(), session);
     } catch (actionError) {
-      setError(errorMessage(actionError));
+      if (!(await recoverExpiredSession(actionError))) setError(errorMessage(actionError));
     } finally {
       setSaving(false);
     }

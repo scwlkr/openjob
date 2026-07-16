@@ -13,6 +13,7 @@ type ApiState = {
   concealedGroupIds: Set<string>;
   authorizationHeaders: string[];
   meFailureStatus: number | null;
+  claimFailureStatus: number | null;
   failGroups: boolean;
   hangMe: boolean;
 };
@@ -45,7 +46,7 @@ async function startSignedIn(page: Page) {
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "meFailureStatus" | "failGroups" | "hangMe">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "meFailureStatus" | "claimFailureStatus" | "failGroups" | "hangMe">> = {},
 ) {
   const state: ApiState = {
     user: initial.user ?? {
@@ -57,6 +58,7 @@ async function installApi(
     concealedGroupIds: new Set(),
     authorizationHeaders: [],
     meFailureStatus: initial.meFailureStatus ?? null,
+    claimFailureStatus: initial.claimFailureStatus ?? null,
     failGroups: initial.failGroups ?? false,
     hangMe: initial.hangMe ?? false,
   };
@@ -102,6 +104,14 @@ async function installApi(
     }
 
     if (url.pathname === "/api/v1/me/username" && request.method() === "PUT") {
+      if (state.claimFailureStatus) {
+        await error(
+          state.claimFailureStatus,
+          "authentication_required",
+          "Authentication is required.",
+        );
+        return;
+      }
       const { username } = request.postDataJSON() as { username?: unknown };
       const valid =
         typeof username === "string" &&
@@ -308,4 +318,17 @@ test("returns an expired session to a working sign-in path", async ({ page }) =>
   state.meFailureStatus = null;
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+});
+
+test("recovers when a session expires during a mutation", async ({ page }) => {
+  const state = await installApi(page, { claimFailureStatus: 401 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByLabel("Username").fill("shane");
+  await page.getByRole("button", { name: "Claim Username" }).click();
+  await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
+
+  state.claimFailureStatus = null;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
 });
