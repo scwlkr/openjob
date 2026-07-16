@@ -26,8 +26,13 @@ export function apiBaseUrl(environment = process.env) {
   return raw.replace(/\/$/, "");
 }
 
-export async function apiRequest(path, init = {}, environment = process.env) {
-  return createApiClient(environment).request(path, init);
+export async function apiRequest(
+  path,
+  init = {},
+  options = {},
+  environment = process.env,
+) {
+  return createApiClient(environment).request(path, init, options);
 }
 
 export async function apiRequestWithIdToken(
@@ -46,23 +51,45 @@ export async function apiCollection(path, options = {}, environment = process.en
 export function createApiClient(environment = process.env, initialIdToken) {
   let idToken = initialIdToken;
 
-  async function request(path, init = {}) {
+  async function request(path, init = {}, { retryable = false, quiet = false } = {}) {
     idToken ??= await refreshIdToken(environment);
-    let response = await send(path, init, idToken, environment);
-    if (response.status === 401) {
-      idToken = await refreshIdToken(environment);
-      response = await send(path, init, idToken, environment);
-    }
-    if (!response.ok) throw await apiError(response);
-    if (response.status === 204) return null;
-    try {
-      return await response.json();
-    } catch {
-      throw new CliError("invalid_response", "OpenJob returned invalid JSON.", 8);
+    let authenticationReplayed = false;
+    let serviceReplayed = false;
+    while (true) {
+      let response;
+      try {
+        response = await send(path, init, idToken, environment);
+      } catch (error) {
+        if (!retryable || serviceReplayed) throw error;
+        serviceReplayed = true;
+        await retryNotice(quiet, environment);
+        continue;
+      }
+      if (response.status === 401 && !authenticationReplayed) {
+        authenticationReplayed = true;
+        idToken = await refreshIdToken(environment);
+        continue;
+      }
+      if (
+        retryable &&
+        !serviceReplayed &&
+        (response.status === 429 || response.status >= 500)
+      ) {
+        serviceReplayed = true;
+        await retryNotice(quiet, environment);
+        continue;
+      }
+      if (!response.ok) throw await apiError(response);
+      if (response.status === 204) return null;
+      try {
+        return await response.json();
+      } catch {
+        throw new CliError("invalid_response", "OpenJob returned invalid JSON.", 8);
+      }
     }
   }
 
-  async function collection(path, { limit } = {}) {
+  async function collection(path, { limit, quiet = false } = {}) {
     const data = [];
     const seen = new Set();
     let cursor = null;
@@ -74,7 +101,7 @@ export function createApiClient(environment = process.env, initialIdToken) {
         parameters.set("limit", String(Math.min(limit - data.length, 500)));
       }
       const requestPath = parameters.size ? `${pathname}?${parameters}` : pathname;
-      const envelope = await request(requestPath);
+      const envelope = await request(requestPath, {}, { retryable: true, quiet });
       if (!Array.isArray(envelope?.data)) {
         throw new CliError("invalid_response", "OpenJob returned an invalid collection.", 8);
       }
@@ -94,6 +121,14 @@ export function createApiClient(environment = process.env, initialIdToken) {
   }
 
   return { collection, request };
+}
+
+async function retryNotice(quiet, environment) {
+  if (!quiet) {
+    process.stderr.write("Retrying safe request after a temporary service failure.\n");
+  }
+  const delay = environment.NODE_ENV === "test" ? 0 : 250;
+  await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 async function send(path, init, idToken, environment) {
