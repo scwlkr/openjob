@@ -376,6 +376,7 @@ test("Group Names are trimmed, bounded Unicode labels and remain non-unique", as
     { name: "   " },
     { name: "a".repeat(81) },
     { name: "Line\nBreak" },
+    { name: "\nTeam\n" },
     { name: "Control\u0000Character" },
     { name: "Line\u2028Separator" },
     { name: "Valid", ignored: true },

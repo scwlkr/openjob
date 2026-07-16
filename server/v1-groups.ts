@@ -407,11 +407,11 @@ async function readSingleStringField(request: Request, field: string) {
   }
 }
 
-function isValidGroupName(name: string) {
+function isValidGroupName(rawName: string, normalizedName = rawName) {
   return (
-    name.trim().length > 0 &&
-    Array.from(name).length <= 80 &&
-    !/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(name)
+    normalizedName.trim().length > 0 &&
+    Array.from(normalizedName).length <= 80 &&
+    !/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(rawName)
   );
 }
 
@@ -419,7 +419,7 @@ async function readGroupName(request: Request) {
   const name = await readSingleStringField(request, "name");
   if (name === null) return null;
   const trimmed = name.trim();
-  return isValidGroupName(trimmed) ? (trimmed as GroupName) : null;
+  return isValidGroupName(name, trimmed) ? (trimmed as GroupName) : null;
 }
 
 async function readGroupConfirmation(request: Request) {
