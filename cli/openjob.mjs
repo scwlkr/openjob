@@ -50,7 +50,10 @@ const RESOURCE_HELP = {
   task: `Usage:
   openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
   openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--due <YYYY-MM-DD>]
-  openjob task create --input <path|->`,
+  openjob task create --input <path|->
+  openjob task show <task-id>
+  openjob task edit <task-id> [--text <text> | --text-file <path|->] [--assignee <username>] [--due <YYYY-MM-DD|none>]
+  openjob task edit <task-id> --input <path|->`,
 };
 
 async function main(raw) {
@@ -193,6 +196,68 @@ async function main(raw) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    );
+    return;
+  }
+  if (resource === "task" && command === "show" && rest.length === 1) {
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
+      ),
+    );
+    return;
+  }
+  if (resource === "task" && command === "edit" && rest.length === 1) {
+    const inputPath = parsed.options.get("--input");
+    const namedFields = ["--text", "--text-file", "--assignee", "--due"];
+    const selectedNamedFields = namedFields.filter((option) =>
+      parsed.options.has(option),
+    );
+    if (inputPath && selectedNamedFields.length > 0) {
+      throw new CliError(
+        "usage_error",
+        "task edit accepts --input or named field flags, never both.",
+        2,
+      );
+    }
+    let body;
+    if (inputPath) {
+      body = readInputObject(inputPath);
+    } else {
+      if (selectedNamedFields.length === 0) {
+        throw new CliError("usage_error", "task edit requires at least one field.", 2);
+      }
+      if (parsed.options.has("--text") && parsed.options.has("--text-file")) {
+        throw new CliError("usage_error", "task edit accepts one text source.", 2);
+      }
+      body = {};
+      if (parsed.options.has("--text")) body.text = parsed.options.get("--text");
+      if (parsed.options.has("--text-file")) {
+        body.text = readTextSource(parsed.options.get("--text-file"));
+      }
+      if (parsed.options.has("--assignee")) {
+        const assignee = parsed.options.get("--assignee").replace(/^@/, "");
+        if (assignee === "unassigned") {
+          throw new CliError(
+            "usage_error",
+            "Task assignees must be Member Usernames.",
+            2,
+          );
+        }
+        body.assigneeUsername = assignee;
+      }
+      if (parsed.options.has("--due")) {
+        const dueDate = parsed.options.get("--due");
+        body.dueDate = dueDate === "none" ? null : dueDate;
+      }
+    }
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
+        { method: "PATCH", body: JSON.stringify(body) },
+      ),
     );
     return;
   }
