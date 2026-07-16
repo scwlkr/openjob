@@ -45,11 +45,16 @@ async function request<T>(
   return payload as T;
 }
 
-async function listAll<T>(path: string, token: string): Promise<T[]> {
+async function listAll<T>(
+  path: string,
+  token: string,
+  parameters?: URLSearchParams,
+): Promise<T[]> {
   const items: T[] = [];
   let cursor: string | null = null;
   do {
-    const query = new URLSearchParams({ limit: "500" });
+    const query = new URLSearchParams(parameters);
+    query.set("limit", "500");
     if (cursor) query.set("cursor", cursor);
     const response: { data: T[]; nextCursor: string | null } = await request(
       `${path}?${query.toString()}`,
@@ -104,10 +109,13 @@ export function createOpenJobApi(): OpenJobApi {
       );
     },
 
-    async listTasks(token, groupId) {
+    async listTasks(token, groupId, filters) {
+      const query = new URLSearchParams({ status: filters.status });
+      if (filters.assignee) query.set("assignee", filters.assignee);
       return listAll<Task>(
         `/api/v1/groups/${encodeURIComponent(groupId)}/tasks`,
         token,
+        query,
       );
     },
 
