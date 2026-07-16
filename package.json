@@ -14,7 +14,9 @@
     "deploy": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
     "openapi:check": "node scripts/validate-openapi.mjs",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && npm run secret:check && node --test tests/*.test.mjs",
+    "secret:check": "node scripts/check-v1-secrets.mjs",
+    "smoke:production": "node scripts/smoke-v1-production.mjs",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv",
     "typecheck": "npm run cf:typegen && tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
