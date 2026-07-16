@@ -25,3 +25,24 @@ export type CreateGroupResponse = JsonResponse<
 export type GetGroupResponse = JsonResponse<
   operations["getGroup"]["responses"][200]
 >;
+export type ListTasksResponse = JsonResponse<
+  operations["listGroupTasks"]["responses"][200]
+>;
+export type CreateTaskRequest =
+  operations["createGroupTask"]["requestBody"]["content"]["application/json"];
+export type CreateTaskResponse = JsonResponse<
+  operations["createGroupTask"]["responses"][201]
+>;
+export type GetTaskResponse = JsonResponse<
+  operations["getGroupTask"]["responses"][200]
+>;
+export type UpdateTaskRequest =
+  operations["updateGroupTask"]["requestBody"]["content"]["application/json"];
+export type UpdateTaskResponse = JsonResponse<
+  operations["updateGroupTask"]["responses"][200]
+>;
+export type SetTaskStateRequest =
+  operations["setGroupTaskState"]["requestBody"]["content"]["application/json"];
+export type SetTaskStateResponse = JsonResponse<
+  operations["setGroupTaskState"]["responses"][200]
+>;
