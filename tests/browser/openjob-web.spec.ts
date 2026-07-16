@@ -1220,6 +1220,7 @@ test("runs the complete Task lifecycle through assignee lanes", async ({ page })
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await card.getByRole("button", { name: "Reopen" }).click();
+  await expect(card).toHaveCount(0);
   await page.getByLabel("Task status").selectOption("open");
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
