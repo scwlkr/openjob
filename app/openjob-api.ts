@@ -1,6 +1,9 @@
 import {
   ApiError,
+  type Ban,
   type Group,
+  type InviteLink,
+  type InvitePreview,
   type Member,
   type OpenJobApi,
   type Task,
@@ -102,11 +105,120 @@ export function createOpenJobApi(): OpenJobApi {
       return response.data;
     },
 
+    async renameGroup(token, groupId, name) {
+      const response = await request<{ data: Group }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}`,
+        token,
+        { method: "PATCH", body: JSON.stringify({ name }) },
+      );
+      return response.data;
+    },
+
+    async leaveGroup(token, groupId) {
+      await request<void>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/actions/leave`,
+        token,
+        { method: "POST" },
+      );
+    },
+
+    async endGroup(token, groupId, confirmationName) {
+      await request<void>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/actions/end`,
+        token,
+        { method: "POST", body: JSON.stringify({ confirmationName }) },
+      );
+    },
+
+    async inspectInvite(token, inviteToken) {
+      const response = await request<{ data: InvitePreview }>(
+        `/api/v1/invites/${encodeURIComponent(inviteToken)}`,
+        token,
+      );
+      return response.data;
+    },
+
+    async joinInvite(token, inviteToken) {
+      const response = await request<{ data: Group }>(
+        `/api/v1/invites/${encodeURIComponent(inviteToken)}/actions/join`,
+        token,
+        { method: "POST" },
+      );
+      return response.data;
+    },
+
     async listMembers(token, groupId) {
       return listAll<Member>(
         `/api/v1/groups/${encodeURIComponent(groupId)}/members`,
         token,
       );
+    },
+
+    async promoteMember(token, groupId, userId) {
+      const response = await request<{ data: Member }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}/actions/promote`,
+        token,
+        { method: "POST" },
+      );
+      return response.data;
+    },
+
+    async demoteMember(token, groupId, userId) {
+      const response = await request<{ data: Member }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}/actions/demote`,
+        token,
+        { method: "POST" },
+      );
+      return response.data;
+    },
+
+    async kickMember(token, groupId, userId) {
+      await request<void>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}/actions/kick`,
+        token,
+        { method: "POST" },
+      );
+    },
+
+    async listBans(token, groupId) {
+      return listAll<Ban>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/bans`,
+        token,
+      );
+    },
+
+    async banMember(token, groupId, userId) {
+      const response = await request<{ data: Ban }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/bans/actions/ban`,
+        token,
+        { method: "POST", body: JSON.stringify({ userId }) },
+      );
+      return response.data;
+    },
+
+    async unbanMember(token, groupId, userId) {
+      await request<void>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(userId)}/actions/unban`,
+        token,
+        { method: "POST" },
+      );
+    },
+
+    async getInviteLink(token, groupId) {
+      const response = await request<{ data: InviteLink }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/invite-link`,
+        token,
+      );
+      return response.data;
+    },
+
+    async rotateInviteLink(token, groupId) {
+      const response = await request<{ data: InviteLink }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/invite-link/actions/rotate`,
+        token,
+        { method: "POST" },
+      );
+      return response.data;
     },
 
     async listTasks(token, groupId, filters) {

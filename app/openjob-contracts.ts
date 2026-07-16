@@ -18,6 +18,22 @@ export type Member = {
   joinedAt: string;
 };
 
+export type Ban = {
+  userId: string;
+  username: string | null;
+  bannedAt: string;
+};
+
+export type InviteLink = {
+  token: string;
+  url: string;
+  issuedAt: string;
+  expiresAt: string;
+  remainingJoins: number;
+};
+
+export type InvitePreview = { groupName: string };
+
 export type Task = {
   taskId: string;
   groupId: string;
@@ -48,7 +64,20 @@ export type OpenJobApi = {
   listGroups(token: string): Promise<Group[]>;
   getGroup(token: string, groupId: string): Promise<Group>;
   createGroup(token: string, name: string): Promise<Group>;
+  renameGroup(token: string, groupId: string, name: string): Promise<Group>;
+  leaveGroup(token: string, groupId: string): Promise<void>;
+  endGroup(token: string, groupId: string, confirmationName: string): Promise<void>;
+  inspectInvite(token: string, inviteToken: string): Promise<InvitePreview>;
+  joinInvite(token: string, inviteToken: string): Promise<Group>;
   listMembers(token: string, groupId: string): Promise<Member[]>;
+  promoteMember(token: string, groupId: string, userId: string): Promise<Member>;
+  demoteMember(token: string, groupId: string, userId: string): Promise<Member>;
+  kickMember(token: string, groupId: string, userId: string): Promise<void>;
+  listBans(token: string, groupId: string): Promise<Ban[]>;
+  banMember(token: string, groupId: string, userId: string): Promise<Ban>;
+  unbanMember(token: string, groupId: string, userId: string): Promise<void>;
+  getInviteLink(token: string, groupId: string): Promise<InviteLink>;
+  rotateInviteLink(token: string, groupId: string): Promise<InviteLink>;
   listTasks(
     token: string,
     groupId: string,
