@@ -45,6 +45,7 @@ type ApiState = {
   user: { userId: string; username: string | null; usernameRequired: boolean };
   groups: Group[];
   members: Member[];
+  knownUsers: Map<string, string | null>;
   bans: Ban[];
   invite: InviteLink;
   tasks: Task[];
@@ -93,6 +94,9 @@ async function installApi(
   page: Page,
   initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "hangMe" | "hangTasks" | "membershipDenied">> = {},
 ) {
+  const members = [...(initial.members ?? [])];
+  const bans = [...(initial.bans ?? [])];
+  const tasks = [...(initial.tasks ?? [])];
   const state: ApiState = {
     user: initial.user ?? {
       userId: "user_shane",
@@ -100,8 +104,15 @@ async function installApi(
       usernameRequired: true,
     },
     groups: [...(initial.groups ?? [])],
-    members: [...(initial.members ?? [])],
-    bans: [...(initial.bans ?? [])],
+    members,
+    knownUsers: new Map([
+      ...members.map((member) => [member.userId, member.username] as const),
+      ...bans.map((ban) => [ban.userId, ban.username] as const),
+      ...tasks.flatMap((task) => task.assignee.state === "assigned"
+        ? [[task.assignee.userId, task.assignee.username] as const]
+        : []),
+    ]),
+    bans,
     invite: initial.invite ?? {
       token: "ivt_browser_active",
       url: "https://openjob.dev/invites/ivt_browser_active",
@@ -109,7 +120,7 @@ async function installApi(
       expiresAt: "2026-07-23T15:00:00.000Z",
       remainingJoins: 25,
     },
-    tasks: [...(initial.tasks ?? [])],
+    tasks,
     taskQueries: [],
     concealedGroupIds: new Set(),
     authorizationHeaders: [],
@@ -123,6 +134,15 @@ async function installApi(
     hangMe: initial.hangMe ?? false,
     hangTasks: initial.hangTasks ?? false,
     membershipDenied: initial.membershipDenied ?? false,
+  };
+
+  const removeMember = (userId: string) => {
+    state.members = state.members.filter((item) => item.userId !== userId);
+    state.tasks = state.tasks.map((task) =>
+      task.state === "open" && task.assignee.state === "assigned" && task.assignee.userId === userId
+        ? { ...task, assignee: { state: "unassigned" as const } }
+        : task,
+    );
   };
 
   await page.route("**/api/v1/**", async (route) => {
@@ -242,8 +262,9 @@ async function installApi(
         await error(403, "membership_denied", "Membership could not be granted.");
         return;
       }
-      const joined = { ...walkerLabs, role: "member" as const };
-      if (!state.groups.some((group) => group.groupId === joined.groupId)) {
+      const existing = state.groups.find((group) => group.groupId === walkerLabs.groupId);
+      const joined = existing ?? { ...walkerLabs, role: "member" as const };
+      if (!existing) {
         state.groups.push(joined);
       }
       if (!state.members.some((member) => member.userId === state.user.userId)) {
@@ -253,6 +274,7 @@ async function installApi(
           role: "member",
           joinedAt: "2026-07-16T16:00:00.000Z",
         });
+        state.knownUsers.set(state.user.userId, state.user.username);
         state.invite = { ...state.invite, remainingJoins: state.invite.remainingJoins - 1 };
       }
       await reply(200, { data: joined });
@@ -393,12 +415,7 @@ async function installApi(
           await error(409, "self_removal", "Use Leave Group to remove yourself.");
           return;
         }
-        state.members = state.members.filter((item) => item.userId !== userId);
-        state.tasks = state.tasks.map((task) =>
-          task.state === "open" && task.assignee.state === "assigned" && task.assignee.userId === userId
-            ? { ...task, assignee: { state: "unassigned" as const } }
-            : task,
-        );
+        removeMember(userId);
         await route.fulfill({ status: 204 });
         return;
       }
@@ -430,7 +447,7 @@ async function installApi(
       const group = state.groups.find((item) => item.groupId === decodeURIComponent(banMatch[1]));
       const { userId } = request.postDataJSON() as { userId?: string };
       const member = state.members.find((item) => item.userId === userId);
-      if (!group || !member) {
+      if (!group || !userId || !state.knownUsers.has(userId)) {
         await error(404, "user_not_found", "User was not found.");
         return;
       }
@@ -442,14 +459,9 @@ async function installApi(
         await error(409, "self_removal", "Admins cannot ban themselves.");
         return;
       }
-      const ban = { userId: member.userId, username: member.username, bannedAt: "2026-07-16T17:00:00.000Z" };
+      const ban = { userId, username: state.knownUsers.get(userId) ?? null, bannedAt: "2026-07-16T17:00:00.000Z" };
       state.bans.push(ban);
-      state.members = state.members.filter((item) => item.userId !== userId);
-      state.tasks = state.tasks.map((task) =>
-        task.state === "open" && task.assignee.state === "assigned" && task.assignee.userId === userId
-          ? { ...task, assignee: { state: "unassigned" as const } }
-          : task,
-      );
+      if (member) removeMember(userId);
       await reply(201, { data: ban });
       return;
     }
@@ -665,7 +677,7 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
 });
 
 test("returns a signed-out Invite Link visitor to an explicit Group join confirmation", async ({ page }) => {
-  const state = await installApi(page, { user: signedInUser });
+  const state = await installApi(page, { user: signedInUser, groups: [openJobCore] });
 
   await page.goto(`/invites/${state.invite.token}`);
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
@@ -676,11 +688,30 @@ test("returns a signed-out Invite Link visitor to an explicit Group join confirm
   await page.getByRole("button", { name: "Join Group" }).click();
 
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "OpenJob Core", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe("/");
   await expect.poll(() =>
     page.evaluate(() => window.localStorage.getItem("openjob:selected-group-id")),
   ).toBe(walkerLabs.groupId);
   expect(state.invite.remainingJoins).toBe(24);
+});
+
+test("keeps an existing Member's complete Group rail on idempotent Invite Link join", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs, openJobCore],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+  });
+
+  await page.goto(`/invites/${state.invite.token}`);
+  await page.getByRole("button", { name: "Join Group" }).click();
+
+  await expect(page.getByRole("button", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "OpenJob Core", exact: true })).toBeVisible();
+  expect(state.invite.remainingJoins).toBe(25);
 });
 
 test("keeps invalid and membership-denied Invite Link results generic", async ({ page }) => {
@@ -708,6 +739,7 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
       { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
       { userId: "user_elijah", username: "elijah", role: "member", joinedAt: "2026-07-03T00:00:00.000Z" },
+      { userId: "user_avery", username: "avery", role: "admin", joinedAt: "2026-07-04T00:00:00.000Z" },
     ],
     bans: [
       { userId: "user_zora", username: "zora", bannedAt: "2026-07-10T00:00:00.000Z" },
@@ -758,6 +790,11 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   await zoraBan.getByRole("button", { name: "Unban" }).click();
   await expect(zoraBan).toHaveCount(0);
 
+  await page.getByLabel("Former Member User ID").fill("user_zora");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Ban former Member" }).click();
+  await expect(page.getByTestId("ban-row").filter({ hasText: "@zora" })).toBeVisible();
+
   await page.getByRole("button", { name: "Task List" }).click();
   const unassigned = page.getByTestId("task-lane").filter({
     has: page.getByRole("heading", { name: "Unassigned" }),
@@ -768,6 +805,12 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   await page.getByRole("button", { name: "Manage Group" }).click();
   const governanceSurface = await page.getByTestId("governance-surface").boundingBox();
   expect(governanceSurface!.width).toBeLessThanOrEqual(354);
+
+  const shane = page.getByTestId("member-row").filter({ hasText: "@shane" });
+  page.once("dialog", (dialog) => dialog.accept());
+  await shane.getByRole("button", { name: "Demote" }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs settings" })).toBeVisible();
+  await expect(page.getByLabel("Invite Link")).toHaveCount(0);
 });
 
 test("keeps Admin controls private and enforces guarded Member departure", async ({ page }) => {
