@@ -14,6 +14,27 @@ npm run dev
 
 Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
+## Production CLI foundation
+
+The real `openjob` executable lives under `cli/`; the no-network command in
+`prototypes/cli/` remains disposable. For local repository development:
+
+```bash
+npm install
+npm link
+openjob --help
+```
+
+The current production command surface covers `auth login/status/logout`,
+`user show`, `username claim`, and `group list/create/show/use/current` against
+`https://openjob.dev/api/v1`. `OPENJOB_API_URL` may target HTTPS or a local
+loopback service for development. The CLI stores only its Firebase refresh
+credential in the operating-system credential store; local config stores only
+the current Group ID.
+
+Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
+`npm run cli:types:check` to verify the checked-in request/response types.
+
 ## v1 API contract
 
 The complete v1 backend contract lives in `openapi/openapi.yaml`. Run

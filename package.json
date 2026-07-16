@@ -2,6 +2,9 @@
   "name": "openjob",
   "version": "0.0.5",
   "private": true,
+  "bin": {
+    "openjob": "cli/openjob.mjs"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
@@ -11,10 +14,12 @@
     "prototype:cli": "node prototypes/cli/openjob.mjs",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "cli:types": "openapi-typescript openapi/openapi.yaml -o cli/generated/openapi.d.ts",
+    "cli:types:check": "openapi-typescript openapi/openapi.yaml -o cli/generated/openapi.d.ts --check",
     "deploy": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
     "openapi:check": "node scripts/validate-openapi.mjs",
-    "test": "npm run build && npm run secret:check && node --test tests/*.test.mjs && npm run test:browser",
+    "test": "npm run build && npm run secret:check && npm run cli:types:check && node --test tests/*.test.mjs && npm run test:browser",
     "test:browser": "playwright install chromium && playwright test --config tests/browser/playwright.config.ts",
     "secret:check": "node scripts/check-v1-secrets.mjs",
     "smoke:production": "node scripts/smoke-v1-production.mjs",
@@ -23,6 +28,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
+    "@napi-rs/keyring": "1.3.0",
     "firebase": "12.16.0",
     "next": "16.2.6",
     "react": "19.2.6",
@@ -42,6 +48,7 @@
     "ajv-formats": "3.0.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "openapi-typescript": "7.13.0",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
