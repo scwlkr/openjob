@@ -95,6 +95,17 @@ export type GroupStore = {
     | { kind: "user_not_found" }
   >;
   create(user: GroupUser, name: GroupName): Promise<OpenJobGroup>;
+  end(
+    userId: string,
+    groupId: GroupId,
+    confirmationName: string,
+  ): Promise<
+    | { kind: "confirmation_mismatch" }
+    | { kind: "ended" }
+    | { kind: "forbidden" }
+    | { kind: "members_remain" }
+    | { kind: "not_found" }
+  >;
   demote(
     actorUserId: string,
     groupId: GroupId,
@@ -344,6 +355,31 @@ function openTasksAssignedConflict(requestId: RequestIdFactory) {
   });
 }
 
+function endGroupConfirmationError(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "invalid_request",
+    message: "One or more fields are invalid.",
+    fields: { confirmationName: "Provide the exact current Group Name." },
+    status: 400,
+  });
+}
+
+function confirmationMismatchConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "confirmation_mismatch",
+    message: "The confirmation does not match the current Group Name.",
+    status: 409,
+  });
+}
+
+function membersRemainConflict(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "members_remain",
+    message: "Every other Member must leave or be removed first.",
+    status: 409,
+  });
+}
+
 function usernameRequired(requestId: RequestIdFactory) {
   return errorResponse(requestId, {
     code: "username_required",
@@ -374,6 +410,28 @@ async function readGroupName(request: Request) {
       return null;
     }
     return name as GroupName;
+  } catch {
+    return null;
+  }
+}
+
+async function readGroupConfirmation(request: Request) {
+  try {
+    const input = (await request.json()) as unknown;
+    if (
+      !input ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.keys(input).length !== 1 ||
+      !("confirmationName" in input) ||
+      typeof input.confirmationName !== "string" ||
+      input.confirmationName.trim().length === 0 ||
+      Array.from(input.confirmationName).length > 80 ||
+      /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(input.confirmationName)
+    ) {
+      return null;
+    }
+    return input.confirmationName;
   } catch {
     return null;
   }
@@ -410,6 +468,7 @@ function banTargetError(requestId: RequestIdFactory) {
 
 type GroupResource =
   | "bans"
+  | "end"
   | "group"
   | "invite"
   | "leave"
@@ -418,7 +477,7 @@ type GroupResource =
 
 function groupResourceFromPath(pathname: string) {
   const match = pathname.match(
-    /^\/api\/v1\/groups\/([^/]+)(\/actions\/leave|\/bans|\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
+    /^\/api\/v1\/groups\/([^/]+)(\/actions\/(?:end|leave)|\/bans|\/members|\/invite-link|\/invite-link\/actions\/rotate)?$/,
   );
   if (!match) return { kind: "none" as const };
   try {
@@ -431,6 +490,7 @@ function groupResourceFromPath(pathname: string) {
       "/bans": "bans",
       "/invite-link": "invite",
       "/invite-link/actions/rotate": "rotate_invite",
+      "/actions/end": "end",
       "/actions/leave": "leave",
       "/members": "members",
     };
@@ -653,6 +713,34 @@ export function createV1GroupsApi({
             }
             if (result.kind === "open_tasks_assigned") {
               return openTasksAssignedConflict(requestId);
+            }
+            return groupNotFound(requestId);
+          }
+          if (resource === "end" && request.method === "POST") {
+            const visibleGroup = await groups.get(user.userId, groupId);
+            if (!visibleGroup) return groupNotFound(requestId);
+            if (visibleGroup.role !== "admin") return adminRequired(requestId);
+            const confirmationName = await readGroupConfirmation(request);
+            if (confirmationName === null) {
+              return endGroupConfirmationError(requestId);
+            }
+            const result = await groups.end(
+              user.userId,
+              groupId,
+              confirmationName,
+            );
+            if (result.kind === "ended") {
+              return new Response(null, {
+                status: 204,
+                headers: { "cache-control": "no-store" },
+              });
+            }
+            if (result.kind === "forbidden") return adminRequired(requestId);
+            if (result.kind === "confirmation_mismatch") {
+              return confirmationMismatchConflict(requestId);
+            }
+            if (result.kind === "members_remain") {
+              return membersRemainConflict(requestId);
             }
             return groupNotFound(requestId);
           }

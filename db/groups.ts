@@ -286,6 +286,24 @@ export function createFirestoreGroupStore(
     );
   }
 
+  async function readAllGroupDocuments(groupId: GroupId) {
+    const collections = [
+      "bans",
+      "invite",
+      "members",
+      "membershipEvidence",
+      "tasks",
+    ] as const;
+    const pages = await Promise.all(
+      collections.map((collection) =>
+        readAllCollectionDocuments(`${groupPath(groupId)}/${collection}`),
+      ),
+    );
+    return Object.fromEntries(
+      collections.map((collection, index) => [collection, pages[index]]),
+    ) as Record<(typeof collections)[number], FirestoreDocument[]>;
+  }
+
   async function hasOpenTasksAssigned(
     groupId: GroupId,
     userId: string,
@@ -308,6 +326,10 @@ export function createFirestoreGroupStore(
 
   function groupPath(groupId: GroupId) {
     return `v1Groups/${groupId}`;
+  }
+
+  function groupIdPath(groupId: GroupId) {
+    return `v1GroupIds/${groupId}`;
   }
 
   function membershipPath(groupId: GroupId, userId: string) {
@@ -428,6 +450,30 @@ export function createFirestoreGroupStore(
       update: {
         name: firestore.documentName(inviteRoutePath(invite.routeId)),
         fields: { groupId: { stringValue: invite.groupId } },
+      },
+      currentDocument: { exists: false },
+    };
+  }
+
+  function updateTimePrecondition(document: FirestoreDocument) {
+    if (!document.updateTime) {
+      throw new Error("Firestore returned a document without an update time.");
+    }
+    return { updateTime: document.updateTime };
+  }
+
+  function deleteDocumentWrite(document: FirestoreDocument) {
+    return {
+      delete: document.name,
+      currentDocument: updateTimePrecondition(document),
+    };
+  }
+
+  function groupIdReservationWrite(groupId: GroupId) {
+    return {
+      update: {
+        name: firestore.documentName(groupIdPath(groupId)),
+        fields: { groupId: { stringValue: groupId } },
       },
       currentDocument: { exists: false },
     };
@@ -628,6 +674,7 @@ export function createFirestoreGroupStore(
         const membershipId = crypto.randomUUID().replaceAll("-", "");
         try {
           await commit([
+            groupIdReservationWrite(groupId),
             {
               update: {
                 name: firestore.documentName(groupDocumentPath),
@@ -690,6 +737,61 @@ export function createFirestoreGroupStore(
       return result.kind === "changed"
         ? { kind: "demoted" as const, member: result.member }
         : result;
+    },
+
+    async end(actorUserId, groupId, confirmationName) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const actor = await readMembership(
+          membershipPath(groupId, actorUserId),
+        );
+        if (!actor) return { kind: "not_found" as const };
+        if (actor.role !== "admin") return { kind: "forbidden" as const };
+        if (group.name !== confirmationName) {
+          return { kind: "confirmation_mismatch" as const };
+        }
+
+        const groupDocuments = await readAllGroupDocuments(groupId);
+        if (groupDocuments.members.length !== 1) {
+          return { kind: "members_remain" as const };
+        }
+        const inviteRoutes = groupDocuments.invite.map((document) =>
+          inviteRoutePath(parseInvite(document, document.name).routeId),
+        );
+        const [access, reservation, ...routePointers] = await Promise.all([
+          readDocument(accessPath(actorUserId, groupId)),
+          readDocument(groupIdPath(groupId)),
+          ...inviteRoutes.map((path) => readDocument(path)),
+        ]);
+        const scopedDocuments = Object.values(groupDocuments).flat();
+        const externalDocuments = [access, ...routePointers].filter(
+          (document): document is FirestoreDocument => document !== null,
+        );
+
+        try {
+          await commit([
+            ...(reservation
+              ? [
+                  {
+                    verify: reservation.name,
+                    currentDocument: updateTimePrecondition(reservation),
+                  },
+                ]
+              : [groupIdReservationWrite(groupId)]),
+            ...scopedDocuments.map(deleteDocumentWrite),
+            ...externalDocuments.map(deleteDocumentWrite),
+            {
+              delete: firestore.documentName(group.path),
+              currentDocument: { updateTime: group.updateTime },
+            },
+          ]);
+          return { kind: "ended" as const };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Group ending could not resolve concurrent writes.");
     },
 
     get,
