@@ -3,18 +3,18 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("defines the OpenJob sign-in and Group entry", async () => {
-  const [page, layout, app] = await Promise.all([
+  const [page, layout, screens] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/openjob-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/openjob-screens.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /OpenJob — One clear list for your team/);
   assert.match(page, /createFirebaseAuth/);
   assert.match(page, /createOpenJobApi/);
-  assert.match(app, /Your team\. One clear list\./);
-  assert.match(app, /Claim your Username/);
-  assert.match(app, /Create your first Group/);
+  assert.match(screens, /Your team\. One clear list\./);
+  assert.match(screens, /Claim your Username/);
+  assert.match(screens, /Create your first Group/);
 });
 
 test("keeps Firebase auth, the v1 API, storage, and social metadata wired", async () => {

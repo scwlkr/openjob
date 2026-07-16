@@ -1,4 +1,9 @@
-import { ApiError, type Group, type OpenJobApi, type User } from "./openjob-app";
+import {
+  ApiError,
+  type Group,
+  type OpenJobApi,
+  type User,
+} from "./openjob-contracts";
 
 type ErrorEnvelope = {
   error?: {
