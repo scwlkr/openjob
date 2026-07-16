@@ -12,7 +12,7 @@ type ApiState = {
   groups: Group[];
   concealedGroupIds: Set<string>;
   authorizationHeaders: string[];
-  failMe: boolean;
+  meFailureStatus: number | null;
   failGroups: boolean;
   hangMe: boolean;
 };
@@ -45,7 +45,7 @@ async function startSignedIn(page: Page) {
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "failMe" | "failGroups" | "hangMe">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "meFailureStatus" | "failGroups" | "hangMe">> = {},
 ) {
   const state: ApiState = {
     user: initial.user ?? {
@@ -56,7 +56,7 @@ async function installApi(
     groups: [...(initial.groups ?? [])],
     concealedGroupIds: new Set(),
     authorizationHeaders: [],
-    failMe: initial.failMe ?? false,
+    meFailureStatus: initial.meFailureStatus ?? null,
     failGroups: initial.failGroups ?? false,
     hangMe: initial.hangMe ?? false,
   };
@@ -87,8 +87,14 @@ async function installApi(
 
     if (url.pathname === "/api/v1/me" && request.method() === "GET") {
       if (state.hangMe) return await new Promise<void>(() => undefined);
-      if (state.failMe) {
-        await error(500, "internal_error", "An unexpected error occurred.");
+      if (state.meFailureStatus) {
+        await error(
+          state.meFailureStatus,
+          state.meFailureStatus === 401 ? "authentication_required" : "internal_error",
+          state.meFailureStatus === 401
+            ? "Authentication is required."
+            : "An unexpected error occurred.",
+        );
         return;
       }
       await reply(200, { data: state.user });
@@ -222,6 +228,13 @@ test("clears stale or concealed Group access without exposing private details", 
   await page.reload();
   await expect(page.getByText("That Group is no longer accessible.")).toBeVisible();
   await expect(page.getByText("Retired Operations")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  state.groups = [walkerLabs, openJobCore];
+  state.concealedGroupIds.clear();
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Choose a Group" })).toBeVisible();
+  await expect(page.getByText("That Group is no longer accessible.")).toHaveCount(0);
 });
 
 test("accepts an 80-character Unicode Group Name from the service", async ({ page }) => {
@@ -265,11 +278,11 @@ test("distinguishes loading and failures from a User with no Groups", async ({ p
   await expect(page.getByText("Loading your OpenJob…")).toBeVisible();
 
   state.hangMe = false;
-  state.failMe = true;
+  state.meFailureStatus = 500;
   await page.reload();
   await expect(page.getByRole("alert")).toContainText("OpenJob could not load right now.");
 
-  state.failMe = false;
+  state.meFailureStatus = null;
   state.failGroups = true;
   await page.reload();
   await expect(page.getByRole("alert")).toContainText("OpenJob could not load right now.");
@@ -280,4 +293,19 @@ test("turns Firebase initialization failure into an understandable auth state", 
   await installApi(page);
   await page.goto("/?scenario=auth-error");
   await expect(page.getByRole("alert")).toContainText("Google sign-in could not start. Try again.");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+});
+
+test("returns an expired session to a working sign-in path", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    meFailureStatus: 401,
+  });
+  await page.goto("/");
+  await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
+  state.meFailureStatus = null;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
 });

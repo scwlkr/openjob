@@ -27,7 +27,8 @@ let clientPromise:
   | undefined;
 
 function firebaseClient() {
-  clientPromise ??= (async () => {
+  if (clientPromise) return clientPromise;
+  const pending = (async () => {
     const app =
       getApps().find((candidate) => candidate.name === "openjob-web") ??
       initializeApp(firebaseConfig, "openjob-web");
@@ -35,7 +36,11 @@ function firebaseClient() {
     await setPersistence(auth, browserLocalPersistence);
     return { auth, provider: new GoogleAuthProvider() };
   })();
-  return clientPromise;
+  clientPromise = pending;
+  void pending.catch(() => {
+    if (clientPromise === pending) clientPromise = undefined;
+  });
+  return pending;
 }
 
 function sessionFor(user: { getIdToken(): Promise<string> }): AuthSession {
