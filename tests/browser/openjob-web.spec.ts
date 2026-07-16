@@ -897,7 +897,7 @@ test("keeps an empty Unassigned lane visible after the final recovery", async ({
     ],
   });
   await page.goto("/");
-  await page.getByLabel("Assignee filter").selectOption("unassigned");
+  await page.getByLabel("Assignee filter").selectOption({ label: "Unassigned" });
   await page.getByRole("button", { name: "Assign" }).click();
   await page.getByRole("dialog", { name: "Assign Task" }).getByRole("button", { name: "Assign Task" }).click();
 
@@ -905,4 +905,38 @@ test("keeps an empty Unassigned lane visible after the final recovery", async ({
   await expect(lane).toHaveCount(1);
   await expect(lane.getByRole("heading")).toHaveText("Unassigned");
   await expect(lane.getByText("No Tasks here.")).toBeVisible();
+});
+
+test("keeps done Tasks visible in departed assignee lanes", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_departed",
+        groupId: walkerLabs.groupId,
+        text: "Completed before departure",
+        assignee: { state: "assigned", userId: "user_zora", username: "zora" },
+        dueDate: null,
+        state: "done",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: "2026-07-15T10:00:00.000Z",
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByLabel("Task status").selectOption("done");
+
+  const departedLane = page.getByTestId("task-lane").filter({ has: page.getByRole("heading", { name: "@zora" }) });
+  await expect(departedLane.getByText("Former Member")).toBeVisible();
+  await expect(departedLane.getByText("Completed before departure")).toBeVisible();
+  await expect(departedLane.getByRole("button", { name: "Add Task" })).toHaveCount(0);
+
+  await page.getByLabel("Assignee filter").selectOption({ label: "@zora" });
+  await expect(page.getByTestId("task-lane")).toHaveCount(1);
+  await expect(page.getByText("Completed before departure")).toBeVisible();
 });
