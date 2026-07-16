@@ -14,6 +14,7 @@ type ApiState = {
   authorizationHeaders: string[];
   meFailureStatus: number | null;
   claimFailureStatus: number | null;
+  getGroupFailureStatus: number | null;
   failGroups: boolean;
   hangMe: boolean;
 };
@@ -46,7 +47,7 @@ async function startSignedIn(page: Page) {
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "meFailureStatus" | "claimFailureStatus" | "failGroups" | "hangMe">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "failGroups" | "hangMe">> = {},
 ) {
   const state: ApiState = {
     user: initial.user ?? {
@@ -59,6 +60,7 @@ async function installApi(
     authorizationHeaders: [],
     meFailureStatus: initial.meFailureStatus ?? null,
     claimFailureStatus: initial.claimFailureStatus ?? null,
+    getGroupFailureStatus: initial.getGroupFailureStatus ?? null,
     failGroups: initial.failGroups ?? false,
     hangMe: initial.hangMe ?? false,
   };
@@ -162,6 +164,14 @@ async function installApi(
 
     const groupId = decodeURIComponent(url.pathname.slice("/api/v1/groups/".length));
     if (request.method() === "GET" && groupId) {
+      if (state.getGroupFailureStatus) {
+        await error(
+          state.getGroupFailureStatus,
+          "authentication_required",
+          "Authentication is required.",
+        );
+        return;
+      }
       const group = state.groups.find((item) => item.groupId === groupId);
       if (!group || state.concealedGroupIds.has(groupId)) {
         await error(404, "not_found", "The requested resource was not found.");
@@ -331,4 +341,20 @@ test("recovers when a session expires during a mutation", async ({ page }) => {
   state.claimFailureStatus = null;
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+});
+
+test("recovers when a session expires while selecting a Group", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs, openJobCore],
+    getGroupFailureStatus: 401,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
+
+  state.getGroupFailureStatus = null;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Choose a Group" })).toBeVisible();
 });
