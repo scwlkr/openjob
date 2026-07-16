@@ -987,3 +987,110 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task show and edit expose server state through explicit edit inputs", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-edit-"));
+  const credentialPath = join(directory, "credential");
+  const inputPath = join(directory, "edit.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(inputPath, JSON.stringify({ dueDate: "2026-07-20" }));
+  let task = {
+    taskId: "task_edit",
+    groupId: "grp_tasks",
+    text: "Original",
+    assigneeUsername: "maya",
+    dueDate: "2026-07-18",
+    state: "open",
+  };
+  const patches = [];
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_tasks/tasks/task_edit") {
+      if (request.method === "GET") {
+        response.end(JSON.stringify({ data: task }));
+        return;
+      }
+      if (request.method === "PATCH") {
+        const patch = JSON.parse(body);
+        patches.push(patch);
+        task = { ...task, ...patch };
+        response.end(JSON.stringify({ data: task }));
+        return;
+      }
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const show = await runCliAsync(
+      ["task", "show", "task_edit", "--group", "grp_tasks", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(show.status, 0, show.stderr);
+    assert.deepEqual(JSON.parse(show.stdout), { data: task });
+
+    const named = await runCliAsync(
+      [
+        "task",
+        "edit",
+        "task_edit",
+        "--group",
+        "grp_tasks",
+        "--text-file",
+        "-",
+        "--assignee",
+        "@scwlkr",
+        "--due",
+        "none",
+        "--format",
+        "json",
+      ],
+      { env: environment, input: "Edited\n\nfrom stdin\n" },
+    );
+    assert.equal(named.status, 0, named.stderr);
+    assert.deepEqual(patches[0], {
+      text: "Edited\n\nfrom stdin",
+      assigneeUsername: "scwlkr",
+      dueDate: null,
+    });
+
+    const json = await runCliAsync(
+      [
+        "task",
+        "edit",
+        "task_edit",
+        "--group",
+        "grp_tasks",
+        "--input",
+        inputPath,
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(json.status, 0, json.stderr);
+    assert.deepEqual(patches[1], { dueDate: "2026-07-20" });
+    assert.deepEqual(JSON.parse(json.stdout).data, task);
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
