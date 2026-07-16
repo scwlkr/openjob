@@ -21,6 +21,7 @@ Resources:
   user       Show the current User
   username   Claim the current User's immutable Username
   group      List, create, select, or inspect Groups
+  task       List and manage Tasks
 
 Global options:
   --group <group-id>          Override the client-local current Group
@@ -46,6 +47,8 @@ const RESOURCE_HELP = {
   openjob group show [--group <group-id>]
   openjob group use <group-id>
   openjob group current`,
+  task: `Usage:
+  openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]`,
 };
 
 async function main(raw) {
@@ -122,6 +125,27 @@ async function main(raw) {
   }
   if (resource === "group" && command === "list" && rest.length === 0) {
     writeResult(await apiCollection("/groups"));
+    return;
+  }
+  if (resource === "task" && command === "list" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    const status = parsed.options.get("--status") || "open";
+    if (!new Set(["open", "done", "all"]).has(status)) {
+      throw new CliError("usage_error", "--status must be open, done, or all.", 2);
+    }
+    const assigneeOption = parsed.options.get("--assignee") || "all";
+    const assignee = assigneeOption.startsWith("@")
+      ? assigneeOption.slice(1)
+      : assigneeOption;
+    const limitOption = parsed.options.get("--limit");
+    const limit = limitOption === undefined ? undefined : Number(limitOption);
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
+      throw new CliError("usage_error", "--limit must be a positive integer.", 2);
+    }
+    const parameters = new URLSearchParams({ status });
+    if (assignee !== "all") parameters.set("assignee", assignee);
+    const path = `/groups/${encodeURIComponent(groupId)}/tasks?${parameters}`;
+    writeResult(await apiCollection(path, { limit }));
     return;
   }
   if (resource === "group" && command === "create" && rest.length === 0) {

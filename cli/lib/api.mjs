@@ -39,8 +39,8 @@ export async function apiRequestWithIdToken(
   return createApiClient(environment, idToken).request(path, init);
 }
 
-export async function apiCollection(path, environment = process.env) {
-  return createApiClient(environment).collection(path);
+export async function apiCollection(path, options = {}, environment = process.env) {
+  return createApiClient(environment).collection(path, options);
 }
 
 export function createApiClient(environment = process.env, initialIdToken) {
@@ -62,19 +62,25 @@ export function createApiClient(environment = process.env, initialIdToken) {
     }
   }
 
-  async function collection(path) {
+  async function collection(path, { limit } = {}) {
     const data = [];
     const seen = new Set();
     let cursor = null;
     do {
-      const suffix = cursor
-        ? `${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`
-        : "";
-      const envelope = await request(`${path}${suffix}`);
+      const [pathname, query = ""] = path.split("?", 2);
+      const parameters = new URLSearchParams(query);
+      if (cursor) parameters.set("cursor", cursor);
+      if (limit !== undefined) {
+        parameters.set("limit", String(Math.min(limit - data.length, 500)));
+      }
+      const requestPath = parameters.size ? `${pathname}?${parameters}` : pathname;
+      const envelope = await request(requestPath);
       if (!Array.isArray(envelope?.data)) {
         throw new CliError("invalid_response", "OpenJob returned an invalid collection.", 8);
       }
-      data.push(...envelope.data);
+      const remaining = limit === undefined ? envelope.data.length : limit - data.length;
+      data.push(...envelope.data.slice(0, remaining));
+      if (limit !== undefined && data.length >= limit) break;
       cursor = envelope.nextCursor;
       if (cursor !== null && typeof cursor !== "string") {
         throw new CliError("invalid_response", "OpenJob returned an invalid cursor.", 8);
