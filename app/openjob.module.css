@@ -120,6 +120,7 @@
 .taskLane { flex: 0 0 310px; min-width: 0; border: 1px solid var(--ink); background: rgba(255,255,255,.42); scroll-snap-align: start; }
 .taskLane > header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid var(--ink); padding: 0 16px; }
 .taskLane h2 { margin: 0; font-size: 18px; letter-spacing: -.035em; }
+.taskLane > header small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
 .taskLane > header span { display: grid; place-items: center; min-width: 26px; height: 26px; background: var(--ink); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
 .taskCards { display: grid; gap: 10px; padding: 12px; }
 .addTaskButton { width: 100%; min-height: 40px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
