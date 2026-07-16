@@ -8,7 +8,7 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-import type { AuthSession, OpenJobAuth } from "./openjob-app";
+import type { AuthSession, OpenJobAuth } from "./openjob-contracts";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU",
@@ -44,15 +44,19 @@ function sessionFor(user: { getIdToken(): Promise<string> }): AuthSession {
 
 export function createFirebaseAuth(): OpenJobAuth {
   return Object.freeze({
-    observe(listener) {
+    observe(listener, onError) {
       let active = true;
       let unsubscribe: () => void = () => undefined;
-      void firebaseClient().then(({ auth }) => {
-        if (!active) return;
-        unsubscribe = onAuthStateChanged(auth, (user) => {
-          listener(user ? sessionFor(user) : null);
+      void firebaseClient()
+        .then(({ auth }) => {
+          if (!active) return;
+          unsubscribe = onAuthStateChanged(auth, (user) => {
+            listener(user ? sessionFor(user) : null);
+          });
+        })
+        .catch((error: unknown) => {
+          if (active) onError?.(error);
         });
-      });
       return () => {
         active = false;
         unsubscribe();

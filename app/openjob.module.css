@@ -55,7 +55,7 @@
 .authContent { display: grid; place-items: center; padding: clamp(46px, 8vw, 120px); }
 .authCopy { width: min(720px, 100%); }
 
-.authCopy h1, .onboardingCard h1, .emptyGroups h1, .chooseGroup h1, .selectedWorkspace h1 {
+.authCopy h1, .onboardingCard h1, .emptyGroups h1, .chooseGroup h1, .selectedGroupSurface h1 {
   margin: 14px 0 0;
   font-size: clamp(48px, 7vw, 94px);
   font-weight: 880;
@@ -101,21 +101,21 @@
 .signedInUser { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 7px; margin-top: auto; border-top: 1px solid #393c37; padding: 18px 8px 0; font-size: 12px; }
 .signedInUser > span { color: #9cb3ff; }
 .signedInUser button { grid-column: 2; border: 0; background: transparent; color: #a7aaa3; padding: 0; font-size: 10px; text-align: left; cursor: pointer; }
-.groupWorkspace { min-width: 0; padding: 50px clamp(24px, 5vw, 72px) 80px; }
+.groupSurface { min-width: 0; padding: 50px clamp(24px, 5vw, 72px) 80px; }
 .emptyGroups, .chooseGroup { width: min(100%, 720px); margin: 8vh auto 0; }
 .groupForm { max-width: 560px; border: 1px solid var(--ink); background: rgba(255,255,255,.5); box-shadow: 7px 7px 0 var(--ink); padding: 22px; }
 .groupForm input { border: 1px solid var(--line); }
 .formActions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
 .textButton { border: 0; background: transparent; color: var(--muted); font-weight: 750; cursor: pointer; }
 
-.selectedWorkspace > header { display: flex; align-items: end; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); padding-bottom: 25px; }
-.selectedWorkspace h1 { font-size: clamp(48px, 6vw, 76px); }
+.selectedGroupSurface > header { display: flex; align-items: end; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); padding-bottom: 25px; }
+.selectedGroupSurface h1 { font-size: clamp(48px, 6vw, 76px); }
 .groupMeta { display: flex; gap: 9px; margin: 13px 0 0; color: var(--muted); font-size: 12px; }
 .groupMeta code { color: inherit; }
-.workspacePlaceholder { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 28px; margin-top: 56px; border: 1px solid var(--line); background: var(--paper-light); padding: clamp(28px, 5vw, 60px); }
+.taskListPlaceholder { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 28px; margin-top: 56px; border: 1px solid var(--line); background: var(--paper-light); padding: clamp(28px, 5vw, 60px); }
 .indexMark { display: grid; place-items: center; width: 72px; height: 72px; background: var(--blue); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 12px; font-weight: 850; box-shadow: 8px 8px 0 var(--ink); }
-.workspacePlaceholder h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.055em; }
-.workspacePlaceholder p:last-child { margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
+.taskListPlaceholder h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.055em; }
+.taskListPlaceholder p:last-child { margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
 .notice, .errorBanner { margin: 0 0 24px; padding: 13px 16px; font-size: 13px; }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
@@ -148,13 +148,13 @@
   .groupList { display: flex; gap: 7px; overflow-x: auto; padding: 0 0 2px; scroll-snap-type: x proximity; }
   .groupList button { flex: 0 0 auto; min-width: 150px; border: 1px solid #454941; padding: 8px; scroll-snap-align: start; }
   .groupList button.selectedGroup { border-color: var(--paper); }
-  .newGroupButton { position: absolute; right: 14px; bottom: 16px; margin: 0; }
+  .newGroupButton { margin: 10px 4px 0 auto; text-align: right; }
   .signedInUser { display: none; }
-  .groupWorkspace { padding: 34px 18px 64px; }
+  .groupSurface { padding: 34px 18px 64px; }
   .emptyGroups, .chooseGroup { margin-top: 3vh; }
   .emptyGroups h1, .chooseGroup h1 { font-size: 48px; }
-  .selectedWorkspace h1 { font-size: 50px; }
-  .workspacePlaceholder { grid-template-columns: 1fr; margin-top: 34px; padding: 26px; }
+  .selectedGroupSurface h1 { font-size: 50px; }
+  .taskListPlaceholder { grid-template-columns: 1fr; margin-top: 34px; padding: 26px; }
   .indexMark { width: 58px; height: 58px; }
   .dialog { padding: 20px; }
 }
