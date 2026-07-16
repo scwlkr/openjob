@@ -243,9 +243,11 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
   }
   return (
     <GroupShell
+      api={api}
       error={error}
       groups={groups}
       notice={notice}
+      onSessionExpired={recoverExpiredSession}
       onCreate={createGroup}
       onRetry={() => void bootstrap(session)}
       onSelect={(group) => void selectGroup(group)}
@@ -253,6 +255,7 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
       saving={saving}
       selectedGroup={selectedGroup}
       selectingGroupId={selectingGroupId}
+      session={session}
       user={user}
     />
   );
