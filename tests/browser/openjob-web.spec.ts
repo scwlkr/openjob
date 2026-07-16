@@ -90,6 +90,22 @@ async function startSignedIn(page: Page) {
   });
 }
 
+async function expectConfirmation(
+  page: Page,
+  expectedMessage: string,
+  action: () => Promise<unknown>,
+  accept = true,
+) {
+  const confirmation = page.waitForEvent("dialog").then(async (dialog) => {
+    const message = dialog.message();
+    if (accept) await dialog.accept();
+    else await dialog.dismiss();
+    return message;
+  });
+  await action();
+  expect(await confirmation).toContain(expectedMessage);
+}
+
 async function installApi(
   page: Page,
   initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "hangMe" | "hangTasks" | "membershipDenied">> = {},
@@ -765,35 +781,61 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   await expect(page.getByText("25 joins remaining")).toBeVisible();
   await expect(page.locator("time").filter({ hasText: /Expires/ })).toHaveAttribute("datetime", state.invite.expiresAt);
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Rotate Invite Link" }).click();
+  await expectConfirmation(
+    page,
+    "current link will stop working immediately",
+    () => page.getByRole("button", { name: "Rotate Invite Link" }).click(),
+    false,
+  );
+  await expect(page.getByLabel("Invite Link")).toHaveValue(state.invite.url);
+  await expectConfirmation(
+    page,
+    "current link will stop working immediately",
+    () => page.getByRole("button", { name: "Rotate Invite Link" }).click(),
+  );
   await expect(page.getByLabel("Invite Link")).toHaveValue(/_rotated$/);
 
   const elijah = page.getByTestId("member-row").filter({ hasText: "@elijah" });
+  const formerMemberUserId = await elijah.getByLabel("@elijah User ID").textContent();
   await elijah.getByRole("button", { name: "Promote" }).click();
   await expect(elijah.getByText("Admin", { exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await elijah.getByRole("button", { name: "Demote" }).click();
+  await expectConfirmation(
+    page,
+    "Demote @elijah to Member",
+    () => elijah.getByRole("button", { name: "Demote" }).click(),
+  );
   await expect(elijah.getByText("Member", { exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await elijah.getByRole("button", { name: "Kick" }).click();
+  await expectConfirmation(
+    page,
+    "Their open Tasks will become Unassigned",
+    () => elijah.getByRole("button", { name: "Kick" }).click(),
+  );
   await expect(elijah).toHaveCount(0);
 
   const morgan = page.getByTestId("member-row").filter({ hasText: "@morgan" });
-  page.once("dialog", (dialog) => dialog.accept());
-  await morgan.getByRole("button", { name: "Ban" }).click();
+  await expectConfirmation(
+    page,
+    "cannot rejoin until unbanned",
+    () => morgan.getByRole("button", { name: "Ban" }).click(),
+  );
   await expect(morgan).toHaveCount(0);
   await expect(page.getByTestId("ban-row").filter({ hasText: "@morgan" })).toBeVisible();
 
   const zoraBan = page.getByTestId("ban-row").filter({ hasText: "@zora" });
-  page.once("dialog", (dialog) => dialog.accept());
-  await zoraBan.getByRole("button", { name: "Unban" }).click();
+  await expectConfirmation(
+    page,
+    "still need an Invite Link to rejoin",
+    () => zoraBan.getByRole("button", { name: "Unban" }).click(),
+  );
   await expect(zoraBan).toHaveCount(0);
 
-  await page.getByLabel("Former Member User ID").fill("user_zora");
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Ban former Member" }).click();
-  await expect(page.getByTestId("ban-row").filter({ hasText: "@zora" })).toBeVisible();
+  await page.getByLabel("Former Member User ID").fill(formerMemberUserId!);
+  await expectConfirmation(
+    page,
+    "former Member",
+    () => page.getByRole("button", { name: "Ban former Member" }).click(),
+  );
+  await expect(page.getByTestId("ban-row").filter({ hasText: "@elijah" })).toBeVisible();
 
   await page.getByRole("button", { name: "Task List" }).click();
   const unassigned = page.getByTestId("task-lane").filter({
@@ -807,8 +849,11 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   expect(governanceSurface!.width).toBeLessThanOrEqual(354);
 
   const shane = page.getByTestId("member-row").filter({ hasText: "@shane" });
-  page.once("dialog", (dialog) => dialog.accept());
-  await shane.getByRole("button", { name: "Demote" }).click();
+  await expectConfirmation(
+    page,
+    "Demote @shane to Member",
+    () => shane.getByRole("button", { name: "Demote" }).click(),
+  );
   await expect(page.getByRole("heading", { name: "Walker Labs settings" })).toBeVisible();
   await expect(page.getByLabel("Invite Link")).toHaveCount(0);
 });
@@ -844,13 +889,19 @@ test("keeps Admin controls private and enforces guarded Member departure", async
   await expect(page.getByRole("heading", { name: "Bans" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Promote|Demote|Kick|Ban/ })).toHaveCount(0);
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Leave Group" }).click();
+  await expectConfirmation(
+    page,
+    "lose access immediately",
+    () => page.getByRole("button", { name: "Leave Group" }).click(),
+  );
   await expect(page.getByRole("alert")).toContainText("Reassign or complete your open Tasks");
 
   state.tasks = [];
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Leave Group" }).click();
+  await expectConfirmation(
+    page,
+    "lose access immediately",
+    () => page.getByRole("button", { name: "Leave Group" }).click(),
+  );
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("openjob:selected-group-id"))).toBeNull();
 });
@@ -875,8 +926,11 @@ test("lets the sole Admin rename and explicitly End Group", async ({ page }) => 
   await expect(endButton).toBeDisabled();
   await page.getByLabel("Type Walker Studio to confirm").fill("Walker Studio");
   await expect(endButton).toBeEnabled();
-  page.once("dialog", (dialog) => dialog.accept());
-  await endButton.click();
+  await expectConfirmation(
+    page,
+    "cannot be undone",
+    () => endButton.click(),
+  );
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
 });
 

@@ -195,6 +195,7 @@ export function GroupGovernance({
                   <div>
                     <strong>{memberLabel(member)}</strong>
                     <span>{member.role === "admin" ? "Admin" : "Member"}</span>
+                    <code aria-label={`${memberLabel(member)} User ID`}>{member.userId}</code>
                   </div>
                   {isAdmin ? (
                     <div className={styles.rowActions}>
