@@ -1210,3 +1210,166 @@ test("task state commands are explicit and deletion requires confirmation", asyn
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task retries only safe operations and never writes partial output", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-retry-"));
+  const credentialPath = join(directory, "credential");
+  const outputPath = join(directory, "partial.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const calls = new Map();
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    const key = `${request.method} ${request.url}`;
+    calls.set(key, (calls.get(key) || 0) + 1);
+    const attempt = calls.get(key);
+
+    if (request.url.endsWith("/tasks/task_show") && request.method === "GET") {
+      if (attempt === 1) {
+        response.statusCode = 500;
+        response.end(JSON.stringify({ error: { code: "internal_error", message: "Retry." } }));
+        return;
+      }
+      response.end(JSON.stringify({ data: { taskId: "task_show", state: "open" } }));
+      return;
+    }
+    if (request.url.endsWith("/tasks/task_state/state") && request.method === "PUT") {
+      if (attempt === 1) {
+        response.statusCode = 500;
+        response.end(JSON.stringify({ error: { code: "internal_error", message: "Retry." } }));
+        return;
+      }
+      response.end(JSON.stringify({ data: { taskId: "task_state", state: "done" } }));
+      return;
+    }
+    if (request.url.endsWith("/tasks/task_create") || request.method === "POST") {
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: { code: "internal_error", message: "No retry." } }));
+      return;
+    }
+    if (request.url.endsWith("/tasks/task_delete") && request.method === "DELETE") {
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: { code: "internal_error", message: "No retry." } }));
+      return;
+    }
+    if (request.url.includes("/tasks?status=open")) {
+      if (!request.url.includes("cursor=page_2")) {
+        response.end(
+          JSON.stringify({
+            data: [{ taskId: "task_page_1", state: "open" }],
+            nextCursor: "page_2",
+          }),
+        );
+        return;
+      }
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: { code: "internal_error", message: "Partial." } }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const show = await runCliAsync(
+      ["task", "show", "task_show", "--group", "grp_tasks", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(show.status, 0, show.stderr);
+    assert.match(show.stderr, /Retrying safe request after a temporary service failure\./);
+    assert.equal(calls.get("GET /api/v1/groups/grp_tasks/tasks/task_show"), 2);
+
+    const state = await runCliAsync(
+      [
+        "task",
+        "done",
+        "task_state",
+        "--group",
+        "grp_tasks",
+        "--format",
+        "json",
+        "--quiet",
+      ],
+      { env: environment },
+    );
+    assert.equal(state.status, 0, state.stderr);
+    assert.equal(state.stderr, "");
+    assert.equal(calls.get("PUT /api/v1/groups/grp_tasks/tasks/task_state/state"), 2);
+
+    const create = await runCliAsync(
+      [
+        "task",
+        "create",
+        "--group",
+        "grp_tasks",
+        "--text",
+        "No retry",
+        "--assignee",
+        "scwlkr",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(create.status, 8);
+    assert.doesNotMatch(create.stderr, /Retrying safe request/);
+    assert.equal(calls.get("POST /api/v1/groups/grp_tasks/tasks"), 1);
+
+    const deletion = await runCliAsync(
+      [
+        "task",
+        "delete",
+        "task_delete",
+        "--group",
+        "grp_tasks",
+        "--yes",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(deletion.status, 8);
+    assert.doesNotMatch(deletion.stderr, /Retrying safe request/);
+    assert.equal(calls.get("DELETE /api/v1/groups/grp_tasks/tasks/task_delete"), 1);
+
+    const partial = await runCliAsync(
+      [
+        "task",
+        "list",
+        "--group",
+        "grp_tasks",
+        "--format",
+        "json",
+        "--out",
+        outputPath,
+      ],
+      { env: environment },
+    );
+    assert.equal(partial.status, 8);
+    assert.equal(partial.stdout, "");
+    assert.equal(existsSync(outputPath), false);
+    assert.equal(
+      calls.get("GET /api/v1/groups/grp_tasks/tasks?status=open&cursor=page_2"),
+      2,
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

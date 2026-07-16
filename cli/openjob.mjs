@@ -155,7 +155,12 @@ async function main(raw) {
     const parameters = new URLSearchParams({ status });
     if (assignee !== "all") parameters.set("assignee", assignee);
     const path = `/groups/${encodeURIComponent(groupId)}/tasks?${parameters}`;
-    writeResult(await apiCollection(path, { limit }));
+    writeResult(
+      await apiCollection(path, {
+        limit,
+        quiet: parsed.options.has("--quiet"),
+      }),
+    );
     return;
   }
   if (resource === "task" && command === "create" && rest.length === 0) {
@@ -209,6 +214,8 @@ async function main(raw) {
     writeResult(
       await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
+        {},
+        { retryable: true, quiet: parsed.options.has("--quiet") },
       ),
     );
     return;
@@ -279,6 +286,7 @@ async function main(raw) {
           method: "PUT",
           body: JSON.stringify({ state: command === "done" ? "done" : "open" }),
         },
+        { retryable: true, quiet: parsed.options.has("--quiet") },
       ),
     );
     return;
