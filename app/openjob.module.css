@@ -1,0 +1,164 @@
+.authShell, .onboardingShell, .groupShell, .centeredScreen {
+  --ink: #151713;
+  --paper: #eef0ea;
+  --paper-light: #f8f8f3;
+  --blue: #1e4ed8;
+  --blue-dark: #153caf;
+  --muted: #656a61;
+  --line: #b9bdb3;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.kicker {
+  margin: 0;
+  color: var(--blue);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.brand { color: inherit; font-size: 18px; font-weight: 950; letter-spacing: -.055em; }
+.brand span { color: #6387ff; }
+.authShell { display: grid; grid-template-columns: minmax(230px, 28vw) 1fr; }
+
+.authRail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--paper-light);
+  padding: 30px clamp(24px, 3.5vw, 54px);
+}
+
+.authRail::after {
+  position: absolute;
+  right: -54px;
+  bottom: 8vh;
+  width: 172px;
+  height: 172px;
+  border: 1px solid #4b5048;
+  box-shadow: -18px 18px 0 var(--blue);
+  content: "";
+  rotate: 8deg;
+}
+
+.railStatement { max-width: 220px; margin: auto 0; }
+.railStatement .kicker { color: #9cb3ff; }
+.railStatement > p:last-child { margin: 16px 0 0; font-size: clamp(22px, 2.4vw, 34px); font-weight: 760; letter-spacing: -.045em; line-height: 1.05; }
+.railFoot { margin: 0; color: #9da198; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.authContent { display: grid; place-items: center; padding: clamp(46px, 8vw, 120px); }
+.authCopy { width: min(720px, 100%); }
+
+.authCopy h1, .onboardingCard h1, .emptyGroups h1, .chooseGroup h1, .selectedWorkspace h1 {
+  margin: 14px 0 0;
+  font-size: clamp(48px, 7vw, 94px);
+  font-weight: 880;
+  letter-spacing: -.075em;
+  line-height: .92;
+}
+
+.lede { max-width: 600px; margin: 24px 0 0; color: var(--muted); font-size: clamp(17px, 2vw, 21px); line-height: 1.55; }
+.googleButton, .primaryButton { min-height: 52px; border: 1px solid var(--blue); background: var(--blue); color: #fff; padding: 0 20px; font-weight: 800; cursor: pointer; }
+.googleButton { display: inline-flex; align-items: center; gap: 13px; min-width: 236px; margin-top: 38px; }
+.googleButton span { display: grid; place-items: center; width: 25px; height: 25px; background: #fff; color: #2458c5; font-family: Arial, sans-serif; font-weight: 900; }
+.googleButton:hover, .primaryButton:hover { background: var(--blue-dark); }
+.googleButton:disabled, .primaryButton:disabled { cursor: not-allowed; opacity: .48; }
+.authNote, .guidance { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.authNote { max-width: 380px; margin: 14px 0 0; }
+.inlineError, .fieldError { color: #982f27; font-size: 13px; font-weight: 700; }
+.inlineError { margin: 20px 0 -18px; }
+
+.onboardingShell { padding: 0 24px 80px; }
+.simpleHeader { display: flex; align-items: center; justify-content: space-between; width: min(100%, 1100px); min-height: 82px; margin: 0 auto; border-bottom: 1px solid var(--ink); }
+.simpleHeader > span:last-child { color: var(--muted); font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.onboardingCard { width: min(100%, 680px); margin: 10vh auto 0; }
+.onboardingCard h1, .emptyGroups h1, .chooseGroup h1 { font-size: clamp(46px, 6vw, 72px); }
+.onboardingCard form, .groupForm { margin-top: 34px; }
+.onboardingCard label, .groupForm label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.prefixedInput { display: grid; grid-template-columns: 52px 1fr; border: 1px solid var(--ink); background: #fff; box-shadow: 7px 7px 0 var(--ink); }
+.prefixedInput span { display: grid; place-items: center; border-right: 1px solid var(--line); color: var(--blue); font-size: 24px; font-weight: 850; }
+.prefixedInput input, .groupForm input { width: 100%; height: 58px; border: 0; background: #fff; color: var(--ink); padding: 0 16px; font-size: 18px; }
+.onboardingCard .primaryButton { margin-top: 18px; }
+
+.groupShell { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+.groupRail { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; height: 100vh; min-width: 0; background: var(--ink); color: var(--paper-light); padding: 28px 18px 18px; }
+.railTopline { display: flex; align-items: center; justify-content: space-between; }
+.compactSignOut { display: none; }
+.railLabel { margin: 62px 10px 12px; color: #91968c; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.groupList { display: grid; gap: 5px; }
+.groupList button { display: grid; grid-template-columns: 29px minmax(0, 1fr); align-items: center; gap: 9px; min-width: 0; border: 0; background: transparent; color: #bfc3ba; padding: 9px 10px; text-align: left; cursor: pointer; }
+.groupList button > span { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #4c5049; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; }
+.groupList button b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.groupList button.selectedGroup { background: var(--paper); color: var(--ink); }
+.groupList button.selectedGroup > span { border-color: var(--blue); background: var(--blue); color: #fff; }
+.newGroupButton { margin: 18px 10px 0; border: 0; background: transparent; color: #9cb3ff; padding: 0; font-size: 12px; text-align: left; cursor: pointer; }
+.signedInUser { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 7px; margin-top: auto; border-top: 1px solid #393c37; padding: 18px 8px 0; font-size: 12px; }
+.signedInUser > span { color: #9cb3ff; }
+.signedInUser button { grid-column: 2; border: 0; background: transparent; color: #a7aaa3; padding: 0; font-size: 10px; text-align: left; cursor: pointer; }
+.groupWorkspace { min-width: 0; padding: 50px clamp(24px, 5vw, 72px) 80px; }
+.emptyGroups, .chooseGroup { width: min(100%, 720px); margin: 8vh auto 0; }
+.groupForm { max-width: 560px; border: 1px solid var(--ink); background: rgba(255,255,255,.5); box-shadow: 7px 7px 0 var(--ink); padding: 22px; }
+.groupForm input { border: 1px solid var(--line); }
+.formActions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
+.textButton { border: 0; background: transparent; color: var(--muted); font-weight: 750; cursor: pointer; }
+
+.selectedWorkspace > header { display: flex; align-items: end; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ink); padding-bottom: 25px; }
+.selectedWorkspace h1 { font-size: clamp(48px, 6vw, 76px); }
+.groupMeta { display: flex; gap: 9px; margin: 13px 0 0; color: var(--muted); font-size: 12px; }
+.groupMeta code { color: inherit; }
+.workspacePlaceholder { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 28px; margin-top: 56px; border: 1px solid var(--line); background: var(--paper-light); padding: clamp(28px, 5vw, 60px); }
+.indexMark { display: grid; place-items: center; width: 72px; height: 72px; background: var(--blue); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 12px; font-weight: 850; box-shadow: 8px 8px 0 var(--ink); }
+.workspacePlaceholder h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.055em; }
+.workspacePlaceholder p:last-child { margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
+.notice, .errorBanner { margin: 0 0 24px; padding: 13px 16px; font-size: 13px; }
+.notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
+.errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
+.errorBanner button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+
+.dialogBackdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(21,23,19,.58); padding: 20px; }
+.dialog { width: min(100%, 620px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }
+.dialog h2 { margin: 10px 0 0; font-size: 40px; letter-spacing: -.06em; }
+.dialog .groupForm { max-width: none; margin-top: 24px; box-shadow: none; }
+.centeredScreen { display: grid; place-items: center; padding: 24px; }
+.centeredScreen > p { color: var(--muted); font-size: 13px; }
+.loadingMark { display: grid; place-items: center; width: 68px; height: 68px; margin: 0 auto 16px; background: var(--blue); color: #fff; font-weight: 950; box-shadow: 8px 8px 0 var(--ink); }
+.loadError { max-width: 520px; border: 1px solid var(--ink); background: var(--paper-light); padding: 32px; box-shadow: 8px 8px 0 var(--ink); }
+.loadError h1 { margin: 0; font-size: 38px; letter-spacing: -.055em; }
+.loadError p { color: var(--muted); line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .authShell { grid-template-columns: 1fr; }
+  .authRail { min-height: 176px; padding: 22px 20px; }
+  .authRail::after { right: -24px; bottom: -86px; width: 134px; height: 134px; }
+  .railStatement { margin: auto 0 0; }
+  .railStatement > p:last-child { max-width: 280px; margin-top: 8px; font-size: 20px; }
+  .railFoot { display: none; }
+  .authContent { min-height: calc(100vh - 176px); place-items: start; padding: 50px 20px 70px; }
+  .authCopy h1 { font-size: clamp(52px, 16vw, 74px); }
+  .groupShell { display: block; }
+  .groupRail { position: sticky; width: 100%; height: auto; min-height: 0; padding: 16px 14px 14px; }
+  .compactSignOut { display: block; border: 0; background: transparent; color: #a7aaa3; font-size: 11px; cursor: pointer; }
+  .railLabel { margin: 18px 4px 8px; }
+  .groupList { display: flex; gap: 7px; overflow-x: auto; padding: 0 0 2px; scroll-snap-type: x proximity; }
+  .groupList button { flex: 0 0 auto; min-width: 150px; border: 1px solid #454941; padding: 8px; scroll-snap-align: start; }
+  .groupList button.selectedGroup { border-color: var(--paper); }
+  .newGroupButton { position: absolute; right: 14px; bottom: 16px; margin: 0; }
+  .signedInUser { display: none; }
+  .groupWorkspace { padding: 34px 18px 64px; }
+  .emptyGroups, .chooseGroup { margin-top: 3vh; }
+  .emptyGroups h1, .chooseGroup h1 { font-size: 48px; }
+  .selectedWorkspace h1 { font-size: 50px; }
+  .workspacePlaceholder { grid-template-columns: 1fr; margin-top: 34px; padding: 26px; }
+  .indexMark { width: 58px; height: 58px; }
+  .dialog { padding: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authShell *, .onboardingShell *, .groupShell * { scroll-behavior: auto !important; transition: none !important; }
+}

@@ -24,30 +24,30 @@ export async function generateMetadata(): Promise<Metadata> {
     (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
   const description =
-    "A simple shared task list for your whole team. Assign by name, add a date, and check things off.";
+    "Private Group task lists that keep small teams clear on who is doing what.";
 
   return {
     metadataBase: baseUrl,
-    title: "Openjob — A shared team to-do list",
+    title: "OpenJob — One clear list for your team",
     description,
     icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
     openGraph: {
-      title: "Openjob",
-      description: "A shared list for the whole team.",
+      title: "OpenJob",
+      description,
       type: "website",
       images: [
         {
           url: new URL("/og.png", baseUrl),
           width: 1200,
           height: 630,
-          alt: "Openjob, a shared list for the whole team",
+          alt: "OpenJob, one clear list for your team",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Openjob",
-      description: "A shared list for the whole team.",
+      title: "OpenJob",
+      description,
       images: [new URL("/og.png", baseUrl)],
     },
   };
