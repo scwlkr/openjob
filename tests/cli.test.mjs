@@ -1373,3 +1373,104 @@ test("task retries only safe operations and never writes partial output", async 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("task failures keep stable API exit statuses and interruption exits 130", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-status-"));
+  const credentialPath = join(directory, "credential");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  let interruptStarted;
+  const interruptRequest = new Promise((resolve) => (interruptStarted = resolve));
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    const match = request.url.match(/\/tasks\/status_(\d+|interrupt)$/);
+    if (!match) {
+      response.statusCode = 404;
+      response.end();
+      return;
+    }
+    if (match[1] === "interrupt") {
+      interruptStarted();
+      return;
+    }
+    const status = Number(match[1]);
+    response.statusCode = status;
+    response.end(
+      JSON.stringify({
+        error: {
+          code: `status_${status}`,
+          message: `HTTP ${status}`,
+          requestId: `req_${status}`,
+        },
+      }),
+    );
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    for (const [httpStatus, exitStatus] of [
+      [400, 2],
+      [401, 3],
+      [403, 4],
+      [404, 5],
+      [409, 6],
+      [429, 7],
+      [500, 8],
+    ]) {
+      const result = await runCliAsync(
+        [
+          "task",
+          "edit",
+          `status_${httpStatus}`,
+          "--group",
+          "grp_tasks",
+          "--text",
+          "Changed",
+          "--format",
+          "json",
+        ],
+        { env: environment },
+      );
+      assert.equal(result.status, exitStatus, result.stderr);
+      assert.equal(result.stdout, "");
+      assert.equal(JSON.parse(result.stderr).error.code, `status_${httpStatus}`);
+    }
+
+    const interrupted = startCli(
+      [
+        "task",
+        "edit",
+        "status_interrupt",
+        "--group",
+        "grp_tasks",
+        "--text",
+        "Changed",
+      ],
+      { env: environment },
+    );
+    interrupted.child.stdin.end();
+    await interruptRequest;
+    interrupted.child.kill("SIGINT");
+    const result = await interrupted.result;
+    assert.equal(result.status, 130);
+    assert.equal(result.signal, null);
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
