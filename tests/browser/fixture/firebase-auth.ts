@@ -2,6 +2,7 @@ const SESSION_KEY = "openjob-test:firebase-session";
 const PERSISTENCE_KEY = "openjob-test:firebase-persistence";
 const listeners = new Set<(user: TestUser | null) => void>();
 const auth = {};
+let initializationFailed = false;
 
 type TestUser = { getIdToken(): Promise<string> };
 
@@ -31,7 +32,11 @@ export async function setPersistence(
   _auth: unknown,
   persistence: { type: string },
 ) {
-  if (new URLSearchParams(window.location.search).get("scenario") === "auth-error") {
+  if (
+    new URLSearchParams(window.location.search).get("scenario") === "auth-error" &&
+    !initializationFailed
+  ) {
+    initializationFailed = true;
     throw new Error("Test Firebase initialization failure.");
   }
   window.localStorage.setItem(PERSISTENCE_KEY, persistence.type);

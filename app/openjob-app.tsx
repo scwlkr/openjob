@@ -45,6 +45,8 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
+  const [authObserverFailed, setAuthObserverFailed] = useState(false);
+  const [authObservation, setAuthObservation] = useState(0);
   const [selectingGroupId, setSelectingGroupId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -93,6 +95,7 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
     setLoading(true);
     setGroupsReady(false);
     setError("");
+    setNotice("");
     try {
       const token = await activeSession.getIdToken();
       const currentUser = await api.getMe(token);
@@ -100,37 +103,45 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
       if (!currentUser.usernameRequired) await loadGroups(activeSession);
     } catch (loadError) {
       setError(readableError(loadError));
+      if (loadError instanceof ApiError && loadError.status === 401) {
+        await auth.signOut().catch(() => undefined);
+        setSession(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [api, loadGroups]);
+  }, [api, auth, loadGroups]);
 
   useEffect(
     () =>
       auth.observe(
         (nextSession) => {
+          setAuthObserverFailed(false);
           setSession(nextSession);
           if (nextSession === null) {
             setUser(null);
             setGroups([]);
             setGroupsReady(false);
             setSelectedGroup(null);
+            setNotice("");
             setLoading(false);
           } else {
             void bootstrap(nextSession);
           }
         },
         () => {
+          setAuthObserverFailed(true);
           setSession(null);
           setUser(null);
           setGroups([]);
           setGroupsReady(false);
           setSelectedGroup(null);
+          setNotice("");
           setError("Google sign-in could not start. Try again.");
           setLoading(false);
         },
       ),
-    [auth, bootstrap],
+    [auth, authObservation, bootstrap],
   );
 
   async function signIn() {
@@ -138,6 +149,12 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
     setError("");
     try {
       await auth.signIn();
+      if (authObserverFailed) {
+        setSession(undefined);
+        setLoading(true);
+        setAuthObserverFailed(false);
+        setAuthObservation((current) => current + 1);
+      }
     } catch {
       setError("Google sign-in did not finish. Try again.");
     } finally {
