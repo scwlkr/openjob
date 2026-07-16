@@ -45,7 +45,7 @@ function formatLogArguments(arguments_) {
     .join(" ");
 }
 
-test("the complete v0.0.5 backend passes one clean two-identity black-box gate", async (t) => {
+test("the complete hosted backend passes one clean two-identity black-box gate", async (t) => {
   const authority = await createTestFirebaseAuthority({ now: NOW });
   const firestore = createFakeFirestore();
   const privateKey = await createPrivateKey();
@@ -60,7 +60,7 @@ test("the complete v0.0.5 backend passes one clean two-identity black-box gate",
   };
   firestore.documents.set(legacyTaskName, structuredClone(legacyTask));
 
-  const identities = ["first", "second"];
+  const identities = ["initialAdmin", "memberUser"];
   const tokens = new Map(
     await Promise.all(
       identities.map(async (name) => [
@@ -128,11 +128,16 @@ test("the complete v0.0.5 backend passes one clean two-identity black-box gate",
     warn: console.warn,
   };
 
-  async function request({ as, ...options }) {
-    const token = tokens.get(as);
+  async function request({ actor, ...options }) {
+    const token = tokens.get(actor);
     return harness.request({
       ...options,
-      headers: token ? { authorization: `Bearer ${token}` } : undefined,
+      headers:
+        actor === "invalid"
+          ? { authorization: "Bearer invalid-production-smoke-token" }
+          : token
+            ? { authorization: `Bearer ${token}` }
+            : undefined,
     });
   }
 
@@ -154,7 +159,8 @@ test("the complete v0.0.5 backend passes one clean two-identity black-box gate",
   let result;
   try {
     result = await runV1AcceptanceScenario({
-      proposedUsernames: { first: "shane", second: "eli" },
+      checkpoint: () => harness.restart(),
+      proposedUsernames: { initialAdmin: "shane", memberUser: "eli" },
       request,
       validate,
     });

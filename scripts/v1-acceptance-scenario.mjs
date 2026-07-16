@@ -10,6 +10,7 @@ async function responseData(response) {
 }
 
 export async function runV1AcceptanceScenario({
+  checkpoint = async () => {},
   proposedUsernames,
   request,
   validate,
@@ -20,44 +21,45 @@ export async function runV1AcceptanceScenario({
   const successfulOperations = new Set();
 
   async function expectSuccess({
-    as,
+    actor,
     body,
     contractPath,
     method,
     path,
     status,
+    envelope = false,
   }) {
-    const response = await request({ as, body, method, path });
+    const response = await request({ actor, body, method, path });
     assertStatus(response, status, method, path);
     await validate(response, contractPath, method.toLowerCase());
     successfulOperations.add(`${method.toLowerCase()} ${contractPath}`);
-    return responseData(response);
+    return envelope ? response.clone().json() : responseData(response);
   }
 
   async function expectError({
-    as,
+    actor,
     body,
     contractPath,
     method,
     path,
     status,
   }) {
-    const response = await request({ as, body, method, path });
+    const response = await request({ actor, body, method, path });
     assertStatus(response, status, method, path);
     await validate(response, contractPath, method.toLowerCase());
     return response.clone().json();
   }
 
-  async function claimIdentity(as, proposedUsername) {
+  async function claimIdentity(actor, proposedUsername) {
     const current = await expectSuccess({
-      as,
+      actor,
       contractPath: "/api/v1/me",
       method: "GET",
       path: "/api/v1/me",
       status: 200,
     });
     return expectSuccess({
-      as,
+      actor,
       body: { username: current.username ?? proposedUsername },
       contractPath: "/api/v1/me/username",
       method: "PUT",
@@ -66,11 +68,11 @@ export async function runV1AcceptanceScenario({
     });
   }
 
-  const first = await claimIdentity("first", proposedUsernames.first);
-  const second = await claimIdentity("second", proposedUsernames.second);
-  const groupName = `OpenJob v0.0.5 acceptance ${Date.now()}`;
+  const initialAdmin = await claimIdentity("initialAdmin", proposedUsernames.initialAdmin);
+  const memberUser = await claimIdentity("memberUser", proposedUsernames.memberUser);
+  const groupName = `OpenJob backend acceptance ${Date.now()}`;
   const group = await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     body: { name: groupName },
     contractPath: "/api/v1/groups",
     method: "POST",
@@ -78,16 +80,38 @@ export async function runV1AcceptanceScenario({
     status: 201,
   });
   const groupPath = `/api/v1/groups/${group.groupId}`;
-
-  await expectSuccess({
-    as: "first",
+  const paginationGroup = await expectSuccess({
+    actor: "initialAdmin",
+    body: { name: `${groupName} pagination` },
     contractPath: "/api/v1/groups",
+    method: "POST",
+    path: "/api/v1/groups",
+    status: 201,
+  });
+  const firstGroupPage = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups",
+    envelope: true,
     method: "GET",
     path: "/api/v1/groups?limit=1",
     status: 200,
   });
+  if (firstGroupPage.data.length !== 1 || !firstGroupPage.nextCursor) {
+    throw new Error("Group pagination did not return one row and a cursor.");
+  }
+  const secondGroupPage = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups",
+    envelope: true,
+    method: "GET",
+    path: `/api/v1/groups?limit=1&cursor=${encodeURIComponent(firstGroupPage.nextCursor)}`,
+    status: 200,
+  });
+  if (secondGroupPage.data.length !== 1 || secondGroupPage.nextCursor !== null) {
+    throw new Error("Group pagination did not terminate after the second row.");
+  }
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}",
     method: "GET",
     path: groupPath,
@@ -95,54 +119,69 @@ export async function runV1AcceptanceScenario({
   });
 
   const initialInvite = await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/invite-link",
     method: "GET",
     path: `${groupPath}/invite-link`,
     status: 200,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/invites/{token}",
     method: "GET",
     path: `/api/v1/invites/${initialInvite.token}`,
     status: 200,
   });
   const invite = await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/invite-link/actions/rotate",
     method: "POST",
     path: `${groupPath}/invite-link/actions/rotate`,
     status: 200,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/invites/{token}/actions/join",
     method: "POST",
     path: `/api/v1/invites/${invite.token}/actions/join`,
     status: 200,
   });
-  await expectSuccess({
-    as: "first",
+  const firstMemberPage = await expectSuccess({
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/members",
+    envelope: true,
     method: "GET",
-    path: `${groupPath}/members`,
+    path: `${groupPath}/members?limit=1`,
     status: 200,
   });
+  if (firstMemberPage.data.length !== 1 || !firstMemberPage.nextCursor) {
+    throw new Error("Member pagination did not return one row and a cursor.");
+  }
+  const secondMemberPage = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/members",
+    envelope: true,
+    method: "GET",
+    path: `${groupPath}/members?limit=1&cursor=${encodeURIComponent(firstMemberPage.nextCursor)}`,
+    status: 200,
+  });
+  if (secondMemberPage.data.length !== 1 || secondMemberPage.nextCursor !== null) {
+    throw new Error("Member pagination did not terminate after the second row.");
+  }
 
   const tasksPath = `${groupPath}/tasks`;
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/tasks",
     method: "GET",
     path: tasksPath,
     status: 200,
   });
   const task = await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     body: {
       text: "Prove the hosted backend",
-      assigneeUsername: first.username,
+      assigneeUsername: initialAdmin.username,
       dueDate: "2026-07-31",
     },
     contractPath: "/api/v1/groups/{groupId}/tasks",
@@ -150,19 +189,95 @@ export async function runV1AcceptanceScenario({
     path: tasksPath,
     status: 201,
   });
+  const earlierDueTask = await expectSuccess({
+    actor: "memberUser",
+    body: {
+      text: "Prove pagination and ordering",
+      assigneeUsername: memberUser.username,
+      dueDate: "2026-07-20",
+    },
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    method: "POST",
+    path: tasksPath,
+    status: 201,
+  });
+  const undatedTask = await expectSuccess({
+    actor: "initialAdmin",
+    body: {
+      text: "Prove undated ordering",
+      assigneeUsername: initialAdmin.username,
+    },
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    method: "POST",
+    path: tasksPath,
+    status: 201,
+  });
+  await checkpoint();
+  const firstTaskPage = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    envelope: true,
+    method: "GET",
+    path: `${tasksPath}?limit=2`,
+    status: 200,
+  });
+  if (
+    firstTaskPage.data.map(({ taskId }) => taskId).join(",") !==
+      [earlierDueTask.taskId, task.taskId].join(",") ||
+    !firstTaskPage.nextCursor
+  ) {
+    throw new Error("Open Task pagination did not preserve due-date ordering.");
+  }
+  const secondTaskPage = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    envelope: true,
+    method: "GET",
+    path: `${tasksPath}?limit=2&cursor=${encodeURIComponent(firstTaskPage.nextCursor)}`,
+    status: 200,
+  });
+  if (
+    secondTaskPage.data.map(({ taskId }) => taskId).join(",") !== undatedTask.taskId ||
+    secondTaskPage.nextCursor !== null
+  ) {
+    throw new Error("Open Task pagination did not terminate with the undated Task.");
+  }
+  const filteredTasks = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    method: "GET",
+    path: `${tasksPath}?assignee=${encodeURIComponent(memberUser.username)}`,
+    status: 200,
+  });
+  if (
+    filteredTasks.length !== 1 ||
+    filteredTasks[0].taskId !== earlierDueTask.taskId
+  ) {
+    throw new Error("Task assignee filtering returned the wrong Task set.");
+  }
+  const wrongTaskCursor = await expectError({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    method: "GET",
+    path: `${tasksPath}?status=done&cursor=${encodeURIComponent(firstTaskPage.nextCursor)}`,
+    status: 400,
+  });
+  if (wrongTaskCursor.error.code !== "invalid_request") {
+    throw new Error("Task cursor mismatch did not return invalid_request.");
+  }
   const taskPath = `${tasksPath}/${task.taskId}`;
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}",
     method: "GET",
     path: taskPath,
     status: 200,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     body: {
       text: "Prove and ship the hosted backend",
-      assigneeUsername: second.username,
+      assigneeUsername: memberUser.username,
       dueDate: null,
     },
     contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}",
@@ -171,15 +286,36 @@ export async function runV1AcceptanceScenario({
     status: 200,
   });
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     body: { state: "done" },
     contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}/state",
     method: "PUT",
     path: `${taskPath}/state`,
     status: 200,
   });
+  const frozenTask = await expectError({
+    actor: "memberUser",
+    body: { text: "Do not rewrite completed work" },
+    contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}",
+    method: "PATCH",
+    path: taskPath,
+    status: 409,
+  });
+  if (frozenTask.error.code !== "task_done") {
+    throw new Error("Done Task editing did not return task_done.");
+  }
+  const doneTasks = await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: "/api/v1/groups/{groupId}/tasks",
+    method: "GET",
+    path: `${tasksPath}?status=done`,
+    status: 200,
+  });
+  if (doneTasks.length !== 1 || doneTasks[0].taskId !== task.taskId) {
+    throw new Error("Done Task filtering returned the wrong Task set.");
+  }
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     body: { state: "open" },
     contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}/state",
     method: "PUT",
@@ -187,37 +323,46 @@ export async function runV1AcceptanceScenario({
     status: 200,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}",
     method: "DELETE",
     path: taskPath,
     status: 204,
   });
+  for (const removableTask of [earlierDueTask, undatedTask]) {
+    await expectSuccess({
+      actor: "initialAdmin",
+      contractPath: "/api/v1/groups/{groupId}/tasks/{taskId}",
+      method: "DELETE",
+      path: `${tasksPath}/${removableTask.taskId}`,
+      status: 204,
+    });
+  }
 
-  const memberPath = `${groupPath}/members/${second.userId}`;
+  const memberPath = `${groupPath}/members/${memberUser.userId}`;
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/members/{userId}/actions/promote",
     method: "POST",
     path: `${memberPath}/actions/promote`,
     status: 200,
   });
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/members/{userId}/actions/demote",
     method: "POST",
     path: `${memberPath}/actions/demote`,
     status: 200,
   });
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/members/{userId}/actions/kick",
     method: "POST",
     path: `${memberPath}/actions/kick`,
     status: 204,
   });
   await expectError({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/groups/{groupId}",
     method: "GET",
     path: groupPath,
@@ -226,43 +371,43 @@ export async function runV1AcceptanceScenario({
 
   const bansPath = `${groupPath}/bans`;
   await expectSuccess({
-    as: "first",
-    body: { userId: second.userId },
+    actor: "initialAdmin",
+    body: { userId: memberUser.userId },
     contractPath: "/api/v1/groups/{groupId}/bans/actions/ban",
     method: "POST",
     path: `${bansPath}/actions/ban`,
     status: 201,
   });
   await expectError({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/invites/{token}/actions/join",
     method: "POST",
     path: `/api/v1/invites/${invite.token}/actions/join`,
     status: 403,
   });
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/bans",
     method: "GET",
     path: bansPath,
     status: 200,
   });
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}/bans/{userId}/actions/unban",
     method: "POST",
-    path: `${bansPath}/${second.userId}/actions/unban`,
+    path: `${bansPath}/${memberUser.userId}/actions/unban`,
     status: 204,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/invites/{token}/actions/join",
     method: "POST",
     path: `/api/v1/invites/${invite.token}/actions/join`,
     status: 200,
   });
   await expectSuccess({
-    as: "second",
+    actor: "memberUser",
     contractPath: "/api/v1/groups/{groupId}/actions/leave",
     method: "POST",
     path: `${groupPath}/actions/leave`,
@@ -270,7 +415,7 @@ export async function runV1AcceptanceScenario({
   });
 
   const renamedGroup = await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     body: { name: `${groupName} verified` },
     contractPath: "/api/v1/groups/{groupId}",
     method: "PATCH",
@@ -279,8 +424,8 @@ export async function runV1AcceptanceScenario({
   });
 
   const unauthenticatedExamples = [
-    ["GET", "/api/v1/me", "/api/v1/me"],
-    ["PUT", "/api/v1/me/username", "/api/v1/me/username", { username: first.username }],
+    ["GET", "/api/v1/me", "/api/v1/me", undefined, "invalid"],
+    ["PUT", "/api/v1/me/username", "/api/v1/me/username", { username: initialAdmin.username }],
     ["GET", "/api/v1/groups", "/api/v1/groups"],
     ["POST", "/api/v1/groups", "/api/v1/groups", { name: "Denied" }],
     ["GET", "/api/v1/groups/{groupId}", groupPath],
@@ -292,42 +437,51 @@ export async function runV1AcceptanceScenario({
     ["POST", "/api/v1/groups/{groupId}/members/{userId}/actions/promote", `${memberPath}/actions/promote`],
     ["POST", "/api/v1/groups/{groupId}/members/{userId}/actions/demote", `${memberPath}/actions/demote`],
     ["GET", "/api/v1/groups/{groupId}/bans", bansPath],
-    ["POST", "/api/v1/groups/{groupId}/bans/actions/ban", `${bansPath}/actions/ban`, { userId: second.userId }],
-    ["POST", "/api/v1/groups/{groupId}/bans/{userId}/actions/unban", `${bansPath}/${second.userId}/actions/unban`],
+    ["POST", "/api/v1/groups/{groupId}/bans/actions/ban", `${bansPath}/actions/ban`, { userId: memberUser.userId }],
+    ["POST", "/api/v1/groups/{groupId}/bans/{userId}/actions/unban", `${bansPath}/${memberUser.userId}/actions/unban`],
     ["GET", "/api/v1/groups/{groupId}/invite-link", `${groupPath}/invite-link`],
     ["POST", "/api/v1/groups/{groupId}/invite-link/actions/rotate", `${groupPath}/invite-link/actions/rotate`],
     ["GET", "/api/v1/invites/{token}", `/api/v1/invites/${invite.token}`],
     ["POST", "/api/v1/invites/{token}/actions/join", `/api/v1/invites/${invite.token}/actions/join`],
     ["GET", "/api/v1/groups/{groupId}/tasks", tasksPath],
-    ["POST", "/api/v1/groups/{groupId}/tasks", tasksPath, { text: "Denied", assigneeUsername: first.username }],
+    ["POST", "/api/v1/groups/{groupId}/tasks", tasksPath, { text: "Denied", assigneeUsername: initialAdmin.username }],
     ["GET", "/api/v1/groups/{groupId}/tasks/{taskId}", taskPath],
     ["PATCH", "/api/v1/groups/{groupId}/tasks/{taskId}", taskPath, { text: "Denied" }],
     ["DELETE", "/api/v1/groups/{groupId}/tasks/{taskId}", taskPath],
     ["PUT", "/api/v1/groups/{groupId}/tasks/{taskId}/state", `${taskPath}/state`, { state: "done" }],
   ];
-  for (const [method, contractPath, path, body] of unauthenticatedExamples) {
-    const response = await request({ body, method, path });
+  for (const [method, contractPath, path, body, actor] of unauthenticatedExamples) {
+    const response = await request({ actor, body, method, path });
     assertStatus(response, 401, method, path);
     await validate(response, contractPath, method.toLowerCase());
   }
 
   await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     body: { confirmationName: renamedGroup.name },
     contractPath: "/api/v1/groups/{groupId}/actions/end",
     method: "POST",
     path: `${groupPath}/actions/end`,
     status: 204,
   });
+  await expectSuccess({
+    actor: "initialAdmin",
+    body: { confirmationName: paginationGroup.name },
+    contractPath: "/api/v1/groups/{groupId}/actions/end",
+    method: "POST",
+    path: `/api/v1/groups/${paginationGroup.groupId}/actions/end`,
+    status: 204,
+  });
   const finalGroups = await expectSuccess({
-    as: "first",
+    actor: "initialAdmin",
     contractPath: "/api/v1/groups",
     method: "GET",
     path: "/api/v1/groups",
     status: 200,
   });
-  if (finalGroups.some(({ groupId }) => groupId === group.groupId)) {
-    throw new Error("The disposable acceptance Group remained visible after End Group.");
+  const endedGroupIds = new Set([group.groupId, paginationGroup.groupId]);
+  if (finalGroups.some(({ groupId }) => endedGroupIds.has(groupId))) {
+    throw new Error("A disposable acceptance Group remained visible after End Group.");
   }
 
   return {

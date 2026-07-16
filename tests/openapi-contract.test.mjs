@@ -7,6 +7,7 @@ import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 
 const contractUrl = new URL("../openapi/openapi.yaml", import.meta.url);
+const EXPECTED_BACKEND_VERSION = "0.0.5";
 
 const expectedOperations = [
   "delete /api/v1/groups/{groupId}/tasks/{taskId} deleteGroupTask",
@@ -118,10 +119,10 @@ test("release metadata identifies the hosted backend as v0.0.5", async () => {
     await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
   );
 
-  assert.equal(contract.info.version, "0.0.5");
-  assert.equal(packageJson.version, "0.0.5");
-  assert.equal(packageLock.version, "0.0.5");
-  assert.equal(packageLock.packages[""].version, "0.0.5");
+  assert.equal(contract.info.version, EXPECTED_BACKEND_VERSION);
+  assert.equal(packageJson.version, EXPECTED_BACKEND_VERSION);
+  assert.equal(packageLock.version, EXPECTED_BACKEND_VERSION);
+  assert.equal(packageLock.packages[""].version, EXPECTED_BACKEND_VERSION);
 });
 
 test("shared v1 representations lock identity, pagination, errors, dates, and assignees", async () => {
