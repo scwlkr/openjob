@@ -20,6 +20,7 @@ const BOOLEAN_OPTIONS = new Set([
   "--no-open",
   "--quiet",
   "--version",
+  "--yes",
 ]);
 
 export function parseArguments(raw) {

@@ -3,6 +3,7 @@
 import { parseArguments } from "./lib/arguments.mjs";
 import { apiCollection, apiRequest, apiRequestWithIdToken } from "./lib/api.mjs";
 import { loginWithGoogle } from "./lib/auth.mjs";
+import { confirmTaskDeletion } from "./lib/confirmation.mjs";
 import { resolveGroup, writeCurrentGroup } from "./lib/config.mjs";
 import { deleteRefreshCredential } from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
@@ -28,6 +29,7 @@ Global options:
   --format <table|json|jsonl> Output encoding; default: table
   --out <path|->              Write results to a new file or stdout (-)
   --force                     Allow --out to replace an existing file
+  --yes                       Confirm a destructive operation
   --quiet                     Suppress nonessential diagnostics
   --help                      Show help
   --version                   Show the version`;
@@ -53,7 +55,10 @@ const RESOURCE_HELP = {
   openjob task create --input <path|->
   openjob task show <task-id>
   openjob task edit <task-id> [--text <text> | --text-file <path|->] [--assignee <username>] [--due <YYYY-MM-DD|none>]
-  openjob task edit <task-id> --input <path|->`,
+  openjob task edit <task-id> --input <path|->
+  openjob task done <task-id>
+  openjob task reopen <task-id>
+  openjob task delete <task-id> [--yes]`,
 };
 
 async function main(raw) {
@@ -259,6 +264,33 @@ async function main(raw) {
         { method: "PATCH", body: JSON.stringify(body) },
       ),
     );
+    return;
+  }
+  if (
+    resource === "task" &&
+    new Set(["done", "reopen"]).has(command) &&
+    rest.length === 1
+  ) {
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}/state`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ state: command === "done" ? "done" : "open" }),
+        },
+      ),
+    );
+    return;
+  }
+  if (resource === "task" && command === "delete" && rest.length === 1) {
+    await confirmTaskDeletion(rest[0], parsed.options);
+    const { groupId } = resolveGroup(parsed.options);
+    await apiRequest(
+      `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
+      { method: "DELETE" },
+    );
+    writeResult({ data: { taskId: rest[0], deleted: true } });
     return;
   }
   if (resource === "group" && command === "create" && rest.length === 0) {
