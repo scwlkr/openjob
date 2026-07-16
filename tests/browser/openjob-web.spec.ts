@@ -258,7 +258,7 @@ test("uses a persistent rail on desktop and a horizontal Group picker on narrow 
   expect(newGroup!.y).toBeGreaterThan(firstGroup!.y + firstGroup!.height);
 });
 
-test("distinguishes loading, identity failure, and Group-list failure from a real empty account", async ({ page }) => {
+test("distinguishes loading and failures from a User with no Groups", async ({ page }) => {
   await startSignedIn(page);
   const state = await installApi(page, { user: signedInUser, hangMe: true });
   await page.goto("/");
