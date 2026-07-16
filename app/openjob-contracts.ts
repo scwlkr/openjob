@@ -11,6 +11,26 @@ export type Group = {
   createdAt: string;
 };
 
+export type Member = {
+  userId: string;
+  username: string | null;
+  role: "member" | "admin";
+  joinedAt: string;
+};
+
+export type Task = {
+  taskId: string;
+  groupId: string;
+  text: string;
+  assignee:
+    | { state: "assigned"; userId: string; username: string }
+    | { state: "unassigned" };
+  dueDate: string | null;
+  state: "open" | "done";
+  createdAt: string;
+  completedAt: string | null;
+};
+
 export type AuthSession = { getIdToken(): Promise<string> };
 
 export type OpenJobAuth = {
@@ -28,6 +48,26 @@ export type OpenJobApi = {
   listGroups(token: string): Promise<Group[]>;
   getGroup(token: string, groupId: string): Promise<Group>;
   createGroup(token: string, name: string): Promise<Group>;
+  listMembers(token: string, groupId: string): Promise<Member[]>;
+  listTasks(token: string, groupId: string): Promise<Task[]>;
+  createTask(
+    token: string,
+    groupId: string,
+    input: { text: string; assigneeUsername: string; dueDate?: string },
+  ): Promise<Task>;
+  updateTask(
+    token: string,
+    groupId: string,
+    taskId: string,
+    input: { text?: string; assigneeUsername?: string; dueDate?: string | null },
+  ): Promise<Task>;
+  setTaskState(
+    token: string,
+    groupId: string,
+    taskId: string,
+    state: "open" | "done",
+  ): Promise<Task>;
+  deleteTask(token: string, groupId: string, taskId: string): Promise<void>;
 };
 
 export class ApiError extends Error {

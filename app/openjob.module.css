@@ -112,10 +112,40 @@
 .selectedGroupSurface h1 { font-size: clamp(48px, 6vw, 76px); }
 .groupMeta { display: flex; gap: 9px; margin: 13px 0 0; color: var(--muted); font-size: 12px; }
 .groupMeta code { color: inherit; }
-.taskListPlaceholder { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 28px; margin-top: 56px; border: 1px solid var(--line); background: var(--paper-light); padding: clamp(28px, 5vw, 60px); }
-.indexMark { display: grid; place-items: center; width: 72px; height: 72px; background: var(--blue); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 12px; font-weight: 850; box-shadow: 8px 8px 0 var(--ink); }
-.taskListPlaceholder h2 { margin: 12px 0 0; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.055em; }
-.taskListPlaceholder p:last-child { margin: 12px 0 0; color: var(--muted); line-height: 1.5; }
+.taskList { margin-top: 32px; }
+.taskToolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+.taskToolbar label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.taskToolbar select { min-width: 160px; height: 42px; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); padding: 0 12px; font: inherit; font-size: 12px; text-transform: none; }
+.taskLanes { display: flex; gap: 16px; overflow-x: auto; padding: 0 0 18px; scroll-snap-type: x proximity; }
+.taskLane { flex: 0 0 310px; min-width: 0; border: 1px solid var(--ink); background: rgba(255,255,255,.42); scroll-snap-align: start; }
+.taskLane > header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid var(--ink); padding: 0 16px; }
+.taskLane h2 { margin: 0; font-size: 18px; letter-spacing: -.035em; }
+.taskLane > header span { display: grid; place-items: center; min-width: 26px; height: 26px; background: var(--ink); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
+.taskCards { display: grid; gap: 10px; padding: 12px; }
+.addTaskButton { width: 100%; min-height: 40px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
+.taskCard { border: 1px solid var(--line); background: var(--paper-light); padding: 15px; }
+.taskCard > p { margin: 0; white-space: pre-wrap; line-height: 1.38; }
+.taskDue { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 11px; }
+.taskDue b { color: #9a3028; text-transform: uppercase; }
+.taskCardActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; border-top: 1px solid #d8dad3; padding-top: 10px; }
+.taskCardActions button { border: 0; background: transparent; color: var(--blue); padding: 0; font-size: 11px; font-weight: 800; cursor: pointer; }
+.taskCardActions button:last-child { margin-left: auto; color: #982f27; }
+.taskCardActions button:disabled { cursor: not-allowed; opacity: .45; }
+.taskForm { display: grid; gap: 12px; border: 1px solid var(--line); background: #fff; padding: 12px; }
+.taskForm label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+.taskForm textarea, .taskForm select, .taskForm input { width: 100%; border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); padding: 9px; font: inherit; font-size: 13px; text-transform: none; }
+.taskForm textarea { min-height: 88px; resize: vertical; }
+.taskFormActions { display: flex; justify-content: flex-end; gap: 10px; }
+.taskFormActions button:first-child { border: 0; background: transparent; color: var(--muted); font-weight: 750; cursor: pointer; }
+.taskFormActions .primaryButton { min-height: 40px; padding: 0 13px; }
+.taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
+.taskActionError button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.taskDialog { width: min(100%, 560px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }
+.taskDialog h2 { margin: 9px 0 22px; font-size: 38px; letter-spacing: -.055em; }
+.emptyLane { margin: 8px 4px; color: var(--muted); font-size: 12px; }
+.taskLoading, .taskLoadError { margin-top: 34px; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
+.taskLoadError p { margin: 0 0 14px; color: #74221c; }
+.taskLoadError button { border: 0; background: transparent; color: var(--blue); padding: 0; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .notice, .errorBanner { margin: 0 0 24px; padding: 13px 16px; font-size: 13px; }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
@@ -154,8 +184,9 @@
   .emptyGroups, .chooseGroup { margin-top: 3vh; }
   .emptyGroups h1, .chooseGroup h1 { font-size: 48px; }
   .selectedGroupSurface h1 { font-size: 50px; }
-  .taskListPlaceholder { grid-template-columns: 1fr; margin-top: 34px; padding: 26px; }
-  .indexMark { width: 58px; height: 58px; }
+  .taskToolbar { display: grid; grid-template-columns: 1fr 1fr; }
+  .taskToolbar select { width: 100%; min-width: 0; }
+  .taskLane { flex-basis: calc(100vw - 56px); }
   .dialog { padding: 20px; }
 }
 

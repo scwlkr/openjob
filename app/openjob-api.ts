@@ -1,7 +1,9 @@
 import {
   ApiError,
   type Group,
+  type Member,
   type OpenJobApi,
+  type Task,
   type User,
 } from "./openjob-contracts";
 
@@ -43,6 +45,22 @@ async function request<T>(
   return payload as T;
 }
 
+async function listAll<T>(path: string, token: string): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: "500" });
+    if (cursor) query.set("cursor", cursor);
+    const response: { data: T[]; nextCursor: string | null } = await request(
+      `${path}?${query.toString()}`,
+      token,
+    );
+    items.push(...response.data);
+    cursor = response.nextCursor;
+  } while (cursor !== null);
+  return items;
+}
+
 export function createOpenJobApi(): OpenJobApi {
   return Object.freeze({
     async getMe(token) {
@@ -60,17 +78,7 @@ export function createOpenJobApi(): OpenJobApi {
     },
 
     async listGroups(token) {
-      const groups: Group[] = [];
-      let cursor: string | null = null;
-      do {
-        const query = new URLSearchParams({ limit: "500" });
-        if (cursor) query.set("cursor", cursor);
-        const response: { data: Group[]; nextCursor: string | null } =
-          await request(`/api/v1/groups?${query.toString()}`, token);
-        groups.push(...response.data);
-        cursor = response.nextCursor;
-      } while (cursor !== null);
-      return groups;
+      return listAll<Group>("/api/v1/groups", token);
     },
 
     async getGroup(token, groupId) {
@@ -87,6 +95,55 @@ export function createOpenJobApi(): OpenJobApi {
         body: JSON.stringify({ name }),
       });
       return response.data;
+    },
+
+    async listMembers(token, groupId) {
+      return listAll<Member>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/members`,
+        token,
+      );
+    },
+
+    async listTasks(token, groupId) {
+      return listAll<Task>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/tasks`,
+        token,
+      );
+    },
+
+    async createTask(token, groupId, input) {
+      const response = await request<{ data: Task }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/tasks`,
+        token,
+        { method: "POST", body: JSON.stringify(input) },
+      );
+      return response.data;
+    },
+
+    async updateTask(token, groupId, taskId, input) {
+      const response = await request<{ data: Task }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(taskId)}`,
+        token,
+        { method: "PATCH", body: JSON.stringify(input) },
+      );
+      return response.data;
+    },
+
+    async setTaskState(token, groupId, taskId, state) {
+      const response = await request<{ data: Task }>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(taskId)}/state`,
+        token,
+        { method: "PUT", body: JSON.stringify({ state }) },
+      );
+      return response.data;
+    },
+
+    async deleteTask(token, groupId, taskId) {
+      await request<void>(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(taskId)}`,
+        token,
+        { method: "DELETE" },
+      );
     },
   });
 }

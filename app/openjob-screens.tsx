@@ -1,7 +1,8 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import type { Group, User } from "./openjob-contracts";
+import type { AuthSession, Group, OpenJobApi, User } from "./openjob-contracts";
+import { TaskList } from "./openjob-task-list";
 import styles from "./openjob.module.css";
 
 function initials(name: string) {
@@ -203,9 +204,11 @@ function GroupCreator({
 }
 
 export type GroupShellProps = {
+  api: OpenJobApi;
   error: string;
   groups: Group[];
   notice: string;
+  onSessionExpired: (error: unknown) => Promise<boolean>;
   onCreate: (name: string) => void;
   onRetry: () => void;
   onSelect: (group: Group) => void;
@@ -213,6 +216,7 @@ export type GroupShellProps = {
   saving: boolean;
   selectedGroup: Group | null;
   selectingGroupId: string | null;
+  session: AuthSession;
   user: User;
 };
 
@@ -275,14 +279,13 @@ export function GroupShell(props: GroupShellProps) {
                 </p>
               </div>
             </header>
-            <div className={styles.taskListPlaceholder}>
-              <span className={styles.indexMark} aria-hidden="true">01</span>
-              <div>
-                <p className={styles.kicker}>Shared Task List</p>
-                <h2>This Group is ready.</h2>
-                <p>Your team’s Task List will open here.</p>
-              </div>
-            </div>
+            <TaskList
+              api={props.api}
+              group={props.selectedGroup}
+              key={props.selectedGroup.groupId}
+              onSessionExpired={props.onSessionExpired}
+              session={props.session}
+            />
           </section>
         ) : (
           <section className={styles.chooseGroup}>
