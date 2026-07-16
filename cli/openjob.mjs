@@ -11,6 +11,17 @@ import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 
 const VERSION = "0.0.5";
+const TASK_COMMON_OPTIONS = ["--format", "--force", "--group", "--out", "--quiet"];
+const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--due"];
+const TASK_OPTIONS = new Map([
+  ["list", new Set([...TASK_COMMON_OPTIONS, "--status", "--assignee", "--limit"])],
+  ["create", new Set([...TASK_COMMON_OPTIONS, "--input", ...TASK_FIELD_OPTIONS])],
+  ["show", new Set(TASK_COMMON_OPTIONS)],
+  ["edit", new Set([...TASK_COMMON_OPTIONS, "--input", ...TASK_FIELD_OPTIONS])],
+  ["done", new Set(TASK_COMMON_OPTIONS)],
+  ["reopen", new Set(TASK_COMMON_OPTIONS)],
+  ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
+]);
 
 process.once("SIGINT", () => process.exit(130));
 
@@ -63,6 +74,66 @@ const RESOURCE_HELP = {
   openjob task delete <task-id> [--yes]`,
 };
 
+function validateTaskOptions(command, options) {
+  const allowed = TASK_OPTIONS.get(command);
+  if (!allowed) return;
+  for (const option of options.keys()) {
+    if (!allowed.has(option)) {
+      throw new CliError(
+        "usage_error",
+        `Option ${option} is not valid for task ${command}.`,
+        2,
+      );
+    }
+  }
+}
+
+function taskMutationBody(command, options) {
+  const hasInput = options.has("--input");
+  const selectedFields = TASK_FIELD_OPTIONS.filter((option) => options.has(option));
+  if (hasInput && selectedFields.length > 0) {
+    throw new CliError(
+      "usage_error",
+      `task ${command} accepts --input or named field flags, never both.`,
+      2,
+    );
+  }
+  if (hasInput) return readInputObject(options.get("--input"));
+
+  const textSources = ["--text", "--text-file"].filter((option) =>
+    options.has(option),
+  );
+  if (command === "create" && (textSources.length !== 1 || !options.has("--assignee"))) {
+    throw new CliError(
+      "usage_error",
+      "task create requires one text source and --assignee.",
+      2,
+    );
+  }
+  if (command === "edit" && selectedFields.length === 0) {
+    throw new CliError("usage_error", "task edit requires at least one field.", 2);
+  }
+  if (textSources.length > 1) {
+    throw new CliError("usage_error", `task ${command} accepts one text source.`, 2);
+  }
+
+  const body = {};
+  if (options.has("--text")) body.text = options.get("--text");
+  if (options.has("--text-file")) body.text = readTextSource(options.get("--text-file"));
+  if (options.has("--assignee")) {
+    const assignee = options.get("--assignee").replace(/^@/, "");
+    if (assignee === "unassigned") {
+      throw new CliError("usage_error", "Task assignees must be Member Usernames.", 2);
+    }
+    body.assigneeUsername = assignee;
+  }
+  if (options.has("--due")) {
+    const dueDate = options.get("--due");
+    body.dueDate = command === "edit" && dueDate === "none" ? null : dueDate;
+  }
+  return body;
+}
+
 async function main(raw) {
   if (raw.length === 0 || raw.includes("--help")) {
     process.stdout.write(`${HELP}\n`);
@@ -90,6 +161,7 @@ async function main(raw) {
   preflightOutput(parsed.options);
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
   const [resource, command, ...rest] = parsed.positionals;
+  if (resource === "task") validateTaskOptions(command, parsed.options);
   if (resource === "group" && command === "current" && rest.length === 0) {
     writeResult({ data: resolveGroup(parsed.options) });
     return;
@@ -166,42 +238,7 @@ async function main(raw) {
     return;
   }
   if (resource === "task" && command === "create" && rest.length === 0) {
-    const inputPath = parsed.options.get("--input");
-    const namedFields = ["--text", "--text-file", "--assignee", "--due"];
-    const hasNamedFields = namedFields.some((option) => parsed.options.has(option));
-    if (inputPath && hasNamedFields) {
-      throw new CliError(
-        "usage_error",
-        "task create accepts --input or named field flags, never both.",
-        2,
-      );
-    }
-    let body;
-    if (inputPath) {
-      body = readInputObject(inputPath);
-    } else {
-      const textSources = ["--text", "--text-file"].filter((option) =>
-        parsed.options.has(option),
-      );
-      if (textSources.length !== 1 || !parsed.options.has("--assignee")) {
-        throw new CliError(
-          "usage_error",
-          "task create requires one text source and --assignee.",
-          2,
-        );
-      }
-      const text = parsed.options.has("--text-file")
-        ? readTextSource(parsed.options.get("--text-file"))
-        : parsed.options.get("--text");
-      const assignee = parsed.options.get("--assignee").replace(/^@/, "");
-      body = {
-        text,
-        assigneeUsername: assignee,
-        ...(parsed.options.has("--due")
-          ? { dueDate: parsed.options.get("--due") }
-          : {}),
-      };
-    }
+    const body = taskMutationBody("create", parsed.options);
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
       await apiRequest(`/groups/${encodeURIComponent(groupId)}/tasks`, {
@@ -223,49 +260,7 @@ async function main(raw) {
     return;
   }
   if (resource === "task" && command === "edit" && rest.length === 1) {
-    const inputPath = parsed.options.get("--input");
-    const namedFields = ["--text", "--text-file", "--assignee", "--due"];
-    const selectedNamedFields = namedFields.filter((option) =>
-      parsed.options.has(option),
-    );
-    if (inputPath && selectedNamedFields.length > 0) {
-      throw new CliError(
-        "usage_error",
-        "task edit accepts --input or named field flags, never both.",
-        2,
-      );
-    }
-    let body;
-    if (inputPath) {
-      body = readInputObject(inputPath);
-    } else {
-      if (selectedNamedFields.length === 0) {
-        throw new CliError("usage_error", "task edit requires at least one field.", 2);
-      }
-      if (parsed.options.has("--text") && parsed.options.has("--text-file")) {
-        throw new CliError("usage_error", "task edit accepts one text source.", 2);
-      }
-      body = {};
-      if (parsed.options.has("--text")) body.text = parsed.options.get("--text");
-      if (parsed.options.has("--text-file")) {
-        body.text = readTextSource(parsed.options.get("--text-file"));
-      }
-      if (parsed.options.has("--assignee")) {
-        const assignee = parsed.options.get("--assignee").replace(/^@/, "");
-        if (assignee === "unassigned") {
-          throw new CliError(
-            "usage_error",
-            "Task assignees must be Member Usernames.",
-            2,
-          );
-        }
-        body.assigneeUsername = assignee;
-      }
-      if (parsed.options.has("--due")) {
-        const dueDate = parsed.options.get("--due");
-        body.dueDate = dueDate === "none" ? null : dueDate;
-      }
-    }
+    const body = taskMutationBody("edit", parsed.options);
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
       await apiRequest(

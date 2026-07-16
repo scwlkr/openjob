@@ -33,22 +33,28 @@ export function parseArguments(raw) {
       positionals.push(token);
       continue;
     }
-    if (options.has(token)) {
-      throw new CliError("usage_error", `Option ${token} may be used only once.`, 2);
+    const separator = token.indexOf("=");
+    const option = separator === -1 ? token : token.slice(0, separator);
+    const inlineValue = separator === -1 ? undefined : token.slice(separator + 1);
+    if (options.has(option)) {
+      throw new CliError("usage_error", `Option ${option} may be used only once.`, 2);
     }
-    if (BOOLEAN_OPTIONS.has(token)) {
-      options.set(token, true);
+    if (BOOLEAN_OPTIONS.has(option)) {
+      if (inlineValue !== undefined) {
+        throw new CliError("usage_error", `Option ${option} does not accept a value.`, 2);
+      }
+      options.set(option, true);
       continue;
     }
-    if (!VALUE_OPTIONS.has(token)) {
+    if (!VALUE_OPTIONS.has(option)) {
       throw new CliError("usage_error", `Unknown option ${token}.`, 2);
     }
-    const value = raw[index + 1];
-    if (!value || value.startsWith("--")) {
-      throw new CliError("usage_error", `Option ${token} requires a value.`, 2);
+    const value = inlineValue ?? raw[index + 1];
+    if (value === undefined || (inlineValue === undefined && value.startsWith("--"))) {
+      throw new CliError("usage_error", `Option ${option} requires a value.`, 2);
     }
-    options.set(token, value);
-    index += 1;
+    options.set(option, value);
+    if (inlineValue === undefined) index += 1;
   }
 
   return { options, positionals };

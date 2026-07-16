@@ -3,6 +3,7 @@ import {
   accessSync,
   constants,
   existsSync,
+  linkSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -49,9 +50,17 @@ export function writeEnvelope(envelope, format, options) {
   const temporary = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   try {
     writeFileSync(temporary, rendered, { encoding: "utf8", flag: "wx", mode: 0o600 });
-    renameSync(temporary, path);
-  } catch {
+    if (options.has("--force")) {
+      renameSync(temporary, path);
+    } else {
+      linkSync(temporary, path);
+      unlinkSync(temporary);
+    }
+  } catch (error) {
     if (existsSync(temporary)) unlinkSync(temporary);
+    if (!options.has("--force") && error?.code === "EEXIST") {
+      throw new CliError("output_exists", `Output file already exists: ${path}`, 2);
+    }
     throw new CliError(
       "output_write_failed",
       `Could not atomically write output in ${dirname(path)}.`,

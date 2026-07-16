@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -16,9 +17,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const cliPath = fileURLToPath(new URL("../cli/openjob.mjs", import.meta.url));
+const repoPath = fileURLToPath(new URL("../", import.meta.url));
 
 function runCli(args, options = {}) {
-  return spawnSync(process.execPath, [cliPath, ...args], {
+  return spawnSync(cliPath, args, {
     encoding: "utf8",
     env: { ...process.env, ...options.env },
     input: options.input,
@@ -32,7 +34,7 @@ function runCliAsync(args, options = {}) {
 }
 
 function startCli(args, options = {}) {
-  const child = spawn(process.execPath, [cliPath, ...args], {
+  const child = spawn(cliPath, args, {
     env: { ...process.env, ...options.env },
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -95,6 +97,33 @@ test("production CLI exposes the executable contract separately from the simulat
   assert.equal(taskHelp.status, 0, taskHelp.stderr);
   for (const command of ["list", "create", "show", "edit", "done", "reopen", "delete"]) {
     assert.match(taskHelp.stdout, new RegExp(`openjob task ${command}`));
+  }
+});
+
+test("package installation exposes the executable on PATH", () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-install-"));
+  try {
+    const install = spawnSync(
+      "npm",
+      [
+        "install",
+        "--prefix",
+        directory,
+        "--no-package-lock",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        repoPath,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(install.status, 0, install.stderr);
+    const installedCli = join(directory, "node_modules", ".bin", "openjob");
+    const version = spawnSync(installedCli, ["--version"], { encoding: "utf8" });
+    assert.equal(version.status, 0, version.stderr);
+    assert.equal(version.stdout, "openjob 0.0.5\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
@@ -962,6 +991,23 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
     assert.equal(json.status, 0, json.stderr);
     assert.deepEqual(bodies[1], input);
 
+    const leadingDashes = await runCliAsync(
+      [
+        "task",
+        "create",
+        "--group",
+        "grp_tasks",
+        "--text=--urgent",
+        "--assignee",
+        "maya",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(leadingDashes.status, 0, leadingDashes.stderr);
+    assert.equal(bodies[2].text, "--urgent");
+
     const mixed = runCli(
       [
         "task",
@@ -987,7 +1033,7 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
         message: "task create accepts --input or named field flags, never both.",
       },
     });
-    assert.equal(bodies.length, 2);
+    assert.equal(bodies.length, 3);
   } finally {
     await service.close();
     rmSync(directory, { recursive: true, force: true });
@@ -1095,6 +1141,24 @@ test("task show and edit expose server state through explicit edit inputs", asyn
     assert.equal(json.status, 0, json.stderr);
     assert.deepEqual(patches[1], { dueDate: "2026-07-20" });
     assert.deepEqual(JSON.parse(json.stdout).data, task);
+
+    const invalidOption = await runCliAsync(
+      [
+        "task",
+        "show",
+        "task_edit",
+        "--group",
+        "grp_tasks",
+        "--due",
+        "none",
+        "--format",
+        "json",
+      ],
+      { env: environment },
+    );
+    assert.equal(invalidOption.status, 2);
+    assert.equal(invalidOption.stdout, "");
+    assert.equal(JSON.parse(invalidOption.stderr).error.code, "usage_error");
   } finally {
     await service.close();
     rmSync(directory, { recursive: true, force: true });
@@ -1210,7 +1274,20 @@ test("task state commands are explicit and deletion requires confirmation", asyn
       data: { taskId: "task_deleted", deleted: true },
     });
     assert.equal(approved.stderr, "");
-    assert.deepEqual(deleted, ["task_deleted"]);
+
+    const interactive = await runCliAsync(
+      ["task", "delete", "task_interactive", "--group", "grp_tasks", "--format", "json"],
+      {
+        env: { ...environment, OPENJOB_TEST_INTERACTIVE: "1" },
+        input: "yes\n",
+      },
+    );
+    assert.equal(interactive.status, 0, interactive.stderr);
+    assert.match(interactive.stderr, /^Delete Task task_interactive\? \[y\/N\] /);
+    assert.deepEqual(JSON.parse(interactive.stdout), {
+      data: { taskId: "task_interactive", deleted: true },
+    });
+    assert.deepEqual(deleted, ["task_deleted", "task_interactive"]);
   } finally {
     await service.close();
     rmSync(directory, { recursive: true, force: true });
@@ -1477,6 +1554,159 @@ test("task failures keep stable API exit statuses and interruption exits 130", a
     assert.equal(result.signal, null);
   } finally {
     await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Task table and JSON Lines output stay stable when redirected", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-formats-"));
+  const credentialPath = join(directory, "credential");
+  const outputPath = join(directory, "tasks.jsonl");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const tasks = [
+    { taskId: "task_1", text: "Line one\nLine two", state: "open" },
+    { taskId: "task_2", text: "Second", state: "done" },
+  ];
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_tasks/tasks?status=open") {
+      response.end(JSON.stringify({ data: tasks, nextCursor: null }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const table = await runCliAsync(
+      ["task", "list", "--group", "grp_tasks", "--out", "-"],
+      { env: environment },
+    );
+    assert.equal(table.status, 0, table.stderr);
+    assert.equal(
+      table.stdout,
+      "TASK_ID\tTEXT\tSTATE\n" +
+        "task_1\tLine one\\nLine two\topen\n" +
+        "task_2\tSecond\tdone\n",
+    );
+    assert.equal(table.stderr, "");
+
+    const jsonl = await runCliAsync(
+      [
+        "task",
+        "list",
+        "--group",
+        "grp_tasks",
+        "--format",
+        "jsonl",
+        "--out",
+        outputPath,
+      ],
+      { env: environment },
+    );
+    assert.equal(jsonl.status, 0, jsonl.stderr);
+    assert.equal(jsonl.stdout, "");
+    assert.equal(
+      readFileSync(outputPath, "utf8"),
+      `${tasks.map((task) => JSON.stringify(task)).join("\n")}\n`,
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("atomic output refuses a destination created during the request", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-output-race-"));
+  const credentialPath = join(directory, "credential");
+  const outputPath = join(directory, "result.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          id_token: "firebase-id-token-process-only-secret",
+          refresh_token: "firebase-refresh-keychain-only-secret",
+        }),
+      );
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_tasks/tasks/task_race") {
+      writeFileSync(outputPath, "created by another process");
+      response.end(JSON.stringify({ data: { taskId: "task_race", state: "open" } }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end();
+  });
+
+  try {
+    const result = await runCliAsync(
+      [
+        "task",
+        "show",
+        "task_race",
+        "--group",
+        "grp_tasks",
+        "--format",
+        "json",
+        "--out",
+        outputPath,
+      ],
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+          OPENJOB_TEST_AUTH_URL: service.baseUrl,
+          OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+          OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+        },
+      },
+    );
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.equal(JSON.parse(result.stderr).error.code, "output_exists");
+    assert.equal(readFileSync(outputPath, "utf8"), "created by another process");
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unexpected local failures use exit status 1", () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-internal-status-"));
+  const credentialPath = join(directory, "credential-directory");
+  mkdirSync(credentialPath);
+  try {
+    const result = runCli(["auth", "status", "--format", "json"], {
+      env: {
+        NODE_ENV: "test",
+        OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+      },
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(JSON.parse(result.stderr).error.code, "internal_error");
+  } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
