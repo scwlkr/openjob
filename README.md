@@ -26,7 +26,8 @@ openjob --help
 ```
 
 The current production command surface covers `auth login/status/logout`,
-`user show`, `username claim`, and `group list/create/show/use/current` against
+`user show`, `username claim`, `group list/create/show/use/current`, and the
+complete `task list/create/show/edit/done/reopen/delete` lifecycle against
 `https://openjob.dev/api/v1`. `OPENJOB_API_URL` may target HTTPS or a local
 loopback service for development. The CLI stores only its Firebase refresh
 credential in the operating-system credential store; local config stores only
