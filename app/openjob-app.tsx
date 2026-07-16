@@ -118,13 +118,13 @@ export function OpenJobApp({
       const token = await activeSession.getIdToken();
       const currentUser = await api.getMe(token);
       setUser(currentUser);
-      if (!currentUser.usernameRequired && !inviteToken) await loadGroups(activeSession);
+      if (!currentUser.usernameRequired) await loadGroups(activeSession);
     } catch (loadError) {
       if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [api, inviteToken, loadGroups, recoverExpiredSession]);
+  }, [api, loadGroups, recoverExpiredSession]);
 
   useEffect(
     () =>

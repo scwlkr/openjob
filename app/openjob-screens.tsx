@@ -237,7 +237,7 @@ export function InviteJoin({
           </>
         ) : preview ? (
           <>
-            <p className={styles.kicker}>Private Group invitation</p>
+            <p className={styles.kicker}>Private Group Invite Link</p>
             <h1>Join {preview.groupName}</h1>
             <p className={styles.lede}>
               Confirm to become a Member. You will see the Group Task List after joining.

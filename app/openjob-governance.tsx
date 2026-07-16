@@ -65,6 +65,7 @@ export function GroupGovernance({
   const [bans, setBans] = useState<Ban[]>([]);
   const [invite, setInvite] = useState<InviteLink | null>(null);
   const [name, setName] = useState(group.name);
+  const [banUserId, setBanUserId] = useState("");
   const [confirmationName, setConfirmationName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -207,9 +208,12 @@ export function GroupGovernance({
                           disabled={saving}
                           onClick={() => confirmAction(
                             `Demote ${memberLabel(member)} to Member?`,
-                            () => void runAction((token) =>
-                              api.demoteMember(token, group.groupId, member.userId).then(() => undefined)
-                            ),
+                            () => void runAction(async (token) => {
+                              const updated = await api.demoteMember(token, group.groupId, member.userId);
+                              if (member.userId === user.userId) {
+                                onGroupUpdated({ ...group, role: updated.role });
+                              }
+                            }, { refresh: member.userId !== user.userId }),
                           )}
                         >Demote</button>
                       )}
@@ -274,6 +278,28 @@ export function GroupGovernance({
                   ))}
                 </div>
               )}
+              <form
+                className={styles.formerMemberForm}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  confirmAction(
+                    "Ban this former Member? They will not be able to rejoin until unbanned.",
+                    () => void runAction(async (token) => {
+                      await api.banMember(token, group.groupId, banUserId);
+                      setBanUserId("");
+                    }),
+                  );
+                }}
+              >
+                <label>
+                  Former Member User ID
+                  <input value={banUserId} onChange={(event) => setBanUserId(event.target.value)} />
+                </label>
+                <p>Use the canonical User ID from a previous roster.</p>
+                <button className={styles.secondaryButton} type="submit" disabled={saving || !banUserId}>
+                  Ban former Member
+                </button>
+              </form>
             </section>
           ) : null}
 
