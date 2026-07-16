@@ -11,6 +11,7 @@ import {
 } from "./openjob-contracts";
 import {
   GroupShell,
+  InviteJoin,
   LoadError,
   LoadingScreen,
   SignedOut,
@@ -36,7 +37,15 @@ function usernameError(error: unknown) {
   return readableError(error);
 }
 
-export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }) {
+export function OpenJobApp({
+  auth,
+  api,
+  inviteToken: initialInviteToken,
+}: {
+  auth: OpenJobAuth;
+  api: OpenJobApi;
+  inviteToken?: string;
+}) {
   const [session, setSession] = useState<AuthSession | null | undefined>(undefined);
   const [user, setUser] = useState<User | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -50,6 +59,7 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
   const [selectingGroupId, setSelectingGroupId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [inviteToken, setInviteToken] = useState(initialInviteToken ?? null);
 
   const recoverExpiredSession = useCallback(async (candidate: unknown) => {
     if (!(candidate instanceof ApiError) || candidate.status !== 401) return false;
@@ -108,13 +118,13 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
       const token = await activeSession.getIdToken();
       const currentUser = await api.getMe(token);
       setUser(currentUser);
-      if (!currentUser.usernameRequired) await loadGroups(activeSession);
+      if (!currentUser.usernameRequired && !inviteToken) await loadGroups(activeSession);
     } catch (loadError) {
       if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [api, loadGroups, recoverExpiredSession]);
+  }, [api, inviteToken, loadGroups, recoverExpiredSession]);
 
   useEffect(
     () =>
@@ -186,8 +196,30 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
     void runSavingAction(async (token, activeSession) => {
       const claimed = await api.claimUsername(token, username);
       setUser(claimed);
-      await loadGroups(activeSession);
+      if (!inviteToken) await loadGroups(activeSession);
     }, usernameError);
+  }
+
+  function completeInvite(group: Group) {
+    setGroups((current) => [
+      ...current.filter((candidate) => candidate.groupId !== group.groupId),
+      group,
+    ]);
+    setSelectedGroup(group);
+    setGroupsReady(true);
+    setInviteToken(null);
+    setNotice(`Joined ${group.name}.`);
+    window.localStorage.setItem(SELECTED_GROUP_KEY, group.groupId);
+    window.history.replaceState({}, "", "/");
+  }
+
+  function cancelInvite() {
+    if (!session) return;
+    setInviteToken(null);
+    window.history.replaceState({}, "", "/");
+    void loadGroups(session).catch(async (loadError) => {
+      if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
+    });
   }
 
   function createGroup(name: string) {
@@ -203,6 +235,22 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
         ? createError.fields.name
         : readableError(createError),
     );
+  }
+
+  function updateGroup(group: Group) {
+    setGroups((current) => current.map((candidate) =>
+      candidate.groupId === group.groupId ? group : candidate
+    ));
+    setSelectedGroup((current) => current?.groupId === group.groupId ? group : current);
+  }
+
+  function removeGroup(group: Group, message: string) {
+    setGroups((current) => current.filter((candidate) => candidate.groupId !== group.groupId));
+    setSelectedGroup((current) => current?.groupId === group.groupId ? null : current);
+    setNotice(message);
+    if (window.localStorage.getItem(SELECTED_GROUP_KEY) === group.groupId) {
+      window.localStorage.removeItem(SELECTED_GROUP_KEY);
+    }
   }
 
   async function selectGroup(group: Group) {
@@ -237,10 +285,23 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
   if ((!user && error) || groupLoadFailed) {
     return <LoadError error={error} onRetry={() => void bootstrap(session)} />;
   }
-  if (!user || (!user.usernameRequired && !groupsReady)) return <LoadingScreen />;
+  if (!user) return <LoadingScreen />;
   if (user.usernameRequired) {
     return <UsernameOnboarding error={error} onClaim={claimUsername} saving={saving} />;
   }
+  if (inviteToken) {
+    return (
+      <InviteJoin
+        api={api}
+        inviteToken={inviteToken}
+        onCancel={cancelInvite}
+        onJoined={completeInvite}
+        onSessionExpired={recoverExpiredSession}
+        session={session}
+      />
+    );
+  }
+  if (!groupsReady) return <LoadingScreen />;
   return (
     <GroupShell
       api={api}
@@ -249,6 +310,8 @@ export function OpenJobApp({ auth, api }: { auth: OpenJobAuth; api: OpenJobApi }
       notice={notice}
       onSessionExpired={recoverExpiredSession}
       onCreate={createGroup}
+      onGroupRemoved={removeGroup}
+      onGroupUpdated={updateGroup}
       onRetry={() => void bootstrap(session)}
       onSelect={(group) => void selectGroup(group)}
       onSignOut={() => void auth.signOut()}

@@ -1,7 +1,15 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
-import type { AuthSession, Group, OpenJobApi, User } from "./openjob-contracts";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  ApiError,
+  type AuthSession,
+  type Group,
+  type InvitePreview,
+  type OpenJobApi,
+  type User,
+} from "./openjob-contracts";
+import { GroupGovernance } from "./openjob-governance";
 import { TaskList } from "./openjob-task-list";
 import styles from "./openjob.module.css";
 
@@ -136,6 +144,125 @@ export function UsernameOnboarding({
   );
 }
 
+export function InviteJoin({
+  api,
+  inviteToken,
+  onCancel,
+  onJoined,
+  onSessionExpired,
+  session,
+}: {
+  api: OpenJobApi;
+  inviteToken: string;
+  onCancel: () => void;
+  onJoined: (group: Group) => void;
+  onSessionExpired: (error: unknown) => Promise<boolean>;
+  session: AuthSession;
+}) {
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [invalid, setInvalid] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setInvalid(false);
+    setError("");
+    try {
+      setPreview(await api.inspectInvite(await session.getIdToken(), inviteToken));
+    } catch (loadError) {
+      if (await onSessionExpired(loadError)) return;
+      if (loadError instanceof ApiError && loadError.status === 404) {
+        setPreview(null);
+        setInvalid(true);
+      } else {
+        setError("OpenJob could not check this Invite Link. Try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [api, inviteToken, onSessionExpired, session]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [load]);
+
+  async function join() {
+    setJoining(true);
+    setError("");
+    try {
+      onJoined(await api.joinInvite(await session.getIdToken(), inviteToken));
+    } catch (joinError) {
+      if (await onSessionExpired(joinError)) return;
+      if (joinError instanceof ApiError) {
+        if (joinError.status === 404) {
+          setPreview(null);
+          setInvalid(true);
+          return;
+        }
+        if (joinError.code === "membership_denied") {
+          setError("Membership could not be granted.");
+          return;
+        }
+        if (joinError.code === "username_required") {
+          setError("Claim a Username before joining this Group.");
+          return;
+        }
+      }
+      setError("OpenJob could not join this Group. Try again.");
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <main className={styles.onboardingShell}>
+      <header className={styles.simpleHeader}>
+        <Brand />
+        <span>Invite Link</span>
+      </header>
+      <section className={styles.onboardingCard}>
+        {invalid ? (
+          <>
+            <p className={styles.kicker}>Private Group</p>
+            <h1>Invite Link unavailable</h1>
+            <p className={styles.lede}>
+              This Invite Link is no longer valid. Ask a Group Admin for the current link.
+            </p>
+            <button className={styles.textButton} type="button" onClick={onCancel}>Back to your Groups</button>
+          </>
+        ) : preview ? (
+          <>
+            <p className={styles.kicker}>Private Group invitation</p>
+            <h1>Join {preview.groupName}</h1>
+            <p className={styles.lede}>
+              Confirm to become a Member. You will see the Group Task List after joining.
+            </p>
+            {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
+            <div className={styles.inviteActions}>
+              <button className={styles.textButton} type="button" onClick={onCancel}>Not now</button>
+              <button className={styles.primaryButton} type="button" disabled={joining} onClick={() => void join()}>
+                {joining ? "Joining…" : "Join Group"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className={styles.kicker}>Invite Link</p>
+            <h1>Invite Link unavailable</h1>
+            <p className={styles.inlineError} role="alert">{error}</p>
+            <button className={styles.primaryButton} type="button" onClick={() => void load()}>Try again</button>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
 function GroupCreator({
   error,
   onCancel,
@@ -210,6 +337,8 @@ export type GroupShellProps = {
   notice: string;
   onSessionExpired: (error: unknown) => Promise<boolean>;
   onCreate: (name: string) => void;
+  onGroupRemoved: (group: Group, message: string) => void;
+  onGroupUpdated: (group: Group) => void;
   onRetry: () => void;
   onSelect: (group: Group) => void;
   onSignOut: () => void;
@@ -222,6 +351,7 @@ export type GroupShellProps = {
 
 export function GroupShell(props: GroupShellProps) {
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<"tasks" | "governance">("tasks");
   return (
     <main className={styles.groupShell} data-testid="group-shell">
       <aside className={styles.groupRail} data-testid="group-rail">
@@ -236,7 +366,10 @@ export function GroupShell(props: GroupShellProps) {
               type="button"
               key={group.groupId}
               className={props.selectedGroup?.groupId === group.groupId ? styles.selectedGroup : ""}
-              onClick={() => props.onSelect(group)}
+              onClick={() => {
+                setView("tasks");
+                props.onSelect(group);
+              }}
               aria-label={group.name}
               aria-current={props.selectedGroup?.groupId === group.groupId ? "page" : undefined}
               disabled={props.selectingGroupId === group.groupId}
@@ -278,14 +411,39 @@ export function GroupShell(props: GroupShellProps) {
                   <code>{props.selectedGroup.groupId}</code>
                 </p>
               </div>
+              <nav className={styles.groupViewNav} aria-label="Selected Group view">
+                <button
+                  type="button"
+                  aria-current={view === "tasks" ? "page" : undefined}
+                  onClick={() => setView("tasks")}
+                >Task List</button>
+                <button
+                  type="button"
+                  aria-current={view === "governance" ? "page" : undefined}
+                  onClick={() => setView("governance")}
+                >{props.selectedGroup.role === "admin" ? "Manage Group" : "Group settings"}</button>
+              </nav>
             </header>
-            <TaskList
-              api={props.api}
-              group={props.selectedGroup}
-              key={props.selectedGroup.groupId}
-              onSessionExpired={props.onSessionExpired}
-              session={props.session}
-            />
+            {view === "tasks" ? (
+              <TaskList
+                api={props.api}
+                group={props.selectedGroup}
+                key={props.selectedGroup.groupId}
+                onSessionExpired={props.onSessionExpired}
+                session={props.session}
+              />
+            ) : (
+              <GroupGovernance
+                api={props.api}
+                group={props.selectedGroup}
+                key={props.selectedGroup.groupId}
+                onGroupRemoved={(message) => props.onGroupRemoved(props.selectedGroup!, message)}
+                onGroupUpdated={props.onGroupUpdated}
+                onSessionExpired={props.onSessionExpired}
+                session={props.session}
+                user={props.user}
+              />
+            )}
           </section>
         ) : (
           <section className={styles.chooseGroup}>

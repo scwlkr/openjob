@@ -1,10 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import Home from "../../../app/page";
+import { OpenJobPage } from "../../../app/page";
 import "../../../app/globals.css";
+
+const inviteToken = window.location.pathname.match(/^\/invites\/([^/]+)$/)?.[1];
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Home />
+    <OpenJobPage inviteToken={inviteToken ? decodeURIComponent(inviteToken) : undefined} />
   </StrictMode>,
 );
