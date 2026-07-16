@@ -109,6 +109,21 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   }
 });
 
+test("release metadata identifies the hosted backend as v0.0.5", async () => {
+  const contract = await validateOpenApiContract(contractUrl);
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const packageLock = JSON.parse(
+    await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+  );
+
+  assert.equal(contract.info.version, "0.0.5");
+  assert.equal(packageJson.version, "0.0.5");
+  assert.equal(packageLock.version, "0.0.5");
+  assert.equal(packageLock.packages[""].version, "0.0.5");
+});
+
 test("shared v1 representations lock identity, pagination, errors, dates, and assignees", async () => {
   const contract = await validateOpenApiContract(contractUrl);
   const { parameters, schemas, securitySchemes } = contract.components;
