@@ -1445,7 +1445,9 @@ components:
         userId:
           $ref: "#/components/schemas/UserId"
         username:
-          $ref: "#/components/schemas/Username"
+          oneOf:
+            - $ref: "#/components/schemas/Username"
+            - type: "null"
         bannedAt:
           $ref: "#/components/schemas/Timestamp"
     InviteLink:

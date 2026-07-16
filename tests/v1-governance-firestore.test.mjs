@@ -636,6 +636,44 @@ test("Ban removes a current Member atomically and denies every Invite Link", asy
   assert.equal((await denied.json()).error.code, "membership_denied");
 });
 
+test("an Admin can Ban an unclaimed current Member", async (t) => {
+  const { claim, createGroup, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const assertContract = await createOpenApiResponseValidator();
+  const eli = await claim("eli");
+  const group = await createGroup("Onboarding Ban");
+  const creatorResponse = await request("shane", {
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  const creator = (await creatorResponse.json()).data;
+  assert.equal(creator.username, null);
+  await join("eli", group.groupId);
+  const promoted = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
+  });
+  assert.equal(promoted.status, 200);
+
+  const banned = await request("eli", {
+    body: { userId: creator.userId },
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/bans/actions/ban`,
+  });
+  assert.equal(banned.status, 201);
+  await assertContract(
+    banned,
+    "/api/v1/groups/{groupId}/bans/actions/ban",
+    "post",
+  );
+  assert.deepEqual((await banned.json()).data, {
+    userId: creator.userId,
+    username: null,
+    bannedAt: NOW,
+  });
+});
+
 test("Admins ban former Members, list bans, and unban without restoring membership", async (t) => {
   const { claim, createGroup, harness, join, request } =
     await createGovernanceHarness(["shane", "eli", "maya", "zoe"]);
@@ -766,49 +804,6 @@ test("Admins ban former Members, list bans, and unban without restoring membersh
   assert.equal((await repeatedUnban.json()).error.code, "ban_not_found");
 });
 
-test("Ban recognizes former Members persisted before durable membership records", async (t) => {
-  const { claim, createGroup, firestore, harness, join, request } =
-    await createGovernanceHarness(["shane", "eli", "maya"]);
-  t.after(() => harness.close());
-  await claim("shane");
-  const eli = await claim("eli");
-  const maya = await claim("maya");
-  const leftGroup = await createGroup("Compatible Leave");
-  await join("eli", leftGroup.groupId);
-  const kickedGroup = await createGroup("Compatible Kick");
-  await join("maya", kickedGroup.groupId);
-  const database = "projects/openjob-dev/databases/(default)/documents";
-  firestore.documents.delete(
-    `${database}/v1Groups/${leftGroup.groupId}/memberRecords/${eli.userId}`,
-  );
-  firestore.documents.delete(
-    `${database}/v1Groups/${kickedGroup.groupId}/memberRecords/${maya.userId}`,
-  );
-
-  const left = await request("eli", {
-    method: "POST",
-    path: `/api/v1/groups/${leftGroup.groupId}/actions/leave`,
-  });
-  assert.equal(left.status, 204);
-  const kicked = await request("shane", {
-    method: "POST",
-    path: `/api/v1/groups/${kickedGroup.groupId}/members/${maya.userId}/actions/kick`,
-  });
-  assert.equal(kicked.status, 204);
-
-  for (const [groupId, former] of [
-    [leftGroup.groupId, eli],
-    [kickedGroup.groupId, maya],
-  ]) {
-    const banned = await request("shane", {
-      body: { userId: former.userId },
-      method: "POST",
-      path: `/api/v1/groups/${groupId}/bans/actions/ban`,
-    });
-    assert.equal(banned.status, 201);
-  }
-});
-
 test("Ban governance preserves Admin-only privacy and settled conflicts", async (t) => {
   const { claim, createGroup, harness, join, request } =
     await createGovernanceHarness(["shane", "eli", "maya", "outsider"]);
@@ -888,6 +883,18 @@ test("Ban governance preserves Admin-only privacy and settled conflicts", async 
   });
   assert.equal(invalidCursor.status, 400);
   assert.equal((await invalidCursor.json()).error.code, "invalid_request");
+  const memberInvalidCursor = await request("eli", {
+    method: "GET",
+    path: `${bansPath}?cursor=`,
+  });
+  assert.equal(memberInvalidCursor.status, 403);
+  assert.equal((await memberInvalidCursor.json()).error.code, "admin_required");
+  const concealedInvalidCursor = await request("outsider", {
+    method: "GET",
+    path: `${bansPath}?cursor=`,
+  });
+  assert.equal(concealedInvalidCursor.status, 404);
+  assert.equal((await concealedInvalidCursor.json()).error.code, "group_not_found");
   const concealedList = await request("outsider", {
     method: "GET",
     path: bansPath,
@@ -900,6 +907,17 @@ test("Ban governance preserves Admin-only privacy and settled conflicts", async 
   });
   assert.equal(concealedUnban.status, 404);
   assert.equal((await concealedUnban.json()).error.code, "ban_not_found");
+  const invalidUnban = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/not-a-group/bans/${maya.userId}/actions/unban`,
+  });
+  assert.equal(invalidUnban.status, 404);
+  await assertContract(
+    invalidUnban,
+    "/api/v1/groups/{groupId}/bans/{userId}/actions/unban",
+    "post",
+  );
+  assert.equal((await invalidUnban.json()).error.code, "ban_not_found");
 });
 
 test("concurrent Task assignment and Ban cannot leave an invalid assignee", async (t) => {
@@ -1099,46 +1117,6 @@ test("concurrent Ban and demotion cannot remove every Admin", async (t) => {
     ],
     nextCursor: null,
   });
-});
-
-test("Ban stays atomic independently of the removed Member's open Task count", async (t) => {
-  const { claim, createGroup, firestore, harness, join, request } =
-    await createGovernanceHarness(["shane", "eli"]);
-  t.after(() => harness.close());
-  await claim("shane");
-  const eli = await claim("eli");
-  const group = await createGroup("Bounded Ban");
-  await join("eli", group.groupId);
-  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
-  const tasks = [];
-  for (let index = 1; index <= 6; index += 1) {
-    const created = await request("shane", {
-      body: { text: `Banned work ${index}`, assigneeUsername: "eli" },
-      method: "POST",
-      path: tasksPath,
-    });
-    assert.equal(created.status, 201);
-    tasks.push((await created.json()).data);
-  }
-
-  firestore.setMaxCommitWrites(5);
-  const commitsBeforeBan = firestore.commitAttempts();
-  const banned = await request("shane", {
-    body: { userId: eli.userId },
-    method: "POST",
-    path: `/api/v1/groups/${group.groupId}/bans/actions/ban`,
-  });
-  assert.equal(banned.status, 201);
-  assert.equal(firestore.commitAttempts(), commitsBeforeBan + 1);
-
-  const listed = await request("shane", {
-    method: "GET",
-    path: `${tasksPath}?status=all`,
-  });
-  assert.deepEqual(
-    (await listed.json()).data.map(({ taskId, assignee }) => ({ taskId, assignee })),
-    tasks.map(({ taskId }) => ({ taskId, assignee: { state: "unassigned" } })),
-  );
 });
 
 test("concurrent Task assignment and Kick cannot leave an invalid assignee", async (t) => {

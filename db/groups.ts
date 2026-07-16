@@ -119,9 +119,9 @@ function parseMembership(
 
 function parseBan(document: FirestoreDocument, path: string): StoredBan {
   const userId = document.fields?.userId?.stringValue;
-  const username = document.fields?.username?.stringValue;
+  const username = document.fields?.username?.stringValue ?? null;
   const bannedAt = document.fields?.bannedAt?.timestampValue;
-  if (!userId || !username || !bannedAt || !document.updateTime) {
+  if (!userId || !bannedAt || !document.updateTime) {
     throw new Error("Firestore returned an invalid Group ban record.");
   }
   return { bannedAt, path, updateTime: document.updateTime, userId, username };
@@ -318,14 +318,16 @@ export function createFirestoreGroupStore(
     return `${groupPath(groupId)}/bans/${userId}`;
   }
 
-  function memberRecordPath(groupId: GroupId, userId: string) {
-    return `${groupPath(groupId)}/memberRecords/${userId}`;
+  function membershipEvidencePath(groupId: GroupId, userId: string) {
+    return `${groupPath(groupId)}/membershipEvidence/${userId}`;
   }
 
-  function memberRecordWrite(groupId: GroupId, user: GroupUser) {
+  function membershipEvidenceWrite(groupId: GroupId, user: GroupUser) {
     return {
       update: {
-        name: firestore.documentName(memberRecordPath(groupId, user.userId)),
+        name: firestore.documentName(
+          membershipEvidencePath(groupId, user.userId),
+        ),
         fields: {
           userId: { stringValue: user.userId },
           ...(user.username
@@ -537,11 +539,11 @@ export function createFirestoreGroupStore(
         const targetUserId = targetUser.userId;
         const group = await readGroup(groupPath(groupId));
         if (!group) return { kind: "not_found" as const };
-        const [actor, target, existingBan, memberRecord] = await Promise.all([
+        const [actor, target, existingBan, membershipEvidence] = await Promise.all([
           readMembership(membershipPath(groupId, actorUserId)),
           readMembership(membershipPath(groupId, targetUserId)),
           readBan(banPath(groupId, targetUserId)),
-          readDocument(memberRecordPath(groupId, targetUserId)),
+          readDocument(membershipEvidencePath(groupId, targetUserId)),
         ]);
         if (!actor) return { kind: "not_found" as const };
         if (actor.role !== "admin") return { kind: "forbidden" as const };
@@ -549,7 +551,7 @@ export function createFirestoreGroupStore(
           return { kind: "self_removal" as const };
         }
         if (existingBan) return { kind: "ban_not_allowed" as const };
-        if ((!target && !memberRecord) || !targetUser.username) {
+        if (!target && !membershipEvidence) {
           return { kind: "user_not_found" as const };
         }
         if (target?.role === "admin") {
@@ -575,7 +577,9 @@ export function createFirestoreGroupStore(
                 name: firestore.documentName(banPath(groupId, targetUserId)),
                 fields: {
                   userId: { stringValue: ban.userId },
-                  username: { stringValue: ban.username },
+                  ...(ban.username
+                    ? { username: { stringValue: ban.username } }
+                    : {}),
                   bannedAt: { timestampValue: ban.bannedAt },
                 },
               },
@@ -601,7 +605,9 @@ export function createFirestoreGroupStore(
                     currentDocument: { exists: false },
                   },
                 ]),
-            ...(memberRecord ? [] : [memberRecordWrite(groupId, targetUser)]),
+            ...(membershipEvidence
+              ? []
+              : [membershipEvidenceWrite(groupId, targetUser)]),
           ]);
           return { kind: "banned" as const, ban };
         } catch (error) {
@@ -649,7 +655,7 @@ export function createFirestoreGroupStore(
               },
               currentDocument: { exists: false },
             },
-            memberRecordWrite(groupId, user),
+            membershipEvidenceWrite(groupId, user),
             {
               update: {
                 name: firestore.documentName(accessDocumentPath),
@@ -750,11 +756,11 @@ export function createFirestoreGroupStore(
 
         const memberDocumentPath = membershipPath(group.groupId, user.userId);
         const userBanPath = banPath(group.groupId, user.userId);
-        const recordPath = memberRecordPath(group.groupId, user.userId);
-        const [existing, existingBan, memberRecord] = await Promise.all([
+        const evidencePath = membershipEvidencePath(group.groupId, user.userId);
+        const [existing, existingBan, membershipEvidence] = await Promise.all([
           readMembership(memberDocumentPath),
           readBan(userBanPath),
-          readDocument(recordPath),
+          readDocument(evidencePath),
         ]);
         if (existing) {
           return {
@@ -806,7 +812,9 @@ export function createFirestoreGroupStore(
             },
             currentDocument: { exists: false },
           },
-          ...(memberRecord ? [] : [memberRecordWrite(group.groupId, user)]),
+          ...(membershipEvidence
+            ? []
+            : [membershipEvidenceWrite(group.groupId, user)]),
           {
             update: {
               name: firestore.documentName(accessPath(user.userId, group.groupId)),
@@ -854,10 +862,10 @@ export function createFirestoreGroupStore(
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const group = await readGroup(groupPath(groupId));
         if (!group) return { kind: "not_found" as const };
-        const [actor, target, memberRecord] = await Promise.all([
+        const [actor, target, membershipEvidence] = await Promise.all([
           readMembership(membershipPath(groupId, actorUserId)),
           readMembership(membershipPath(groupId, targetUserId)),
-          readDocument(memberRecordPath(groupId, targetUserId)),
+          readDocument(membershipEvidencePath(groupId, targetUserId)),
         ]);
         if (!actor) return { kind: "not_found" as const };
         if (actor.role !== "admin") return { kind: "forbidden" as const };
@@ -885,10 +893,10 @@ export function createFirestoreGroupStore(
             {
               delete: firestore.documentName(accessPath(targetUserId, groupId)),
             },
-            ...(memberRecord
+            ...(membershipEvidence
               ? []
               : [
-                  memberRecordWrite(groupId, {
+                  membershipEvidenceWrite(groupId, {
                     userId: targetUserId,
                     username: target.username,
                   }),
@@ -906,9 +914,9 @@ export function createFirestoreGroupStore(
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const group = await readGroup(groupPath(groupId));
         if (!group) return { kind: "not_found" as const };
-        const [member, memberRecord] = await Promise.all([
+        const [member, membershipEvidence] = await Promise.all([
           readMembership(membershipPath(groupId, userId)),
-          readDocument(memberRecordPath(groupId, userId)),
+          readDocument(membershipEvidencePath(groupId, userId)),
         ]);
         if (!member) return { kind: "not_found" as const };
         if (member.role === "admin") {
@@ -931,10 +939,10 @@ export function createFirestoreGroupStore(
             {
               delete: firestore.documentName(accessPath(userId, groupId)),
             },
-            ...(memberRecord
+            ...(membershipEvidence
               ? []
               : [
-                  memberRecordWrite(groupId, {
+                  membershipEvidenceWrite(groupId, {
                     userId,
                     username: member.username,
                   }),

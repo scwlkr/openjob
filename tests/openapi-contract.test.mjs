@@ -214,6 +214,14 @@ test("contract schemas enforce normalized domain rules and status-specific error
     }),
     true,
   );
+  assert.equal(
+    compileSchema(schemas.Ban)({
+      userId: "user_onboarding",
+      username: null,
+      bannedAt: "2026-07-15T12:00:00Z",
+    }),
+    true,
+  );
   assert.equal(compileSchema(schemas.GroupName)("Alpha\u2028Beta"), false);
   assert.equal(compileSchema(schemas.TaskText)("\n\n"), false);
   assert.equal(Object.hasOwn(schemas.Task.properties, "updatedAt"), false);

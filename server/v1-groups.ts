@@ -22,6 +22,10 @@ export function isGroupId(value: string): value is GroupId {
   return value.length <= 1_500 && /^grp_[A-Za-z0-9_-]+$/.test(value);
 }
 
+export function isUserId(value: string) {
+  return value.length <= 1_500 && /^user_[A-Za-z0-9_-]+$/.test(value);
+}
+
 export type OpenJobGroup = {
   groupId: GroupId;
   name: string;
@@ -38,7 +42,7 @@ export type OpenJobMember = {
 
 export type OpenJobBan = {
   userId: string;
-  username: string;
+  username: string | null;
   bannedAt: string;
 };
 
@@ -385,9 +389,7 @@ async function readBanTarget(request: Request) {
       Object.keys(input).length !== 1 ||
       !("userId" in input) ||
       typeof input.userId !== "string" ||
-      input.userId.length === 0 ||
-      input.userId.length > 1_500 ||
-      /[/?#]/.test(input.userId)
+      !isUserId(input.userId)
     ) {
       return null;
     }
@@ -470,9 +472,7 @@ function memberActionFromPath(pathname: string) {
     const userId = decodeURIComponent(match[2]);
     if (
       !isGroupId(groupId) ||
-      userId.length === 0 ||
-      userId.length > 1_500 ||
-      /[/?#]/.test(userId)
+      !isUserId(userId)
     ) {
       return { kind: "invalid" as const };
     }
@@ -492,24 +492,24 @@ function banActionFromPath(pathname: string) {
     /^\/api\/v1\/groups\/([^/]+)\/bans(?:\/actions\/(ban)|\/([^/]+)\/actions\/(unban))$/,
   );
   if (!match) return { kind: "none" as const };
+  const action = (match[2] ?? match[4]) as "ban" | "unban";
   try {
     const groupId = decodeURIComponent(match[1]);
     const userId = match[3] ? decodeURIComponent(match[3]) : null;
     if (
       !isGroupId(groupId) ||
-      (userId !== null &&
-        (userId.length === 0 || userId.length > 1_500 || /[/?#]/.test(userId)))
+      (userId !== null && !isUserId(userId))
     ) {
-      return { kind: "invalid" as const };
+      return { kind: "invalid" as const, action };
     }
     return {
       kind: "valid" as const,
-      action: (match[2] ?? match[4]) as "ban" | "unban",
+      action,
       groupId: groupId as GroupId,
       userId,
     };
   } catch {
-    return { kind: "invalid" as const };
+    return { kind: "invalid" as const, action };
   }
 }
 
@@ -617,6 +617,9 @@ export function createV1GroupsApi({
             });
           }
           if (resource === "bans" && request.method === "GET") {
+            const visibleGroup = await groups.get(user.userId, groupId);
+            if (!visibleGroup) return groupNotFound(requestId);
+            if (visibleGroup.role !== "admin") return adminRequired(requestId);
             const pagination = readPagination(url);
             if ("error" in pagination) {
               return paginationError(pagination.error, requestId);
@@ -672,7 +675,11 @@ export function createV1GroupsApi({
         }
 
         const banActionPath = banActionFromPath(url.pathname);
-        if (banActionPath.kind === "invalid") return userNotFound(requestId);
+        if (banActionPath.kind === "invalid") {
+          return banActionPath.action === "unban"
+            ? banNotFound(requestId)
+            : userNotFound(requestId);
+        }
         if (
           banActionPath.kind === "valid" &&
           banActionPath.action === "ban" &&
