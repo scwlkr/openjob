@@ -9,6 +9,13 @@ async function responseData(response) {
   return (await response.clone().json()).data;
 }
 
+function assertExactPagedIds(pages, idKey, expectedIds, label) {
+  const actualIds = pages.flatMap(({ data }) => data).map((item) => item[idKey]);
+  if (actualIds.join(",") !== [...expectedIds].sort().join(",")) {
+    throw new Error(`${label} pagination skipped or duplicated a ${label}.`);
+  }
+}
+
 export async function runV1AcceptanceScenario({
   checkpoint = async () => {},
   proposedUsernames,
@@ -110,13 +117,12 @@ export async function runV1AcceptanceScenario({
   if (secondGroupPage.data.length !== 1 || secondGroupPage.nextCursor !== null) {
     throw new Error("Group pagination did not terminate after the second row.");
   }
-  const pagedGroupIds = [...firstGroupPage.data, ...secondGroupPage.data].map(
-    ({ groupId }) => groupId,
+  assertExactPagedIds(
+    [firstGroupPage, secondGroupPage],
+    "groupId",
+    [group.groupId, paginationGroup.groupId],
+    "Group",
   );
-  const expectedGroupIds = [group.groupId, paginationGroup.groupId].sort();
-  if (pagedGroupIds.join(",") !== expectedGroupIds.join(",")) {
-    throw new Error("Group pagination skipped or duplicated a Group.");
-  }
   await expectSuccess({
     actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}",
@@ -175,13 +181,12 @@ export async function runV1AcceptanceScenario({
   if (secondMemberPage.data.length !== 1 || secondMemberPage.nextCursor !== null) {
     throw new Error("Member pagination did not terminate after the second row.");
   }
-  const pagedMemberIds = [...firstMemberPage.data, ...secondMemberPage.data].map(
-    ({ userId }) => userId,
+  assertExactPagedIds(
+    [firstMemberPage, secondMemberPage],
+    "userId",
+    [initialAdmin.userId, memberUser.userId],
+    "Member",
   );
-  const expectedMemberIds = [initialAdmin.userId, memberUser.userId].sort();
-  if (pagedMemberIds.join(",") !== expectedMemberIds.join(",")) {
-    throw new Error("Member pagination skipped or duplicated a Member.");
-  }
 
   const tasksPath = `${groupPath}/tasks`;
   await expectSuccess({
