@@ -8,7 +8,7 @@ const redirectUri = "http://127.0.0.1:43123/callback";
 const codeVerifier = "v".repeat(64);
 
 function exchangeRequest(body) {
-  return new Request("https://openjob.test/cli-auth/exchange", {
+  return new Request("https://openjob.test/api/cli-auth/exchange", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
