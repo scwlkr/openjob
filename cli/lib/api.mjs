@@ -26,6 +26,7 @@ export function apiBaseUrl(environment = process.env) {
   return raw.replace(/\/$/, "");
 }
 
+/** @returns {Promise<unknown>} */
 export async function apiRequest(
   path,
   init = {},
@@ -35,6 +36,7 @@ export async function apiRequest(
   return createApiClient(environment).request(path, init, options);
 }
 
+/** @returns {Promise<unknown>} */
 export async function apiRequestWithIdToken(
   path,
   init = {},
@@ -44,6 +46,7 @@ export async function apiRequestWithIdToken(
   return createApiClient(environment, idToken).request(path, init);
 }
 
+/** @returns {Promise<unknown>} */
 export async function apiCollection(path, options = {}, environment = process.env) {
   return createApiClient(environment).collection(path, options);
 }

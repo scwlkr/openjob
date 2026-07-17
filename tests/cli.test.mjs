@@ -142,7 +142,12 @@ test("production CLI exposes the executable contract separately from the simulat
   assert.equal(authHelp.status, 0, authHelp.stderr);
   assert.match(authHelp.stdout, /openjob auth login \[--no-open\]/);
   assert.match(authHelp.stdout, /openjob auth status/);
-  assert.match(authHelp.stdout, /openjob auth logout/);
+  assert.match(authHelp.stdout, /openjob auth logout \[--yes\]/);
+
+  const usernameHelp = runCli(["help", "username"]);
+  assert.equal(usernameHelp.status, 0, usernameHelp.stderr);
+  assert.match(usernameHelp.stdout, /openjob username claim <username>/);
+  assert.match(usernameHelp.stdout, /openjob username claim --input <path\|->/);
 
   const groupHelp = runCli(["help", "group"]);
   assert.equal(groupHelp.status, 0, groupHelp.stderr);
@@ -247,6 +252,60 @@ test("group current resolves explicit flag, environment, then local config", () 
     assert.equal(invalidOption.stdout, "");
     assert.equal(JSON.parse(invalidOption.stderr).error.code, "usage_error");
   } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a concealed config-selected Group is cleared without changing overrides", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-stale-group-"));
+  const credentialPath = join(directory, "credential");
+  const configPath = join(directory, "config.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_stale" }));
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({
+      error: { code: "group_not_found", message: "Group not found." },
+    }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const stale = await runCliAsync(["group", "show", "--format", "json"], {
+      env: environment,
+    });
+    assert.equal(stale.status, 5, stale.stderr);
+    assert.equal(JSON.parse(stale.stderr).error.code, "group_not_found");
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), {});
+
+    writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_remembered" }));
+    const override = await runCliAsync(
+      ["group", "show", "--group", "grp_override", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(override.status, 5, override.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), {
+      currentGroupId: "grp_remembered",
+    });
+  } finally {
+    await service.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -572,12 +631,24 @@ test("auth login preserves rate-limit and service exit statuses", async () => {
   }
 });
 
-test("auth logout deletes the stored refresh credential without network access", () => {
+test("auth logout requires confirmation and deletes credentials without network access", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-logout-"));
   const credentialPath = join(directory, "credential");
   writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
   try {
-    const first = runCli(["auth", "logout", "--format", "json"], {
+    const refused = runCli(["auth", "logout", "--format", "json"], {
+      env: {
+        NODE_ENV: "test",
+        OPENJOB_API_URL: "http://127.0.0.1:1/api/v1",
+        OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+      },
+    });
+    assert.equal(refused.status, 2);
+    assert.equal(refused.stdout, "");
+    assert.equal(JSON.parse(refused.stderr).error.code, "confirmation_required");
+    assert.equal(existsSync(credentialPath), true);
+
+    const first = runCli(["auth", "logout", "--yes", "--format", "json"], {
       env: {
         NODE_ENV: "test",
         OPENJOB_API_URL: "http://127.0.0.1:1/api/v1",
@@ -589,7 +660,7 @@ test("auth logout deletes the stored refresh credential without network access",
     assert.equal(first.stderr, "");
     assert.equal(existsSync(credentialPath), false);
 
-    const repeated = runCli(["auth", "logout", "--format", "json"], {
+    const repeated = runCli(["auth", "logout", "--yes", "--format", "json"], {
       env: {
         NODE_ENV: "test",
         OPENJOB_API_URL: "http://127.0.0.1:1/api/v1",
@@ -668,7 +739,15 @@ test("user show and username claim use the shared identity API", async () => {
     assert.equal(claim.status, 0, claim.stderr);
     assert.deepEqual(JSON.parse(claim.stdout), currentUser);
     assert.equal(claim.stderr, "");
-    assert.equal(calls.length, 4);
+
+    const inputClaim = await runCliAsync(
+      ["username", "claim", "--input", "-", "--format", "json"],
+      { env: environment, input: '{"username":"scwlkr"}\n' },
+    );
+    assert.equal(inputClaim.status, 0, inputClaim.stderr);
+    assert.deepEqual(JSON.parse(inputClaim.stdout), currentUser);
+    assert.equal(inputClaim.stderr, "");
+    assert.equal(calls.length, 6);
   } finally {
     await service.close();
     rmSync(directory, { recursive: true, force: true });
