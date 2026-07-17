@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   type AuthSession,
@@ -352,42 +352,111 @@ export type GroupShellProps = {
 export function GroupShell(props: GroupShellProps) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"tasks" | "governance">("tasks");
+  const [openMenu, setOpenMenu] = useState<"group" | "user" | null>(null);
+  const groupMenuButton = useRef<HTMLButtonElement>(null);
+  const userMenuButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    function closeMenu(event: KeyboardEvent) {
+      if (event.key !== "Escape" || !openMenu) return;
+      const opener = openMenu === "group" ? groupMenuButton : userMenuButton;
+      setOpenMenu(null);
+      window.setTimeout(() => opener.current?.focus(), 0);
+    }
+    document.addEventListener("keydown", closeMenu);
+    return () => document.removeEventListener("keydown", closeMenu);
+  }, [openMenu]);
+
   return (
     <main className={styles.groupShell} data-testid="group-shell">
-      <aside className={styles.groupRail} data-testid="group-rail">
-        <div className={styles.railTopline}>
-          <Brand />
-          <button className={styles.compactSignOut} type="button" onClick={props.onSignOut}>Sign out</button>
-        </div>
-        <p className={styles.railLabel}>Your Groups</p>
-        <nav className={styles.groupList} aria-label="Groups">
-          {props.groups.map((group) => (
+      <header className={styles.signedInHeader}>
+        <Brand />
+        <div className={styles.signedInNav} aria-label="OpenJob navigation">
+          <div className={styles.navMenu}>
             <button
+              aria-controls="group-menu-panel"
+              aria-expanded={openMenu === "group"}
+              aria-label="Group menu"
+              className={styles.navMenuTrigger}
+              onClick={() => setOpenMenu((current) => current === "group" ? null : "group")}
+              ref={groupMenuButton}
               type="button"
-              key={group.groupId}
-              className={props.selectedGroup?.groupId === group.groupId ? styles.selectedGroup : ""}
-              onClick={() => {
-                setView("tasks");
-                props.onSelect(group);
-              }}
-              aria-label={group.name}
-              aria-current={props.selectedGroup?.groupId === group.groupId ? "page" : undefined}
-              disabled={props.selectingGroupId === group.groupId}
             >
-              <span aria-hidden="true">{initials(group.name)}</span>
-              <b>{group.name}</b>
+              <span className={styles.navMenuTriggerText}>{props.selectedGroup?.name ?? "Groups"}</span>
+              <span aria-hidden="true">↓</span>
             </button>
-          ))}
-        </nav>
-        {props.groups.length > 0 ? (
-          <button className={styles.newGroupButton} type="button" onClick={() => setCreating(true)}>+ New Group</button>
-        ) : null}
-        <div className={styles.signedInUser}>
-          <span aria-hidden="true">@</span>
-          <b>{props.user.username}</b>
-          <button type="button" onClick={props.onSignOut}>Sign out</button>
+            {openMenu === "group" ? (
+              <div className={styles.navMenuPanel} id="group-menu-panel" data-testid="group-menu-panel">
+                <p className={styles.menuLabel}>Your Groups</p>
+                <nav className={styles.menuGroupList} aria-label="Groups">
+                  {props.groups.map((group) => (
+                    <button
+                      type="button"
+                      key={group.groupId}
+                      className={props.selectedGroup?.groupId === group.groupId ? styles.selectedMenuGroup : ""}
+                      onClick={() => {
+                        setOpenMenu(null);
+                        setView("tasks");
+                        props.onSelect(group);
+                      }}
+                      aria-current={props.selectedGroup?.groupId === group.groupId ? "page" : undefined}
+                      disabled={props.selectingGroupId === group.groupId}
+                    >
+                      <span aria-hidden="true">{initials(group.name)}</span>
+                      <b>{group.name}</b>
+                    </button>
+                  ))}
+                </nav>
+                {props.groups.length > 0 ? (
+                  <div className={styles.menuActions}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenu(null);
+                        setCreating(true);
+                      }}
+                    >New Group</button>
+                    {props.selectedGroup ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenMenu(null);
+                          setView("governance");
+                        }}
+                      >{props.selectedGroup.role === "admin" ? "Manage Group" : "Group settings"}</button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <div className={styles.navMenu}>
+            <button
+              aria-controls="user-menu-panel"
+              aria-expanded={openMenu === "user"}
+              aria-label="User menu"
+              className={styles.userMenuTrigger}
+              onClick={() => setOpenMenu((current) => current === "user" ? null : "user")}
+              ref={userMenuButton}
+              type="button"
+            >@{props.user.username}</button>
+            {openMenu === "user" ? (
+              <div className={`${styles.navMenuPanel} ${styles.userMenuPanel}`} id="user-menu-panel">
+                <p className={styles.menuLabel}>Signed in as @{props.user.username}</p>
+                <div className={styles.menuActions}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      props.onSignOut();
+                    }}
+                  >Sign out</button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </aside>
+      </header>
 
       <section className={styles.groupSurface} data-testid="group-surface">
         {props.notice ? <p className={styles.notice} role="status">{props.notice}</p> : null}
@@ -403,7 +472,6 @@ export function GroupShell(props: GroupShellProps) {
           <section className={styles.selectedGroupSurface}>
             <header>
               <div>
-                <p className={styles.kicker}>Selected Group</p>
                 <h1>{props.selectedGroup.name}</h1>
                 <p className={styles.groupMeta}>
                   {props.selectedGroup.role === "admin" ? "Admin" : "Member"}
@@ -411,18 +479,14 @@ export function GroupShell(props: GroupShellProps) {
                   <code>{props.selectedGroup.groupId}</code>
                 </p>
               </div>
-              <nav className={styles.groupViewNav} aria-label="Selected Group view">
+              {view === "governance" ? (
+                <nav className={styles.groupViewNav} aria-label="Selected Group view">
                 <button
                   type="button"
-                  aria-current={view === "tasks" ? "page" : undefined}
                   onClick={() => setView("tasks")}
-                >Task List</button>
-                <button
-                  type="button"
-                  aria-current={view === "governance" ? "page" : undefined}
-                  onClick={() => setView("governance")}
-                >{props.selectedGroup.role === "admin" ? "Manage Group" : "Group settings"}</button>
-              </nav>
+                >Back to Task List</button>
+                </nav>
+              ) : null}
             </header>
             {view === "tasks" ? (
               <TaskList
@@ -450,7 +514,7 @@ export function GroupShell(props: GroupShellProps) {
             <p className={styles.kicker}>More than one place to work</p>
             <h1>Choose a Group</h1>
             <p className={styles.lede}>
-              Pick one from the Group rail. OpenJob will remember this choice only on this device.
+              Pick one from the Group menu. OpenJob will remember this choice only on this device.
             </p>
           </section>
         )}

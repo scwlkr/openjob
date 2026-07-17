@@ -93,6 +93,20 @@ async function startSignedIn(page: Page) {
   });
 }
 
+async function openGroupMenu(page: Page) {
+  await page.getByRole("button", { name: "Group menu" }).click();
+}
+
+async function openGroupManagement(page: Page, action: "Manage Group" | "Group settings") {
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: action }).click();
+}
+
+async function signOut(page: Page) {
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+}
+
 async function expectConfirmation(
   page: Page,
   expectedMessage: string,
@@ -709,7 +723,7 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("openjob-test:firebase-persistence"))).toBe("LOCAL");
   expect(state.authorizationHeaders.every((header) => header === "Bearer browser-test-token")).toBe(true);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOut(page);
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
@@ -727,6 +741,7 @@ test("returns a signed-out Invite Link visitor to an explicit Group join confirm
   await page.getByRole("button", { name: "Join Group" }).click();
 
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await openGroupMenu(page);
   await expect(page.getByRole("button", { name: "OpenJob Core", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe("/");
   await expect.poll(() =>
@@ -735,7 +750,7 @@ test("returns a signed-out Invite Link visitor to an explicit Group join confirm
   expect(state.invite.remainingJoins).toBe(24);
 });
 
-test("keeps an existing Member's complete Group rail on idempotent Invite Link join", async ({ page }) => {
+test("keeps an existing Member's complete Group menu on idempotent Invite Link join", async ({ page }) => {
   await startSignedIn(page);
   const state = await installApi(page, {
     user: signedInUser,
@@ -748,6 +763,7 @@ test("keeps an existing Member's complete Group rail on idempotent Invite Link j
   await page.goto(`/invites/${state.invite.token}`);
   await page.getByRole("button", { name: "Join Group" }).click();
 
+  await openGroupMenu(page);
   await expect(page.getByRole("button", { name: "Walker Labs", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "OpenJob Core", exact: true })).toBeVisible();
   expect(state.invite.remainingJoins).toBe(25);
@@ -797,7 +813,7 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Manage Group" }).click();
+  await openGroupManagement(page, "Manage Group");
 
   await expect(page.getByRole("heading", { name: "Manage Walker Labs" })).toBeVisible();
   await expect(page.getByLabel("Invite Link")).toHaveValue(state.invite.url);
@@ -860,14 +876,14 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   );
   await expect(page.getByTestId("ban-row").filter({ hasText: "@elijah" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Task List" }).click();
+  await page.getByRole("button", { name: "Back to Task List" }).click();
   const unassigned = page.getByTestId("task-lane").filter({
     has: page.getByRole("heading", { name: "Unassigned" }),
   });
   await expect(unassigned.getByText("Recover removed Member work")).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Manage Group" }).click();
+  await openGroupManagement(page, "Manage Group");
   const governanceSurface = await page.getByTestId("governance-surface").boundingBox();
   expect(governanceSurface!.width).toBeLessThanOrEqual(354);
 
@@ -905,7 +921,7 @@ test("keeps Admin controls private and enforces guarded Member departure", async
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Group settings" }).click();
+  await openGroupManagement(page, "Group settings");
 
   await expect(page.getByRole("heading", { name: "OpenJob Core settings" })).toBeVisible();
   await expect(page.getByLabel("Invite Link")).toHaveCount(0);
@@ -939,7 +955,7 @@ test("lets the sole Admin rename and explicitly End Group", async ({ page }) => 
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Manage Group" }).click();
+  await openGroupManagement(page, "Manage Group");
 
   await page.getByLabel("Group Name").fill("Walker Studio");
   await page.getByRole("button", { name: "Rename Group" }).click();
@@ -967,6 +983,7 @@ test("auto-selects one Group but requires and remembers a choice among multiple 
   await page.evaluate(() => window.localStorage.removeItem("openjob:selected-group-id"));
   await page.reload();
   await expect(page.getByRole("heading", { name: "Choose a Group" })).toBeVisible();
+  await openGroupMenu(page);
   await page.getByRole("button", { name: "OpenJob Core", exact: true }).click();
   await expect(page.getByRole("heading", { name: "OpenJob Core", exact: true })).toBeVisible();
 
@@ -989,7 +1006,7 @@ test("clears stale or concealed Group access without exposing private details", 
   await expect(page.getByText("That Group is no longer accessible.")).toBeVisible();
   await expect(page.getByText("Retired Operations")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOut(page);
   state.groups = [walkerLabs, openJobCore];
   state.concealedGroupIds.clear();
   await page.getByRole("button", { name: "Continue with Google" }).click();
@@ -1007,28 +1024,72 @@ test("accepts an 80-character Unicode Group Name from the service", async ({ pag
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 });
 
-test("uses a persistent rail on desktop and a horizontal Group picker on narrow screens", async ({ page }) => {
+test("switches Groups and exposes role-appropriate actions from compact signed-in menus", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs, openJobCore] });
+  await page.goto("/");
+
+  await expect(page.getByTestId("group-rail")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Group menu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "User menu" })).toBeVisible();
+
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Group menu" }).click();
+  await expect(page.getByRole("button", { name: "New Group" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage Group" })).toBeVisible();
+  await page.getByRole("button", { name: "OpenJob Core", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "OpenJob Core", exact: true })).toBeVisible();
+  await expect.poll(() =>
+    page.evaluate(() => window.localStorage.getItem("openjob:selected-group-id")),
+  ).toBe(openJobCore.groupId);
+  await page.getByRole("button", { name: "Group menu" }).click();
+  await expect(page.getByRole("button", { name: "Group settings" })).toBeVisible();
+});
+
+test("keeps compact navigation keyboard-visible and overflow-free at desktop and narrow widths", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, { user: signedInUser, groups: [walkerLabs, openJobCore] });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
 
-  const desktopRail = await page.getByTestId("group-rail").boundingBox();
-  const desktopSurface = await page.getByTestId("group-surface").boundingBox();
-  expect(desktopRail!.width).toBeLessThan(300);
-  expect(desktopRail!.height).toBeGreaterThanOrEqual(790);
-  expect(desktopSurface!.x).toBeGreaterThanOrEqual(desktopRail!.width - 1);
+  const groupMenu = page.getByRole("button", { name: "Group menu" });
+  const userMenu = page.getByRole("button", { name: "User menu" });
+  for (const control of [groupMenu, userMenu]) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
+
+  await page.keyboard.press("Tab");
+  await expect(groupMenu).toBeFocused();
+  expect(await groupMenu.evaluate((element) => Number.parseFloat(getComputedStyle(element).outlineWidth)))
+    .toBeGreaterThanOrEqual(3);
+  await page.keyboard.press("Enter");
+  const groupPanel = page.getByTestId("group-menu-panel");
+  await expect(groupPanel).toBeVisible();
+  for (const control of await groupPanel.getByRole("button").all()) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.keyboard.press("Escape");
+  await expect(groupPanel).toHaveCount(0);
+  await expect(groupMenu).toBeFocused();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const narrowRail = await page.getByTestId("group-rail").boundingBox();
-  const firstGroup = await page.getByRole("button", { name: "Walker Labs", exact: true }).boundingBox();
-  const secondGroup = await page.getByRole("button", { name: "OpenJob Core", exact: true }).boundingBox();
-  const newGroup = await page.getByRole("button", { name: "+ New Group" }).boundingBox();
-  expect(narrowRail!.width).toBeGreaterThanOrEqual(389);
-  expect(narrowRail!.height).toBeLessThan(240);
-  expect(Math.abs(firstGroup!.y - secondGroup!.y)).toBeLessThan(2);
-  expect(newGroup!.y).toBeGreaterThan(firstGroup!.y + firstGroup!.height);
+  await expect(page.getByTestId("group-rail")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  for (const control of [groupMenu, userMenu]) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
 });
 
 test("distinguishes loading and failures from a User with no Groups", async ({ page }) => {
@@ -1091,6 +1152,7 @@ test("recovers when a session expires while selecting a Group", async ({ page })
     getGroupFailureStatus: 401,
   });
   await page.goto("/");
+  await openGroupMenu(page);
   await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
 
