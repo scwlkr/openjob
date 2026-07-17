@@ -740,6 +740,14 @@ test("user show and username claim use the shared identity API", async () => {
     assert.deepEqual(JSON.parse(claim.stdout), currentUser);
     assert.equal(claim.stderr, "");
 
+    const ambiguousClaim = await runCliAsync(
+      ["username", "claim", "extra", "extra", "--input", "-", "--format", "json"],
+      { env: environment, input: '{"username":"scwlkr"}\n' },
+    );
+    assert.equal(ambiguousClaim.status, 2);
+    assert.equal(ambiguousClaim.stdout, "");
+    assert.equal(JSON.parse(ambiguousClaim.stderr).error.code, "usage_error");
+
     const inputClaim = await runCliAsync(
       ["username", "claim", "--input", "-", "--format", "json"],
       { env: environment, input: '{"username":"scwlkr"}\n' },
