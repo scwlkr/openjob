@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">OpenJob brandmark</title>
+  <desc id="description">A square ink O followed by a blue square period.</desc>
+  <path fill="#151713" fill-rule="evenodd" d="M64 96h288v288H64V96Zm64 64v160h160V160H128Z"/>
+  <path fill="#1e4ed8" d="M384 320h64v64h-64z"/>
+</svg>

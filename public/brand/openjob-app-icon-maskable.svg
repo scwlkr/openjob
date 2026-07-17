@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">OpenJob maskable app icon</title>
+  <desc id="description">The OpenJob square O and blue period inside a mask-safe off-white tile.</desc>
+  <path fill="#eef0ea" d="M0 0h512v512H0z"/>
+  <path fill="#151713" fill-rule="evenodd" d="M112 128h224v224H112V128Zm48 48v128h128V176H160Z"/>
+  <path fill="#1e4ed8" d="M368 288h64v64h-64z"/>
+</svg>

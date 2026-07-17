@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="OpenJob">
+  <path fill="#eef0ea" d="M0 0h32v32H0z"/>
+  <path fill="#151713" fill-rule="evenodd" d="M4 6h18v18H4V6Zm4 4v10h10V10H8Z"/>
+  <path fill="#1e4ed8" d="M24 20h4v4h-4z"/>
+</svg>
