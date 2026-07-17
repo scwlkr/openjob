@@ -57,6 +57,7 @@ type ApiState = {
   getGroupFailureStatus: number | null;
   taskFailureStatus: number | null;
   taskMutationFailureStatus: number | null;
+  taskMutationRequests: number;
   failGroups: boolean;
   failTaskNetwork: boolean;
   failTaskMutationNetwork: boolean;
@@ -147,6 +148,7 @@ async function installApi(
     getGroupFailureStatus: initial.getGroupFailureStatus ?? null,
     taskFailureStatus: initial.taskFailureStatus ?? null,
     taskMutationFailureStatus: initial.taskMutationFailureStatus ?? null,
+    taskMutationRequests: 0,
     failGroups: initial.failGroups ?? false,
     failTaskNetwork: initial.failTaskNetwork ?? false,
     failTaskMutationNetwork: initial.failTaskMutationNetwork ?? false,
@@ -183,7 +185,7 @@ async function installApi(
       message: string,
       fields?: Record<string, string>,
     ) => reply(status, { error: { code, message, fields, requestId: "req_browser" } });
-    const stopTaskMutation = async () => {
+    const handleMockTaskMutationDelayOrFailure = async () => {
       if (state.taskMutationDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, state.taskMutationDelayMs));
       }
@@ -559,7 +561,8 @@ async function installApi(
       return;
     }
     if (tasksMatch && request.method() === "POST") {
-      if (await stopTaskMutation()) return;
+      state.taskMutationRequests += 1;
+      if (await handleMockTaskMutationDelayOrFailure()) return;
       const input = request.postDataJSON() as {
         text?: unknown;
         assigneeUsername?: unknown;
@@ -594,7 +597,8 @@ async function installApi(
 
     const taskMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)$/);
     if (taskMatch && request.method() === "PATCH") {
-      if (await stopTaskMutation()) return;
+      state.taskMutationRequests += 1;
+      if (await handleMockTaskMutationDelayOrFailure()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       const task = state.tasks.find((item) => item.taskId === taskId);
       if (!task) {
@@ -630,7 +634,8 @@ async function installApi(
       return;
     }
     if (taskMatch && request.method() === "DELETE") {
-      if (await stopTaskMutation()) return;
+      state.taskMutationRequests += 1;
+      if (await handleMockTaskMutationDelayOrFailure()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       state.tasks = state.tasks.filter((item) => item.taskId !== taskId);
       await route.fulfill({ status: 204 });
@@ -639,7 +644,8 @@ async function installApi(
 
     const taskStateMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)\/state$/);
     if (taskStateMatch && request.method() === "PUT") {
-      if (await stopTaskMutation()) return;
+      state.taskMutationRequests += 1;
+      if (await handleMockTaskMutationDelayOrFailure()) return;
       const taskId = decodeURIComponent(taskStateMatch[2]);
       const desired = (request.postDataJSON() as { state: "open" | "done" }).state;
       const task = state.tasks.find((item) => item.taskId === taskId);
@@ -1299,8 +1305,11 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await unassignedCard.getByRole("button", { name: "Assign" }).click();
   editor = page.getByRole("dialog", { name: "Assign Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
+  const requestsBeforeRequiredSelection = state.taskMutationRequests;
   await editor.getByRole("button", { name: "Assign Task" }).click();
   await expect(editor).toBeVisible();
+  await expect(editor.getByRole("alert")).toContainText("Choose a current Member");
+  expect(state.taskMutationRequests).toBe(requestsBeforeRequiredSelection);
   await editor.getByLabel("Assignee").selectOption("morgan");
   await editor.getByRole("button", { name: "Assign Task" }).click();
   await expect(morganLane.getByText("Recover payroll handoff")).toBeVisible();
@@ -1368,6 +1377,97 @@ test("keeps narrow-screen lanes nearly full width and horizontally interactive",
   await editor.getByLabel("Assignee").selectOption("shane");
   await editor.getByRole("button", { name: "Create Task" }).click();
   await expect(page.getByText("Created from the bottom sheet")).toBeVisible();
+});
+
+test("runs edit, recovery, failure, focus, and delete flows in the narrow Task sheet", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_narrow_edit",
+        groupId: walkerLabs.groupId,
+        text: "Edit this narrow Task",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_narrow_unassigned",
+        groupId: walkerLabs.groupId,
+        text: "Recover this narrow Task",
+        assignee: { state: "unassigned" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-02T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const globalNewTask = page.getByRole("button", { name: "New Task" });
+  let editButton = page.getByTestId("task-card")
+    .filter({ hasText: "Edit this narrow Task" })
+    .getByRole("button", { name: "Edit" });
+  await editButton.click();
+  let editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expect(editor.getByLabel("Task text")).toBeFocused();
+  await editor.getByLabel("Task text").fill("Preserve this narrow draft");
+  await editor.getByLabel("Assignee").selectOption("morgan");
+  await editor.getByLabel("Due date").fill("2026-07-30");
+  state.taskMutationFailureStatus = 409;
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("Task changed");
+  await expect(editor.getByLabel("Task text")).toHaveValue("Preserve this narrow draft");
+  state.taskMutationFailureStatus = null;
+
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(editButton).toBeFocused();
+  await editButton.click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(editButton).toBeFocused();
+
+  await editButton.click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await editor.getByLabel("Task text").fill("Narrow edited Task");
+  await editor.getByLabel("Assignee").selectOption("morgan");
+  await editor.getByLabel("Due date").fill("2026-07-30");
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(page.getByText("Narrow edited Task")).toBeVisible();
+  await expect(globalNewTask).toBeFocused();
+
+  const unassignedCard = page.getByTestId("task-card").filter({ hasText: "Recover this narrow Task" });
+  await unassignedCard.getByRole("button", { name: "Assign" }).click();
+  editor = page.getByRole("dialog", { name: "Assign Task" });
+  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("Choose a current Member");
+  await editor.getByLabel("Assignee").selectOption("morgan");
+  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await expect(page.getByText("Recover this narrow Task")).toBeVisible();
+
+  const editedCard = page.getByTestId("task-card").filter({ hasText: "Narrow edited Task" });
+  editButton = editedCard.getByRole("button", { name: "Edit" });
+  await editButton.click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expectConfirmation(page, "permanently delete", () =>
+    editor.getByRole("button", { name: "Delete Task" }).click(), false);
+  await expect(editor).toBeVisible();
+  await expectConfirmation(page, "permanently delete", () =>
+    editor.getByRole("button", { name: "Delete Task" }).click());
+  await expect(page.getByText("Narrow edited Task")).toHaveCount(0);
+  await expect(globalNewTask).toBeFocused();
 });
 
 test("shows loading and empty Task List states", async ({ page }) => {
@@ -1468,6 +1568,31 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   state.failTaskMutationNetwork = false;
   await editor.getByRole("button", { name: "Save Task" }).click();
   await expect(page.getByText("Keep this recovered draft")).toBeVisible();
+});
+
+test("closes a committed editor mutation when the Task List refresh fails", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+  });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New Task" }).click();
+  const editor = page.getByRole("dialog", { name: "New Task" });
+  await editor.getByLabel("Task text").fill("Created before refresh failed");
+  await editor.getByLabel("Assignee").selectOption("shane");
+  state.failTaskNetwork = true;
+  await editor.getByRole("button", { name: "Create Task" }).click();
+
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("saved, but the Task List could not refresh");
+  state.failTaskNetwork = false;
+  await page.getByRole("button", { name: "Reload Task List" }).click();
+  await expect(page.getByText("Created before refresh failed")).toHaveCount(1);
 });
 
 test("restores a Task editor draft after authentication recovery", async ({ page }) => {
