@@ -172,6 +172,28 @@ async function memberByUsername(groupId, rawUsername, options) {
   return member;
 }
 
+function inviteToken(raw) {
+  if (!raw.includes("://")) return raw;
+  try {
+    const url = new URL(raw);
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (
+      !new Set(["http:", "https:"]).has(url.protocol) ||
+      segments.length !== 2 ||
+      segments[0] !== "invites"
+    ) {
+      throw new Error("not an Invite Link");
+    }
+    return decodeURIComponent(segments[1]);
+  } catch {
+    throw new CliError(
+      "usage_error",
+      "Invite input must be a token or an /invites/<token> URL.",
+      2,
+    );
+  }
+}
+
 async function main(raw) {
   if (raw.length === 0 || raw.includes("--help")) {
     process.stdout.write(`${HELP}\n`);
@@ -492,6 +514,48 @@ async function main(raw) {
       { method: "POST" },
     );
     writeResult({ data: { userId, unbanned: true } });
+    return;
+  }
+  if (resource === "invite" && command === "show" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/invite-link`,
+        {},
+        { retryable: true, quiet: parsed.options.has("--quiet") },
+      ),
+    );
+    return;
+  }
+  if (resource === "invite" && command === "rotate" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    await confirmDestructiveAction(
+      `Rotate the Invite Link for Group ${groupId}?`,
+      "Non-interactive Invite Link rotation requires --yes.",
+      parsed.options,
+    );
+    writeResult(
+      await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/invite-link/actions/rotate`,
+        { method: "POST" },
+      ),
+    );
+    return;
+  }
+  if (
+    resource === "invite" &&
+    new Set(["inspect", "join"]).has(command) &&
+    rest.length === 1
+  ) {
+    const token = inviteToken(rest[0]);
+    const action = command === "join" ? "/actions/join" : "";
+    writeResult(
+      await apiRequest(
+        `/invites/${encodeURIComponent(token)}${action}`,
+        command === "join" ? { method: "POST" } : {},
+        { retryable: true, quiet: parsed.options.has("--quiet") },
+      ),
+    );
     return;
   }
   if (resource === "group" && command === "use" && rest.length === 1) {
