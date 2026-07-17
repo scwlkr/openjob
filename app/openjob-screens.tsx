@@ -407,26 +407,28 @@ export function GroupShell(props: GroupShellProps) {
                     </button>
                   ))}
                 </nav>
-                {props.groups.length > 0 ? (
-                  <div className={styles.menuActions}>
+                <div className={styles.menuActions}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      if (props.groups.length === 0) {
+                        document.getElementById("first-group-name")?.focus();
+                        return;
+                      }
+                      setCreating(true);
+                    }}
+                  >New Group</button>
+                  {props.selectedGroup ? (
                     <button
                       type="button"
                       onClick={() => {
                         setOpenMenu(null);
-                        setCreating(true);
+                        setView("governance");
                       }}
-                    >New Group</button>
-                    {props.selectedGroup ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenMenu(null);
-                          setView("governance");
-                        }}
-                      >{props.selectedGroup.role === "admin" ? "Manage Group" : "Group settings"}</button>
-                    ) : null}
-                  </div>
-                ) : null}
+                    >{props.selectedGroup.role === "admin" ? "Manage Group" : "Group settings"}</button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>
