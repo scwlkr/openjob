@@ -18,6 +18,9 @@ import test from "node:test";
 
 const cliPath = fileURLToPath(new URL("../cli/openjob.mjs", import.meta.url));
 const repoPath = fileURLToPath(new URL("../", import.meta.url));
+const cliVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../cli/package.json", import.meta.url)), "utf8"),
+).version;
 
 function runCli(args, options = {}) {
   return spawnSync(cliPath, args, {
@@ -113,7 +116,7 @@ test("production CLI exposes the executable contract separately from the simulat
 
   const version = runCli(["--version"]);
   assert.equal(version.status, 0, version.stderr);
-  assert.equal(version.stdout, "openjob 0.0.5\n");
+  assert.equal(version.stdout, `openjob ${cliVersion}\n`);
   assert.equal(version.stderr, "");
 
   const authHelp = runCli(["help", "auth"]);
@@ -179,7 +182,7 @@ test("package installation exposes the executable on PATH", () => {
     const installedCli = join(directory, "node_modules", ".bin", "openjob");
     const version = spawnSync(installedCli, ["--version"], { encoding: "utf8" });
     assert.equal(version.status, 0, version.stderr);
-    assert.equal(version.stdout, "openjob 0.0.5\n");
+    assert.equal(version.stdout, `openjob ${cliVersion}\n`);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

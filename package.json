@@ -16,6 +16,8 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "cli:types": "openapi-typescript openapi/openapi.yaml -o cli/generated/openapi.d.ts",
     "cli:types:check": "openapi-typescript openapi/openapi.yaml -o cli/generated/openapi.d.ts --check",
+    "cli:pack": "npm pack ./cli",
+    "cli:smoke:production": "node scripts/smoke-cli-production.mjs",
     "deploy": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
     "openapi:check": "node scripts/validate-openapi.mjs",

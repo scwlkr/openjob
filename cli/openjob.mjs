@@ -14,8 +14,9 @@ import { deleteRefreshCredential } from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
+import packageJson from "./package.json" with { type: "json" };
 
-const VERSION = "0.0.5";
+const VERSION = packageJson.version;
 const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
 const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
 const TASK_COMMON_OPTIONS = GROUP_SCOPED_OPTIONS;

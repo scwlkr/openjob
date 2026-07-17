@@ -1,0 +1,23 @@
+{
+  "name": "openjob",
+  "version": "0.1.0-rc.1",
+  "private": true,
+  "description": "OpenJob command-line client",
+  "type": "module",
+  "bin": {
+    "openjob": "openjob.mjs"
+  },
+  "files": [
+    "generated/openapi.d.ts",
+    "lib",
+    "openapi-types.ts",
+    "openjob.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "1.3.0"
+  }
+}
