@@ -22,6 +22,13 @@ type Editor =
   | { mode: "new"; username: string }
   | { mode: "edit" | "assign"; task: Task };
 type TaskFormInput = { text: string; assigneeUsername: string; dueDate: string };
+type EditorAction = "save" | "delete";
+type StoredEditorDraft = {
+  groupId: string;
+  input: TaskFormInput;
+  mode: EditorMode;
+  taskId: string | null;
+};
 type AssigneeLane = { username: string; current: boolean };
 type TaskLane = {
   key: string;
@@ -34,6 +41,7 @@ type TaskLane = {
 const ALL_ASSIGNEES_VALUE = "filter:all";
 const UNASSIGNED_VALUE = "filter:unassigned";
 const MEMBER_VALUE_PREFIX = "member:";
+const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
 
 const TASK_FORM_COPY: Record<EditorMode, { kicker: string; title: string; submit: string }> = {
   new: { kicker: "New Task", title: "New Task", submit: "Create Task" },
@@ -95,10 +103,30 @@ function mutationMessage(error: unknown) {
     if (error.code === "assignee_not_member") return "That assignee is no longer a Member. Reload and choose another.";
     if (error.status === 409) return "That Task changed. Reload the Task List and try again.";
   }
-  return "OpenJob could not save that change. Check your connection and try again.";
+  return "OpenJob could not apply that change. Check your connection and try again.";
+}
+
+function readEditorDraft(): StoredEditorDraft | null {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(TASK_EDITOR_DRAFT_KEY) ?? "null") as Partial<StoredEditorDraft> | null;
+    if (
+      !value ||
+      typeof value.groupId !== "string" ||
+      !value.input ||
+      typeof value.input.text !== "string" ||
+      typeof value.input.assigneeUsername !== "string" ||
+      typeof value.input.dueDate !== "string" ||
+      !["new", "edit", "assign"].includes(value.mode ?? "") ||
+      !(value.taskId === null || typeof value.taskId === "string")
+    ) return null;
+    return value as StoredEditorDraft;
+  } catch {
+    return null;
+  }
 }
 
 function TaskForm({
+  busyAction,
   error,
   initialAssignee,
   initialDueDate = "",
@@ -106,9 +134,11 @@ function TaskForm({
   members,
   mode,
   onCancel,
+  onInputChange,
+  onDelete,
   onSave,
-  saving,
 }: {
+  busyAction: EditorAction | null;
   error: string;
   initialAssignee: string;
   initialDueDate?: string;
@@ -116,8 +146,9 @@ function TaskForm({
   members: NamedMember[];
   mode: EditorMode;
   onCancel: () => void;
+  onInputChange: (input: TaskFormInput) => void;
+  onDelete?: () => void;
   onSave: (input: TaskFormInput) => void;
-  saving: boolean;
 }) {
   const [text, setText] = useState(initialText);
   const [assignee, setAssignee] = useState(initialAssignee);
@@ -136,24 +167,60 @@ function TaskForm({
     >
       <label>
         Task text
-        <textarea value={text} onChange={(event) => setText(event.target.value)} autoFocus />
+        <textarea
+          value={text}
+          onChange={(event) => {
+            const nextText = event.target.value;
+            setText(nextText);
+            onInputChange({ text: nextText, assigneeUsername: assignee, dueDate });
+          }}
+          autoFocus
+          required
+        />
       </label>
-      {mode !== "new" ? (
-        <label>
-          Assignee
-          <select value={assignee} onChange={(event) => setAssignee(event.target.value)}>
-            {members.map((member) => <option key={member.userId} value={member.username}>@{member.username}</option>)}
-          </select>
-        </label>
-      ) : null}
+      <label>
+        Assignee
+        <select
+          value={assignee}
+          onChange={(event) => {
+            const nextAssignee = event.target.value;
+            setAssignee(nextAssignee);
+            onInputChange({ text, assigneeUsername: nextAssignee, dueDate });
+          }}
+          required
+        >
+          <option value="" disabled>Choose a Member</option>
+          {members.map((member) => <option key={member.userId} value={member.username}>@{member.username}</option>)}
+        </select>
+      </label>
       <label>
         Due date
-        <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(event) => {
+            const nextDueDate = event.target.value;
+            setDueDate(nextDueDate);
+            onInputChange({ text, assigneeUsername: assignee, dueDate: nextDueDate });
+          }}
+        />
       </label>
       {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
       <div className={styles.taskFormActions}>
-        <button type="button" onClick={onCancel}>Cancel</button>
-        <button className={styles.primaryButton} type="submit" disabled={saving}>{saving ? "Saving…" : copy.submit}</button>
+        {onDelete ? (
+          <button
+            className={styles.taskDeleteButton}
+            type="button"
+            disabled={busyAction !== null}
+            onClick={onDelete}
+          >
+            {busyAction === "delete" ? "Deleting…" : "Delete Task"}
+          </button>
+        ) : null}
+        <button className={styles.taskCancelButton} type="button" disabled={busyAction !== null} onClick={onCancel}>Cancel</button>
+        <button className={styles.primaryButton} type="submit" disabled={busyAction !== null}>
+          {busyAction === "save" ? "Saving…" : copy.submit}
+        </button>
       </div>
     </form>
   );
@@ -178,8 +245,70 @@ export function TaskList({
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [editorInput, setEditorInput] = useState<TaskFormInput | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editorAction, setEditorAction] = useState<EditorAction | null>(null);
   const activeLoadGeneration = useRef(0);
+  const editorOpener = useRef<HTMLButtonElement | null>(null);
+  const savingRef = useRef(false);
+
+  const closeEditor = useCallback(() => {
+    window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+    setEditor(null);
+    setEditorInput(null);
+    setActionError("");
+  }, []);
+
+  const openEditor = useCallback((nextEditor: Editor, opener: HTMLButtonElement) => {
+    editorOpener.current = opener;
+    window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+    setEditor(nextEditor);
+    setEditorInput(nextEditor.mode === "new"
+      ? { text: "", assigneeUsername: nextEditor.username, dueDate: "" }
+      : {
+          text: nextEditor.task.text,
+          assigneeUsername: nextEditor.task.assignee.state === "assigned" ? nextEditor.task.assignee.username : "",
+          dueDate: nextEditor.task.dueDate ?? "",
+        });
+    setActionError("");
+  }, []);
+
+  useEffect(() => {
+    if (!editor) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || savingRef.current) return;
+      event.preventDefault();
+      closeEditor();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      window.requestAnimationFrame(() => editorOpener.current?.focus());
+    };
+  }, [closeEditor, editor]);
+
+  useEffect(() => {
+    if (loading || editor) return;
+    const draft = readEditorDraft();
+    if (!draft || draft.groupId !== group.groupId) return;
+    let restoredEditor: Editor;
+    if (draft.mode === "new") {
+      restoredEditor = { mode: "new", username: draft.input.assigneeUsername };
+    } else {
+      const task = tasks.find((candidate) => candidate.taskId === draft.taskId);
+      if (!task || task.state === "done") {
+        window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+        return;
+      }
+      restoredEditor = { mode: draft.mode, task };
+    }
+    const timeout = window.setTimeout(() => {
+      editorOpener.current = null;
+      setEditorInput(draft.input);
+      setEditor(restoredEditor);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [editor, group.groupId, loading, tasks]);
 
   const taskFilters = useMemo(
     () => {
@@ -263,36 +392,67 @@ export function TaskList({
     return memberLanes;
   }, [assignee, assigneeLanes, tasks]);
 
-  async function runMutation(action: (token: string) => Promise<unknown>) {
+  async function runMutation(action: (token: string) => Promise<unknown>, nextEditorAction: EditorAction | null = null) {
+    savingRef.current = true;
     setSaving(true);
+    setEditorAction(nextEditorAction);
     setActionError("");
     try {
       const token = await session.getIdToken();
       await action(token);
       setTasks(await api.listTasks(token, group.groupId, taskFilters));
+      if (nextEditorAction !== null) window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
       setEditor(null);
+      setEditorInput(null);
     } catch (mutationError) {
       if (!(await onSessionExpired(mutationError))) setActionError(mutationMessage(mutationError));
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      setEditorAction(null);
     }
   }
 
   function saveEditor(input: TaskFormInput) {
     if (!editor) return;
+    window.sessionStorage.setItem(TASK_EDITOR_DRAFT_KEY, JSON.stringify({
+      groupId: group.groupId,
+      input,
+      mode: editor.mode,
+      taskId: editor.mode === "new" ? null : editor.task.taskId,
+    } satisfies StoredEditorDraft));
     if (editor.mode === "new") {
       void runMutation((token) => api.createTask(token, group.groupId, {
         text: input.text,
-        assigneeUsername: editor.username,
+        assigneeUsername: input.assigneeUsername,
         ...(input.dueDate ? { dueDate: input.dueDate } : {}),
-      }));
+      }), "save");
       return;
     }
     void runMutation((token) => api.updateTask(token, group.groupId, editor.task.taskId, {
       text: input.text,
       assigneeUsername: input.assigneeUsername,
       dueDate: input.dueDate || null,
-    }));
+    }), "save");
+  }
+
+  function deleteEditorTask() {
+    if (!editor || editor.mode === "new") return;
+    if (!window.confirm(`This will permanently delete “${editor.task.text}”. Continue?`)) return;
+    window.sessionStorage.setItem(TASK_EDITOR_DRAFT_KEY, JSON.stringify({
+      groupId: group.groupId,
+      input: editorInput ?? {
+        text: editor.task.text,
+        assigneeUsername: editor.task.assignee.state === "assigned" ? editor.task.assignee.username : "",
+        dueDate: editor.task.dueDate ?? "",
+      },
+      mode: editor.mode,
+      taskId: editor.task.taskId,
+    } satisfies StoredEditorDraft));
+    void runMutation(
+      (token) => api.deleteTask(token, group.groupId, editor.task.taskId),
+      "delete",
+    );
   }
 
   if (loading) {
@@ -346,6 +506,13 @@ export function TaskList({
             <option value={UNASSIGNED_VALUE}>Unassigned</option>
           </select>
         </label>
+        <button
+          className={styles.newTaskButton}
+          type="button"
+          onClick={(event) => openEditor({ mode: "new", username: "" }, event.currentTarget)}
+        >
+          New Task
+        </button>
       </div>
 
       <div className={styles.taskLanes}>
@@ -366,25 +533,13 @@ export function TaskList({
               </header>
               <div className={styles.taskCards}>
                 {lane.canCreate ? (
-                  editor?.mode === "new" && editor.username === lane.key ? (
-                    <TaskForm
-                      error={actionError}
-                      initialAssignee={lane.key}
-                      members={namedMembers}
-                      mode="new"
-                      onCancel={() => { setEditor(null); setActionError(""); }}
-                      onSave={saveEditor}
-                      saving={saving}
-                    />
-                  ) : (
-                    <button
-                      className={styles.addTaskButton}
-                      type="button"
-                      onClick={() => { setEditor({ mode: "new", username: lane.key }); setActionError(""); }}
-                    >
-                      Add Task
-                    </button>
-                  )
+                  <button
+                    className={styles.addTaskButton}
+                    type="button"
+                    onClick={(event) => openEditor({ mode: "new", username: lane.key }, event.currentTarget)}
+                  >
+                    Add Task
+                  </button>
                 ) : null}
                 {laneTasks.length === 0 ? <p className={styles.emptyLane}>No Tasks here.</p> : null}
                 {laneTasks.map((task) => {
@@ -401,9 +556,9 @@ export function TaskList({
                       <div className={styles.taskCardActions}>
                         {task.state === "open" ? (
                           task.assignee.state === "unassigned" ? (
-                            <button type="button" onClick={() => { setEditor({ mode: "assign", task }); setActionError(""); }}>Assign</button>
+                            <button type="button" onClick={(event) => openEditor({ mode: "assign", task }, event.currentTarget)}>Assign</button>
                           ) : (
-                            <button type="button" onClick={() => { setEditor({ mode: "edit", task }); setActionError(""); }}>Edit</button>
+                            <button type="button" onClick={(event) => openEditor({ mode: "edit", task }, event.currentTarget)}>Edit</button>
                           )
                         ) : null}
                         <button
@@ -415,17 +570,6 @@ export function TaskList({
                         >
                           {task.state === "open" ? "Complete" : "Reopen"}
                         </button>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => {
-                            if (window.confirm(`This will permanently delete “${task.text}”. Continue?`)) {
-                              void runMutation((token) => api.deleteTask(token, group.groupId, task.taskId));
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
                       </div>
                     </article>
                   );
@@ -436,8 +580,8 @@ export function TaskList({
         })}
       </div>
 
-      {editor && editor.mode !== "new" ? (
-        <div className={styles.dialogBackdrop} role="presentation">
+      {editor ? (
+        <div className={`${styles.dialogBackdrop} ${styles.taskDialogBackdrop}`} role="presentation">
           <section
             className={styles.taskDialog}
             role="dialog"
@@ -447,19 +591,23 @@ export function TaskList({
             <p className={styles.kicker}>{TASK_FORM_COPY[editor.mode].kicker}</p>
             <h2 id="task-editor-title">{TASK_FORM_COPY[editor.mode].title}</h2>
             <TaskForm
+              busyAction={editorAction}
               error={actionError}
               initialAssignee={
-                editor.task.assignee.state === "assigned"
-                  ? editor.task.assignee.username
-                  : namedMembers[0]?.username ?? ""
+                editorInput?.assigneeUsername ?? (editor.mode === "new"
+                  ? editor.username
+                  : editor.task.assignee.state === "assigned"
+                    ? editor.task.assignee.username
+                    : "")
               }
-              initialDueDate={editor.task.dueDate ?? ""}
-              initialText={editor.task.text}
+              initialDueDate={editorInput?.dueDate ?? (editor.mode === "new" ? "" : editor.task.dueDate ?? "")}
+              initialText={editorInput?.text ?? (editor.mode === "new" ? "" : editor.task.text)}
               members={namedMembers}
               mode={editor.mode}
-              onCancel={() => { setEditor(null); setActionError(""); }}
+              onCancel={closeEditor}
+              onDelete={editor.mode === "new" ? undefined : deleteEditorTask}
+              onInputChange={setEditorInput}
               onSave={saveEditor}
-              saving={saving}
             />
           </section>
         </div>
