@@ -241,7 +241,11 @@ export async function captureLegacySnapshot({
 export async function retireLegacyState({
   accessToken,
   confirmationDigest,
+  confirmedFreezeWorkerVersion,
   deleteWorkerVersion,
+  expectedBaseUrl = DEFAULT_BASE_URL,
+  expectedDatabaseId = DEFAULT_DATABASE_ID,
+  expectedProjectId = DEFAULT_PROJECT_ID,
   fetchImplementation = fetch,
   getActiveWorkerVersion,
   snapshotPath,
@@ -282,6 +286,22 @@ export async function retireLegacyState({
   }
   if (confirmationDigest !== snapshot.sha256) {
     throw new Error("Retirement confirmation must exactly match the snapshot SHA-256.");
+  }
+  if (confirmedFreezeWorkerVersion !== snapshot.freeze.workerVersion) {
+    throw new Error("The snapshot Worker does not match the retirement target.");
+  }
+  let snapshotBaseUrl;
+  try {
+    snapshotBaseUrl = new URL(snapshot.freeze.baseUrl).href;
+  } catch {}
+  if (snapshotBaseUrl !== new URL(expectedBaseUrl).href) {
+    throw new Error("The snapshot origin does not match the retirement target.");
+  }
+  if (snapshot.source.projectId !== expectedProjectId) {
+    throw new Error("The snapshot project does not match the retirement target.");
+  }
+  if (snapshot.source.databaseId !== expectedDatabaseId) {
+    throw new Error("The snapshot database does not match the retirement target.");
   }
 
   const activeWorkerVersion = await getActiveWorkerVersion();
@@ -340,6 +360,34 @@ export async function deleteCloudflareWorkerVersion({
         `${message ? `: ${message}` : "."}`,
     );
   }
+}
+
+export async function getCloudflareActiveWorkerVersion({
+  accountId,
+  apiToken,
+  fetchImplementation = fetch,
+  workerName,
+}) {
+  if (!accountId || !apiToken || !workerName) {
+    throw new Error("Cloudflare account, token, and Worker are required.");
+  }
+  const url =
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}` +
+    `/workers/scripts/${encodeURIComponent(workerName)}/deployments`;
+  const response = await fetchImplementation(url, {
+    headers: { authorization: `Bearer ${apiToken}` },
+  });
+  const body = await parseJsonResponse(response, "Cloudflare Worker deployment status");
+  if (!response.ok || body.success !== true) {
+    const message = body.errors?.[0]?.message;
+    throw new Error(
+      `Cloudflare Worker deployment status returned ${response.status}` +
+        `${message ? `: ${message}` : "."}`,
+    );
+  }
+  const deployment = body.result?.deployments?.[0];
+  if (!deployment) throw new Error("The Cloudflare Worker has no deployments.");
+  return activeWorkerVersionFromDeployment(deployment);
 }
 
 function option(arguments_, name) {
@@ -446,20 +494,21 @@ export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
   if (command === "retire") {
     const snapshotPath = option(args, "--snapshot");
     const confirmationDigest = option(args, "--confirm");
+    const confirmedFreezeWorkerVersion = option(args, "--confirm-worker-version");
     if (args.length > 0) throw new Error(`Unexpected argument: ${args[0]}`);
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
     const workerName = process.env.CLOUDFLARE_WORKER_NAME ?? "openjob";
+    const cloudflareTarget = { accountId, apiToken, workerName };
     const result = await retireLegacyState({
       accessToken: await ownerAccessToken(),
       confirmationDigest,
+      confirmedFreezeWorkerVersion,
       deleteWorkerVersion: (versionId) => deleteCloudflareWorkerVersion({
-        accountId,
-        apiToken,
+        ...cloudflareTarget,
         versionId,
-        workerName,
       }),
-      getActiveWorkerVersion: () => activeWorkerVersion(repoRoot),
+      getActiveWorkerVersion: () => getCloudflareActiveWorkerVersion(cloudflareTarget),
       snapshotPath,
     });
     process.stdout.write(
@@ -473,7 +522,8 @@ export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
   throw new Error(
     "Usage: legacy-cutover.mjs smoke <read-only|unavailable> | " +
       "snapshot [--output <path>] | " +
-      "retire --snapshot <path> --confirm <sha256>",
+      "retire --snapshot <path> --confirm <sha256> " +
+      "--confirm-worker-version <version-id>",
   );
 }
 

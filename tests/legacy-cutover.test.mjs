@@ -17,6 +17,7 @@ import {
   activeWorkerVersionFromDeployment,
   captureLegacySnapshot,
   deleteCloudflareWorkerVersion,
+  getCloudflareActiveWorkerVersion,
   retireLegacyState,
   verifyLegacyDeployment,
 } from "../scripts/legacy-cutover.mjs";
@@ -311,6 +312,7 @@ test("final retirement revalidates the zero snapshot and removes only its inacti
   const result = await retireLegacyState({
     accessToken: "owner-token",
     confirmationDigest: sha256,
+    confirmedFreezeWorkerVersion: freezeWorkerVersion,
     deleteWorkerVersion: async (versionId) => deletedVersions.push(versionId),
     fetchImplementation: createCutoverFetch({
       legacyReadStatus: 404,
@@ -358,6 +360,7 @@ test("final retirement requires the snapshot digest as explicit confirmation", a
     retireLegacyState({
       accessToken: "owner-token",
       confirmationDigest: "wrong-digest",
+      confirmedFreezeWorkerVersion: "77777777-7777-4777-8777-777777777777",
       deleteWorkerVersion: async () => {
         deletionAttempted = true;
       },
@@ -371,6 +374,100 @@ test("final retirement requires the snapshot digest as explicit confirmation", a
     /confirmation must exactly match the snapshot SHA-256/,
   );
   assert.equal(deletionAttempted, false);
+});
+
+test("final retirement rejects tampered destructive target metadata", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "openjob-retirement-tamper-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const freezeWorkerVersion = "77777777-7777-4777-8777-777777777777";
+  const sha256 = "f332a4181af7c4a82f09927e71369910957b21632a21eb990216dbd59c728dd3";
+  const baseSnapshot = {
+    capturedAt: "2026-07-17T13:00:00.000Z",
+    format: "openjob-legacy-tasks-snapshot-v1",
+    freeze: {
+      baseUrl: "https://openjob.dev/",
+      gitCommit: "a".repeat(40),
+      workerVersion: freezeWorkerVersion,
+    },
+    rawSnapshot: { documents: [] },
+    sha256,
+    source: {
+      collection: "tasks",
+      databaseId: "(default)",
+      projectId: "openjob-dev",
+    },
+    taskCount: 0,
+  };
+  const tamperedSnapshots = [
+    {
+      ...baseSnapshot,
+      freeze: { ...baseSnapshot.freeze, workerVersion: "99999999-9999-4999-8999-999999999999" },
+    },
+    {
+      ...baseSnapshot,
+      freeze: { ...baseSnapshot.freeze, baseUrl: "https://attacker.example/" },
+    },
+    {
+      ...baseSnapshot,
+      source: { ...baseSnapshot.source, projectId: "attacker-project" },
+    },
+    {
+      ...baseSnapshot,
+      source: { ...baseSnapshot.source, databaseId: "attacker-database" },
+    },
+  ];
+
+  for (const [index, snapshot] of tamperedSnapshots.entries()) {
+    const snapshotPath = join(directory, `legacy-tasks-${index}.json`);
+    await writeFile(snapshotPath, JSON.stringify(snapshot));
+    let deletionAttempted = false;
+    await assert.rejects(
+      retireLegacyState({
+        accessToken: "owner-token",
+        confirmationDigest: sha256,
+        confirmedFreezeWorkerVersion: freezeWorkerVersion,
+        deleteWorkerVersion: async () => {
+          deletionAttempted = true;
+        },
+        fetchImplementation: createCutoverFetch({
+          legacyReadStatus: 404,
+          writeStatus: 404,
+        }),
+        getActiveWorkerVersion: async () => "88888888-8888-4888-8888-888888888888",
+        snapshotPath,
+      }),
+      /snapshot (Worker|origin|project|database) does not match the retirement target/,
+    );
+    assert.equal(deletionAttempted, false);
+  }
+});
+
+test("active Worker lookup and retirement share the Cloudflare target identity", async () => {
+  let observedRequest;
+  const versionId = await getCloudflareActiveWorkerVersion({
+    accountId: "account-id",
+    apiToken: "api-token",
+    fetchImplementation: async (input, init) => {
+      observedRequest = { init, url: String(input) };
+      return Response.json({
+        result: {
+          deployments: [{ versions: [{ percentage: 100, version_id: "active-version" }] }],
+        },
+        success: true,
+      });
+    },
+    workerName: "openjob",
+  });
+
+  assert.equal(versionId, "active-version");
+  assert.equal(
+    observedRequest.url,
+    "https://api.cloudflare.com/client/v4/accounts/account-id/workers/scripts/openjob/deployments",
+  );
+  assert.equal(
+    new Headers(observedRequest.init.headers).get("authorization"),
+    "Bearer api-token",
+  );
 });
 
 test("Worker retirement deletes only the confirmed Cloudflare version", async () => {
