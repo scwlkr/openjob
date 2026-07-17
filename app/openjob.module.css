@@ -137,31 +137,44 @@
 .memberSection > header span { display: grid; place-items: center; min-width: 26px; height: 26px; background: var(--ink); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
 .taskCards { display: grid; gap: 10px; padding: 12px; }
 .addTaskButton { width: 100%; min-height: 44px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
-.taskCard { border: 1px solid var(--line); background: var(--paper-light); padding: 15px; }
-.taskCard > p { margin: 0; white-space: pre-wrap; line-height: 1.38; }
-.taskDue { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 11px; }
+.taskCard { display: grid; gap: 10px; border: 1px solid var(--line); background: var(--paper-light); padding: 10px; }
+.taskCardMain { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; }
+.taskStateControl { display: grid; justify-items: center; gap: 4px; color: var(--muted); font-size: 9px; font-weight: 800; }
+.taskBody, .taskBodyButton { display: grid; min-width: 0; min-height: 44px; gap: 10px; padding: 5px; text-align: left; }
+.taskBody { grid-column: 1 / -1; }
+.taskBodyButton { border: 1px solid transparent; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.taskBodyButton:hover { border-color: var(--line); background: #fff; }
+.taskText { overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.38; }
+.taskMeta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+.taskMeta > span:first-child { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.taskDue { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .taskDue b { color: #9a3028; text-transform: uppercase; }
-.taskCardActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; border-top: 1px solid #d8dad3; padding-top: 10px; }
-.taskCardActions button { border: 0; background: transparent; color: var(--blue); padding: 0; font-size: 11px; font-weight: 800; cursor: pointer; }
-.taskCardActions button:last-child { margin-left: auto; color: #982f27; }
-.taskCardActions button:disabled { cursor: not-allowed; opacity: .45; }
+.taskCompletion { display: grid; place-content: center; width: 44px; height: 44px; margin: 0; appearance: none; border: 2px solid var(--ink); border-radius: 50%; background: #fff; color: #fff; cursor: pointer; }
+.taskCompletion::before { width: 19px; height: 14px; background: currentColor; clip-path: polygon(0 42%, 35% 76%, 100% 0, 100% 34%, 35% 100%, 0 67%); content: ""; scale: 0; }
+.taskCompletion:checked { background: var(--blue); }
+.taskCompletion:checked::before { scale: 1; }
+.taskCompletion:disabled, .taskReopenButton:disabled { cursor: not-allowed; opacity: .45; }
+.taskReopenButton { min-width: 88px; min-height: 44px; justify-self: end; border: 1px solid var(--blue); background: transparent; color: var(--blue); padding: 0 14px; font-size: 11px; font-weight: 850; cursor: pointer; }
 .taskForm { display: grid; gap: 12px; border: 1px solid var(--line); background: #fff; padding: 12px; }
 .taskForm label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
-.taskForm textarea, .taskForm select, .taskForm input { width: 100%; border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); padding: 9px; font: inherit; font-size: 13px; text-transform: none; }
+.taskForm textarea, .taskForm select, .taskForm input { width: 100%; min-height: 44px; border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); padding: 9px; font: inherit; font-size: 13px; text-transform: none; }
 .taskForm textarea { min-height: 88px; resize: vertical; }
 .taskFormActions { display: flex; justify-content: flex-end; gap: 10px; }
-.taskFormActions .taskCancelButton { border: 0; background: transparent; color: var(--muted); font-weight: 750; cursor: pointer; }
-.taskFormActions .taskDeleteButton { margin-right: auto; border: 0; background: transparent; color: #982f27; font-weight: 800; cursor: pointer; }
+.taskFormActions .taskCancelButton { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--muted); padding: 0 10px; font-weight: 750; cursor: pointer; }
+.taskFormActions .taskDeleteButton { min-width: 44px; min-height: 44px; margin-right: auto; border: 0; background: transparent; color: #982f27; padding: 0 10px; font-weight: 800; cursor: pointer; }
 .taskFormActions button:disabled { cursor: not-allowed; opacity: .5; }
-.taskFormActions .primaryButton { min-height: 40px; padding: 0 13px; }
+.taskFormActions .primaryButton { min-width: 44px; min-height: 44px; padding: 0 13px; }
 .taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
-.taskActionError button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.taskActionError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.taskUndo { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; padding: 10px 14px; font-size: 12px; }
+.taskUndo button { min-width: 64px; min-height: 44px; border: 1px solid currentColor; background: transparent; color: inherit; font-weight: 850; cursor: pointer; }
+.taskUndo button:disabled { cursor: not-allowed; opacity: .5; }
 .taskDialog { width: min(100%, 560px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }
 .taskDialog h2 { margin: 9px 0 22px; font-size: 38px; letter-spacing: -.055em; }
 .emptyTaskList { margin: 0; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); font-size: 12px; }
 .taskLoading, .taskLoadError { margin-top: 34px; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
 .taskLoadError p { margin: 0 0 14px; color: #74221c; }
-.taskLoadError button { border: 0; background: transparent; color: var(--blue); padding: 0; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.taskLoadError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--blue); padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .notice, .errorBanner { margin: 0 0 24px; padding: 13px 16px; font-size: 13px; }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }

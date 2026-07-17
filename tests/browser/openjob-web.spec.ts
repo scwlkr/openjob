@@ -50,6 +50,7 @@ type ApiState = {
   invite: InviteLink;
   tasks: Task[];
   taskQueries: string[];
+  taskStateRequests: { state: "open" | "done"; taskId: string }[];
   concealedGroupIds: Set<string>;
   authorizationHeaders: string[];
   meFailureStatus: number | null;
@@ -174,6 +175,7 @@ async function installApi(
     },
     tasks,
     taskQueries: [],
+    taskStateRequests: [],
     concealedGroupIds: new Set(),
     authorizationHeaders: [],
     meFailureStatus: initial.meFailureStatus ?? null,
@@ -675,9 +677,10 @@ async function installApi(
 
     const taskStateMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)\/state$/);
     if (taskStateMatch && request.method() === "PUT") {
-      if (await handleMockTaskMutationPreflight()) return;
       const taskId = decodeURIComponent(taskStateMatch[2]);
       const desired = (request.postDataJSON() as { state: "open" | "done" }).state;
+      state.taskStateRequests.push({ state: desired, taskId });
+      if (await handleMockTaskMutationPreflight()) return;
       const task = state.tasks.find((item) => item.taskId === taskId);
       if (!task) {
         await error(404, "not_found", "The requested resource was not found.");
@@ -1357,6 +1360,276 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await expect(memberAddTask).toBeFocused();
 });
 
+test("separates the touch-first completion control from keyboard Task editing", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_touch_open",
+        groupId: walkerLabs.groupId,
+        text: "Publish the touch menu",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: "2026-07-20",
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_touch_done",
+        groupId: walkerLabs.groupId,
+        text: "Archive the old menu",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "done",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: "2026-07-16T18:30:00.000Z",
+      },
+    ],
+  });
+  await page.goto("/");
+
+  const openCard = page.getByTestId("task-card").filter({ hasText: "Publish the touch menu" });
+  const completion = openCard.getByRole("checkbox", { name: "Complete Publish the touch menu" });
+  const taskBody = openCard.getByRole("button", { name: "Edit Task: Publish the touch menu" });
+  for (const control of [completion, taskBody]) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await taskBody.focus();
+  await page.keyboard.press("Enter");
+  const editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expect(editor).toBeVisible();
+  for (const control of await editor.locator("button, input, select, textarea").all()) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(state.taskMutationRequests).toBe(0);
+  await page.keyboard.press("Escape");
+  await expect(taskBody).toBeFocused();
+
+  await page.getByRole("button", { name: "Done 1", exact: true }).click();
+  const doneCard = page.getByTestId("task-card").filter({ hasText: "Archive the old menu" });
+  await expect(doneCard.getByRole("button", { name: /^Edit Task:/ })).toHaveCount(0);
+  const reopen = doneCard.getByRole("button", { name: "Reopen Archive the old menu" });
+  const reopenBox = await reopen.boundingBox();
+  expect(reopenBox!.width).toBeGreaterThanOrEqual(44);
+  expect(reopenBox!.height).toBeGreaterThanOrEqual(44);
+  await reopen.click();
+  await expect(doneCard).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
+  const emptyDoneFilter = page.getByRole("button", { name: "Done 0", exact: true });
+  await expect(emptyDoneFilter).toBeFocused();
+  await page.getByRole("button", { name: "Open 2", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit Task: Archive the old menu" })).toBeVisible();
+  expect(state.taskStateRequests).toEqual([{ state: "open", taskId: "task_touch_done" }]);
+});
+
+test("completes optimistically and restores the active filtered view with five-second Undo", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_undo",
+        groupId: walkerLabs.groupId,
+        text: "Publish the Undo menu",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_stays_open",
+        groupId: walkerLabs.groupId,
+        text: "Keep one Task open",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+    taskMutationDelayMs: 500,
+  });
+  await page.goto("/");
+
+  let card = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
+  await card.getByRole("checkbox", { name: "Complete Publish the Undo menu" }).click();
+  await expect.poll(() => card.count(), { timeout: 150 }).toBe(0);
+  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All 2", exact: true })).toBeVisible();
+
+  const undoNotice = page.getByRole("status").filter({ hasText: "Publish the Undo menu" });
+  await expect(undoNotice).toContainText("Undo available for 5 seconds");
+  const undo = undoNotice.getByRole("button", { name: "Undo completion of Publish the Undo menu" });
+  await page.getByRole("button", { name: "Done 1", exact: true }).click();
+  card = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
+  await expect(card).toBeVisible();
+
+  state.taskMutationDelayMs = 150;
+  await undo.click();
+  await expect(undo).toBeDisabled();
+  await expect(undoNotice).toContainText("Undoing…");
+  await expect.poll(() => card.count(), { timeout: 100 }).toBe(0);
+  await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 0", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open 2", exact: true }).click();
+  await expect(undoNotice).toHaveCount(0);
+  await expect(page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" })).toBeVisible();
+  expect(state.taskStateRequests).toEqual([
+    { state: "done", taskId: "task_undo" },
+    { state: "open", taskId: "task_undo" },
+  ]);
+});
+
+test("scopes visible state-action busy controls to the affected Task", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_busy_first",
+        groupId: walkerLabs.groupId,
+        text: "Complete the first order",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_busy_second",
+        groupId: walkerLabs.groupId,
+        text: "Complete the second order",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+    taskMutationDelayMs: 300,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "All 2", exact: true }).click();
+
+  const firstCard = page.getByTestId("task-card").filter({ hasText: "Complete the first order" });
+  const secondCard = page.getByTestId("task-card").filter({ hasText: "Complete the second order" });
+  await firstCard.getByRole("checkbox", { name: "Complete Complete the first order" }).click();
+  const firstBusyControl = firstCard.getByRole("checkbox", { name: "Completing Complete the first order" });
+  await expect(firstBusyControl).toBeDisabled();
+  await expect(firstCard.getByText("Completing…")).toBeVisible();
+
+  const secondControl = secondCard.getByRole("checkbox", { name: "Complete Complete the second order" });
+  await expect(secondControl).toBeEnabled();
+  await secondControl.click();
+  await expect.poll(() => state.taskMutationRequests).toBe(2);
+  await expect(secondCard.getByRole("checkbox", { name: "Completing Complete the second order" })).toBeDisabled();
+
+  await expect(page.getByRole("button", { name: "Undo completion of Complete the first order" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo completion of Complete the second order" })).toBeVisible();
+  expect(state.taskMutationRequests).toBe(2);
+});
+
+test("rolls back a failed optimistic state change and offers a direct retry", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_retry",
+        groupId: walkerLabs.groupId,
+        text: "Retry the failed completion",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+    taskMutationDelayMs: 150,
+    taskMutationFailureStatus: 500,
+  });
+  await page.goto("/");
+
+  const card = page.getByTestId("task-card").filter({ hasText: "Retry the failed completion" });
+  await card.getByRole("checkbox", { name: "Complete Retry the failed completion" }).click();
+  await expect.poll(() => card.count(), { timeout: 100 }).toBe(0);
+  await expect(card).toBeVisible();
+  const error = page.getByRole("alert").filter({ hasText: "could not apply that change" });
+  await expect(error).toBeVisible();
+  const retry = error.getByRole("button", { name: "Retry completion of Retry the failed completion" });
+  await expect(retry).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 0", exact: true })).toBeVisible();
+
+  state.taskMutationFailureStatus = null;
+  await retry.click();
+  await expect(card).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo completion of Retry the failed completion" })).toBeVisible();
+  expect(state.taskMutationRequests).toBe(2);
+});
+
+test("expires completion Undo after five seconds without changing the completed Task", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-17T12:00:00-05:00") });
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_undo_expiry",
+        groupId: walkerLabs.groupId,
+        text: "Let Undo expire",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+  await page.goto("/");
+
+  const completion = page.getByRole("checkbox", { name: "Complete Let Undo expire" });
+  await expect(completion).toBeVisible();
+  await page.clock.pauseAt(new Date("2026-07-17T12:00:01-05:00"));
+  await completion.click();
+  const undo = page.getByRole("button", { name: "Undo completion of Let Undo expire" });
+  await expect(undo).toBeVisible();
+  await page.clock.fastForward(4_999);
+  await expect(undo).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(undo).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
+  expect(state.taskStateRequests).toEqual([{ state: "done", taskId: "task_undo_expiry" }]);
+});
+
 test("runs the complete Task lifecycle through the shared editor", async ({ page }) => {
   await startSignedIn(page);
   const state = await installApi(page, {
@@ -1417,7 +1690,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
 
-  await card.getByRole("button", { name: "Complete" }).click();
+  await card.getByRole("checkbox", { name: "Complete Order two menu stands" }).click();
   await expect(card).toHaveCount(0);
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
@@ -1490,17 +1763,25 @@ test("uses one narrow column and two desktop columns without horizontal overflow
       },
     ],
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
 
   const sections = page.getByTestId("member-section");
   let first = await sections.nth(0).boundingBox();
   let second = await sections.nth(1).boundingBox();
-  expect(first!.width).toBeGreaterThanOrEqual(330);
-  expect(first!.width).toBeLessThan(390);
+  expect(first!.width).toBeGreaterThanOrEqual(315);
+  expect(first!.width).toBeLessThan(375);
   expect(Math.abs(second!.x - first!.x)).toBeLessThanOrEqual(1);
   expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height);
   await expectNoHorizontalOverflow(page);
+
+  for (const viewport of [
+    { width: 667, height: 375 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expectNoHorizontalOverflow(page);
+  }
 
   await page.setViewportSize({ width: 1280, height: 720 });
   first = await sections.nth(0).boundingBox();
@@ -1509,18 +1790,18 @@ test("uses one narrow column and two desktop columns without horizontal overflow
   expect(second!.x).toBeGreaterThan(first!.x + first!.width);
   await expectNoHorizontalOverflow(page);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 375, height: 812 });
   const morganSection = sections.filter({ has: page.getByRole("heading", { name: "@morgan" }) });
   await morganSection.scrollIntoViewIfNeeded();
-  await morganSection.getByRole("button", { name: "Complete" }).click();
-  await expect(page.getByText("Check the narrow layout")).toHaveCount(0);
+  await morganSection.getByRole("checkbox", { name: "Complete Check the narrow layout" }).click();
+  await expect(page.getByTestId("task-card").filter({ hasText: "Check the narrow layout" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "New Task" }).click();
   const editor = page.getByRole("dialog", { name: "New Task" });
   const narrowEditor = await editor.boundingBox();
   expect(narrowEditor!.x).toBe(0);
-  expect(narrowEditor!.width).toBe(390);
-  expect(Math.abs(narrowEditor!.y + narrowEditor!.height - 844)).toBeLessThanOrEqual(1);
+  expect(narrowEditor!.width).toBe(375);
+  expect(Math.abs(narrowEditor!.y + narrowEditor!.height - 812)).toBeLessThanOrEqual(1);
   await editor.getByLabel("Task text").fill("Created from the bottom sheet");
   await editor.getByLabel("Assignee").selectOption("shane");
   await editor.getByRole("button", { name: "Create Task" }).click();
