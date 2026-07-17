@@ -21,7 +21,7 @@ The real `openjob` executable lives under `cli/`; the no-network command in
 Install the current v0.1.0 release candidate from GitHub with one command:
 
 ```bash
-npm install --global https://github.com/scwlkr/openjob/releases/download/cli-v0.1.0-rc.1/openjob-0.1.0-rc.1.tgz
+npm install --global https://github.com/scwlkr/openjob/releases/download/cli-v0.1.0-rc.2/openjob-0.1.0-rc.2.tgz
 ```
 
 Run `openjob auth login`, then `openjob --help`. The production command surface

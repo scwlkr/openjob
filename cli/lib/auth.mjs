@@ -56,7 +56,6 @@ export async function loginWithGoogle({ openBrowser }, environment = process.env
     code_challenge: challenge,
     code_challenge_method: "S256",
     redirect_uri: callback.redirectUri,
-    response_mode: "form_post",
     response_type: "code",
     scope: "openid email profile",
     state,
@@ -160,41 +159,42 @@ async function loopbackCallback(expectedState) {
     resolveCode = resolve;
     rejectCode = reject;
   });
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
-    if (request.method !== "POST" || url.pathname !== "/callback") {
+    if (request.method === "GET" && url.pathname === "/complete") {
+      response.setHeader("cache-control", "no-store");
+      response.setHeader("content-type", "text/html; charset=utf-8");
+      response.setHeader("referrer-policy", "no-referrer");
+      response.end(
+        "<!doctype html><title>OpenJob signed in</title><p>Sign-in received. You can close this tab and return to OpenJob.</p>",
+      );
+      return;
+    }
+    if (request.method !== "GET" || url.pathname !== "/callback") {
       response.statusCode = 404;
       response.end("Not found");
       return;
     }
-    let parameters;
-    try {
-      parameters = await readForm(request);
-    } catch {
-      response.statusCode = 400;
-      response.end("Invalid sign-in response. Return to OpenJob and try again.");
-      rejectCode(new CliError("auth_failed", "Google sign-in was not completed.", 3));
-      return;
-    }
-    const receivedState = parameters.get("state") || "";
+    const receivedState = url.searchParams.get("state") || "";
     if (!safeEqual(receivedState, expectedState)) {
       response.statusCode = 400;
       response.end("Invalid OAuth state. Return to OpenJob and try again.");
       rejectCode(new CliError("auth_failed", "Google sign-in state did not match.", 3));
       return;
     }
-    const providerError = parameters.get("error");
-    const authorizationCode = parameters.get("code");
+    const providerError = url.searchParams.get("error");
+    const authorizationCode = url.searchParams.get("code");
     if (providerError || !authorizationCode) {
       response.statusCode = 400;
       response.end("Google sign-in was not completed. Return to OpenJob and try again.");
       rejectCode(new CliError("auth_failed", "Google sign-in was not completed.", 3));
       return;
     }
-    response.setHeader("content-type", "text/html; charset=utf-8");
-    response.end(
-      "<!doctype html><title>OpenJob signed in</title><p>Sign-in received. You can close this tab and return to OpenJob.</p>",
-    );
+    response.statusCode = 303;
+    response.setHeader("cache-control", "no-store");
+    response.setHeader("location", "/complete");
+    response.setHeader("referrer-policy", "no-referrer");
+    response.end();
     resolveCode(authorizationCode);
   });
   await new Promise((resolve, reject) => {
@@ -222,21 +222,6 @@ async function loopbackCallback(expectedState) {
         server.close(resolve);
       }),
   };
-}
-
-async function readForm(request) {
-  if (!request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
-    throw new Error("unexpected content type");
-  }
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 16_384) throw new Error("sign-in response too large");
-    chunks.push(buffer);
-  }
-  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
 }
 
 function safeEqual(received, expected) {
