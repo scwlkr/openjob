@@ -424,23 +424,26 @@ test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Fire
       "desktop-client.apps.googleusercontent.com",
     );
     assert.equal(authorizationUrl.searchParams.get("response_type"), "code");
-    assert.equal(authorizationUrl.searchParams.get("response_mode"), "form_post");
+    assert.equal(authorizationUrl.searchParams.get("response_mode"), null);
     assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
     assert.match(authorizationUrl.searchParams.get("state"), /^[A-Za-z0-9_-]{43}$/);
     const redirectUri = new URL(authorizationUrl.searchParams.get("redirect_uri"));
     assert.equal(redirectUri.hostname, "127.0.0.1");
     assert.notEqual(redirectUri.port, "0");
 
-    const callbackResponse = await fetch(redirectUri, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code: "one-time-google-code",
-        state: authorizationUrl.searchParams.get("state"),
-      }),
-    });
-    assert.equal(callbackResponse.status, 200);
-    assert.match(await callbackResponse.text(), /return to OpenJob/i);
+    const callback = new URL(redirectUri);
+    callback.searchParams.set("code", "one-time-google-code");
+    callback.searchParams.set("state", authorizationUrl.searchParams.get("state"));
+    const callbackResponse = await fetch(callback, { redirect: "manual" });
+    assert.equal(callbackResponse.status, 303);
+    assert.equal(callbackResponse.headers.get("location"), "/complete");
+    assert.equal(callbackResponse.headers.get("cache-control"), "no-store");
+    assert.equal(callbackResponse.headers.get("referrer-policy"), "no-referrer");
+    const completionUrl = new URL(callbackResponse.headers.get("location"), redirectUri);
+    assert.equal(completionUrl.search, "");
+    const completionResponse = await fetch(completionUrl);
+    assert.equal(completionResponse.status, 200);
+    assert.match(await completionResponse.text(), /return to OpenJob/i);
 
     const result = await running.result;
     assert.equal(result.status, 0, result.stderr);
@@ -497,7 +500,7 @@ test("production auth login uses the configured Google Desktop client and PKCE",
     );
     assert.match(GOOGLE_DESKTOP_CLIENT_ID, /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
     assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
-    assert.equal(authorizationUrl.searchParams.get("response_mode"), "form_post");
+    assert.equal(authorizationUrl.searchParams.get("response_mode"), null);
     assert.match(
       authorizationUrl.searchParams.get("code_challenge"),
       /^[A-Za-z0-9_-]{43}$/,
@@ -546,15 +549,11 @@ test("auth login preserves rate-limit and service exit statuses", async () => {
     try {
       running.child.stdin.end();
       const authorizationUrl = await waitForLoginUrl(running);
-      const callbackResponse = await fetch(authorizationUrl.searchParams.get("redirect_uri"), {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          state: authorizationUrl.searchParams.get("state"),
-        }),
-      });
-      assert.equal(callbackResponse.status, 200);
+      const callback = new URL(authorizationUrl.searchParams.get("redirect_uri"));
+      callback.searchParams.set("code", code);
+      callback.searchParams.set("state", authorizationUrl.searchParams.get("state"));
+      const callbackResponse = await fetch(callback, { redirect: "manual" });
+      assert.equal(callbackResponse.status, 303);
       const result = await running.result;
       assert.equal(result.status, expectedStatus, result.stderr);
       assert.equal(JSON.parse(result.stderr.split("\n").at(-2)).error.code, expectedCode);
