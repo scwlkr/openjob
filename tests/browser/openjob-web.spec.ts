@@ -1486,3 +1486,31 @@ test("keeps done Tasks visible in departed assignee lanes", async ({ page }) => 
   await expect(page.getByTestId("task-lane")).toHaveCount(1);
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });
+
+test("hands a Google credential to the CLI loopback without putting it in the URL", async ({
+  page,
+}) => {
+  let callbackBody = "";
+  await page.route("http://127.0.0.1:43123/callback", async (route) => {
+    callbackBody = route.request().postData() ?? "";
+    await route.fulfill({
+      status: 200,
+      contentType: "text/plain",
+      headers: { "access-control-allow-origin": "http://127.0.0.1:4175" },
+      body: "Sign-in received.",
+    });
+  });
+
+  const callback = "http://127.0.0.1:43123/callback";
+  const state = "a".repeat(43);
+  await page.goto(
+    `/cli-auth?callback=${encodeURIComponent(callback)}&state=${state}`,
+  );
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByText("Return to OpenJob in your terminal.")).toBeVisible();
+  const submitted = new URLSearchParams(callbackBody);
+  expect(submitted.get("state")).toBe(state);
+  expect(submitted.get("id_token")).toBe("google-browser-process-only-secret");
+  expect(page.url()).not.toContain("process-only-secret");
+});

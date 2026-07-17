@@ -79,3 +79,13 @@ export function createFirebaseAuth(): OpenJobAuth {
     },
   });
 }
+
+export async function getGoogleIdTokenForCli() {
+  const { auth, provider } = await firebaseClient();
+  const result = await signInWithPopup(auth, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (!credential?.idToken) {
+    throw new Error("Google sign-in returned no identity credential.");
+  }
+  return credential.idToken;
+}

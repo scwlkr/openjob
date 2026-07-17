@@ -3,12 +3,12 @@ import {
   writeRefreshCredential,
 } from "./credential-store.mjs";
 import { spawnSync } from "node:child_process";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { CliError } from "./errors.mjs";
 
 const FIREBASE_API_KEY = "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU";
-const GOOGLE_DESKTOP_CLIENT_ID = "pending-desktop-client.apps.googleusercontent.com";
+const CLI_AUTH_URL = "https://openjob.dev/cli-auth";
 
 function firebaseApiKey(environment) {
   if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_FIREBASE_API_KEY) {
@@ -24,39 +24,23 @@ export function authEndpoints(environment = process.env) {
     return {
       firebaseSignIn: `${base}/firebase/accounts:signInWithIdp?key=${key}`,
       firebaseToken: `${base}/firebase/token?key=${key}`,
-      oauthAuthorize: `${base}/oauth/authorize`,
-      oauthToken: `${base}/oauth/token`,
+      browserLogin: `${base}/cli-auth`,
     };
   }
   return {
     firebaseSignIn: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${key}`,
     firebaseToken: `https://securetoken.googleapis.com/v1/token?key=${key}`,
-    oauthAuthorize: "https://accounts.google.com/o/oauth2/v2/auth",
-    oauthToken: "https://oauth2.googleapis.com/token",
+    browserLogin: CLI_AUTH_URL,
   };
-}
-
-function googleClientId(environment) {
-  if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_GOOGLE_CLIENT_ID) {
-    return environment.OPENJOB_TEST_GOOGLE_CLIENT_ID;
-  }
-  return GOOGLE_DESKTOP_CLIENT_ID;
 }
 
 export async function loginWithGoogle({ openBrowser }, environment = process.env) {
   const state = randomBytes(32).toString("base64url");
-  const verifier = randomBytes(64).toString("base64url");
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const callback = await loopbackCallback(state);
   const endpoints = authEndpoints(environment);
-  const authorizationUrl = new URL(endpoints.oauthAuthorize);
+  const authorizationUrl = new URL(endpoints.browserLogin);
+  const callback = await loopbackCallback(state, authorizationUrl.origin);
   authorizationUrl.search = new URLSearchParams({
-    client_id: googleClientId(environment),
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    redirect_uri: callback.redirectUri,
-    response_type: "code",
-    scope: "openid email profile",
+    callback: callback.redirectUri,
     state,
   }).toString();
 
@@ -74,23 +58,10 @@ export async function loginWithGoogle({ openBrowser }, environment = process.env
   }
 
   try {
-    const code = await callback.code;
-    const oauth = await postForm(endpoints.oauthToken, {
-      client_id: googleClientId(environment),
-      code,
-      code_verifier: verifier,
-      grant_type: "authorization_code",
-      redirect_uri: callback.redirectUri,
-    });
-    const credentialName =
-      typeof oauth.id_token === "string" ? "id_token" : "access_token";
-    const googleCredential = oauth[credentialName];
-    if (typeof googleCredential !== "string") {
-      throw new CliError("auth_failed", "Google sign-in returned no credential.", 3);
-    }
+    const googleIdToken = await callback.idToken;
     const firebaseResponse = await postJson(endpoints.firebaseSignIn, {
       postBody: new URLSearchParams({
-        [credentialName]: googleCredential,
+        id_token: googleIdToken,
         providerId: "google.com",
       }).toString(),
       requestUri: callback.redirectUri,
@@ -155,40 +126,57 @@ async function readJson(response) {
   }
 }
 
-async function loopbackCallback(expectedState) {
-  let resolveCode;
-  let rejectCode;
-  const code = new Promise((resolve, reject) => {
-    resolveCode = resolve;
-    rejectCode = reject;
+async function loopbackCallback(expectedState, allowedOrigin) {
+  let resolveIdToken;
+  let rejectIdToken;
+  const idToken = new Promise((resolve, reject) => {
+    resolveIdToken = resolve;
+    rejectIdToken = reject;
   });
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
-    if (request.method !== "GET" || url.pathname !== "/callback") {
+    if (request.method !== "POST" || url.pathname !== "/callback") {
       response.statusCode = 404;
       response.end("Not found");
       return;
     }
-    const receivedState = url.searchParams.get("state") || "";
+    if (request.headers.origin !== allowedOrigin) {
+      response.statusCode = 403;
+      response.end("Invalid sign-in origin. Return to OpenJob and try again.");
+      rejectIdToken(new CliError("auth_failed", "Google sign-in origin did not match.", 3));
+      return;
+    }
+    response.setHeader("access-control-allow-origin", allowedOrigin);
+    response.setHeader("vary", "Origin");
+    let parameters;
+    try {
+      parameters = await readForm(request);
+    } catch {
+      response.statusCode = 400;
+      response.end("Invalid sign-in response. Return to OpenJob and try again.");
+      rejectIdToken(new CliError("auth_failed", "Google sign-in was not completed.", 3));
+      return;
+    }
+    const receivedState = parameters.get("state") || "";
     if (!safeEqual(receivedState, expectedState)) {
       response.statusCode = 400;
       response.end("Invalid OAuth state. Return to OpenJob and try again.");
-      rejectCode(new CliError("auth_failed", "Google sign-in state did not match.", 3));
+      rejectIdToken(new CliError("auth_failed", "Google sign-in state did not match.", 3));
       return;
     }
-    const providerError = url.searchParams.get("error");
-    const authorizationCode = url.searchParams.get("code");
-    if (providerError || !authorizationCode) {
+    const providerError = parameters.get("error");
+    const googleIdToken = parameters.get("id_token");
+    if (providerError || !googleIdToken) {
       response.statusCode = 400;
       response.end("Google sign-in was not completed. Return to OpenJob and try again.");
-      rejectCode(new CliError("auth_failed", "Google sign-in was not completed.", 3));
+      rejectIdToken(new CliError("auth_failed", "Google sign-in was not completed.", 3));
       return;
     }
     response.setHeader("content-type", "text/html; charset=utf-8");
     response.end(
       "<!doctype html><title>OpenJob signed in</title><p>Sign-in received. You can close this tab and return to OpenJob.</p>",
     );
-    resolveCode(authorizationCode);
+    resolveIdToken(googleIdToken);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -196,13 +184,13 @@ async function loopbackCallback(expectedState) {
   });
   const address = server.address();
   const timeout = setTimeout(() => {
-    rejectCode(new CliError("auth_timeout", "Google sign-in timed out.", 3));
+    rejectIdToken(new CliError("auth_timeout", "Google sign-in timed out.", 3));
     server.close();
   }, 5 * 60 * 1000);
   timeout.unref();
   let closed = false;
   return {
-    code,
+    idToken,
     redirectUri: `http://127.0.0.1:${address.port}/callback`,
     close: () =>
       new Promise((resolve) => {
@@ -217,18 +205,25 @@ async function loopbackCallback(expectedState) {
   };
 }
 
+async function readForm(request) {
+  if (!request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
+    throw new Error("unexpected content type");
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > 16_384) throw new Error("sign-in response too large");
+    chunks.push(buffer);
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+}
+
 function safeEqual(received, expected) {
   const left = Buffer.from(received);
   const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
-}
-
-async function postForm(url, values) {
-  return requestAuth(url, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(values),
-  });
 }
 
 async function postJson(url, value) {

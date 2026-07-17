@@ -7,15 +7,18 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 const idToken = process.env.OPENJOB_CLI_SMOKE_TOKEN;
+const useKeychain = process.env.OPENJOB_CLI_SMOKE_USE_KEYCHAIN === "1";
 
-if (!idToken) {
-  process.stderr.write("OPENJOB_CLI_SMOKE_TOKEN is required.\n");
+if (!idToken && !useKeychain) {
+  process.stderr.write(
+    "OPENJOB_CLI_SMOKE_TOKEN is required unless OPENJOB_CLI_SMOKE_USE_KEYCHAIN=1.\n",
+  );
   process.exitCode = 1;
 } else {
-  await smoke(idToken);
+  await smoke({ firebaseIdToken: idToken, useKeychain });
 }
 
-async function smoke(firebaseIdToken) {
+async function smoke({ firebaseIdToken, useKeychain: useStoredCredential }) {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-production-"));
   const credentialPath = join(directory, "credential");
   const configPath = join(directory, "config.json");
@@ -24,36 +27,49 @@ async function smoke(firebaseIdToken) {
     readFileSync(new URL("../cli/package.json", import.meta.url), "utf8"),
   );
   const refreshMarker = "openjob-cli-production-smoke";
-  writeFileSync(credentialPath, refreshMarker, { mode: 0o600 });
+  if (firebaseIdToken) writeFileSync(credentialPath, refreshMarker, { mode: 0o600 });
 
-  const authServer = createServer((request, response) => {
-    if (request.method === "POST" && request.url?.startsWith("/firebase/token?")) {
-      response.setHeader("content-type", "application/json");
-      response.end(
-        JSON.stringify({
-          expires_in: "3600",
-          id_token: firebaseIdToken,
-          refresh_token: refreshMarker,
-        }),
-      );
-      return;
-    }
-    response.statusCode = 404;
-    response.end();
-  });
-  await new Promise((resolve) => authServer.listen(0, "127.0.0.1", resolve));
-  const address = authServer.address();
+  const authServer = firebaseIdToken
+    ? createServer((request, response) => {
+        if (request.method === "POST" && request.url?.startsWith("/firebase/token?")) {
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({
+              expires_in: "3600",
+              id_token: firebaseIdToken,
+              refresh_token: refreshMarker,
+            }),
+          );
+          return;
+        }
+        response.statusCode = 404;
+        response.end();
+      })
+    : undefined;
+  if (authServer) {
+    await new Promise((resolve) => authServer.listen(0, "127.0.0.1", resolve));
+  }
+  const address = authServer?.address();
   const childEnvironment = { ...process.env };
   delete childEnvironment.OPENJOB_CLI_SMOKE_TOKEN;
+  delete childEnvironment.OPENJOB_CLI_SMOKE_USE_KEYCHAIN;
   Object.assign(childEnvironment, {
-    NODE_ENV: "test",
+    NODE_ENV: useStoredCredential ? "production" : "test",
     OPENJOB_API_URL: "https://openjob.dev/api/v1",
     OPENJOB_CONFIG: configPath,
     OPENJOB_GROUP_ID: "",
-    OPENJOB_TEST_AUTH_URL: `http://127.0.0.1:${address.port}`,
-    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
-    OPENJOB_TEST_FIREBASE_API_KEY: "production-smoke",
   });
+  if (address && typeof address === "object") {
+    Object.assign(childEnvironment, {
+      OPENJOB_TEST_AUTH_URL: `http://127.0.0.1:${address.port}`,
+      OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+      OPENJOB_TEST_FIREBASE_API_KEY: "production-smoke",
+    });
+  } else {
+    delete childEnvironment.OPENJOB_TEST_AUTH_URL;
+    delete childEnvironment.OPENJOB_TEST_CREDENTIAL_FILE;
+    delete childEnvironment.OPENJOB_TEST_FIREBASE_API_KEY;
+  }
 
   let group;
   let task;
@@ -141,7 +157,7 @@ async function smoke(firebaseIdToken) {
         group.name,
       ]).catch(() => {});
     }
-    await new Promise((resolve) => authServer.close(resolve));
+    if (authServer) await new Promise((resolve) => authServer.close(resolve));
     rmSync(directory, { recursive: true, force: true });
   }
 }

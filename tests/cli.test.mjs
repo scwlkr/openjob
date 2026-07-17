@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -331,29 +330,21 @@ test("auth status refreshes in memory and never prints credentials", async () =>
   }
 });
 
-test("auth login uses state, PKCE, random loopback, and stores only Firebase refresh", async () => {
+test("auth login uses a state-bound hosted handoff and stores only Firebase refresh", async () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-login-"));
   const credentialPath = join(directory, "credential");
-  const googleAccessToken = "google-oauth-access-process-only-secret";
   const firebaseIdToken = "firebase-id-token-process-only-secret";
   const firebaseRefresh = "firebase-refresh-keychain-only-secret";
   let authorizationUrl;
-  let tokenExchange;
+  let googleIdToken;
+  let running;
   const service = await listen(async (request, response) => {
     const body = await requestBody(request);
-    if (request.url === "/oauth/token") {
-      tokenExchange = new URLSearchParams(body);
-      response.setHeader("content-type", "application/json");
-      response.end(
-        JSON.stringify({ access_token: googleAccessToken, expires_in: 3600 }),
-      );
-      return;
-    }
     if (request.url === "/firebase/accounts:signInWithIdp?key=test-api-key") {
       const payload = JSON.parse(body);
-      assert.equal(payload.requestUri, authorizationUrl.searchParams.get("redirect_uri"));
+      assert.equal(payload.requestUri, authorizationUrl.searchParams.get("callback"));
       const assertion = new URLSearchParams(payload.postBody);
-      assert.equal(assertion.get("access_token"), googleAccessToken);
+      assert.equal(assertion.get("id_token"), googleIdToken);
       assert.equal(assertion.get("providerId"), "google.com");
       response.setHeader("content-type", "application/json");
       response.end(
@@ -385,14 +376,13 @@ test("auth login uses state, PKCE, random loopback, and stores only Firebase ref
   });
 
   try {
-    const running = startCli(["auth", "login", "--no-open", "--format", "json"], {
+    running = startCli(["auth", "login", "--no-open", "--format", "json"], {
       env: {
         NODE_ENV: "test",
         OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
         OPENJOB_TEST_AUTH_URL: service.baseUrl,
         OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
         OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
-        OPENJOB_TEST_GOOGLE_CLIENT_ID: "desktop-client.apps.googleusercontent.com",
       },
     });
     running.child.stdin.end();
@@ -412,22 +402,28 @@ test("auth login uses state, PKCE, random loopback, and stores only Firebase ref
     });
 
     assert.equal(authorizationUrl.origin, service.baseUrl);
-    assert.equal(authorizationUrl.pathname, "/oauth/authorize");
-    assert.equal(
-      authorizationUrl.searchParams.get("client_id"),
-      "desktop-client.apps.googleusercontent.com",
-    );
-    assert.equal(authorizationUrl.searchParams.get("response_type"), "code");
-    assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
+    assert.equal(authorizationUrl.pathname, "/cli-auth");
     assert.match(authorizationUrl.searchParams.get("state"), /^[A-Za-z0-9_-]{43}$/);
-    const redirectUri = new URL(authorizationUrl.searchParams.get("redirect_uri"));
+    const redirectUri = new URL(authorizationUrl.searchParams.get("callback"));
     assert.equal(redirectUri.hostname, "127.0.0.1");
     assert.notEqual(redirectUri.port, "0");
 
-    const callback = new URL(redirectUri);
-    callback.searchParams.set("code", "one-time-google-code");
-    callback.searchParams.set("state", authorizationUrl.searchParams.get("state"));
-    const callbackResponse = await fetch(callback);
+    googleIdToken = [
+      Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url"),
+      Buffer.from(JSON.stringify({ sub: "google-user" })).toString("base64url"),
+      "google-signature-process-only-secret",
+    ].join(".");
+    const callbackResponse = await fetch(redirectUri, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: service.baseUrl,
+      },
+      body: new URLSearchParams({
+        id_token: googleIdToken,
+        state: authorizationUrl.searchParams.get("state"),
+      }),
+    });
     assert.equal(callbackResponse.status, 200);
     assert.match(await callbackResponse.text(), /return to OpenJob/i);
 
@@ -444,14 +440,8 @@ test("auth login uses state, PKCE, random loopback, and stores only Firebase ref
     assert.match(result.stderr, /^Open this URL:\nhttp:\/\/127\.0\.0\.1:/);
     assert.doesNotMatch(
       result.stdout + result.stderr,
-      /one-time-google-code|process-only-secret|keychain-only-secret/,
+      /google-signature|process-only-secret|keychain-only-secret/,
     );
-    assert.equal(tokenExchange.get("code"), "one-time-google-code");
-    assert.equal(tokenExchange.get("client_secret"), null);
-    const challenge = createHash("sha256")
-      .update(tokenExchange.get("code_verifier"))
-      .digest("base64url");
-    assert.equal(challenge, authorizationUrl.searchParams.get("code_challenge"));
     assert.equal(
       await import("node:fs").then(({ readFileSync }) =>
         readFileSync(credentialPath, "utf8"),
@@ -459,9 +449,48 @@ test("auth login uses state, PKCE, random loopback, and stores only Firebase ref
       firebaseRefresh,
     );
   } finally {
+    if (running?.child.exitCode === null) running.child.kill("SIGINT");
     await service.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("production auth login uses the hosted Google handoff", async () => {
+  const running = startCli(["auth", "login", "--no-open"], {
+    env: { NODE_ENV: "production" },
+  });
+  running.child.stdin.end();
+
+  try {
+    const authorizationUrl = await new Promise((resolve, reject) => {
+      let stderr = "";
+      const timeout = setTimeout(
+        () => reject(new Error("production login URL was not emitted")),
+        5000,
+      );
+      running.child.stderr.setEncoding("utf8");
+      running.child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+        const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
+        if (match) {
+          clearTimeout(timeout);
+          resolve(new URL(match[1]));
+        }
+      });
+    });
+
+    assert.equal(authorizationUrl.origin, "https://openjob.dev");
+    assert.equal(authorizationUrl.pathname, "/cli-auth");
+    assert.match(authorizationUrl.searchParams.get("state"), /^[A-Za-z0-9_-]{43}$/);
+    const redirectUri = new URL(authorizationUrl.searchParams.get("callback"));
+    assert.equal(redirectUri.hostname, "127.0.0.1");
+    assert.notEqual(redirectUri.port, "0");
+  } finally {
+    running.child.kill("SIGINT");
+  }
+
+  const result = await running.result;
+  assert.equal(result.status, 130, result.stderr);
 });
 
 test("auth logout deletes the stored refresh credential without network access", () => {

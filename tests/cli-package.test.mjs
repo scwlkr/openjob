@@ -24,7 +24,11 @@ test("the hosted CLI smoke fails closed without a Firebase ID token", () => {
     {
       cwd: repoPath,
       encoding: "utf8",
-      env: { ...process.env, OPENJOB_CLI_SMOKE_TOKEN: "" },
+      env: {
+        ...process.env,
+        OPENJOB_CLI_SMOKE_TOKEN: "",
+        OPENJOB_CLI_SMOKE_USE_KEYCHAIN: "",
+      },
     },
   );
   assert.equal(result.status, 1);
