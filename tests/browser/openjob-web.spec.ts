@@ -2303,3 +2303,94 @@ test("keeps done Tasks visible in Former Member sections", async ({ page }) => {
   await expect(departedSection.getByRole("button", { name: "Add Task" })).toHaveCount(0);
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });
+
+test("keeps the approved Variant B visual hierarchy at phone and desktop sizes", async ({ page }) => {
+  await startSignedIn(page);
+  await page.clock.setFixedTime(new Date("2026-07-17T12:00:00-05:00"));
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_elijah", username: "elijah", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+      { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-03T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_shane_photo",
+        groupId: walkerLabs.groupId,
+        text: "Confirm the July photo schedule",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: "2026-07-17",
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_shane_specials",
+        groupId: walkerLabs.groupId,
+        text: "Publish this week's lunch specials",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: "2026-07-18",
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_elijah_patio",
+        groupId: walkerLabs.groupId,
+        text: "Send final patio measurements",
+        assignee: { state: "assigned", userId: "user_elijah", username: "elijah" },
+        dueDate: "2026-07-17",
+        state: "open",
+        createdAt: "2026-07-01T11:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_elijah_vendor",
+        groupId: walkerLabs.groupId,
+        text: "Review vendor renewal",
+        assignee: { state: "assigned", userId: "user_elijah", username: "elijah" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T12:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_morgan_stands",
+        groupId: walkerLabs.groupId,
+        text: "Order replacement menu stands",
+        assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
+        dueDate: "2026-07-20",
+        state: "open",
+        createdAt: "2026-07-01T13:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_unassigned_payroll",
+        groupId: walkerLabs.groupId,
+        text: "Reassign the payroll handoff",
+        assignee: { state: "unassigned" },
+        dueDate: "2026-07-16",
+        state: "open",
+        createdAt: "2026-07-01T14:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Walker Labs" })).toBeVisible();
+  await expect(page.getByTestId("member-section")).toHaveCount(4);
+  await expect(page).toHaveScreenshot("variant-b-phone.png", {
+    animations: "disabled",
+    fullPage: true,
+  });
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page).toHaveScreenshot("variant-b-desktop.png", {
+    animations: "disabled",
+    fullPage: true,
+  });
+});

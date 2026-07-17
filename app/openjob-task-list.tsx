@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ApiError,
   type AuthSession,
@@ -62,6 +63,18 @@ function formatDueDate(dueDate: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+function memberInitials(label: string) {
+  if (label === "Unassigned") return "–";
+  return label
+    .replace(/^@/u, "")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 function taskFormInput(task: Task): TaskFormInput {
@@ -255,6 +268,7 @@ export function TaskList({
   const [taskStateActions, setTaskStateActions] = useState<Record<string, TaskStateAction>>({});
   const [taskStateFailures, setTaskStateFailures] = useState<Record<string, TaskStateFailure>>({});
   const [undoableCompletions, setUndoableCompletions] = useState<UndoableCompletion[]>([]);
+  const [taskActionTarget, setTaskActionTarget] = useState<HTMLElement | null>(null);
   const activeLoadGeneration = useRef(0);
   const editorOpener = useRef<HTMLButtonElement | null>(null);
   const editorDialog = useRef<HTMLElement | null>(null);
@@ -263,6 +277,10 @@ export function TaskList({
   const statusFilterButtons = useRef<Partial<Record<StatusFilter, HTMLButtonElement | null>>>({});
   const statusRef = useRef<StatusFilter>("open");
   const taskStateActionsRef = useRef(new Map<string, TaskStateAction>());
+
+  useEffect(() => {
+    setTaskActionTarget(document.getElementById("signed-in-task-action"));
+  }, []);
 
   const closeEditor = useCallback(() => {
     window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
@@ -631,6 +649,18 @@ export function TaskList({
 
   return (
     <section className={styles.taskList} aria-label="Task List">
+      {taskActionTarget ? createPortal(
+        <button
+          aria-label="New Task"
+          className={styles.newTaskButton}
+          ref={newTaskButton}
+          type="button"
+          onClick={(event) => openEditor({ mode: "new", username: "" }, event.currentTarget)}
+        >
+          <span aria-hidden="true">+</span>
+        </button>,
+        taskActionTarget,
+      ) : null}
       {actionError ? (
         <div className={styles.taskActionError} role="alert">
           <span>{actionError}</span>
@@ -706,14 +736,6 @@ export function TaskList({
             </button>
           ))}
         </div>
-        <button
-          className={styles.newTaskButton}
-          ref={newTaskButton}
-          type="button"
-          onClick={(event) => openEditor({ mode: "new", username: "" }, event.currentTarget)}
-        >
-          New Task
-        </button>
       </div>
 
       {sections.length === 0 ? (
@@ -732,22 +754,26 @@ export function TaskList({
           return (
             <section className={styles.memberSection} data-testid="member-section" key={section.key}>
               <header>
-                <div>
+                <span className={styles.memberAvatar} aria-hidden="true">{memberInitials(section.label)}</span>
+                <div className={styles.memberIdentity}>
                   <h2>{section.label}</h2>
-                  {section.kind === "former" ? <small>Former Member</small> : null}
+                  <p>
+                    {section.kind === "former" ? <><span>Former Member</span><span aria-hidden="true"> · </span></> : null}
+                    {sectionTasks.length} {sectionTasks.length === 1 ? "Task" : "Tasks"}
+                  </p>
                 </div>
-                <span>{sectionTasks.length}</span>
-              </header>
-              <div className={styles.taskCards}>
                 {section.kind === "current" ? (
                   <button
+                    aria-label="Add Task"
                     className={styles.addTaskButton}
                     type="button"
                     onClick={(event) => openEditor({ mode: "new", username: section.key }, event.currentTarget)}
                   >
-                    Add Task
+                    <span aria-hidden="true">+</span>
                   </button>
-                ) : null}
+                ) : <span className={styles.memberCount}>{sectionTasks.length}</span>}
+              </header>
+              <div className={styles.taskCards}>
                 {sectionTasks.map((task) => {
                   const overdue = task.state === "open" && task.dueDate !== null && task.dueDate < localDateKey();
                   const taskStateAction = taskStateActions[task.taskId];
@@ -758,7 +784,11 @@ export function TaskList({
                     <>
                       <span className={styles.taskText}>{task.text}</span>
                       <span className={styles.taskMeta}>
-                        <span>{task.state === "open" ? "Open" : "Done"}</span>
+                        <span className={styles.taskAssignee}>
+                          {task.assignee.state === "assigned" ? `@${task.assignee.username}` : "Unassigned"}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span className={styles.taskState}>{task.state === "open" ? "Open" : "Done"}</span>
                         {task.dueDate ? (
                           <span className={styles.taskDue}>
                             <time dateTime={task.dueDate}>Due {formatDueDate(task.dueDate)}</time>

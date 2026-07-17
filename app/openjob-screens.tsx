@@ -367,24 +367,30 @@ export function GroupShell(props: GroupShellProps) {
     return () => document.removeEventListener("keydown", closeMenu);
   }, [openMenu]);
 
+  const groupMenuTrigger = (
+    <button
+      aria-controls="group-menu-panel"
+      aria-expanded={openMenu === "group"}
+      aria-label="Group menu"
+      className={styles.navMenuTrigger}
+      onClick={() => setOpenMenu((current) => current === "group" ? null : "group")}
+      ref={groupMenuButton}
+      type="button"
+    >
+      <span className={styles.navMenuTriggerText}>{props.selectedGroup?.name ?? "Groups"}</span>
+      <span aria-hidden="true">⌄</span>
+    </button>
+  );
+
   return (
     <main className={styles.groupShell} data-testid="group-shell">
       <header className={styles.signedInHeader}>
         <Brand />
         <div className={styles.signedInNav} aria-label="OpenJob navigation">
           <div className={styles.navMenu}>
-            <button
-              aria-controls="group-menu-panel"
-              aria-expanded={openMenu === "group"}
-              aria-label="Group menu"
-              className={styles.navMenuTrigger}
-              onClick={() => setOpenMenu((current) => current === "group" ? null : "group")}
-              ref={groupMenuButton}
-              type="button"
-            >
-              <span className={styles.navMenuTriggerText}>{props.selectedGroup?.name ?? "Groups"}</span>
-              <span aria-hidden="true">↓</span>
-            </button>
+            {props.selectedGroup ? (
+              <h1 aria-label={props.selectedGroup.name} className={styles.groupMenuHeading}>{groupMenuTrigger}</h1>
+            ) : groupMenuTrigger}
             {openMenu === "group" ? (
               <div className={styles.navMenuPanel} id="group-menu-panel" data-testid="group-menu-panel">
                 <p className={styles.menuLabel}>Your Groups</p>
@@ -432,6 +438,7 @@ export function GroupShell(props: GroupShellProps) {
               </div>
             ) : null}
           </div>
+          <div className={styles.taskActionSlot} id="signed-in-task-action" />
           <div className={styles.navMenu}>
             <button
               aria-controls="user-menu-panel"
@@ -441,7 +448,7 @@ export function GroupShell(props: GroupShellProps) {
               onClick={() => setOpenMenu((current) => current === "user" ? null : "user")}
               ref={userMenuButton}
               type="button"
-            >@{props.user.username}</button>
+            ><span aria-hidden="true">{props.user.username ? initials(props.user.username) : "?"}</span></button>
             {openMenu === "user" ? (
               <div className={`${styles.navMenuPanel} ${styles.userMenuPanel}`} id="user-menu-panel">
                 <p className={styles.menuLabel}>Signed in as @{props.user.username}</p>
@@ -472,24 +479,16 @@ export function GroupShell(props: GroupShellProps) {
           <GroupCreator error={props.error} onCreate={props.onCreate} saving={props.saving} standalone />
         ) : props.selectedGroup ? (
           <section className={styles.selectedGroupSurface}>
-            <header>
-              <div>
-                <h1>{props.selectedGroup.name}</h1>
-                <p className={styles.groupMeta}>
-                  {props.selectedGroup.role === "admin" ? "Admin" : "Member"}
-                  <span aria-hidden="true">·</span>
-                  <code>{props.selectedGroup.groupId}</code>
-                </p>
-              </div>
-              {view === "governance" ? (
+            {view === "governance" ? (
+              <header>
                 <nav className={styles.groupViewNav} aria-label="Selected Group view">
                 <button
                   type="button"
                   onClick={() => setView("tasks")}
                 >Back to Task List</button>
                 </nav>
-              ) : null}
-            </header>
+              </header>
+            ) : null}
             {view === "tasks" ? (
               <TaskList
                 api={props.api}
