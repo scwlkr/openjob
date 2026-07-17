@@ -153,6 +153,7 @@ function TaskForm({
   const [text, setText] = useState(initialText);
   const [assignee, setAssignee] = useState(initialAssignee);
   const [dueDate, setDueDate] = useState(initialDueDate);
+  const [validationError, setValidationError] = useState("");
   const copy = TASK_FORM_COPY[mode];
 
   return (
@@ -161,6 +162,15 @@ function TaskForm({
       aria-label={copy.title}
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        setValidationError("");
+        if (!text.trim()) {
+          setValidationError("Use 1 to 2,000 characters.");
+          return;
+        }
+        if (!members.some((member) => member.username === assignee)) {
+          setValidationError("Choose a current Member before saving.");
+          return;
+        }
         onSave({ text, assigneeUsername: assignee, dueDate });
       }}
       noValidate
@@ -172,6 +182,7 @@ function TaskForm({
           onChange={(event) => {
             const nextText = event.target.value;
             setText(nextText);
+            setValidationError("");
             onInputChange({ text: nextText, assigneeUsername: assignee, dueDate });
           }}
           autoFocus
@@ -185,6 +196,7 @@ function TaskForm({
           onChange={(event) => {
             const nextAssignee = event.target.value;
             setAssignee(nextAssignee);
+            setValidationError("");
             onInputChange({ text, assigneeUsername: nextAssignee, dueDate });
           }}
           required
@@ -201,11 +213,12 @@ function TaskForm({
           onChange={(event) => {
             const nextDueDate = event.target.value;
             setDueDate(nextDueDate);
+            setValidationError("");
             onInputChange({ text, assigneeUsername: assignee, dueDate: nextDueDate });
           }}
         />
       </label>
-      {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+      {validationError || error ? <p className={styles.fieldError} role="alert">{validationError || error}</p> : null}
       <div className={styles.taskFormActions}>
         {onDelete ? (
           <button
@@ -250,6 +263,7 @@ export function TaskList({
   const [editorAction, setEditorAction] = useState<EditorAction | null>(null);
   const activeLoadGeneration = useRef(0);
   const editorOpener = useRef<HTMLButtonElement | null>(null);
+  const newTaskButton = useRef<HTMLButtonElement | null>(null);
   const savingRef = useRef(false);
 
   const closeEditor = useCallback(() => {
@@ -275,6 +289,7 @@ export function TaskList({
 
   useEffect(() => {
     if (!editor) return;
+    const fallback = newTaskButton.current;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || savingRef.current) return;
       event.preventDefault();
@@ -283,7 +298,11 @@ export function TaskList({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      window.requestAnimationFrame(() => editorOpener.current?.focus());
+      const opener = editorOpener.current;
+      window.requestAnimationFrame(() => {
+        if (opener?.isConnected) opener.focus();
+        else fallback?.focus();
+      });
     };
   }, [closeEditor, editor]);
 
@@ -393,6 +412,9 @@ export function TaskList({
   }, [assignee, assigneeLanes, tasks]);
 
   async function runMutation(action: (token: string) => Promise<unknown>, nextEditorAction: EditorAction | null = null) {
+    const editorMutation = nextEditorAction !== null;
+    const opener = editorOpener.current;
+    let mutationCommitted = false;
     savingRef.current = true;
     setSaving(true);
     setEditorAction(nextEditorAction);
@@ -400,12 +422,27 @@ export function TaskList({
     try {
       const token = await session.getIdToken();
       await action(token);
-      setTasks(await api.listTasks(token, group.groupId, taskFilters));
-      if (nextEditorAction !== null) window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
-      setEditor(null);
-      setEditorInput(null);
+      mutationCommitted = true;
+      if (editorMutation) {
+        window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+        setEditor(null);
+        setEditorInput(null);
+      }
+      const nextTasks = await api.listTasks(token, group.groupId, taskFilters);
+      setTasks(nextTasks);
+      if (editorMutation) {
+        window.requestAnimationFrame(() => {
+          if (!opener?.isConnected && document.activeElement === document.body) {
+            newTaskButton.current?.focus();
+          }
+        });
+      }
     } catch (mutationError) {
-      if (!(await onSessionExpired(mutationError))) setActionError(mutationMessage(mutationError));
+      if (!(await onSessionExpired(mutationError))) {
+        setActionError(mutationCommitted
+          ? "Your change was saved, but the Task List could not refresh. Reload the Task List."
+          : mutationMessage(mutationError));
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -413,7 +450,7 @@ export function TaskList({
     }
   }
 
-  function saveEditor(input: TaskFormInput) {
+  function storeEditorDraft(input: TaskFormInput) {
     if (!editor) return;
     window.sessionStorage.setItem(TASK_EDITOR_DRAFT_KEY, JSON.stringify({
       groupId: group.groupId,
@@ -421,6 +458,11 @@ export function TaskList({
       mode: editor.mode,
       taskId: editor.mode === "new" ? null : editor.task.taskId,
     } satisfies StoredEditorDraft));
+  }
+
+  function saveEditor(input: TaskFormInput) {
+    if (!editor) return;
+    storeEditorDraft(input);
     if (editor.mode === "new") {
       void runMutation((token) => api.createTask(token, group.groupId, {
         text: input.text,
@@ -439,16 +481,11 @@ export function TaskList({
   function deleteEditorTask() {
     if (!editor || editor.mode === "new") return;
     if (!window.confirm(`This will permanently delete “${editor.task.text}”. Continue?`)) return;
-    window.sessionStorage.setItem(TASK_EDITOR_DRAFT_KEY, JSON.stringify({
-      groupId: group.groupId,
-      input: editorInput ?? {
-        text: editor.task.text,
-        assigneeUsername: editor.task.assignee.state === "assigned" ? editor.task.assignee.username : "",
-        dueDate: editor.task.dueDate ?? "",
-      },
-      mode: editor.mode,
-      taskId: editor.task.taskId,
-    } satisfies StoredEditorDraft));
+    storeEditorDraft(editorInput ?? {
+      text: editor.task.text,
+      assigneeUsername: editor.task.assignee.state === "assigned" ? editor.task.assignee.username : "",
+      dueDate: editor.task.dueDate ?? "",
+    });
     void runMutation(
       (token) => api.deleteTask(token, group.groupId, editor.task.taskId),
       "delete",
@@ -508,6 +545,7 @@ export function TaskList({
         </label>
         <button
           className={styles.newTaskButton}
+          ref={newTaskButton}
           type="button"
           onClick={(event) => openEditor({ mode: "new", username: "" }, event.currentTarget)}
         >
