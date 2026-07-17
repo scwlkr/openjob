@@ -18,7 +18,7 @@ const installCommand = `npm install --global https://github.com/scwlkr/openjob/r
 test("the repository documents one clean-Mac CLI install command", () => {
   const readme = readFileSync(join(repoPath, "README.md"), "utf8");
   const cliReadme = readFileSync(join(cliPackagePath, "README.md"), "utf8");
-  assert.equal(cliVersion, "0.1.0");
+  assert.equal(cliVersion, "0.1.1");
   assert.match(readme, /Requires macOS and Node\.js 22\.13 or newer\./);
   assert.equal(readme.split(installCommand).length - 1, 1);
   assert.equal(cliReadme.split(installCommand).length - 1, 1);
