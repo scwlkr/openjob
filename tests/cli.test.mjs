@@ -1043,6 +1043,138 @@ test("Ban commands cover current and former Members without duplicating service 
   }
 });
 
+test("Invite commands show, rotate, inspect, and join with tokens or URLs", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-invites-"));
+  const credentialPath = join(directory, "credential");
+  const configPath = join(directory, "config.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_invites" }));
+  const calls = [];
+  const inviteLink = {
+    token: "ivt_current",
+    url: "https://openjob.dev/invites/ivt_current",
+    issuedAt: "2026-07-16T12:00:00Z",
+    expiresAt: "2026-07-23T12:00:00Z",
+    remainingJoins: 25,
+  };
+  const joinedGroup = {
+    groupId: "grp_joined",
+    name: "Joined Group",
+    role: "member",
+    createdAt: "2026-07-15T12:00:00Z",
+  };
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    calls.push({ method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_invites/invite-link" &&
+      request.method === "GET"
+    ) {
+      response.end(JSON.stringify({ data: inviteLink }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_invites/invite-link/actions/rotate" &&
+      request.method === "POST"
+    ) {
+      response.end(JSON.stringify({
+        data: { ...inviteLink, token: "ivt_rotated", url: "https://openjob.dev/invites/ivt_rotated" },
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/invites/ivt_raw" && request.method === "GET") {
+      response.end(JSON.stringify({ data: { groupName: "Raw Token Group" } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/invites/ivt_url/actions/join" &&
+      request.method === "POST"
+    ) {
+      response.end(JSON.stringify({ data: joinedGroup }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "invite_invalid", message: "Invite Link is not valid." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const show = await runCliAsync(["invite", "show", "--format", "json"], {
+      env: environment,
+    });
+    assert.equal(show.status, 0, show.stderr);
+    assert.deepEqual(JSON.parse(show.stdout), { data: inviteLink });
+
+    const rotateRefused = runCli(
+      ["invite", "rotate", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(rotateRefused.status, 2);
+    assert.equal(rotateRefused.stdout, "");
+    assert.equal(JSON.parse(rotateRefused.stderr).error.code, "confirmation_required");
+
+    const rotate = await runCliAsync(
+      ["invite", "rotate", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(rotate.status, 0, rotate.stderr);
+    assert.equal(JSON.parse(rotate.stdout).data.token, "ivt_rotated");
+
+    const inspect = await runCliAsync(
+      ["invite", "inspect", "ivt_raw", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(inspect.status, 0, inspect.stderr);
+    assert.deepEqual(JSON.parse(inspect.stdout), {
+      data: { groupName: "Raw Token Group" },
+    });
+
+    const join = await runCliAsync(
+      ["invite", "join", "https://openjob.dev/invites/ivt_url", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(join.status, 0, join.stderr);
+    assert.deepEqual(JSON.parse(join.stdout), { data: joinedGroup });
+
+    const invalidUrl = runCli(
+      ["invite", "inspect", "https://openjob.dev/groups/not-an-invite", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(invalidUrl.status, 2);
+    assert.equal(invalidUrl.stdout, "");
+    assert.equal(JSON.parse(invalidUrl.stderr).error.code, "usage_error");
+
+    assert.deepEqual(
+      calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
+      [
+        "GET /api/v1/groups/grp_invites/invite-link",
+        "POST /api/v1/groups/grp_invites/invite-link/actions/rotate",
+        "GET /api/v1/invites/ivt_raw",
+        "POST /api/v1/invites/ivt_url/actions/join",
+      ],
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("success output is atomic and never mixes files with stdout", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-output-"));
   const configPath = join(directory, "config.json");
