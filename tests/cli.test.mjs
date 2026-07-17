@@ -344,7 +344,7 @@ test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Fire
   let running;
   const service = await listen(async (request, response) => {
     const body = await requestBody(request);
-    if (request.url === "/cli-auth/exchange") {
+    if (request.url === "/api/cli-auth/exchange") {
       tokenExchange = JSON.parse(body);
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ data: { idToken: googleIdToken } }));

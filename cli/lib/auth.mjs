@@ -10,7 +10,7 @@ import { CliError } from "./errors.mjs";
 const FIREBASE_API_KEY = "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU";
 const GOOGLE_DESKTOP_CLIENT_ID =
   "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com";
-const CLI_AUTH_EXCHANGE_URL = "https://openjob.dev/cli-auth/exchange";
+const CLI_AUTH_EXCHANGE_URL = "https://openjob.dev/api/cli-auth/exchange";
 
 function firebaseApiKey(environment) {
   if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_FIREBASE_API_KEY) {
@@ -27,7 +27,7 @@ export function authEndpoints(environment = process.env) {
       firebaseSignIn: `${base}/firebase/accounts:signInWithIdp?key=${key}`,
       firebaseToken: `${base}/firebase/token?key=${key}`,
       oauthAuthorize: `${base}/oauth/authorize`,
-      oauthExchange: `${base}/cli-auth/exchange`,
+      oauthExchange: `${base}/api/cli-auth/exchange`,
     };
   }
   return {
