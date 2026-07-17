@@ -714,6 +714,9 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await page.getByRole("button", { name: "Claim Username" }).click();
 
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "New Group" }).click();
+  await expect(page.getByLabel("Group Name")).toBeFocused();
   await page.getByLabel("Group Name").fill("Walker Labs");
   await page.getByRole("button", { name: "Create Group" }).click();
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
@@ -1038,7 +1041,7 @@ test("switches Groups and exposes role-appropriate actions from compact signed-i
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
   await expect(page.getByRole("heading")).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Group menu" }).click();
+  await openGroupMenu(page);
   await expect(page.getByRole("button", { name: "New Group" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manage Group" })).toBeVisible();
   await page.getByRole("button", { name: "OpenJob Core", exact: true }).click();
@@ -1047,7 +1050,7 @@ test("switches Groups and exposes role-appropriate actions from compact signed-i
   await expect.poll(() =>
     page.evaluate(() => window.localStorage.getItem("openjob:selected-group-id")),
   ).toBe(openJobCore.groupId);
-  await page.getByRole("button", { name: "Group menu" }).click();
+  await openGroupMenu(page);
   await expect(page.getByRole("button", { name: "Group settings" })).toBeVisible();
 });
 
@@ -1073,14 +1076,26 @@ test("keeps compact navigation keyboard-visible and overflow-free at desktop and
   await page.keyboard.press("Enter");
   const groupPanel = page.getByTestId("group-menu-panel");
   await expect(groupPanel).toBeVisible();
-  for (const control of await groupPanel.getByRole("button").all()) {
+  const groupControls = groupPanel.getByRole("button");
+  for (const control of await groupControls.all()) {
     const box = await control.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
+  await page.keyboard.press("Tab");
+  await expect(groupControls.nth(0)).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(groupControls.nth(1)).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(groupPanel).toHaveCount(0);
   await expect(groupMenu).toBeFocused();
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(await page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+  await expect.poll(() => groupMenu.evaluate((element) => ({
+    animationDuration: getComputedStyle(element).animationDuration,
+    transitionDuration: getComputedStyle(element).transitionDuration,
+  }))).toEqual({ animationDuration: "0s", transitionDuration: "0s" });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("group-rail")).toHaveCount(0);
