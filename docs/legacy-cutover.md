@@ -61,3 +61,28 @@ unavailable.
 ./node_modules/.bin/wrangler versions deploy <cutover-worker-version-id>@100% --yes
 npm run legacy:smoke -- unavailable
 ```
+
+## Final retirement
+
+Run this only after issue #21's two-User web/CLI acceptance and complete local
+verification pass. The command revalidates the snapshot digest and zero count,
+proves the legacy route remains unavailable, fetches a fresh owner-authenticated
+zero count, and refuses to retire a Worker that is active. The snapshot's exact
+SHA-256 is the destructive confirmation.
+
+Cloudflare's per-version API requires the account ID and a token with Workers
+write permission. Keep the token in the process environment only.
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=<account-id> \
+CLOUDFLARE_API_TOKEN=<token> \
+npm run legacy:retire -- \
+  --snapshot '<owner-only-snapshot-path>' \
+  --confirm <snapshot-sha256>
+```
+
+When the recorded and fresh Task counts are both zero, the Firestore collection
+is already absent: Firestore has no standalone empty collection resource. The
+only deletion performed is the exact frozen Worker version recorded by the
+snapshot. Keep the owner-only snapshot as immutable release evidence after
+retirement.
