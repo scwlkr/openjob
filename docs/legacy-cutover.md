@@ -78,11 +78,15 @@ CLOUDFLARE_ACCOUNT_ID=<account-id> \
 CLOUDFLARE_API_TOKEN=<token> \
 npm run legacy:retire -- \
   --snapshot '<owner-only-snapshot-path>' \
-  --confirm <snapshot-sha256>
+  --confirm <snapshot-sha256> \
+  --confirm-worker-version <freeze-worker-version-id>
 ```
 
 When the recorded and fresh Task counts are both zero, the Firestore collection
 is already absent: Firestore has no standalone empty collection resource. The
 only deletion performed is the exact frozen Worker version recorded by the
-snapshot. Keep the owner-only snapshot as immutable release evidence after
-retirement.
+snapshot. Pass that version separately so the destructive target must match
+both the immutable snapshot and the operator's explicit confirmation. Active
+deployment status and version deletion use the same Cloudflare account and
+Worker identity. Keep the owner-only snapshot as immutable release evidence
+after retirement.
