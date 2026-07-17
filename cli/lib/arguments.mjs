@@ -2,6 +2,7 @@ import { CliError } from "./errors.mjs";
 
 const VALUE_OPTIONS = new Set([
   "--assignee",
+  "--confirm-name",
   "--due",
   "--format",
   "--group",

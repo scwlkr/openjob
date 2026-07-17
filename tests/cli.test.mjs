@@ -72,6 +72,9 @@ test("production CLI exposes the executable contract separately from the simulat
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /^OpenJob\n\nUsage:/);
   assert.doesNotMatch(help.stdout, /prototype|simulator|no network/i);
+  for (const resource of ["member", "ban", "invite"]) {
+    assert.match(help.stdout, new RegExp(`^  ${resource}\\s`, "m"));
+  }
   assert.equal(help.stderr, "");
 
   const version = runCli(["--version"]);
@@ -92,6 +95,27 @@ test("production CLI exposes the executable contract separately from the simulat
   assert.match(groupHelp.stdout, /openjob group show \[--group <group-id>\]/);
   assert.match(groupHelp.stdout, /openjob group use <group-id>/);
   assert.match(groupHelp.stdout, /openjob group current/);
+  assert.match(groupHelp.stdout, /openjob group rename --name <name>/);
+  assert.match(groupHelp.stdout, /openjob group leave \[--yes\]/);
+  assert.match(groupHelp.stdout, /openjob group end \[--confirm-name <name>\]/);
+
+  const memberHelp = runCli(["help", "member"]);
+  assert.equal(memberHelp.status, 0, memberHelp.stderr);
+  for (const command of ["list", "kick", "promote", "demote"]) {
+    assert.match(memberHelp.stdout, new RegExp(`openjob member ${command}`));
+  }
+
+  const banHelp = runCli(["help", "ban"]);
+  assert.equal(banHelp.status, 0, banHelp.stderr);
+  for (const command of ["list", "add", "remove"]) {
+    assert.match(banHelp.stdout, new RegExp(`openjob ban ${command}`));
+  }
+
+  const inviteHelp = runCli(["help", "invite"]);
+  assert.equal(inviteHelp.status, 0, inviteHelp.stderr);
+  for (const command of ["show", "rotate", "inspect", "join"]) {
+    assert.match(inviteHelp.stdout, new RegExp(`openjob invite ${command}`));
+  }
 
   const taskHelp = runCli(["help", "task"]);
   assert.equal(taskHelp.status, 0, taskHelp.stderr);
@@ -619,6 +643,123 @@ test("Group commands paginate, create, inspect, and persist verified selection",
     assert.equal(
       calls.filter(({ url }) => url === "/firebase/token?key=test-api-key").length,
       4,
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Group lifecycle commands preserve input, confirmation, and Group context contracts", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-group-lifecycle-"));
+  const credentialPath = join(directory, "credential");
+  const configPath = join(directory, "config.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_config" }));
+  const calls = [];
+  const renamedGroup = {
+    groupId: "grp_flag",
+    name: "Renamed Group",
+    role: "admin",
+    createdAt: "2026-07-16T12:00:00Z",
+  };
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    calls.push({ body, method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_flag" && request.method === "PATCH") {
+      assert.deepEqual(JSON.parse(body), { name: "Renamed Group" });
+      response.end(JSON.stringify({ data: renamedGroup }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_environment/actions/leave" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_config/actions/end" &&
+      request.method === "POST"
+    ) {
+      assert.deepEqual(JSON.parse(body), { confirmationName: "Config Group" });
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "not_found", message: "Missing." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const rename = await runCliAsync(
+      ["group", "rename", "--name", "Renamed Group", "--group", "grp_flag", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(rename.status, 0, rename.stderr);
+    assert.deepEqual(JSON.parse(rename.stdout), { data: renamedGroup });
+    assert.equal(rename.stderr, "");
+
+    const leaveRefused = runCli(
+      ["group", "leave", "--format", "json"],
+      { env: { ...environment, OPENJOB_GROUP_ID: "grp_environment" } },
+    );
+    assert.equal(leaveRefused.status, 2);
+    assert.equal(leaveRefused.stdout, "");
+    assert.equal(JSON.parse(leaveRefused.stderr).error.code, "confirmation_required");
+
+    const leave = await runCliAsync(
+      ["group", "leave", "--yes", "--format", "json"],
+      { env: { ...environment, OPENJOB_GROUP_ID: "grp_environment" } },
+    );
+    assert.equal(leave.status, 0, leave.stderr);
+    assert.deepEqual(JSON.parse(leave.stdout), {
+      data: { groupId: "grp_environment", left: true },
+    });
+
+    const endBypassed = runCli(
+      ["group", "end", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(endBypassed.status, 2);
+    assert.equal(endBypassed.stdout, "");
+    assert.equal(JSON.parse(endBypassed.stderr).error.code, "confirmation_required");
+
+    const end = await runCliAsync(
+      ["group", "end", "--confirm-name", "Config Group", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(end.status, 0, end.stderr);
+    assert.deepEqual(JSON.parse(end.stdout), {
+      data: { groupId: "grp_config", ended: true },
+    });
+    assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), {});
+
+    assert.deepEqual(
+      calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
+      [
+        "PATCH /api/v1/groups/grp_flag",
+        "POST /api/v1/groups/grp_environment/actions/leave",
+        "POST /api/v1/groups/grp_config/actions/end",
+      ],
     );
   } finally {
     await service.close();
