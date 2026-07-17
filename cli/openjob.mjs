@@ -185,9 +185,9 @@ function validateCommandOptions(resource, command, options) {
 
 /** @param {string[]} rest @param {CommandOptions} options @returns {ClaimUsernameRequest} */
 function usernameMutationBody(rest, options) {
-  const hasUsername = rest.length === 1;
   const hasInput = options.has("--input");
-  if (hasUsername === hasInput) {
+  const hasValidInput = hasInput ? rest.length === 0 : rest.length === 1;
+  if (!hasValidInput) {
     throw new CliError(
       "usage_error",
       "username claim requires exactly one Username argument or --input.",
