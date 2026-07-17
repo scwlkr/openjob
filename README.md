@@ -14,24 +14,33 @@ npm run dev
 
 Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
-## Production CLI foundation
+## Installable CLI
 
 The real `openjob` executable lives under `cli/`; the no-network command in
-`prototypes/cli/` remains disposable. For local repository development:
+`prototypes/cli/` remains disposable. Requires macOS and Node.js 22.13 or newer.
+Install the current v0.1.0 release candidate from GitHub with one command:
 
 ```bash
-npm install
-npm link
-openjob --help
+npm install --global https://github.com/scwlkr/openjob/releases/download/cli-v0.1.0-rc.1/openjob-0.1.0-rc.1.tgz
 ```
 
-The current production command surface covers `auth login/status/logout`,
-`user show`, `username claim`, `group list/create/show/use/current`, and the
-complete `task list/create/show/edit/done/reopen/delete` lifecycle against
-`https://openjob.dev/api/v1`. `OPENJOB_API_URL` may target HTTPS or a local
-loopback service for development. The CLI stores only its Firebase refresh
-credential in the operating-system credential store; local config stores only
-the current Group ID.
+Run `openjob auth login`, then `openjob --help`. The production command surface
+covers authentication, User and Username identity, the complete Group and Task
+lifecycle, Member governance, bans, and Invite Links against
+`https://openjob.dev/api/v1`. The CLI stores only its Firebase refresh
+credential in the macOS credential store; local config stores only the current
+Group ID. It has no local Task database or offline mode.
+
+For repository development, run `npm install`, `npm link`, and
+`openjob --help`. Maintainers build the release artifact with `npm run cli:pack`
+and run its hosted Task workflow with:
+
+```bash
+OPENJOB_CLI_SMOKE_TOKEN=<firebase-id-token> npm run cli:smoke:production
+```
+
+The token stays in the smoke process and is not passed to the installed
+executable.
 
 Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
 `npm run cli:types:check` to verify the checked-in request/response types.
