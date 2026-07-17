@@ -24,6 +24,8 @@
     "test": "npm run build && npm run secret:check && npm run cli:types:check && node --test tests/*.test.mjs && npm run test:browser",
     "test:browser": "playwright install chromium && playwright test --config tests/browser/playwright.config.ts",
     "secret:check": "node scripts/check-v1-secrets.mjs",
+    "legacy:smoke": "node scripts/legacy-cutover.mjs smoke",
+    "legacy:snapshot": "node scripts/legacy-cutover.mjs snapshot",
     "smoke:production": "node scripts/smoke-v1-production.mjs",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv",
     "typecheck": "npm run cf:typegen && tsc --noEmit",
