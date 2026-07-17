@@ -1393,9 +1393,9 @@ test("separates the touch-first completion control from keyboard Task editing", 
   });
   await page.goto("/");
 
-  const openCard = page.getByTestId("task-card").filter({ hasText: "Publish the touch menu" });
-  const completion = openCard.getByRole("checkbox", { name: "Complete Publish the touch menu" });
-  const taskBody = openCard.getByRole("button", { name: "Edit Task: Publish the touch menu" });
+  const openTask = page.getByTestId("task-card").filter({ hasText: "Publish the touch menu" });
+  const completion = openTask.getByRole("checkbox", { name: "Complete Publish the touch menu" });
+  const taskBody = openTask.getByRole("button", { name: "Edit Task: Publish the touch menu" });
   for (const control of [completion, taskBody]) {
     const box = await control.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -1416,14 +1416,16 @@ test("separates the touch-first completion control from keyboard Task editing", 
   await expect(taskBody).toBeFocused();
 
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
-  const doneCard = page.getByTestId("task-card").filter({ hasText: "Archive the old menu" });
-  await expect(doneCard.getByRole("button", { name: /^Edit Task:/ })).toHaveCount(0);
-  const reopen = doneCard.getByRole("button", { name: "Reopen Archive the old menu" });
+  const doneTask = page.getByTestId("task-card").filter({ hasText: "Archive the old menu" });
+  await expect(doneTask.getByRole("button", { name: /^Edit Task:/ })).toHaveCount(0);
+  const reopen = doneTask.getByRole("button", { name: "Reopen Archive the old menu" });
   const reopenBox = await reopen.boundingBox();
   expect(reopenBox!.width).toBeGreaterThanOrEqual(44);
   expect(reopenBox!.height).toBeGreaterThanOrEqual(44);
+  state.taskMutationDelayMs = 150;
   await reopen.click();
-  await expect(doneCard).toHaveCount(0);
+  await expect(doneTask).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Task state update: Archive the old menu" })).toContainText("Reopening");
   await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
   const emptyDoneFilter = page.getByRole("button", { name: "Done 0", exact: true });
   await expect(emptyDoneFilter).toBeFocused();
@@ -1466,9 +1468,10 @@ test("completes optimistically and restores the active filtered view with five-s
   });
   await page.goto("/");
 
-  let card = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
-  await card.getByRole("checkbox", { name: "Complete Publish the Undo menu" }).click();
-  await expect.poll(() => card.count(), { timeout: 150 }).toBe(0);
+  let task = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
+  await task.getByRole("checkbox", { name: "Complete Publish the Undo menu" }).click();
+  await expect.poll(() => task.count(), { timeout: 150 }).toBe(0);
+  await expect(page.getByRole("status", { name: "Task state update: Publish the Undo menu" })).toContainText("Completing");
   await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeFocused();
   await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "All 2", exact: true })).toBeVisible();
@@ -1477,14 +1480,14 @@ test("completes optimistically and restores the active filtered view with five-s
   await expect(undoNotice).toContainText("Undo available for 5 seconds");
   const undo = undoNotice.getByRole("button", { name: "Undo completion of Publish the Undo menu" });
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
-  card = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
-  await expect(card).toBeVisible();
+  task = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
+  await expect(task).toBeVisible();
 
   state.taskMutationDelayMs = 150;
   await undo.click();
   await expect(undo).toBeDisabled();
   await expect(undoNotice).toContainText("Undoing…");
-  await expect.poll(() => card.count(), { timeout: 100 }).toBe(0);
+  await expect.poll(() => task.count(), { timeout: 100 }).toBe(0);
   await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Done 0", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open 2", exact: true }).click();
@@ -1531,18 +1534,18 @@ test("scopes visible state-action busy controls to the affected Task", async ({ 
   await page.goto("/");
   await page.getByRole("button", { name: "All 2", exact: true }).click();
 
-  const firstCard = page.getByTestId("task-card").filter({ hasText: "Complete the first order" });
-  const secondCard = page.getByTestId("task-card").filter({ hasText: "Complete the second order" });
-  await firstCard.getByRole("checkbox", { name: "Complete Complete the first order" }).click();
-  const firstBusyControl = firstCard.getByRole("checkbox", { name: "Completing Complete the first order" });
+  const firstTask = page.getByTestId("task-card").filter({ hasText: "Complete the first order" });
+  const secondTask = page.getByTestId("task-card").filter({ hasText: "Complete the second order" });
+  await firstTask.getByRole("checkbox", { name: "Complete Complete the first order" }).click();
+  const firstBusyControl = firstTask.getByRole("checkbox", { name: "Completing Complete the first order" });
   await expect(firstBusyControl).toBeDisabled();
-  await expect(firstCard.getByText("Completing…")).toBeVisible();
+  await expect(firstTask.getByText("Completing…")).toBeVisible();
 
-  const secondControl = secondCard.getByRole("checkbox", { name: "Complete Complete the second order" });
+  const secondControl = secondTask.getByRole("checkbox", { name: "Complete Complete the second order" });
   await expect(secondControl).toBeEnabled();
   await secondControl.click();
   await expect.poll(() => state.taskMutationRequests).toBe(2);
-  await expect(secondCard.getByRole("checkbox", { name: "Completing Complete the second order" })).toBeDisabled();
+  await expect(secondTask.getByRole("checkbox", { name: "Completing Complete the second order" })).toBeDisabled();
 
   await expect(page.getByRole("button", { name: "Undo completion of Complete the first order" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo completion of Complete the second order" })).toBeVisible();
@@ -1574,10 +1577,10 @@ test("rolls back a failed optimistic state change and offers a direct retry", as
   });
   await page.goto("/");
 
-  const card = page.getByTestId("task-card").filter({ hasText: "Retry the failed completion" });
-  await card.getByRole("checkbox", { name: "Complete Retry the failed completion" }).click();
-  await expect.poll(() => card.count(), { timeout: 100 }).toBe(0);
-  await expect(card).toBeVisible();
+  const task = page.getByTestId("task-card").filter({ hasText: "Retry the failed completion" });
+  await task.getByRole("checkbox", { name: "Complete Retry the failed completion" }).click();
+  await expect.poll(() => task.count(), { timeout: 100 }).toBe(0);
+  await expect(task).toBeVisible();
   const error = page.getByRole("alert").filter({ hasText: "could not apply that change" });
   await expect(error).toBeVisible();
   const retry = error.getByRole("button", { name: "Retry completion of Retry the failed completion" });
@@ -1587,9 +1590,59 @@ test("rolls back a failed optimistic state change and offers a direct retry", as
 
   state.taskMutationFailureStatus = null;
   await retry.click();
-  await expect(card).toHaveCount(0);
+  await expect(task).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Undo completion of Retry the failed completion" })).toBeVisible();
   expect(state.taskMutationRequests).toBe(2);
+});
+
+test("keeps independent recovery actions when concurrent Task state changes fail", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_fail_first",
+        groupId: walkerLabs.groupId,
+        text: "Recover first failure",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+      {
+        taskId: "task_fail_second",
+        groupId: walkerLabs.groupId,
+        text: "Recover second failure",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+    taskMutationDelayMs: 150,
+    taskMutationFailureStatus: 500,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "All 2", exact: true }).click();
+
+  await page.getByRole("checkbox", { name: "Complete Recover first failure" }).click();
+  await page.getByRole("checkbox", { name: "Complete Recover second failure" }).click();
+  const firstRetry = page.getByRole("button", { name: "Retry completion of Recover first failure" });
+  const secondRetry = page.getByRole("button", { name: "Retry completion of Recover second failure" });
+  await expect(firstRetry).toBeVisible();
+  await expect(secondRetry).toBeVisible();
+  expect(state.taskMutationRequests).toBe(2);
+
+  state.taskMutationFailureStatus = null;
+  await firstRetry.click();
+  await expect(firstRetry).toHaveCount(0);
+  await expect(secondRetry).toBeVisible();
 });
 
 test("expires completion Undo after five seconds without changing the completed Task", async ({ page }) => {
@@ -1624,8 +1677,10 @@ test("expires completion Undo after five seconds without changing the completed 
   await expect(undo).toBeVisible();
   await page.clock.fastForward(4_999);
   await expect(undo).toBeVisible();
+  await undo.focus();
   await page.clock.fastForward(1);
   await expect(undo).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open 0", exact: true })).toBeFocused();
   await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
   expect(state.taskStateRequests).toEqual([{ state: "done", taskId: "task_undo_expiry" }]);
 });

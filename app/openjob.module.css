@@ -138,7 +138,7 @@
 .taskCards { display: grid; gap: 10px; padding: 12px; }
 .addTaskButton { width: 100%; min-height: 44px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
 .taskCard { display: grid; gap: 10px; border: 1px solid var(--line); background: var(--paper-light); padding: 10px; }
-.taskCardMain { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; }
+.taskMain { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; }
 .taskStateControl { display: grid; justify-items: center; gap: 4px; color: var(--muted); font-size: 9px; font-weight: 800; }
 .taskBody, .taskBodyButton { display: grid; min-width: 0; min-height: 44px; gap: 10px; padding: 5px; text-align: left; }
 .taskBody { grid-column: 1 / -1; }
@@ -166,6 +166,7 @@
 .taskFormActions .primaryButton { min-width: 44px; min-height: 44px; padding: 0 13px; }
 .taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
 .taskActionError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.taskStatePending { margin-bottom: 12px; border-left: 4px solid var(--ink); background: var(--paper-light); color: var(--ink); padding: 14px; font-size: 12px; font-weight: 800; }
 .taskUndo { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; padding: 10px 14px; font-size: 12px; }
 .taskUndo button { min-width: 64px; min-height: 44px; border: 1px solid currentColor; background: transparent; color: inherit; font-weight: 850; cursor: pointer; }
 .taskUndo button:disabled { cursor: not-allowed; opacity: .5; }

@@ -57,7 +57,8 @@ rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 ## Where things live
 
 - `app/page.tsx` — authenticated web entry
-- `app/globals.css` — all styling
+- `app/globals.css` — global reset, typography, and legacy public-board styling
+- `app/openjob.module.css` — authenticated OpenJob screens and Task List styling
 - `server/legacy-board.ts` — frozen revision's read-only legacy contract
 - `db/tasks.ts` — task storage adapter
 - `db/firestore-rest.ts` — authenticated Firestore REST client

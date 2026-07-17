@@ -20,14 +20,13 @@ type Editor =
 type TaskFormInput = { text: string; assigneeUsername: string; dueDate: string };
 type EditorAction = "save" | "delete";
 type TaskStateAction = "complete" | "reopen" | "undo";
-type TaskStateFailure = {
+type TaskStateSubject = { taskId: string; taskText: string };
+type TaskStateFailure = TaskStateSubject & {
   action: TaskStateAction;
-  desiredState: "open" | "done";
+  desiredState: Task["state"];
   message: string;
-  taskId: string;
-  taskText: string;
 };
-type UndoableCompletion = { expiresAt: number; taskId: string; taskText: string };
+type UndoableCompletion = TaskStateSubject & { expiresAt: number };
 type StoredEditorDraft = {
   groupId: string;
   input: TaskFormInput;
@@ -239,7 +238,7 @@ export function TaskList({
   const [editorInput, setEditorInput] = useState<TaskFormInput | null>(null);
   const [editorAction, setEditorAction] = useState<EditorAction | null>(null);
   const [taskStateActions, setTaskStateActions] = useState<Record<string, TaskStateAction>>({});
-  const [taskStateFailure, setTaskStateFailure] = useState<TaskStateFailure | null>(null);
+  const [taskStateFailures, setTaskStateFailures] = useState<Record<string, TaskStateFailure>>({});
   const [undoableCompletions, setUndoableCompletions] = useState<UndoableCompletion[]>([]);
   const activeLoadGeneration = useRef(0);
   const editorOpener = useRef<HTMLButtonElement | null>(null);
@@ -349,25 +348,29 @@ export function TaskList({
     const hasExpiredCompletion = undoableCompletions.some(
       (completion) => completion.expiresAt <= now && !taskStateActions[completion.taskId],
     );
-    if (hasExpiredCompletion) {
-      const timeout = window.setTimeout(() => {
-        setUndoableCompletions((current) => current.filter(
-          (completion) => completion.expiresAt > Date.now() || Boolean(taskStateActionsRef.current.get(completion.taskId)),
-        ));
-      }, 0);
-      return () => window.clearTimeout(timeout);
-    }
     const nextExpiration = Math.min(
       ...undoableCompletions
         .filter((completion) => completion.expiresAt > now)
         .map((completion) => completion.expiresAt),
     );
-    if (!Number.isFinite(nextExpiration)) return;
+    if (!hasExpiredCompletion && !Number.isFinite(nextExpiration)) return;
     const timeout = window.setTimeout(() => {
+      const pruneTime = Date.now();
+      const focusedTaskId = document.activeElement instanceof HTMLElement
+        ? document.activeElement.dataset.taskStateControl
+        : undefined;
+      const focusWillExpire = focusedTaskId !== undefined && undoableCompletions.some(
+        (completion) => completion.taskId === focusedTaskId
+          && completion.expiresAt <= pruneTime
+          && !taskStateActionsRef.current.has(completion.taskId),
+      );
       setUndoableCompletions((current) => current.filter(
-        (completion) => completion.expiresAt > Date.now() || Boolean(taskStateActionsRef.current.get(completion.taskId)),
+        (completion) => completion.expiresAt > pruneTime || taskStateActionsRef.current.has(completion.taskId),
       ));
-    }, nextExpiration - now);
+      if (focusWillExpire && focusedTaskId) {
+        focusTaskStateFallback(focusedTaskId, document.activeElement);
+      }
+    }, hasExpiredCompletion ? 0 : nextExpiration - now);
     return () => window.clearTimeout(timeout);
   }, [taskStateActions, undoableCompletions]);
 
@@ -461,26 +464,51 @@ export function TaskList({
     }
   }
 
+  function focusTaskStateFallback(taskId: string, excludedElement?: Element | null) {
+    const taskControl = [...document.querySelectorAll(
+      `[data-task-state-control="${CSS.escape(taskId)}"]`,
+    )].find((element) => element !== excludedElement);
+    if (taskControl instanceof HTMLElement) taskControl.focus();
+    else statusFilterButtons.current[statusRef.current]?.focus();
+  }
+
   function restoreTaskStateFocus(taskId: string) {
     window.requestAnimationFrame(() => {
-      if (document.activeElement !== document.body) return;
-      const taskControl = document.querySelector(
-        `[data-task-state-control="${CSS.escape(taskId)}"]`,
-      );
-      if (taskControl instanceof HTMLElement) taskControl.focus();
-      else statusFilterButtons.current[statusRef.current]?.focus();
+      if (document.activeElement === document.body) focusTaskStateFallback(taskId);
+    });
+  }
+
+  function startTaskStateAction(taskId: string, taskAction: TaskStateAction) {
+    taskStateActionsRef.current.set(taskId, taskAction);
+    setTaskStateActions((current) => ({ ...current, [taskId]: taskAction }));
+  }
+
+  function finishTaskStateAction(taskId: string) {
+    taskStateActionsRef.current.delete(taskId);
+    setTaskStateActions((current) => {
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
+  }
+
+  function clearTaskStateFailure(taskId: string) {
+    setTaskStateFailures((current) => {
+      if (!current[taskId]) return current;
+      const next = { ...current };
+      delete next[taskId];
+      return next;
     });
   }
 
   async function runTaskStateMutation(
     task: Task,
-    desiredState: "open" | "done",
+    desiredState: Task["state"],
     taskAction: TaskStateAction,
   ) {
     if (taskStateActionsRef.current.has(task.taskId)) return;
-    taskStateActionsRef.current.set(task.taskId, taskAction);
-    setTaskStateActions((current) => ({ ...current, [task.taskId]: taskAction }));
-    setTaskStateFailure((current) => current?.taskId === task.taskId ? null : current);
+    startTaskStateAction(task.taskId, taskAction);
+    clearTaskStateFailure(task.taskId);
     setActionError("");
     const optimisticTask: Task = {
       ...task,
@@ -497,7 +525,7 @@ export function TaskList({
       setTasks((current) => current.map((candidate) =>
         candidate.taskId === task.taskId ? updatedTask : candidate,
       ));
-      setTaskStateFailure((current) => current?.taskId === task.taskId ? null : current);
+      clearTaskStateFailure(task.taskId);
       if (taskAction === "complete") {
         setUndoableCompletions((current) => [
           ...current.filter((completion) => completion.taskId !== task.taskId),
@@ -513,21 +541,19 @@ export function TaskList({
         candidate.taskId === task.taskId ? task : candidate,
       ));
       if (!(await onSessionExpired(mutationError))) {
-        setTaskStateFailure({
-          action: taskAction,
-          desiredState,
-          message: mutationMessage(mutationError),
-          taskId: task.taskId,
-          taskText: task.text,
-        });
+        setTaskStateFailures((current) => ({
+          ...current,
+          [task.taskId]: {
+            action: taskAction,
+            desiredState,
+            message: mutationMessage(mutationError),
+            taskId: task.taskId,
+            taskText: task.text,
+          },
+        }));
       }
     } finally {
-      taskStateActionsRef.current.delete(task.taskId);
-      setTaskStateActions((current) => {
-        const next = { ...current };
-        delete next[task.taskId];
-        return next;
-      });
+      finishTaskStateAction(task.taskId);
       restoreTaskStateFocus(task.taskId);
     }
   }
@@ -594,22 +620,37 @@ export function TaskList({
           <button type="button" onClick={() => void load()}>Reload Task List</button>
         </div>
       ) : null}
-      {taskStateFailure ? (
-        <div className={styles.taskActionError} role="alert">
-          <span>{taskStateFailure.message}</span>
+      {Object.values(taskStateFailures).map((failure) => (
+        <div className={styles.taskActionError} role="alert" key={failure.taskId}>
+          <span>{failure.message}</span>
           <button
             type="button"
-            aria-label={`Retry ${taskStateFailure.action === "complete" ? "completion" : taskStateFailure.action} of ${taskStateFailure.taskText}`}
+            aria-label={`Retry ${failure.action === "complete" ? "completion" : failure.action} of ${failure.taskText}`}
             onClick={() => {
-              const task = tasks.find((candidate) => candidate.taskId === taskStateFailure.taskId);
-              if (task) void runTaskStateMutation(task, taskStateFailure.desiredState, taskStateFailure.action);
+              const task = tasks.find((candidate) => candidate.taskId === failure.taskId);
+              if (task) void runTaskStateMutation(task, failure.desiredState, failure.action);
               else void load();
             }}
           >
             Retry
           </button>
         </div>
-      ) : null}
+      ))}
+      {Object.entries(taskStateActions).map(([taskId, taskAction]) => {
+        if (taskAction === "undo") return null;
+        const task = tasks.find((candidate) => candidate.taskId === taskId);
+        if (!task) return null;
+        return (
+          <div
+            className={styles.taskStatePending}
+            role="status"
+            aria-label={`Task state update: ${task.text}`}
+            key={taskId}
+          >
+            {taskAction === "complete" ? "Completing" : "Reopening"} “{task.text}”…
+          </div>
+        );
+      })}
       {undoableCompletions.map((completion) => (
         <div className={styles.taskUndo} role="status" key={completion.taskId}>
           <span>Completed “{completion.taskText}”. Undo available for 5 seconds.</span>
@@ -712,7 +753,7 @@ export function TaskList({
                   );
                   return (
                     <article className={styles.taskCard} data-testid="task-card" key={task.taskId}>
-                      <div className={styles.taskCardMain}>
+                      <div className={styles.taskMain}>
                         {showCompletionControl ? (
                           <div className={styles.taskStateControl}>
                             <input
