@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -12,6 +12,10 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+export const viewport: Viewport = {
+  themeColor: "#1e4ed8",
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -30,7 +34,21 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: baseUrl,
     title: "OpenJob — One clear list for your team",
     description,
-    icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
+    icons: {
+      icon: [
+        { url: "/favicon.svg", type: "image/svg+xml", sizes: "any" },
+        { url: "/favicon.png", type: "image/png", sizes: "64x64" },
+      ],
+      shortcut: "/favicon.ico",
+      apple: [
+        {
+          url: "/apple-touch-icon.png",
+          type: "image/png",
+          sizes: "180x180",
+        },
+      ],
+    },
+    manifest: "/site.webmanifest",
     openGraph: {
       title: "OpenJob",
       description,
