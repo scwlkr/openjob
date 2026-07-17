@@ -8,8 +8,12 @@ import test from "node:test";
 
 const repoPath = fileURLToPath(new URL("../", import.meta.url));
 const cliPackagePath = fileURLToPath(new URL("../cli/", import.meta.url));
-const installCommand =
-  "npm install --global https://github.com/scwlkr/openjob/releases/download/cli-v0.1.0-rc.1/openjob-0.1.0-rc.1.tgz";
+const cliManifest = JSON.parse(
+  readFileSync(join(cliPackagePath, "package.json"), "utf8"),
+);
+const cliVersion = cliManifest.version;
+const releaseTag = `cli-v${cliVersion}`;
+const installCommand = `npm install --global https://github.com/scwlkr/openjob/releases/download/${releaseTag}/openjob-${cliVersion}.tgz`;
 
 test("the repository documents one clean-Mac CLI install command", () => {
   const readme = readFileSync(join(repoPath, "README.md"), "utf8");
@@ -50,7 +54,7 @@ test("the CLI release artifact installs the complete executable without app code
 
     const [artifact] = JSON.parse(packed.stdout);
     assert.equal(artifact.name, "openjob");
-    assert.equal(artifact.version, "0.1.0-rc.1");
+    assert.equal(artifact.version, cliVersion);
 
     const packagedFiles = artifact.files.map(({ path }) => path);
     for (const required of [
@@ -89,7 +93,7 @@ test("the CLI release artifact installs the complete executable without app code
     const installedCli = join(installPrefix, "node_modules", ".bin", "openjob");
     const version = spawnSync(installedCli, ["--version"], { encoding: "utf8" });
     assert.equal(version.status, 0, version.stderr);
-    assert.equal(version.stdout, "openjob 0.1.0-rc.1\n");
+    assert.equal(version.stdout, `openjob ${cliVersion}\n`);
 
     const help = spawnSync(installedCli, ["--help"], { encoding: "utf8" });
     assert.equal(help.status, 0, help.stderr);
@@ -130,6 +134,26 @@ test("the CLI release artifact installs the complete executable without app code
       readFileSync(join(installPrefix, "node_modules", "openjob", "package.json"), "utf8"),
     );
     assert.deepEqual(manifest.dependencies, { "@napi-rs/keyring": "1.3.0" });
+
+    const installedSuiteEnvironment = {
+      ...process.env,
+      OPENJOB_CLI_TEST_BIN: installedCli,
+    };
+    delete installedSuiteEnvironment.NODE_TEST_CONTEXT;
+    const installedProcessSuite = spawnSync(
+      process.execPath,
+      ["--test", join(repoPath, "tests", "cli.test.mjs")],
+      {
+        cwd: repoPath,
+        encoding: "utf8",
+        env: installedSuiteEnvironment,
+      },
+    );
+    assert.equal(
+      installedProcessSuite.status,
+      0,
+      installedProcessSuite.stderr || installedProcessSuite.stdout,
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
