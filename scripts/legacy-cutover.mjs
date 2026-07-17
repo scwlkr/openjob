@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, open } from "node:fs/promises";
+import { chmod, mkdir, open, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
 const DEFAULT_BASE_URL = "https://openjob.dev";
 const DEFAULT_PROJECT_ID = "openjob-dev";
 const DEFAULT_DATABASE_ID = "(default)";
@@ -16,7 +16,7 @@ function statusError(label, response, expected) {
   return new Error(`${label} returned ${response.status}; expected ${expected}.`);
 }
 
-async function json(response, label) {
+async function parseJsonResponse(response, label) {
   try {
     return await response.json();
   } catch {
@@ -49,26 +49,38 @@ export async function verifyLegacyDeployment({
     const read = await fetchImplementation(legacyUrl, {
       headers: { "cache-control": "no-cache" },
     });
-    const write = await fetchImplementation(legacyUrl, {
-      body: "{}",
-      headers: {
-        "cache-control": "no-cache",
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
     const readLabel = `GET /api/tasks probe ${probe}`;
-    const writeLabel = `POST /api/tasks probe ${probe}`;
+    const writes = await Promise.all(
+      ["POST", "PATCH"].map(async (method) => ({
+        method,
+        response: await fetchImplementation(legacyUrl, {
+          body: "{}",
+          headers: {
+            "cache-control": "no-cache",
+            "content-type": "application/json",
+          },
+          method,
+        }),
+      })),
+    );
 
     if (expectedMode === "unavailable") {
       if (read.status !== 404) throw statusError(readLabel, read, 404);
-      if (write.status !== 404) throw statusError(writeLabel, write, 404);
+      for (const { method, response } of writes) {
+        if (response.status !== 404) {
+          throw statusError(`${method} /api/tasks probe ${probe}`, response, 404);
+        }
+      }
       continue;
     }
 
     if (read.status !== 200) throw statusError(readLabel, read, 200);
-    if (write.status !== 410) throw statusError(writeLabel, write, 410);
-    const body = await json(read, readLabel);
+    for (const { method, response } of writes) {
+      if (response.status !== 410) {
+        throw statusError(`${method} /api/tasks probe ${probe}`, response, 410);
+      }
+    }
+    const body = await parseJsonResponse(read, readLabel);
     if (!Array.isArray(body.tasks)) {
       throw new Error(`${readLabel} did not return the legacy Task collection.`);
     }
@@ -102,7 +114,7 @@ async function fetchLegacyDocuments({
     if (!response.ok) {
       throw new Error(`Firestore legacy snapshot returned ${response.status}.`);
     }
-    const page = await json(response, "Firestore legacy snapshot");
+    const page = await parseJsonResponse(response, "Firestore legacy snapshot");
     if (page.documents !== undefined && !Array.isArray(page.documents)) {
       throw new Error("Firestore returned an invalid legacy snapshot page.");
     }
@@ -117,14 +129,36 @@ function isWithin(parent, candidate) {
   return path === "" || (!path.startsWith(`..${sep}`) && path !== "..");
 }
 
+async function resolveThroughExistingAncestor(path) {
+  let ancestor = path;
+  const missing = [];
+  for (;;) {
+    try {
+      return resolve(await realpath(ancestor), ...missing.reverse());
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      const parent = dirname(ancestor);
+      if (parent === ancestor) throw error;
+      missing.push(basename(ancestor));
+      ancestor = parent;
+    }
+  }
+}
+
 async function writeOwnerOnlyJson(outputPath, value, repoRoot) {
   const destination = resolve(outputPath);
-  if (isWithin(resolve(repoRoot), destination)) {
+  const canonicalRepo = await realpath(resolve(repoRoot));
+  const canonicalDestination = await resolveThroughExistingAncestor(destination);
+  if (isWithin(canonicalRepo, canonicalDestination)) {
     throw new Error("The legacy snapshot must be written outside the repository.");
   }
   const directory = dirname(destination);
-  await mkdir(directory, { mode: 0o700, recursive: true });
-  await chmod(directory, 0o700);
+  const createdDirectory = await mkdir(directory, { mode: 0o700, recursive: true });
+  if (createdDirectory) await chmod(directory, 0o700);
+  const finalDestination = resolve(await realpath(directory), basename(destination));
+  if (isWithin(canonicalRepo, finalDestination)) {
+    throw new Error("The legacy snapshot must be written outside the repository.");
+  }
   const file = await open(destination, "wx", 0o600);
   try {
     await file.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -142,13 +176,17 @@ export async function captureLegacySnapshot({
   databaseId = DEFAULT_DATABASE_ID,
   fetchImplementation = fetch,
   freezeGitCommit,
-  freezeWorkerVersion,
+  getActiveWorkerVersion,
   now = () => new Date(),
   outputPath,
   projectId = DEFAULT_PROJECT_ID,
   repoRoot,
 }) {
   if (!accessToken) throw new Error("An owner access token is required.");
+  if (typeof getActiveWorkerVersion !== "function") {
+    throw new Error("An active Worker version resolver is required.");
+  }
+  const freezeWorkerVersion = await getActiveWorkerVersion();
   const deployment = await verifyLegacyDeployment({
     baseUrl,
     expectedMode: "read-only",
@@ -160,6 +198,9 @@ export async function captureLegacySnapshot({
     fetchImplementation,
     projectId,
   });
+  if (await getActiveWorkerVersion() !== freezeWorkerVersion) {
+    throw new Error("Active Worker changed during legacy snapshot capture.");
+  }
   if (deployment.taskCount !== documents.length) {
     throw new Error(
       "The public legacy count changed while the authenticated snapshot was captured.",
@@ -219,7 +260,7 @@ function defaultSnapshotPath(now = new Date()) {
 }
 
 async function gitCommit(repoRoot) {
-  const { stdout } = await run("git", ["rev-parse", "HEAD"], {
+  const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
     cwd: repoRoot,
     encoding: "utf8",
   });
@@ -227,12 +268,39 @@ async function gitCommit(repoRoot) {
 }
 
 async function ownerAccessToken() {
-  const { stdout } = await run("gcloud", ["auth", "print-access-token"], {
+  const { stdout } = await execFileAsync("gcloud", ["auth", "print-access-token"], {
     encoding: "utf8",
   });
   const token = stdout.trim();
   if (!token) throw new Error("gcloud did not return an owner access token.");
   return token;
+}
+
+export function activeWorkerVersionFromDeployment(deployment) {
+  const active = Array.isArray(deployment?.versions)
+    ? deployment.versions.filter(({ percentage }) => percentage === 100)
+    : [];
+  if (active.length !== 1 || typeof active[0].version_id !== "string") {
+    throw new Error("Snapshot requires exactly one Worker version at 100% traffic.");
+  }
+  return active[0].version_id;
+}
+
+async function activeWorkerVersion(repoRoot) {
+  const wrangler = join(repoRoot, "node_modules", ".bin", "wrangler");
+  const { stdout } = await execFileAsync(
+    wrangler,
+    ["deployments", "status", "--json"],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  try {
+    return activeWorkerVersionFromDeployment(JSON.parse(stdout));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("Wrangler returned invalid deployment status JSON.");
+    }
+    throw error;
+  }
 }
 
 export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
@@ -254,15 +322,13 @@ export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
   }
 
   if (command === "snapshot") {
-    const freezeWorkerVersion = option(args, "--freeze-version");
     const outputPath = option(args, "--output") ?? defaultSnapshotPath();
-    if (!freezeWorkerVersion) throw new Error("--freeze-version is required.");
     if (args.length > 0) throw new Error(`Unexpected argument: ${args[0]}`);
     const result = await captureLegacySnapshot({
       accessToken: await ownerAccessToken(),
       baseUrl: process.env.OPENJOB_BASE_URL ?? DEFAULT_BASE_URL,
       freezeGitCommit: await gitCommit(repoRoot),
-      freezeWorkerVersion,
+      getActiveWorkerVersion: () => activeWorkerVersion(repoRoot),
       outputPath,
       repoRoot,
     });
@@ -273,7 +339,7 @@ export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
     return result;
   }
 
-  throw new Error("Usage: legacy-cutover.mjs smoke <read-only|unavailable> | snapshot --freeze-version <id> [--output <path>]");
+  throw new Error("Usage: legacy-cutover.mjs smoke <read-only|unavailable> | snapshot [--output <path>]");
 }
 
 if (

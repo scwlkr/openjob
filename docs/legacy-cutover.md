@@ -14,11 +14,13 @@ Worker version from `wrangler deployments status --json`.
 npm run deploy
 ./node_modules/.bin/wrangler deployments status --json
 npm run legacy:smoke -- read-only
-npm run legacy:snapshot -- --freeze-version <worker-version-id>
+npm run legacy:snapshot
 ```
 
 The snapshot command first proves the hosted board is read-only, then uses the
-current `gcloud` owner credential to read raw Firestore documents. It writes a
+current `gcloud` owner credential to read raw Firestore documents. It requires
+exactly one active Worker version at 100% traffic and records that version as
+the rollback target. The command writes a
 new `0600` snapshot under the current macOS User's
 `Library/Application Support/OpenJob/cutover/` directory by default. The file
 records the raw documents, fresh Task count, SHA-256 digest, freeze commit, and

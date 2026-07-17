@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  activeWorkerVersionFromDeployment,
   captureLegacySnapshot,
   verifyLegacyDeployment,
 } from "../scripts/legacy-cutover.mjs";
@@ -12,11 +21,39 @@ import { createLegacyBoardApi } from "../server/legacy-board.ts";
 
 const repoRoot = fileURLToPath(new URL("../", import.meta.url));
 
+function createCutoverFetch({
+  documents = [],
+  onFirestore = () => {},
+  tasks = [],
+  writeStatus = 410,
+} = {}) {
+  const writeCounts = new Map();
+  return async (input, init = {}) => {
+    const url = new URL(input);
+    if (url.hostname === "firestore.googleapis.com") {
+      onFirestore(init);
+      return Response.json({ documents });
+    }
+    if (url.pathname === "/api/tasks" && init.method) {
+      const count = (writeCounts.get(init.method) ?? 0) + 1;
+      writeCounts.set(init.method, count);
+      const status = typeof writeStatus === "function"
+        ? writeStatus({ count, method: init.method })
+        : writeStatus;
+      return Response.json({}, { status });
+    }
+    if (url.pathname === "/api/tasks") return Response.json({ tasks });
+    if (url.pathname === "/api/v1/me") {
+      return Response.json({}, { status: 401 });
+    }
+    return new Response("OpenJob", { status: 200 });
+  };
+}
+
 test("the frozen legacy board stays readable and rejects writes before storage", async () => {
   const tasks = [{ id: "legacy-task", description: "Preserve me" }];
   let reads = 0;
   const api = createLegacyBoardApi({
-    mode: "read-only",
     async listTasks() {
       reads += 1;
       return tasks;
@@ -43,26 +80,6 @@ test("the frozen legacy board stays readable and rejects writes before storage",
   assert.equal(reads, 1);
 });
 
-test("the cutover legacy route conceals the old contract without reading storage", async () => {
-  const api = createLegacyBoardApi({
-    mode: "unavailable",
-    async listTasks() {
-      throw new Error("Legacy storage must stay untouched after cutover.");
-    },
-  });
-
-  for (const method of ["GET", "POST", "PATCH"]) {
-    const response = await api.fetch(
-      new Request("https://openjob.dev/api/tasks", { method }),
-    );
-    assert.equal(response.status, 404, method);
-    assert.equal(response.headers.get("cache-control"), "no-store");
-    assert.deepEqual(await response.json(), {
-      error: { code: "not_found", message: "Not found." },
-    });
-  }
-});
-
 test("an authenticated empty legacy snapshot is owner-only and records its digest", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "openjob-cutover-"));
   const outputPath = join(directory, "legacy-tasks.json");
@@ -71,31 +88,16 @@ test("an authenticated empty legacy snapshot is owner-only and records its diges
   const result = await captureLegacySnapshot({
     accessToken: "owner-token",
     baseUrl: "https://openjob.dev",
-    fetchImplementation: async (input, init = {}) => {
-      const url = new URL(input);
-      if (url.hostname === "firestore.googleapis.com") {
+    fetchImplementation: createCutoverFetch({
+      onFirestore(init) {
         assert.equal(
           new Headers(init.headers).get("authorization"),
           "Bearer owner-token",
         );
-        return Response.json({ documents: [] });
-      }
-      if (url.pathname === "/api/tasks" && init.method === "POST") {
-        return Response.json(
-          { error: { code: "legacy_read_only" } },
-          { status: 410 },
-        );
-      }
-      if (url.pathname === "/api/tasks") {
-        return Response.json({ tasks: [] });
-      }
-      if (url.pathname === "/api/v1/me") {
-        return Response.json({}, { status: 401 });
-      }
-      return new Response("OpenJob", { status: 200 });
-    },
+      },
+    }),
     freezeGitCommit: "a".repeat(40),
-    freezeWorkerVersion: "11111111-1111-4111-8111-111111111111",
+    getActiveWorkerVersion: async () => "11111111-1111-4111-8111-111111111111",
     now: () => new Date("2026-07-17T13:00:00.000Z"),
     outputPath,
     repoRoot,
@@ -140,24 +142,12 @@ test("a fresh nonzero snapshot is retained but blocks cutover", async (t) => {
     captureLegacySnapshot({
       accessToken: "owner-token",
       baseUrl: "https://openjob.dev",
-      fetchImplementation: async (input, init = {}) => {
-        const url = new URL(input);
-        if (url.hostname === "firestore.googleapis.com") {
-          return Response.json({ documents: [document] });
-        }
-        if (url.pathname === "/api/tasks" && init.method === "POST") {
-          return Response.json({}, { status: 410 });
-        }
-        if (url.pathname === "/api/tasks") {
-          return Response.json({ tasks: [{ id: "late" }] });
-        }
-        if (url.pathname === "/api/v1/me") {
-          return Response.json({}, { status: 401 });
-        }
-        return new Response("OpenJob", { status: 200 });
-      },
+      fetchImplementation: createCutoverFetch({
+        documents: [document],
+        tasks: [{ id: "late" }],
+      }),
       freezeGitCommit: "b".repeat(40),
-      freezeWorkerVersion: "22222222-2222-4222-8222-222222222222",
+      getActiveWorkerVersion: async () => "22222222-2222-4222-8222-222222222222",
       outputPath,
       repoRoot,
     }),
@@ -176,21 +166,110 @@ test("freeze verification rejects one stale write-capable edge response", async 
     verifyLegacyDeployment({
       baseUrl: "https://openjob.dev",
       expectedMode: "read-only",
-      fetchImplementation: async (input, init = {}) => {
-        const url = new URL(input);
-        if (url.pathname === "/api/tasks" && init.method === "POST") {
-          writes += 1;
-          return Response.json({}, { status: writes === 2 ? 400 : 410 });
-        }
-        if (url.pathname === "/api/tasks") {
-          return Response.json({ tasks: [] });
-        }
-        if (url.pathname === "/api/v1/me") {
-          return Response.json({}, { status: 401 });
-        }
-        return new Response("OpenJob", { status: 200 });
-      },
+      fetchImplementation: createCutoverFetch({
+        writeStatus({ method }) {
+          if (method === "POST") writes += 1;
+          return method === "POST" && writes === 2 ? 400 : 410;
+        },
+      }),
     }),
     /POST \/api\/tasks probe 2 returned 400; expected 410/,
+  );
+});
+
+test("freeze verification checks the legacy PATCH write path", async () => {
+  await assert.rejects(
+    verifyLegacyDeployment({
+      baseUrl: "https://openjob.dev",
+      expectedMode: "read-only",
+      fetchImplementation: createCutoverFetch({
+        writeStatus: ({ method }) => method === "PATCH" ? 400 : 410,
+      }),
+    }),
+    /PATCH \/api\/tasks probe 1 returned 400; expected 410/,
+  );
+});
+
+test("a custom snapshot path does not change its existing parent permissions", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "openjob-cutover-parent-"));
+  const outputPath = join(directory, "legacy-tasks.json");
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  await chmod(directory, 0o755);
+
+  await captureLegacySnapshot({
+    accessToken: "owner-token",
+    baseUrl: "https://openjob.dev",
+    fetchImplementation: createCutoverFetch(),
+    freezeGitCommit: "c".repeat(40),
+    getActiveWorkerVersion: async () => "33333333-3333-4333-8333-333333333333",
+    outputPath,
+    repoRoot,
+  });
+
+  assert.equal((await stat(directory)).mode & 0o777, 0o755);
+  assert.equal((await stat(outputPath)).mode & 0o777, 0o600);
+});
+
+test("an outside symlink cannot redirect the snapshot into the repository", async (t) => {
+  const workspace = await mkdtemp(join(tmpdir(), "openjob-cutover-link-"));
+  const fakeRepo = join(workspace, "repo");
+  const outside = join(workspace, "outside");
+  await Promise.all([mkdir(fakeRepo), mkdir(outside)]);
+  await symlink(fakeRepo, join(outside, "repo-link"), "dir");
+  t.after(() => rm(workspace, { force: true, recursive: true }));
+
+  await assert.rejects(
+    captureLegacySnapshot({
+      accessToken: "owner-token",
+      baseUrl: "https://openjob.dev",
+      fetchImplementation: createCutoverFetch(),
+      freezeGitCommit: "d".repeat(40),
+      getActiveWorkerVersion: async () => "44444444-4444-4444-8444-444444444444",
+      outputPath: join(outside, "repo-link", "legacy-tasks.json"),
+      repoRoot: fakeRepo,
+    }),
+    /snapshot must be written outside the repository/,
+  );
+});
+
+test("snapshot selects only the one fully active Worker version", () => {
+  assert.equal(
+    activeWorkerVersionFromDeployment({
+      versions: [{ percentage: 100, version_id: "active-version" }],
+    }),
+    "active-version",
+  );
+  assert.throws(
+    () => activeWorkerVersionFromDeployment({
+      versions: [
+        { percentage: 50, version_id: "first" },
+        { percentage: 50, version_id: "second" },
+      ],
+    }),
+    /exactly one Worker version at 100%/,
+  );
+});
+
+test("snapshot blocks if the active Worker changes during capture", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "openjob-cutover-race-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  let checks = 0;
+
+  await assert.rejects(
+    captureLegacySnapshot({
+      accessToken: "owner-token",
+      baseUrl: "https://openjob.dev",
+      fetchImplementation: createCutoverFetch(),
+      freezeGitCommit: "f".repeat(40),
+      getActiveWorkerVersion: async () => {
+        checks += 1;
+        return checks === 1
+          ? "77777777-7777-4777-8777-777777777777"
+          : "88888888-8888-4888-8888-888888888888";
+      },
+      outputPath: join(directory, "legacy-tasks.json"),
+      repoRoot,
+    }),
+    /Active Worker changed during legacy snapshot capture/,
   );
 });
