@@ -169,19 +169,19 @@
 .taskFormActions .taskDeleteButton { min-width: 44px; min-height: 44px; margin-right: auto; border: 0; background: transparent; color: #982f27; padding: 0 10px; font-weight: 800; cursor: pointer; }
 .taskFormActions button:disabled { cursor: not-allowed; opacity: .5; }
 .taskFormActions .primaryButton { min-width: 44px; min-height: 44px; padding: 0 13px; }
-.taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
+.taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: min(calc(100% - 24px), 1120px); margin: 0 auto 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
 .taskActionError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
-.taskStatePending { margin-bottom: 12px; border-left: 4px solid var(--ink); background: var(--paper-light); color: var(--ink); padding: 14px; font-size: 12px; font-weight: 800; }
-.taskUndo { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; padding: 10px 14px; font-size: 12px; }
+.taskStatePending { width: min(calc(100% - 24px), 1120px); margin: 0 auto 12px; border-left: 4px solid var(--ink); background: var(--paper-light); color: var(--ink); padding: 14px; font-size: 12px; font-weight: 800; }
+.taskUndo { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: min(calc(100% - 24px), 1120px); margin: 0 auto 12px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; padding: 10px 14px; font-size: 12px; }
 .taskUndo button { min-width: 64px; min-height: 44px; border: 1px solid currentColor; background: transparent; color: inherit; font-weight: 850; cursor: pointer; }
 .taskUndo button:disabled { cursor: not-allowed; opacity: .5; }
 .taskDialog { width: min(100%, 560px); border: 1px solid var(--ink); border-radius: 2px; background: var(--paper-light); padding: 28px; box-shadow: 0 24px 64px rgba(21,23,19,.28); }
 .taskDialog h2 { margin: 9px 0 22px; font-size: 38px; letter-spacing: -.055em; }
-.emptyTaskList { margin: 0; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); font-size: 12px; }
-.taskLoading, .taskLoadError { margin-top: 34px; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
+.emptyTaskList { width: min(calc(100% - 24px), 1120px); margin: 0 auto; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); font-size: 12px; }
+.taskLoading, .taskLoadError { width: min(calc(100% - 24px), 1120px); margin: 34px auto 0; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
 .taskLoadError p { margin: 0 0 14px; color: #74221c; }
 .taskLoadError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--blue); padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
-.notice, .errorBanner { margin: 0 0 24px; padding: 13px 16px; font-size: 13px; }
+.notice, .errorBanner { width: min(calc(100% - 24px), 1120px); margin: 18px auto 24px; padding: 13px 16px; font-size: 13px; }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
 .errorBanner button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
@@ -197,7 +197,7 @@
 .loadError h1 { margin: 0; font-size: 38px; letter-spacing: -.055em; }
 .loadError p { color: var(--muted); line-height: 1.5; }
 
-.governanceSurface { margin-top: 32px; }
+.governanceSurface { width: min(calc(100% - 48px), 1120px); margin: 32px auto 0; }
 .governanceSurface > header { margin-bottom: 24px; }
 .governanceSurface > header h2 { margin: 8px 0 0; font-size: clamp(34px, 4vw, 52px); letter-spacing: -.055em; }
 .governanceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
