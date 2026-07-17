@@ -22,11 +22,7 @@ function emit() {
 
 export const browserLocalPersistence = { type: "LOCAL" };
 
-export class GoogleAuthProvider {
-  static credentialFromResult() {
-    return { idToken: "google-browser-process-only-secret" };
-  }
-}
+export class GoogleAuthProvider {}
 
 export function getAuth() {
   return auth;

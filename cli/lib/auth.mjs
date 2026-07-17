@@ -3,12 +3,14 @@ import {
   writeRefreshCredential,
 } from "./credential-store.mjs";
 import { spawnSync } from "node:child_process";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { CliError } from "./errors.mjs";
 
 const FIREBASE_API_KEY = "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU";
-const CLI_AUTH_URL = "https://openjob.dev/cli-auth";
+const GOOGLE_DESKTOP_CLIENT_ID =
+  "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com";
+const CLI_AUTH_EXCHANGE_URL = "https://openjob.dev/cli-auth/exchange";
 
 function firebaseApiKey(environment) {
   if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_FIREBASE_API_KEY) {
@@ -24,23 +26,39 @@ export function authEndpoints(environment = process.env) {
     return {
       firebaseSignIn: `${base}/firebase/accounts:signInWithIdp?key=${key}`,
       firebaseToken: `${base}/firebase/token?key=${key}`,
-      browserLogin: `${base}/cli-auth`,
+      oauthAuthorize: `${base}/oauth/authorize`,
+      oauthExchange: `${base}/cli-auth/exchange`,
     };
   }
   return {
     firebaseSignIn: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${key}`,
     firebaseToken: `https://securetoken.googleapis.com/v1/token?key=${key}`,
-    browserLogin: CLI_AUTH_URL,
+    oauthAuthorize: "https://accounts.google.com/o/oauth2/v2/auth",
+    oauthExchange: CLI_AUTH_EXCHANGE_URL,
   };
+}
+
+function googleClientId(environment) {
+  if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_GOOGLE_CLIENT_ID) {
+    return environment.OPENJOB_TEST_GOOGLE_CLIENT_ID;
+  }
+  return GOOGLE_DESKTOP_CLIENT_ID;
 }
 
 export async function loginWithGoogle({ openBrowser }, environment = process.env) {
   const state = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(64).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const callback = await loopbackCallback(state);
   const endpoints = authEndpoints(environment);
-  const authorizationUrl = new URL(endpoints.browserLogin);
-  const callback = await loopbackCallback(state, authorizationUrl.origin);
+  const authorizationUrl = new URL(endpoints.oauthAuthorize);
   authorizationUrl.search = new URLSearchParams({
-    callback: callback.redirectUri,
+    client_id: googleClientId(environment),
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    redirect_uri: callback.redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
     state,
   }).toString();
 
@@ -58,7 +76,16 @@ export async function loginWithGoogle({ openBrowser }, environment = process.env
   }
 
   try {
-    const googleIdToken = await callback.idToken;
+    const code = await callback.code;
+    const exchange = await postJson(endpoints.oauthExchange, {
+      code,
+      codeVerifier: verifier,
+      redirectUri: callback.redirectUri,
+    });
+    const googleIdToken = exchange.data?.idToken;
+    if (typeof googleIdToken !== "string") {
+      throw new CliError("auth_failed", "Google sign-in returned no credential.", 3);
+    }
     const firebaseResponse = await postJson(endpoints.firebaseSignIn, {
       postBody: new URLSearchParams({
         id_token: googleIdToken,
@@ -126,57 +153,40 @@ async function readJson(response) {
   }
 }
 
-async function loopbackCallback(expectedState, allowedOrigin) {
-  let resolveIdToken;
-  let rejectIdToken;
-  const idToken = new Promise((resolve, reject) => {
-    resolveIdToken = resolve;
-    rejectIdToken = reject;
+async function loopbackCallback(expectedState) {
+  let resolveCode;
+  let rejectCode;
+  const code = new Promise((resolve, reject) => {
+    resolveCode = resolve;
+    rejectCode = reject;
   });
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
-    if (request.method !== "POST" || url.pathname !== "/callback") {
+    if (request.method !== "GET" || url.pathname !== "/callback") {
       response.statusCode = 404;
       response.end("Not found");
       return;
     }
-    if (request.headers.origin !== allowedOrigin) {
-      response.statusCode = 403;
-      response.end("Invalid sign-in origin. Return to OpenJob and try again.");
-      rejectIdToken(new CliError("auth_failed", "Google sign-in origin did not match.", 3));
-      return;
-    }
-    response.setHeader("access-control-allow-origin", allowedOrigin);
-    response.setHeader("vary", "Origin");
-    let parameters;
-    try {
-      parameters = await readForm(request);
-    } catch {
-      response.statusCode = 400;
-      response.end("Invalid sign-in response. Return to OpenJob and try again.");
-      rejectIdToken(new CliError("auth_failed", "Google sign-in was not completed.", 3));
-      return;
-    }
-    const receivedState = parameters.get("state") || "";
+    const receivedState = url.searchParams.get("state") || "";
     if (!safeEqual(receivedState, expectedState)) {
       response.statusCode = 400;
       response.end("Invalid OAuth state. Return to OpenJob and try again.");
-      rejectIdToken(new CliError("auth_failed", "Google sign-in state did not match.", 3));
+      rejectCode(new CliError("auth_failed", "Google sign-in state did not match.", 3));
       return;
     }
-    const providerError = parameters.get("error");
-    const googleIdToken = parameters.get("id_token");
-    if (providerError || !googleIdToken) {
+    const providerError = url.searchParams.get("error");
+    const authorizationCode = url.searchParams.get("code");
+    if (providerError || !authorizationCode) {
       response.statusCode = 400;
       response.end("Google sign-in was not completed. Return to OpenJob and try again.");
-      rejectIdToken(new CliError("auth_failed", "Google sign-in was not completed.", 3));
+      rejectCode(new CliError("auth_failed", "Google sign-in was not completed.", 3));
       return;
     }
     response.setHeader("content-type", "text/html; charset=utf-8");
     response.end(
       "<!doctype html><title>OpenJob signed in</title><p>Sign-in received. You can close this tab and return to OpenJob.</p>",
     );
-    resolveIdToken(googleIdToken);
+    resolveCode(authorizationCode);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -184,13 +194,13 @@ async function loopbackCallback(expectedState, allowedOrigin) {
   });
   const address = server.address();
   const timeout = setTimeout(() => {
-    rejectIdToken(new CliError("auth_timeout", "Google sign-in timed out.", 3));
+    rejectCode(new CliError("auth_timeout", "Google sign-in timed out.", 3));
     server.close();
   }, 5 * 60 * 1000);
   timeout.unref();
   let closed = false;
   return {
-    idToken,
+    code,
     redirectUri: `http://127.0.0.1:${address.port}/callback`,
     close: () =>
       new Promise((resolve) => {
@@ -203,21 +213,6 @@ async function loopbackCallback(expectedState, allowedOrigin) {
         server.close(resolve);
       }),
   };
-}
-
-async function readForm(request) {
-  if (!request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
-    throw new Error("unexpected content type");
-  }
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 16_384) throw new Error("sign-in response too large");
-    chunks.push(buffer);
-  }
-  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
 }
 
 function safeEqual(received, expected) {
