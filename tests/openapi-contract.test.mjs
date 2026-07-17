@@ -7,7 +7,7 @@ import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 
 const contractUrl = new URL("../openapi/openapi.yaml", import.meta.url);
-const EXPECTED_BACKEND_VERSION = "0.0.5";
+const EXPECTED_RELEASE_VERSION = "0.1.0";
 
 const expectedOperations = [
   "delete /api/v1/groups/{groupId}/tasks/{taskId} deleteGroupTask",
@@ -110,19 +110,23 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   }
 });
 
-test("release metadata identifies the hosted backend as v0.0.5", async () => {
+test("release metadata identifies the hosted backend and CLI as v0.1.0", async () => {
   const contract = await validateOpenApiContract(contractUrl);
   const packageJson = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const cliPackageJson = JSON.parse(
+    await readFile(new URL("../cli/package.json", import.meta.url), "utf8"),
   );
   const packageLock = JSON.parse(
     await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
   );
 
-  assert.equal(contract.info.version, EXPECTED_BACKEND_VERSION);
-  assert.equal(packageJson.version, EXPECTED_BACKEND_VERSION);
-  assert.equal(packageLock.version, EXPECTED_BACKEND_VERSION);
-  assert.equal(packageLock.packages[""].version, EXPECTED_BACKEND_VERSION);
+  assert.equal(contract.info.version, EXPECTED_RELEASE_VERSION);
+  assert.equal(packageJson.version, EXPECTED_RELEASE_VERSION);
+  assert.equal(cliPackageJson.version, EXPECTED_RELEASE_VERSION);
+  assert.equal(packageLock.version, EXPECTED_RELEASE_VERSION);
+  assert.equal(packageLock.packages[""].version, EXPECTED_RELEASE_VERSION);
 });
 
 test("shared v1 representations lock identity, pagination, errors, dates, and assignees", async () => {

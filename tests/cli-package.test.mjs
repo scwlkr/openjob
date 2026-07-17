@@ -12,13 +12,16 @@ const cliManifest = JSON.parse(
   readFileSync(join(cliPackagePath, "package.json"), "utf8"),
 );
 const cliVersion = cliManifest.version;
-const releaseTag = `cli-v${cliVersion}`;
+const releaseTag = `v${cliVersion}`;
 const installCommand = `npm install --global https://github.com/scwlkr/openjob/releases/download/${releaseTag}/openjob-${cliVersion}.tgz`;
 
 test("the repository documents one clean-Mac CLI install command", () => {
   const readme = readFileSync(join(repoPath, "README.md"), "utf8");
+  const cliReadme = readFileSync(join(cliPackagePath, "README.md"), "utf8");
+  assert.equal(cliVersion, "0.1.0");
   assert.match(readme, /Requires macOS and Node\.js 22\.13 or newer\./);
   assert.equal(readme.split(installCommand).length - 1, 1);
+  assert.equal(cliReadme.split(installCommand).length - 1, 1);
 });
 
 test("the hosted CLI smoke fails closed without a Firebase ID token", () => {
