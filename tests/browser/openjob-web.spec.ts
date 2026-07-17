@@ -185,7 +185,8 @@ async function installApi(
       message: string,
       fields?: Record<string, string>,
     ) => reply(status, { error: { code, message, fields, requestId: "req_browser" } });
-    const handleMockTaskMutationDelayOrFailure = async () => {
+    const handleMockTaskMutationPreflight = async () => {
+      state.taskMutationRequests += 1;
       if (state.taskMutationDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, state.taskMutationDelayMs));
       }
@@ -561,8 +562,7 @@ async function installApi(
       return;
     }
     if (tasksMatch && request.method() === "POST") {
-      state.taskMutationRequests += 1;
-      if (await handleMockTaskMutationDelayOrFailure()) return;
+      if (await handleMockTaskMutationPreflight()) return;
       const input = request.postDataJSON() as {
         text?: unknown;
         assigneeUsername?: unknown;
@@ -597,8 +597,7 @@ async function installApi(
 
     const taskMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)$/);
     if (taskMatch && request.method() === "PATCH") {
-      state.taskMutationRequests += 1;
-      if (await handleMockTaskMutationDelayOrFailure()) return;
+      if (await handleMockTaskMutationPreflight()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       const task = state.tasks.find((item) => item.taskId === taskId);
       if (!task) {
@@ -634,8 +633,7 @@ async function installApi(
       return;
     }
     if (taskMatch && request.method() === "DELETE") {
-      state.taskMutationRequests += 1;
-      if (await handleMockTaskMutationDelayOrFailure()) return;
+      if (await handleMockTaskMutationPreflight()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       state.tasks = state.tasks.filter((item) => item.taskId !== taskId);
       await route.fulfill({ status: 204 });
@@ -644,8 +642,7 @@ async function installApi(
 
     const taskStateMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)\/state$/);
     if (taskStateMatch && request.method() === "PUT") {
-      state.taskMutationRequests += 1;
-      if (await handleMockTaskMutationDelayOrFailure()) return;
+      if (await handleMockTaskMutationPreflight()) return;
       const taskId = decodeURIComponent(taskStateMatch[2]);
       const desired = (request.postDataJSON() as { state: "open" | "done" }).state;
       const task = state.tasks.find((item) => item.taskId === taskId);
