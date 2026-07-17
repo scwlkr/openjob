@@ -3,8 +3,13 @@
 import { parseArguments } from "./lib/arguments.mjs";
 import { apiCollection, apiRequest, apiRequestWithIdToken } from "./lib/api.mjs";
 import { loginWithGoogle } from "./lib/auth.mjs";
-import { confirmTaskDeletion } from "./lib/confirmation.mjs";
-import { resolveGroup, writeCurrentGroup } from "./lib/config.mjs";
+import {
+  confirmDestructiveAction,
+  confirmGroupEnd,
+  confirmTaskDeletion,
+  inputIsInteractive,
+} from "./lib/confirmation.mjs";
+import { clearCurrentGroup, resolveGroup, writeCurrentGroup } from "./lib/config.mjs";
 import { deleteRefreshCredential } from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
@@ -34,7 +39,10 @@ Resources:
   auth       Sign in, inspect authentication, or sign out
   user       Show the current User
   username   Claim the current User's immutable Username
-  group      List, create, select, or inspect Groups
+  group      List, create, select, inspect, rename, leave, or end Groups
+  member     List Members and govern membership or Admin status
+  ban        List, add, or remove Group-scoped bans
+  invite     Inspect, join through, show, or rotate Invite Links
   task       List and manage Tasks
 
 Global options:
@@ -61,7 +69,24 @@ const RESOURCE_HELP = {
   openjob group create --name <name> | --input <path|->
   openjob group show [--group <group-id>]
   openjob group use <group-id>
-  openjob group current`,
+  openjob group current
+  openjob group rename --name <name> | --input <path|->
+  openjob group leave [--yes]
+  openjob group end [--confirm-name <name>]`,
+  member: `Usage:
+  openjob member list
+  openjob member kick <username> [--yes]
+  openjob member promote <username>
+  openjob member demote <username> [--yes]`,
+  ban: `Usage:
+  openjob ban list
+  openjob ban add (--username <username> | --user-id <user-id>) [--yes]
+  openjob ban remove <user-id>`,
+  invite: `Usage:
+  openjob invite show
+  openjob invite rotate [--yes]
+  openjob invite inspect <token-or-url>
+  openjob invite join <token-or-url>`,
   task: `Usage:
   openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
   openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--due <YYYY-MM-DD>]
@@ -317,6 +342,60 @@ async function main(raw) {
   if (resource === "group" && command === "show" && rest.length === 0) {
     const { groupId } = resolveGroup(parsed.options);
     writeResult(await apiRequest(`/groups/${encodeURIComponent(groupId)}`));
+    return;
+  }
+  if (resource === "group" && command === "rename" && rest.length === 0) {
+    const name = parsed.options.get("--name");
+    const inputPath = parsed.options.get("--input");
+    if ((!name && !inputPath) || (name && inputPath)) {
+      throw new CliError(
+        "usage_error",
+        "group rename requires exactly one of --name or --input.",
+        2,
+      );
+    }
+    const body = inputPath ? readInputObject(inputPath) : { name };
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiRequest(`/groups/${encodeURIComponent(groupId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    );
+    return;
+  }
+  if (resource === "group" && command === "leave" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    await confirmDestructiveAction(
+      `Leave Group ${groupId}?`,
+      "Non-interactive Group leaving requires --yes.",
+      parsed.options,
+    );
+    await apiRequest(`/groups/${encodeURIComponent(groupId)}/actions/leave`, {
+      method: "POST",
+    });
+    clearCurrentGroup(groupId);
+    writeResult({ data: { groupId, left: true } });
+    return;
+  }
+  if (resource === "group" && command === "end" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    let groupName;
+    if (inputIsInteractive()) {
+      const group = await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}`,
+        {},
+        { retryable: true, quiet: parsed.options.has("--quiet") },
+      );
+      groupName = group.data.name;
+    }
+    const confirmationName = await confirmGroupEnd(groupName, parsed.options);
+    await apiRequest(`/groups/${encodeURIComponent(groupId)}/actions/end`, {
+      method: "POST",
+      body: JSON.stringify({ confirmationName }),
+    });
+    clearCurrentGroup(groupId);
+    writeResult({ data: { groupId, ended: true } });
     return;
   }
   if (resource === "group" && command === "use" && rest.length === 1) {

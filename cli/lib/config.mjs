@@ -57,11 +57,19 @@ export function resolveGroup(options, environment = process.env) {
 }
 
 export function writeCurrentGroup(groupId, environment = process.env) {
+  writeConfig({ currentGroupId: groupId }, environment);
+}
+
+export function clearCurrentGroup(groupId, environment = process.env) {
+  if (readConfig(environment).currentGroupId === groupId) writeConfig({}, environment);
+}
+
+function writeConfig(config, environment) {
   const path = configPath(environment);
   const temporary = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(temporary, `${JSON.stringify({ currentGroupId: groupId }, null, 2)}\n`, {
+    writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, {
       encoding: "utf8",
       mode: 0o600,
     });
