@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, open, realpath } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -238,6 +238,110 @@ export async function captureLegacySnapshot({
   return { outputPath: destination, sha256, taskCount: documents.length };
 }
 
+export async function retireLegacyState({
+  accessToken,
+  confirmationDigest,
+  deleteWorkerVersion,
+  fetchImplementation = fetch,
+  getActiveWorkerVersion,
+  snapshotPath,
+}) {
+  if (!accessToken) throw new Error("An owner access token is required.");
+  if (typeof deleteWorkerVersion !== "function") {
+    throw new Error("A Worker version retirement function is required.");
+  }
+  if (typeof getActiveWorkerVersion !== "function") {
+    throw new Error("An active Worker version resolver is required.");
+  }
+  if (!snapshotPath) throw new Error("The owner-only legacy snapshot is required.");
+
+  let snapshot;
+  try {
+    snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
+  } catch {
+    throw new Error("The owner-only legacy snapshot is not valid JSON.");
+  }
+  if (
+    snapshot?.format !== "openjob-legacy-tasks-snapshot-v1" ||
+    snapshot?.source?.collection !== LEGACY_COLLECTION ||
+    !Array.isArray(snapshot?.rawSnapshot?.documents) ||
+    typeof snapshot?.freeze?.workerVersion !== "string" ||
+    typeof snapshot?.freeze?.baseUrl !== "string" ||
+    typeof snapshot?.sha256 !== "string"
+  ) {
+    throw new Error("The owner-only legacy snapshot has an invalid format.");
+  }
+  const computedDigest = createHash("sha256")
+    .update(JSON.stringify(snapshot.rawSnapshot))
+    .digest("hex");
+  if (computedDigest !== snapshot.sha256) {
+    throw new Error("The owner-only legacy snapshot digest changed.");
+  }
+  if (snapshot.taskCount !== 0 || snapshot.rawSnapshot.documents.length !== 0) {
+    throw new Error("Legacy retirement requires the recorded Task count to be zero.");
+  }
+  if (confirmationDigest !== snapshot.sha256) {
+    throw new Error("Retirement confirmation must exactly match the snapshot SHA-256.");
+  }
+
+  const activeWorkerVersion = await getActiveWorkerVersion();
+  if (activeWorkerVersion === snapshot.freeze.workerVersion) {
+    throw new Error("The frozen rollback Worker is still active.");
+  }
+  await verifyLegacyDeployment({
+    baseUrl: snapshot.freeze.baseUrl,
+    expectedMode: "unavailable",
+    fetchImplementation,
+  });
+  const documents = await fetchLegacyDocuments({
+    accessToken,
+    databaseId: snapshot.source.databaseId,
+    fetchImplementation,
+    projectId: snapshot.source.projectId,
+  });
+  if (documents.length !== 0) {
+    throw new Error(`Legacy retirement blocked: the fresh Task count is ${documents.length}.`);
+  }
+  if (await getActiveWorkerVersion() !== activeWorkerVersion) {
+    throw new Error("Active Worker changed during legacy retirement.");
+  }
+
+  await deleteWorkerVersion(snapshot.freeze.workerVersion);
+  return {
+    freezeWorkerVersion: snapshot.freeze.workerVersion,
+    sha256: snapshot.sha256,
+    taskCount: documents.length,
+  };
+}
+
+export async function deleteCloudflareWorkerVersion({
+  accountId,
+  apiToken,
+  fetchImplementation = fetch,
+  versionId,
+  workerName,
+}) {
+  if (!accountId || !apiToken || !versionId || !workerName) {
+    throw new Error("Cloudflare account, token, Worker, and version are required.");
+  }
+  const url =
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}` +
+    `/workers/workers/${encodeURIComponent(workerName)}` +
+    `/versions/${encodeURIComponent(versionId)}`;
+  const response = await fetchImplementation(url, {
+    headers: { authorization: `Bearer ${apiToken}` },
+    method: "DELETE",
+  });
+  const body = await parseJsonResponse(response, "Cloudflare Worker version retirement");
+  if (!response.ok || body.success !== true) {
+    const message = body.errors?.[0]?.message;
+    throw new Error(
+      `Cloudflare Worker version retirement returned ${response.status}` +
+        `${message ? `: ${message}` : "."}`,
+    );
+  }
+}
+
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
   if (index === -1) return undefined;
@@ -339,7 +443,38 @@ export async function runLegacyCutoverCli(arguments_ = process.argv.slice(2)) {
     return result;
   }
 
-  throw new Error("Usage: legacy-cutover.mjs smoke <read-only|unavailable> | snapshot [--output <path>]");
+  if (command === "retire") {
+    const snapshotPath = option(args, "--snapshot");
+    const confirmationDigest = option(args, "--confirm");
+    if (args.length > 0) throw new Error(`Unexpected argument: ${args[0]}`);
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const workerName = process.env.CLOUDFLARE_WORKER_NAME ?? "openjob";
+    const result = await retireLegacyState({
+      accessToken: await ownerAccessToken(),
+      confirmationDigest,
+      deleteWorkerVersion: (versionId) => deleteCloudflareWorkerVersion({
+        accountId,
+        apiToken,
+        versionId,
+        workerName,
+      }),
+      getActiveWorkerVersion: () => activeWorkerVersion(repoRoot),
+      snapshotPath,
+    });
+    process.stdout.write(
+      `Legacy collection absent with Task count ${result.taskCount}.\n` +
+        `Retired frozen Worker ${result.freezeWorkerVersion}.\n` +
+        `Verified snapshot SHA-256 ${result.sha256}.\n`,
+    );
+    return result;
+  }
+
+  throw new Error(
+    "Usage: legacy-cutover.mjs smoke <read-only|unavailable> | " +
+      "snapshot [--output <path>] | " +
+      "retire --snapshot <path> --confirm <sha256>",
+  );
 }
 
 if (
