@@ -1175,6 +1175,226 @@ test("Invite commands show, rotate, inspect, and join with tokens or URLs", asyn
   }
 });
 
+test("interactive Group ending requires typing the current Group Name", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-group-end-interactive-"));
+  const credentialPath = join(directory, "credential");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const calls = [];
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    calls.push({ body, method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_interactive" && request.method === "GET") {
+      response.end(JSON.stringify({ data: {
+        groupId: "grp_interactive",
+        name: "Exact Group Name",
+        role: "admin",
+        createdAt: "2026-07-16T12:00:00Z",
+      } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_interactive/actions/end" &&
+      request.method === "POST"
+    ) {
+      assert.deepEqual(JSON.parse(body), { confirmationName: "Exact Group Name" });
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "group_not_found", message: "Group not found." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+    OPENJOB_TEST_INTERACTIVE: "1",
+  };
+
+  try {
+    const mismatch = await runCliAsync(
+      ["group", "end", "--group", "grp_interactive", "--format", "json"],
+      { env: environment, input: "Wrong Name\n" },
+    );
+    assert.equal(mismatch.status, 2);
+    assert.equal(mismatch.stdout, "");
+    assert.match(mismatch.stderr, /Type Exact Group Name to End Group:/);
+    assert.match(mismatch.stderr, /"code":"confirmation_declined"/);
+
+    const ended = await runCliAsync(
+      ["group", "end", "--group", "grp_interactive", "--yes", "--format", "json"],
+      { env: environment, input: "Exact Group Name\n" },
+    );
+    assert.equal(ended.status, 0, ended.stderr);
+    assert.deepEqual(JSON.parse(ended.stdout), {
+      data: { groupId: "grp_interactive", ended: true },
+    });
+    assert.match(ended.stderr, /Type Exact Group Name to End Group:/);
+
+    assert.deepEqual(
+      calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
+      [
+        "GET /api/v1/groups/grp_interactive",
+        "GET /api/v1/groups/grp_interactive",
+        "POST /api/v1/groups/grp_interactive/actions/end",
+      ],
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("governance commands preserve privacy, permission, conflict, and retry contracts", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-governance-errors-"));
+  const credentialPath = join(directory, "credential");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  const calls = [];
+  let joinAttempts = 0;
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    calls.push({ method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_errors/members" && request.method === "GET") {
+      response.end(JSON.stringify({ data: [{
+        userId: "user_alex",
+        username: "alex",
+        role: "member",
+        joinedAt: "2026-07-16T12:00:00Z",
+      }], nextCursor: null }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_errors/members/user_alex/actions/promote" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 403;
+      response.end(JSON.stringify({ error: { code: "admin_required", message: "Admin role required." } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_errors/actions/leave" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 409;
+      response.end(JSON.stringify({ error: { code: "open_tasks_assigned", message: "Reassign open Tasks first." } }));
+      return;
+    }
+    if (request.url === "/api/v1/invites/ivt_private" && request.method === "GET") {
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: { code: "invite_invalid", message: "Invite Link is not valid." } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_errors/invite-link/actions/rotate" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: { code: "internal_error", message: "Do not retry rotation." } }));
+      return;
+    }
+    if (request.url === "/api/v1/invites/ivt_retry/actions/join" && request.method === "POST") {
+      joinAttempts += 1;
+      if (joinAttempts === 1) {
+        response.statusCode = 500;
+        response.end(JSON.stringify({ error: { code: "internal_error", message: "Retry safe join." } }));
+        return;
+      }
+      response.end(JSON.stringify({ data: {
+        groupId: "grp_joined",
+        name: "Joined Group",
+        role: "member",
+        createdAt: "2026-07-16T12:00:00Z",
+      } }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "not_found", message: "Missing." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const permission = await runCliAsync(
+      ["member", "promote", "alex", "--group", "grp_errors", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(permission.status, 4);
+    assert.equal(permission.stdout, "");
+    assert.equal(JSON.parse(permission.stderr).error.code, "admin_required");
+
+    const conflict = await runCliAsync(
+      ["group", "leave", "--group", "grp_errors", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(conflict.status, 6);
+    assert.equal(conflict.stdout, "");
+    assert.equal(JSON.parse(conflict.stderr).error.code, "open_tasks_assigned");
+
+    const concealed = await runCliAsync(
+      ["invite", "inspect", "ivt_private", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(concealed.status, 5);
+    assert.equal(concealed.stdout, "");
+    assert.deepEqual(JSON.parse(concealed.stderr), {
+      error: { code: "invite_invalid", message: "Invite Link is not valid." },
+    });
+
+    const rotate = await runCliAsync(
+      ["invite", "rotate", "--group", "grp_errors", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(rotate.status, 8);
+    assert.equal(rotate.stdout, "");
+    assert.equal(JSON.parse(rotate.stderr).error.code, "internal_error");
+
+    const join = await runCliAsync(
+      ["invite", "join", "ivt_retry", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(join.status, 0, join.stderr);
+    assert.equal(JSON.parse(join.stdout).data.groupId, "grp_joined");
+    assert.match(join.stderr, /Retrying safe request/);
+
+    assert.equal(
+      calls.filter(({ url }) => url === "/api/v1/groups/grp_errors/invite-link/actions/rotate").length,
+      1,
+    );
+    assert.equal(
+      calls.filter(({ url }) => url === "/api/v1/invites/ivt_retry/actions/join").length,
+      2,
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("success output is atomic and never mixes files with stdout", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-output-"));
   const configPath = join(directory, "config.json");
