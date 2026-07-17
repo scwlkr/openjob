@@ -3,7 +3,7 @@ import { createLegacyBoardApi } from "@/server/legacy-board";
 
 const legacyBoard = createLegacyBoardApi({
   listTasks,
-  mode: "read-only",
+  mode: "unavailable",
 });
 
 export function GET(request: Request) {
