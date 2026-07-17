@@ -1604,7 +1604,8 @@ test("runs edit, recovery, failure, focus, and delete flows in the narrow Task s
   await expect(editor.getByRole("alert")).toContainText("Choose a current Member");
   await editor.getByLabel("Assignee").selectOption("morgan");
   await editor.getByRole("button", { name: "Assign Task" }).click();
-  await expect(page.getByText("Recover this narrow Task")).toBeVisible();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByTestId("task-card").filter({ hasText: "Recover this narrow Task" })).toBeVisible();
 
   const editedCard = page.getByTestId("task-card").filter({ hasText: "Narrow edited Task" });
   editButton = editedCard.getByRole("button", { name: "Edit" });
