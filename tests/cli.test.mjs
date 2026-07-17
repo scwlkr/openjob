@@ -900,6 +900,149 @@ test("Member commands list and govern canonical Users through Username inputs", 
   }
 });
 
+test("Ban commands cover current and former Members without duplicating service rules", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-bans-"));
+  const credentialPath = join(directory, "credential");
+  const configPath = join(directory, "config.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_bans" }));
+  const calls = [];
+  const alex = {
+    userId: "user_alex",
+    username: "alex",
+    role: "member",
+    joinedAt: "2026-07-16T12:00:00Z",
+  };
+  const existingBan = {
+    userId: "user_banned",
+    username: "banned",
+    bannedAt: "2026-07-15T12:00:00Z",
+  };
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    calls.push({ body, method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_bans/bans" && request.method === "GET") {
+      response.end(JSON.stringify({ data: [existingBan], nextCursor: null }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_bans/members" && request.method === "GET") {
+      response.end(JSON.stringify({ data: [alex], nextCursor: null }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_bans/bans/actions/ban" &&
+      request.method === "POST"
+    ) {
+      const { userId } = JSON.parse(body);
+      response.statusCode = 201;
+      response.end(JSON.stringify({
+        data: {
+          userId,
+          username: userId === "user_alex" ? "alex" : "former",
+          bannedAt: "2026-07-16T13:00:00Z",
+        },
+      }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_bans/bans/user_banned/actions/unban" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "ban_not_found", message: "Ban not found." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const list = await runCliAsync(["ban", "list", "--format", "json"], {
+      env: environment,
+    });
+    assert.equal(list.status, 0, list.stderr);
+    assert.deepEqual(JSON.parse(list.stdout), { data: [existingBan], nextCursor: null });
+
+    const refused = runCli(
+      ["ban", "add", "--username", "alex", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(refused.status, 2);
+    assert.equal(refused.stdout, "");
+    assert.equal(JSON.parse(refused.stderr).error.code, "confirmation_required");
+
+    const currentMember = await runCliAsync(
+      ["ban", "add", "--username", "@alex", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(currentMember.status, 0, currentMember.stderr);
+    assert.equal(JSON.parse(currentMember.stdout).data.userId, "user_alex");
+
+    const formerMember = await runCliAsync(
+      ["ban", "add", "--user-id", "user_former", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(formerMember.status, 0, formerMember.stderr);
+    assert.equal(JSON.parse(formerMember.stdout).data.userId, "user_former");
+
+    const remove = await runCliAsync(
+      ["ban", "remove", "user_banned", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(remove.status, 0, remove.stderr);
+    assert.deepEqual(JSON.parse(remove.stdout), {
+      data: { userId: "user_banned", unbanned: true },
+    });
+
+    assert.deepEqual(
+      calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ body, method, url }) => ({
+        body: body ? JSON.parse(body) : null,
+        method,
+        url,
+      })),
+      [
+        { body: null, method: "GET", url: "/api/v1/groups/grp_bans/bans" },
+        { body: null, method: "GET", url: "/api/v1/groups/grp_bans/members" },
+        {
+          body: { userId: "user_alex" },
+          method: "POST",
+          url: "/api/v1/groups/grp_bans/bans/actions/ban",
+        },
+        {
+          body: { userId: "user_former" },
+          method: "POST",
+          url: "/api/v1/groups/grp_bans/bans/actions/ban",
+        },
+        {
+          body: null,
+          method: "POST",
+          url: "/api/v1/groups/grp_bans/bans/user_banned/actions/unban",
+        },
+      ],
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("success output is atomic and never mixes files with stdout", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-output-"));
   const configPath = join(directory, "config.json");

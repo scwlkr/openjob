@@ -447,6 +447,53 @@ async function main(raw) {
     );
     return;
   }
+  if (resource === "ban" && command === "list" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiCollection(
+        `/groups/${encodeURIComponent(groupId)}/bans`,
+        { quiet: parsed.options.has("--quiet") },
+      ),
+    );
+    return;
+  }
+  if (resource === "ban" && command === "add" && rest.length === 0) {
+    const username = parsed.options.get("--username");
+    const selectedUserId = parsed.options.get("--user-id");
+    if ((!username && !selectedUserId) || (username && selectedUserId)) {
+      throw new CliError(
+        "usage_error",
+        "ban add requires exactly one of --username or --user-id.",
+        2,
+      );
+    }
+    const { groupId } = resolveGroup(parsed.options);
+    await confirmDestructiveAction(
+      `Ban ${username ? `@${username.replace(/^@/, "")}` : selectedUserId}?`,
+      "Non-interactive banning requires --yes.",
+      parsed.options,
+    );
+    const userId = username
+      ? (await memberByUsername(groupId, username, parsed.options)).userId
+      : selectedUserId;
+    writeResult(
+      await apiRequest(`/groups/${encodeURIComponent(groupId)}/bans/actions/ban`, {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      }),
+    );
+    return;
+  }
+  if (resource === "ban" && command === "remove" && rest.length === 1) {
+    const { groupId } = resolveGroup(parsed.options);
+    const userId = rest[0];
+    await apiRequest(
+      `/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(userId)}/actions/unban`,
+      { method: "POST" },
+    );
+    writeResult({ data: { userId, unbanned: true } });
+    return;
+  }
   if (resource === "group" && command === "use" && rest.length === 1) {
     const groupId = rest[0];
     await apiRequest(`/groups/${encodeURIComponent(groupId)}`);

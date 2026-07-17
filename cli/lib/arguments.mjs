@@ -13,6 +13,8 @@ const VALUE_OPTIONS = new Set([
   "--status",
   "--text",
   "--text-file",
+  "--user-id",
+  "--username",
 ]);
 
 const BOOLEAN_OPTIONS = new Set([
