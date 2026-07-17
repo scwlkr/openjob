@@ -159,6 +159,19 @@ function taskMutationBody(command, options) {
   return body;
 }
 
+async function memberByUsername(groupId, rawUsername, options) {
+  const username = rawUsername.replace(/^@/, "");
+  const members = await apiCollection(
+    `/groups/${encodeURIComponent(groupId)}/members`,
+    { quiet: options.has("--quiet") },
+  );
+  const member = members.data.find((candidate) => candidate.username === username);
+  if (!member) {
+    throw new CliError("member_not_found", `Member @${username} was not found.`, 5);
+  }
+  return member;
+}
+
 async function main(raw) {
   if (raw.length === 0 || raw.includes("--help")) {
     process.stdout.write(`${HELP}\n`);
@@ -396,6 +409,42 @@ async function main(raw) {
     });
     clearCurrentGroup(groupId);
     writeResult({ data: { groupId, ended: true } });
+    return;
+  }
+  if (resource === "member" && command === "list" && rest.length === 0) {
+    const { groupId } = resolveGroup(parsed.options);
+    writeResult(
+      await apiCollection(
+        `/groups/${encodeURIComponent(groupId)}/members`,
+        { quiet: parsed.options.has("--quiet") },
+      ),
+    );
+    return;
+  }
+  if (
+    resource === "member" &&
+    new Set(["kick", "promote", "demote"]).has(command) &&
+    rest.length === 1
+  ) {
+    const { groupId } = resolveGroup(parsed.options);
+    const username = rest[0].replace(/^@/, "");
+    if (new Set(["kick", "demote"]).has(command)) {
+      await confirmDestructiveAction(
+        `${command === "kick" ? "Kick" : "Demote"} @${username}?`,
+        `Non-interactive Member ${command} requires --yes.`,
+        parsed.options,
+      );
+    }
+    const member = await memberByUsername(groupId, username, parsed.options);
+    const result = await apiRequest(
+      `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(member.userId)}/actions/${command}`,
+      { method: "POST" },
+    );
+    writeResult(
+      command === "kick"
+        ? { data: { userId: member.userId, username: member.username, kicked: true } }
+        : result,
+    );
     return;
   }
   if (resource === "group" && command === "use" && rest.length === 1) {
