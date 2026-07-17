@@ -767,6 +767,139 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
   }
 });
 
+test("Member commands list and govern canonical Users through Username inputs", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-members-"));
+  const credentialPath = join(directory, "credential");
+  const configPath = join(directory, "config.json");
+  writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
+  writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_members" }));
+  const calls = [];
+  const members = [
+    {
+      userId: "user_alex",
+      username: "alex",
+      role: "member",
+      joinedAt: "2026-07-16T12:00:00Z",
+    },
+    {
+      userId: "user_sam",
+      username: "sam",
+      role: "admin",
+      joinedAt: "2026-07-15T12:00:00Z",
+    },
+  ];
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    calls.push({ method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: "firebase-id-token-process-only-secret",
+        refresh_token: "firebase-refresh-keychain-only-secret",
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/groups/grp_members/members" && request.method === "GET") {
+      response.end(JSON.stringify({ data: members, nextCursor: null }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_members/members/user_alex/actions/promote" &&
+      request.method === "POST"
+    ) {
+      response.end(JSON.stringify({ data: { ...members[0], role: "admin" } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_members/members/user_sam/actions/demote" &&
+      request.method === "POST"
+    ) {
+      response.end(JSON.stringify({ data: { ...members[1], role: "member" } }));
+      return;
+    }
+    if (
+      request.url === "/api/v1/groups/grp_members/members/user_alex/actions/kick" &&
+      request.method === "POST"
+    ) {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "member_not_found", message: "Member not found." } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+  };
+
+  try {
+    const list = await runCliAsync(["member", "list", "--format", "json"], {
+      env: environment,
+    });
+    assert.equal(list.status, 0, list.stderr);
+    assert.deepEqual(JSON.parse(list.stdout), { data: members, nextCursor: null });
+
+    const promote = await runCliAsync(
+      ["member", "promote", "@alex", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(promote.status, 0, promote.stderr);
+    assert.deepEqual(JSON.parse(promote.stdout), {
+      data: { ...members[0], role: "admin" },
+    });
+
+    for (const [command, username] of [["demote", "sam"], ["kick", "alex"]]) {
+      const refused = runCli(
+        ["member", command, username, "--format", "json"],
+        { env: environment },
+      );
+      assert.equal(refused.status, 2);
+      assert.equal(refused.stdout, "");
+      assert.equal(JSON.parse(refused.stderr).error.code, "confirmation_required");
+    }
+
+    const demote = await runCliAsync(
+      ["member", "demote", "sam", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(demote.status, 0, demote.stderr);
+    assert.deepEqual(JSON.parse(demote.stdout), {
+      data: { ...members[1], role: "member" },
+    });
+
+    const kick = await runCliAsync(
+      ["member", "kick", "@alex", "--yes", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(kick.status, 0, kick.stderr);
+    assert.deepEqual(JSON.parse(kick.stdout), {
+      data: { userId: "user_alex", username: "alex", kicked: true },
+    });
+
+    assert.deepEqual(
+      calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
+      [
+        "GET /api/v1/groups/grp_members/members",
+        "GET /api/v1/groups/grp_members/members",
+        "POST /api/v1/groups/grp_members/members/user_alex/actions/promote",
+        "GET /api/v1/groups/grp_members/members",
+        "POST /api/v1/groups/grp_members/members/user_sam/actions/demote",
+        "GET /api/v1/groups/grp_members/members",
+        "POST /api/v1/groups/grp_members/members/user_alex/actions/kick",
+      ],
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("success output is atomic and never mixes files with stdout", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-output-"));
   const configPath = join(directory, "config.json");
