@@ -83,6 +83,22 @@ function rejectedExchange(requestId: RequestIdFactory) {
   });
 }
 
+function unavailableExchange(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "service_unavailable",
+    message: "Sign-in is temporarily unavailable.",
+    status: 503,
+  });
+}
+
+function rateLimitedExchange(requestId: RequestIdFactory) {
+  return errorResponse(requestId, {
+    code: "rate_limited",
+    message: "Try again later.",
+    status: 429,
+  });
+}
+
 export function createCliAuthExchangeHandler({
   clientId,
   clientSecret,
@@ -113,8 +129,11 @@ export function createCliAuthExchangeHandler({
           }),
         });
       } catch {
-        return internalErrorResponse(requestId);
+        return unavailableExchange(requestId);
       }
+
+      if (providerResponse.status === 429) return rateLimitedExchange(requestId);
+      if (providerResponse.status >= 500) return unavailableExchange(requestId);
 
       let payload: unknown;
       try {

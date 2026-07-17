@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { GOOGLE_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
 
 const cliPath =
   process.env.OPENJOB_CLI_TEST_BIN ||
@@ -419,16 +420,21 @@ test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Fire
       "desktop-client.apps.googleusercontent.com",
     );
     assert.equal(authorizationUrl.searchParams.get("response_type"), "code");
+    assert.equal(authorizationUrl.searchParams.get("response_mode"), "form_post");
     assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
     assert.match(authorizationUrl.searchParams.get("state"), /^[A-Za-z0-9_-]{43}$/);
     const redirectUri = new URL(authorizationUrl.searchParams.get("redirect_uri"));
     assert.equal(redirectUri.hostname, "127.0.0.1");
     assert.notEqual(redirectUri.port, "0");
 
-    const callback = new URL(redirectUri);
-    callback.searchParams.set("code", "one-time-google-code");
-    callback.searchParams.set("state", authorizationUrl.searchParams.get("state"));
-    const callbackResponse = await fetch(callback);
+    const callbackResponse = await fetch(redirectUri, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: "one-time-google-code",
+        state: authorizationUrl.searchParams.get("state"),
+      }),
+    });
     assert.equal(callbackResponse.status, 200);
     assert.match(await callbackResponse.text(), /return to OpenJob/i);
 
@@ -495,9 +501,11 @@ test("production auth login uses the configured Google Desktop client and PKCE",
     assert.equal(authorizationUrl.pathname, "/o/oauth2/v2/auth");
     assert.equal(
       authorizationUrl.searchParams.get("client_id"),
-      "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com",
+      GOOGLE_DESKTOP_CLIENT_ID,
     );
+    assert.match(GOOGLE_DESKTOP_CLIENT_ID, /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
     assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
+    assert.equal(authorizationUrl.searchParams.get("response_mode"), "form_post");
     assert.match(
       authorizationUrl.searchParams.get("code_challenge"),
       /^[A-Za-z0-9_-]{43}$/,
@@ -512,6 +520,77 @@ test("production auth login uses the configured Google Desktop client and PKCE",
 
   const result = await running.result;
   assert.equal(result.status, 130, result.stderr);
+});
+
+test("auth login preserves rate-limit and service exit statuses", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-login-errors-"));
+  const credentialPath = join(directory, "credential");
+  const service = await listen(async (request, response) => {
+    const body = JSON.parse(await requestBody(request));
+    const rateLimited = body.code === "rate-limited-code";
+    response.statusCode = rateLimited ? 429 : 503;
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        error: {
+          code: rateLimited ? "rate_limited" : "service_unavailable",
+          message: rateLimited ? "Try again later." : "Sign-in is unavailable.",
+        },
+      }),
+    );
+  });
+
+  async function attempt(code, expectedStatus, expectedCode) {
+    const running = startCli(["auth", "login", "--no-open", "--format", "json"], {
+      env: {
+        NODE_ENV: "test",
+        OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+        OPENJOB_TEST_AUTH_URL: service.baseUrl,
+        OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+        OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+        OPENJOB_TEST_GOOGLE_CLIENT_ID: "desktop-client.apps.googleusercontent.com",
+      },
+    });
+    try {
+      running.child.stdin.end();
+      const authorizationUrl = await new Promise((resolve, reject) => {
+        let stderr = "";
+        const timeout = setTimeout(() => reject(new Error("login URL was not emitted")), 5000);
+        running.child.stderr.setEncoding("utf8");
+        running.child.stderr.on("data", (chunk) => {
+          stderr += chunk;
+          const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
+          if (match) {
+            clearTimeout(timeout);
+            resolve(new URL(match[1]));
+          }
+        });
+      });
+      const callbackResponse = await fetch(authorizationUrl.searchParams.get("redirect_uri"), {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          state: authorizationUrl.searchParams.get("state"),
+        }),
+      });
+      assert.equal(callbackResponse.status, 200);
+      const result = await running.result;
+      assert.equal(result.status, expectedStatus, result.stderr);
+      assert.equal(JSON.parse(result.stderr.split("\n").at(-2)).error.code, expectedCode);
+      assert.doesNotMatch(result.stdout + result.stderr, new RegExp(code));
+    } finally {
+      if (running.child.exitCode === null) running.child.kill("SIGINT");
+    }
+  }
+
+  try {
+    await attempt("rate-limited-code", 7, "rate_limited");
+    await attempt("service-failed-code", 8, "service_unavailable");
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("auth logout deletes the stored refresh credential without network access", () => {
