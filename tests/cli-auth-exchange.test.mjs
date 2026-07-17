@@ -94,3 +94,23 @@ test("the CLI exchange bridge does not expose provider failures", async () => {
   assert.match(text, /auth_failed/);
   assert.doesNotMatch(text, /invalid_grant|provider detail|client-secret/);
 });
+
+test("the CLI exchange bridge preserves provider rate limits and outages", async () => {
+  for (const { providerStatus, expectedStatus, expectedCode } of [
+    { providerStatus: 429, expectedStatus: 429, expectedCode: "rate_limited" },
+    { providerStatus: 503, expectedStatus: 503, expectedCode: "service_unavailable" },
+  ]) {
+    const handle = createCliAuthExchangeHandler({
+      clientId,
+      clientSecret,
+      fetchImplementation: async () =>
+        Response.json({ error: "provider_failure" }, { status: providerStatus }),
+      requestId: () => `req_provider_${providerStatus}`,
+    });
+    const response = await handle(
+      exchangeRequest({ code: "one-time-code", codeVerifier, redirectUri }),
+    );
+    assert.equal(response.status, expectedStatus);
+    assert.equal((await response.json()).error.code, expectedCode);
+  }
+});

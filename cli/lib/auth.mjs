@@ -6,10 +6,9 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { CliError } from "./errors.mjs";
+import { GOOGLE_DESKTOP_CLIENT_ID } from "./oauth-config.mjs";
 
 const FIREBASE_API_KEY = "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU";
-const GOOGLE_DESKTOP_CLIENT_ID =
-  "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com";
 const CLI_AUTH_EXCHANGE_URL = "https://openjob.dev/api/cli-auth/exchange";
 
 function firebaseApiKey(environment) {
@@ -57,6 +56,7 @@ export async function loginWithGoogle({ openBrowser }, environment = process.env
     code_challenge: challenge,
     code_challenge_method: "S256",
     redirect_uri: callback.redirectUri,
+    response_mode: "form_post",
     response_type: "code",
     scope: "openid email profile",
     state,
@@ -160,22 +160,31 @@ async function loopbackCallback(expectedState) {
     resolveCode = resolve;
     rejectCode = reject;
   });
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
-    if (request.method !== "GET" || url.pathname !== "/callback") {
+    if (request.method !== "POST" || url.pathname !== "/callback") {
       response.statusCode = 404;
       response.end("Not found");
       return;
     }
-    const receivedState = url.searchParams.get("state") || "";
+    let parameters;
+    try {
+      parameters = await readForm(request);
+    } catch {
+      response.statusCode = 400;
+      response.end("Invalid sign-in response. Return to OpenJob and try again.");
+      rejectCode(new CliError("auth_failed", "Google sign-in was not completed.", 3));
+      return;
+    }
+    const receivedState = parameters.get("state") || "";
     if (!safeEqual(receivedState, expectedState)) {
       response.statusCode = 400;
       response.end("Invalid OAuth state. Return to OpenJob and try again.");
       rejectCode(new CliError("auth_failed", "Google sign-in state did not match.", 3));
       return;
     }
-    const providerError = url.searchParams.get("error");
-    const authorizationCode = url.searchParams.get("code");
+    const providerError = parameters.get("error");
+    const authorizationCode = parameters.get("code");
     if (providerError || !authorizationCode) {
       response.statusCode = 400;
       response.end("Google sign-in was not completed. Return to OpenJob and try again.");
@@ -215,6 +224,21 @@ async function loopbackCallback(expectedState) {
   };
 }
 
+async function readForm(request) {
+  if (!request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
+    throw new Error("unexpected content type");
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > 16_384) throw new Error("sign-in response too large");
+    chunks.push(buffer);
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+}
+
 function safeEqual(received, expected) {
   const left = Buffer.from(received);
   const right = Buffer.from(expected);
@@ -238,6 +262,17 @@ async function requestAuth(url, init) {
   }
   const payload = await readJson(response);
   if (!response.ok) {
+    const errorCode = payload?.error?.code;
+    if (response.status === 429 || errorCode === "rate_limited") {
+      throw new CliError("rate_limited", "Try again later.", 7);
+    }
+    if (response.status >= 500 || errorCode === "service_unavailable") {
+      throw new CliError(
+        "service_unavailable",
+        "OpenJob could not complete sign-in.",
+        8,
+      );
+    }
     throw new CliError("auth_failed", "Google sign-in was rejected.", 3);
   }
   return payload;
