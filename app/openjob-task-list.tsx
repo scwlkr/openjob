@@ -25,13 +25,9 @@ type StoredEditorDraft = {
   mode: EditorMode;
   taskId: string | null;
 };
-type MemberSection = {
-  key: string;
-  label: string;
-  canCreate: boolean;
-  former: boolean;
-  unassigned: boolean;
-};
+type MemberSection =
+  | { kind: "current" | "former"; key: string; label: string }
+  | { kind: "unassigned"; key: "unassigned"; label: "Unassigned" };
 
 const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
 const ALL_TASKS_FILTER = { status: "all" } as const;
@@ -355,11 +351,9 @@ export function TaskList({
         (task) => task.assignee.state === "assigned" && task.assignee.username === member.username,
       ))
       .map((member) => ({
+        kind: "current" as const,
         key: member.username,
         label: `@${member.username}`,
-        canCreate: true,
-        former: false,
-        unassigned: false,
       }));
     const formerUsernames = new Set<string>();
     for (const task of visibleTasks) {
@@ -369,20 +363,16 @@ export function TaskList({
     }
     for (const username of [...formerUsernames].sort()) {
       memberSections.push({
+        kind: "former",
         key: username,
         label: `@${username}`,
-        canCreate: false,
-        former: true,
-        unassigned: false,
       });
     }
     if (visibleTasks.some((task) => task.assignee.state === "unassigned")) {
       memberSections.push({
+        kind: "unassigned",
         key: "unassigned",
         label: "Unassigned",
-        canCreate: false,
-        former: false,
-        unassigned: true,
       });
     }
     return memberSections;
@@ -523,7 +513,7 @@ export function TaskList({
       <div className={styles.taskSections}>
         {sections.map((section) => {
           const sectionTasks = visibleTasks.filter((task) =>
-            section.unassigned
+            section.kind === "unassigned"
               ? task.assignee.state === "unassigned"
               : task.assignee.state === "assigned" && task.assignee.username === section.key,
           );
@@ -532,12 +522,12 @@ export function TaskList({
               <header>
                 <div>
                   <h2>{section.label}</h2>
-                  {section.former ? <small>Former Member</small> : null}
+                  {section.kind === "former" ? <small>Former Member</small> : null}
                 </div>
                 <span>{sectionTasks.length}</span>
               </header>
               <div className={styles.taskCards}>
-                {section.canCreate ? (
+                {section.kind === "current" ? (
                   <button
                     className={styles.addTaskButton}
                     type="button"

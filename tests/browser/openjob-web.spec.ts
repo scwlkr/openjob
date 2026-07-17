@@ -87,6 +87,19 @@ const openJobCore: Group = {
   createdAt: "2026-07-16T15:00:00.000Z",
 };
 
+function visibleMorganTask(createdAt: string): Task {
+  return {
+    taskId: "task_morgan_entry",
+    groupId: walkerLabs.groupId,
+    text: "Keep Morgan visible",
+    assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
+    dueDate: null,
+    state: "open",
+    createdAt,
+    completedAt: null,
+  };
+}
+
 async function startSignedIn(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("openjob-test:firebase-session", "signed-in");
@@ -121,6 +134,12 @@ async function expectConfirmation(
   });
   await action();
   expect(await confirmation).toContain(expectedMessage);
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
 }
 
 async function installApi(
@@ -1303,18 +1322,7 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
       { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
     ],
-    tasks: [
-      {
-        taskId: "task_morgan_entry",
-        groupId: walkerLabs.groupId,
-        text: "Keep Morgan visible",
-        assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
-        dueDate: null,
-        state: "open",
-        createdAt: "2026-07-01T10:00:00.000Z",
-        completedAt: null,
-      },
-    ],
+    tasks: [visibleMorganTask("2026-07-01T10:00:00.000Z")],
   });
   await page.goto("/");
 
@@ -1359,16 +1367,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
     ],
     tasks: [
-      {
-        taskId: "task_morgan_entry",
-        groupId: walkerLabs.groupId,
-        text: "Keep Morgan visible",
-        assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
-        dueDate: null,
-        state: "open",
-        createdAt: "2026-07-01T09:00:00.000Z",
-        completedAt: null,
-      },
+      visibleMorganTask("2026-07-01T09:00:00.000Z"),
       {
         taskId: "task_existing",
         groupId: walkerLabs.groupId,
@@ -1501,14 +1500,14 @@ test("uses one narrow column and two desktop columns without horizontal overflow
   expect(first!.width).toBeLessThan(390);
   expect(Math.abs(second!.x - first!.x)).toBeLessThanOrEqual(1);
   expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 1280, height: 720 });
   first = await sections.nth(0).boundingBox();
   second = await sections.nth(1).boundingBox();
   expect(Math.abs(second!.y - first!.y)).toBeLessThanOrEqual(1);
   expect(second!.x).toBeGreaterThan(first!.x + first!.width);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const morganSection = sections.filter({ has: page.getByRole("heading", { name: "@morgan" }) });
