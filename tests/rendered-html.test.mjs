@@ -41,3 +41,13 @@ test("keeps Firebase auth, the v1 API, storage, and social metadata wired", asyn
   await access(new URL("../dist/server/index.js", import.meta.url));
   await access(new URL("../public/og.png", import.meta.url));
 });
+
+test("the cutover artifact publishes v1 without the legacy Task route", async () => {
+  const worker = await readFile(
+    new URL("../dist/server/index.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(worker, /route:\/api\/v1\/me/);
+  assert.doesNotMatch(worker, /route:\/api\/tasks/);
+});

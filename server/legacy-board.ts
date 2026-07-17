@@ -1,7 +1,4 @@
-type LegacyBoardMode = "read-only" | "unavailable";
-
 type LegacyBoardDependencies = {
-  mode: LegacyBoardMode;
   listTasks: () => Promise<unknown[]>;
 };
 
@@ -13,17 +10,9 @@ function errorMessage(error: unknown) {
 
 export function createLegacyBoardApi({
   listTasks,
-  mode,
 }: LegacyBoardDependencies) {
   return Object.freeze({
     async fetch(request: Request) {
-      if (mode === "unavailable") {
-        return Response.json(
-          { error: { code: "not_found", message: "Not found." } },
-          { headers: NO_STORE, status: 404 },
-        );
-      }
-
       if (request.method !== "GET") {
         return Response.json(
           {

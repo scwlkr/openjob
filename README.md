@@ -58,7 +58,7 @@ rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 
 - `app/page.tsx` — authenticated web entry
 - `app/globals.css` — all styling
-- `app/api/tasks/route.ts` — frozen or unavailable legacy Task contract
+- `server/legacy-board.ts` — frozen revision's read-only legacy contract
 - `db/tasks.ts` — task storage adapter
 - `db/firestore-rest.ts` — authenticated Firestore REST client
 - `db/firestore.ts` — legacy public-board Task storage adapter
