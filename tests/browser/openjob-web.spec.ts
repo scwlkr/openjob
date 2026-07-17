@@ -59,9 +59,11 @@ type ApiState = {
   taskMutationFailureStatus: number | null;
   failGroups: boolean;
   failTaskNetwork: boolean;
+  failTaskMutationNetwork: boolean;
   hangMe: boolean;
   hangTasks: boolean;
   membershipDenied: boolean;
+  taskMutationDelayMs: number;
 };
 
 const signedInUser = {
@@ -108,7 +110,7 @@ async function expectConfirmation(
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "hangMe" | "hangTasks" | "membershipDenied">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs">> = {},
 ) {
   const members = [...(initial.members ?? [])];
   const bans = [...(initial.bans ?? [])];
@@ -147,9 +149,11 @@ async function installApi(
     taskMutationFailureStatus: initial.taskMutationFailureStatus ?? null,
     failGroups: initial.failGroups ?? false,
     failTaskNetwork: initial.failTaskNetwork ?? false,
+    failTaskMutationNetwork: initial.failTaskMutationNetwork ?? false,
     hangMe: initial.hangMe ?? false,
     hangTasks: initial.hangTasks ?? false,
     membershipDenied: initial.membershipDenied ?? false,
+    taskMutationDelayMs: initial.taskMutationDelayMs ?? 0,
   };
 
   const removeMember = (userId: string) => {
@@ -179,6 +183,26 @@ async function installApi(
       message: string,
       fields?: Record<string, string>,
     ) => reply(status, { error: { code, message, fields, requestId: "req_browser" } });
+    const stopTaskMutation = async () => {
+      if (state.taskMutationDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, state.taskMutationDelayMs));
+      }
+      if (state.failTaskMutationNetwork) {
+        await route.abort("failed");
+        return true;
+      }
+      if (!state.taskMutationFailureStatus) return false;
+      const status = state.taskMutationFailureStatus;
+      const code = status === 401
+        ? "authentication_required"
+        : status === 403
+          ? "forbidden"
+          : status === 409
+            ? "task_changed"
+            : "internal_error";
+      await error(status, code, "The Task could not be changed.");
+      return true;
+    };
 
     if (authorization !== "Bearer browser-test-token") {
       await error(401, "authentication_required", "Authentication is required.");
@@ -535,6 +559,7 @@ async function installApi(
       return;
     }
     if (tasksMatch && request.method() === "POST") {
+      if (await stopTaskMutation()) return;
       const input = request.postDataJSON() as {
         text?: unknown;
         assigneeUsername?: unknown;
@@ -569,6 +594,7 @@ async function installApi(
 
     const taskMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)$/);
     if (taskMatch && request.method() === "PATCH") {
+      if (await stopTaskMutation()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       const task = state.tasks.find((item) => item.taskId === taskId);
       if (!task) {
@@ -604,6 +630,7 @@ async function installApi(
       return;
     }
     if (taskMatch && request.method() === "DELETE") {
+      if (await stopTaskMutation()) return;
       const taskId = decodeURIComponent(taskMatch[2]);
       state.tasks = state.tasks.filter((item) => item.taskId !== taskId);
       await route.fulfill({ status: 204 });
@@ -612,14 +639,7 @@ async function installApi(
 
     const taskStateMatch = url.pathname.match(/^\/api\/v1\/groups\/([^/]+)\/tasks\/([^/]+)\/state$/);
     if (taskStateMatch && request.method() === "PUT") {
-      if (state.taskMutationFailureStatus) {
-        await error(
-          state.taskMutationFailureStatus,
-          state.taskMutationFailureStatus === 409 ? "task_changed" : "internal_error",
-          "The Task could not be changed.",
-        );
-        return;
-      }
+      if (await stopTaskMutation()) return;
       const taskId = decodeURIComponent(taskStateMatch[2]);
       const desired = (request.postDataJSON() as { state: "open" | "done" }).state;
       const task = state.tasks.find((item) => item.taskId === taskId);
@@ -1161,9 +1181,52 @@ test("renders ordered assignee lanes with combined status and assignee filters",
   expect(state.taskQueries.some((query) => query.includes("status=all") && query.includes("assignee=morgan"))).toBe(true);
 });
 
-test("runs the complete Task lifecycle through assignee lanes", async ({ page }) => {
+test("opens one shared Task editor from global and Member actions", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+  });
+  await page.goto("/");
+
+  const globalNewTask = page.getByRole("button", { name: "New Task" });
+  await globalNewTask.click();
+  let editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor).toBeVisible();
+  const desktopEditor = await editor.boundingBox();
+  expect(desktopEditor!.width).toBeLessThanOrEqual(560);
+  expect(Math.abs(desktopEditor!.x + desktopEditor!.width / 2 - 640)).toBeLessThanOrEqual(1);
+  expect(Math.abs(desktopEditor!.y + desktopEditor!.height / 2 - 360)).toBeLessThanOrEqual(1);
+  await expect(editor.getByLabel("Task text")).toBeFocused();
+  await expect(editor.getByLabel("Assignee")).toHaveValue("");
+  await expect(editor.getByLabel("Assignee").getByRole("option")).toHaveText([
+    "Choose a Member",
+    "@morgan",
+    "@shane",
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(globalNewTask).toBeFocused();
+
+  const morganLane = page.getByTestId("task-lane").filter({
+    has: page.getByRole("heading", { name: "@morgan" }),
+  });
+  const memberAddTask = morganLane.getByRole("button", { name: "Add Task" });
+  await memberAddTask.click();
+  editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(memberAddTask).toBeFocused();
+});
+
+test("runs the complete Task lifecycle through the shared editor", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
     user: signedInUser,
     groups: [walkerLabs],
     members: [
@@ -1201,16 +1264,22 @@ test("runs the complete Task lifecycle through assignee lanes", async ({ page })
   await expect(unassignedLane.getByRole("button", { name: "Add Task" })).toHaveCount(0);
 
   await morganLane.getByRole("button", { name: "Add Task" }).click();
-  await morganLane.getByLabel("Task text").fill("Order replacement menu stands");
-  await morganLane.getByLabel("Due date").fill("2026-07-20");
-  await morganLane.getByRole("button", { name: "Create Task" }).click();
+  let editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
+  await editor.getByLabel("Task text").fill("Order replacement menu stands");
+  await editor.getByLabel("Due date").fill("2026-07-20");
+  state.taskMutationDelayMs = 150;
+  await editor.getByRole("button", { name: "Create Task" }).click();
+  await expect(editor.getByRole("button", { name: "Saving…" })).toBeDisabled();
   await expect(page.getByText("Order replacement menu stands")).toBeVisible();
+  state.taskMutationDelayMs = 0;
 
   let card = page.getByTestId("task-card").filter({ hasText: "Order replacement menu stands" });
   await card.getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("dialog", { name: "Edit Task" }).getByLabel("Task text").fill("Order two menu stands");
-  await page.getByRole("dialog", { name: "Edit Task" }).getByLabel("Assignee").selectOption("shane");
-  await page.getByRole("dialog", { name: "Edit Task" }).getByRole("button", { name: "Save Task" }).click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await editor.getByLabel("Task text").fill("Order two menu stands");
+  await editor.getByLabel("Assignee").selectOption("shane");
+  await editor.getByRole("button", { name: "Save Task" }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
 
@@ -1219,6 +1288,7 @@ test("runs the complete Task lifecycle through assignee lanes", async ({ page })
   await page.getByLabel("Task status").selectOption("done");
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.getByRole("button", { name: "Reopen" }).click();
   await expect(card).toHaveCount(0);
   await page.getByLabel("Task status").selectOption("open");
@@ -1227,15 +1297,27 @@ test("runs the complete Task lifecycle through assignee lanes", async ({ page })
 
   const unassignedCard = page.getByTestId("task-card").filter({ hasText: "Recover payroll handoff" });
   await unassignedCard.getByRole("button", { name: "Assign" }).click();
-  await page.getByRole("dialog", { name: "Assign Task" }).getByLabel("Assignee").selectOption("morgan");
-  await page.getByRole("dialog", { name: "Assign Task" }).getByRole("button", { name: "Assign Task" }).click();
+  editor = page.getByRole("dialog", { name: "Assign Task" });
+  await expect(editor.getByLabel("Assignee")).toHaveValue("");
+  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await expect(editor).toBeVisible();
+  await editor.getByLabel("Assignee").selectOption("morgan");
+  await editor.getByRole("button", { name: "Assign Task" }).click();
   await expect(morganLane.getByText("Recover payroll handoff")).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.message()).toContain("permanently delete");
+  await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await card.getByRole("button", { name: "Edit" }).click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expectConfirmation(page, "permanently delete", () =>
+    editor.getByRole("button", { name: "Delete Task" }).click(), false);
+  await expect(editor).toBeVisible();
+  state.taskMutationDelayMs = 150;
+  const confirmation = page.waitForEvent("dialog").then(async (dialog) => {
     await dialog.accept();
   });
-  await card.getByRole("button", { name: "Delete" }).click();
+  await editor.getByRole("button", { name: "Delete Task" }).click();
+  await confirmation;
+  await expect(editor.getByRole("button", { name: "Deleting…" })).toBeDisabled();
   await expect(page.getByText("Order two menu stands")).toHaveCount(0);
 });
 
@@ -1275,6 +1357,17 @@ test("keeps narrow-screen lanes nearly full width and horizontally interactive",
   await morganLane.scrollIntoViewIfNeeded();
   await morganLane.getByRole("button", { name: "Complete" }).click();
   await expect(page.getByText("Check the narrow layout")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "New Task" }).click();
+  const editor = page.getByRole("dialog", { name: "New Task" });
+  const narrowEditor = await editor.boundingBox();
+  expect(narrowEditor!.x).toBe(0);
+  expect(narrowEditor!.width).toBe(390);
+  expect(Math.abs(narrowEditor!.y + narrowEditor!.height - 844)).toBeLessThanOrEqual(1);
+  await editor.getByLabel("Task text").fill("Created from the bottom sheet");
+  await editor.getByLabel("Assignee").selectOption("shane");
+  await editor.getByRole("button", { name: "Create Task" }).click();
+  await expect(page.getByText("Created from the bottom sheet")).toBeVisible();
 });
 
 test("shows loading and empty Task List states", async ({ page }) => {
@@ -1344,21 +1437,77 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   await page.goto("/");
 
   await page.getByRole("button", { name: "Add Task" }).click();
-  const form = page.getByTestId("task-lane").getByRole("form");
-  await form.getByRole("button", { name: "Create Task" }).click();
-  await expect(form.getByRole("alert")).toContainText("1 to 2,000 characters");
-  await form.getByLabel("Task text").fill("A valid Task");
-  await form.getByRole("button", { name: "Create Task" }).click();
+  let editor = page.getByRole("dialog", { name: "New Task" });
+  await editor.getByLabel("Task text").fill("   ");
+  await editor.getByRole("button", { name: "Create Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("1 to 2,000 characters");
+  await expect(editor.getByLabel("Task text")).toHaveValue("   ");
+  await editor.getByLabel("Task text").fill("A valid Task");
+  await editor.getByRole("button", { name: "Create Task" }).click();
   await expect(page.getByText("A valid Task")).toBeVisible();
 
   state.taskMutationFailureStatus = 409;
   const conflictCard = page.getByTestId("task-card").filter({ hasText: "Resolve the conflict" });
-  await conflictCard.getByRole("button", { name: "Complete" }).click();
-  await expect(page.getByRole("alert")).toContainText("Task changed");
+  await conflictCard.getByRole("button", { name: "Edit" }).click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await editor.getByLabel("Task text").fill("Keep this recovered draft");
+  await editor.getByLabel("Due date").fill("2026-07-25");
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("Task changed");
+  await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
+  await expect(editor.getByLabel("Due date")).toHaveValue("2026-07-25");
+  state.taskMutationFailureStatus = 403;
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("no longer have permission");
+  await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
   state.taskMutationFailureStatus = null;
-  await page.getByRole("button", { name: "Reload Task List" }).click();
-  await conflictCard.getByRole("button", { name: "Complete" }).click();
-  await expect(page.getByText("Resolve the conflict")).toHaveCount(0);
+  state.failTaskMutationNetwork = true;
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("Check your connection");
+  await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
+  state.failTaskMutationNetwork = false;
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(page.getByText("Keep this recovered draft")).toBeVisible();
+});
+
+test("restores a Task editor draft after authentication recovery", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_auth_draft",
+        groupId: walkerLabs.groupId,
+        text: "Keep the original text",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
+    ],
+  });
+  await page.goto("/");
+
+  await page.getByTestId("task-card").getByRole("button", { name: "Edit" }).click();
+  let editor = page.getByRole("dialog", { name: "Edit Task" });
+  await editor.getByLabel("Task text").fill("Restore this exact draft");
+  await editor.getByLabel("Due date").fill("2026-07-29");
+  state.taskMutationFailureStatus = 401;
+  await editor.getByRole("button", { name: "Save Task" }).click();
+  await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
+
+  state.taskMutationFailureStatus = null;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel("Task text")).toHaveValue("Restore this exact draft");
+  await expect(editor.getByLabel("Assignee")).toHaveValue("shane");
+  await expect(editor.getByLabel("Due date")).toHaveValue("2026-07-29");
 });
 
 test("returns Task List authentication failures to a working sign-in path", async ({ page }) => {
@@ -1445,7 +1594,9 @@ test("keeps an empty Unassigned lane visible after the final recovery", async ({
   await page.goto("/");
   await page.getByLabel("Assignee filter").selectOption({ label: "Unassigned" });
   await page.getByRole("button", { name: "Assign" }).click();
-  await page.getByRole("dialog", { name: "Assign Task" }).getByRole("button", { name: "Assign Task" }).click();
+  const editor = page.getByRole("dialog", { name: "Assign Task" });
+  await editor.getByLabel("Assignee").selectOption("shane");
+  await editor.getByRole("button", { name: "Assign Task" }).click();
 
   const lane = page.getByTestId("task-lane");
   await expect(lane).toHaveCount(1);
