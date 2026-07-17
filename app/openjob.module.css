@@ -123,18 +123,20 @@
 .groupViewNav button { min-height: 44px; border: 1px solid var(--ink); background: transparent; color: var(--ink); padding: 0 14px; font-weight: 800; cursor: pointer; }
 .groupViewNav button[aria-current="page"] { background: var(--ink); color: var(--paper-light); }
 .taskList { margin-top: 32px; }
-.taskToolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
-.taskToolbar label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
-.taskToolbar select { min-width: 160px; height: 42px; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); padding: 0 12px; font: inherit; font-size: 12px; text-transform: none; }
-.newTaskButton { align-self: end; min-height: 42px; margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: #fff; padding: 0 18px; font-weight: 850; cursor: pointer; }
-.taskLanes { display: flex; gap: 16px; overflow-x: auto; padding: 0 0 18px; scroll-snap-type: x proximity; }
-.taskLane { flex: 0 0 310px; min-width: 0; border: 1px solid var(--ink); background: rgba(255,255,255,.42); scroll-snap-align: start; }
-.taskLane > header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid var(--ink); padding: 0 16px; }
-.taskLane h2 { margin: 0; font-size: 18px; letter-spacing: -.035em; }
-.taskLane > header small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
-.taskLane > header span { display: grid; place-items: center; min-width: 26px; height: 26px; background: var(--ink); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
+.taskToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 22px; }
+.statusFilters { display: flex; flex-wrap: wrap; gap: 7px; }
+.statusFilters button { display: flex; align-items: center; gap: 10px; min-height: 44px; border: 1px solid var(--ink); background: transparent; color: var(--ink); padding: 0 12px; font: inherit; font-size: 12px; font-weight: 850; cursor: pointer; }
+.statusFilters button[aria-pressed="true"] { background: var(--ink); color: var(--paper-light); }
+.statusFilters span { display: grid; place-items: center; min-width: 24px; height: 24px; border: 1px solid currentColor; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; }
+.newTaskButton { min-height: 44px; margin-left: auto; border: 1px solid var(--blue); background: var(--blue); color: #fff; padding: 0 18px; font-weight: 850; cursor: pointer; }
+.taskSections { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.memberSection { min-width: 0; border: 1px solid var(--ink); background: rgba(255,255,255,.42); }
+.memberSection > header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid var(--ink); padding: 0 16px; }
+.memberSection h2 { margin: 0; overflow-wrap: anywhere; font-size: 18px; letter-spacing: -.035em; }
+.memberSection > header small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.memberSection > header span { display: grid; place-items: center; min-width: 26px; height: 26px; background: var(--ink); color: #fff; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
 .taskCards { display: grid; gap: 10px; padding: 12px; }
-.addTaskButton { width: 100%; min-height: 40px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
+.addTaskButton { width: 100%; min-height: 44px; border: 1px dashed var(--blue); background: transparent; color: var(--blue); font-weight: 800; cursor: pointer; }
 .taskCard { border: 1px solid var(--line); background: var(--paper-light); padding: 15px; }
 .taskCard > p { margin: 0; white-space: pre-wrap; line-height: 1.38; }
 .taskDue { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 11px; }
@@ -156,7 +158,7 @@
 .taskActionError button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .taskDialog { width: min(100%, 560px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }
 .taskDialog h2 { margin: 9px 0 22px; font-size: 38px; letter-spacing: -.055em; }
-.emptyLane { margin: 8px 4px; color: var(--muted); font-size: 12px; }
+.emptyTaskList { margin: 0; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); font-size: 12px; }
 .taskLoading, .taskLoadError { margin-top: 34px; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
 .taskLoadError p { margin: 0 0 14px; color: #74221c; }
 .taskLoadError button { border: 0; background: transparent; color: var(--blue); padding: 0; font-weight: 800; text-decoration: underline; cursor: pointer; }
@@ -239,10 +241,10 @@
   .selectedGroupSurface > header { align-items: stretch; flex-direction: column; }
   .groupViewNav { display: grid; grid-template-columns: 1fr 1fr; }
   .groupViewNav button { width: 100%; padding: 0 8px; }
-  .taskToolbar { display: grid; grid-template-columns: 1fr 1fr; }
-  .taskToolbar select { width: 100%; min-width: 0; }
-  .newTaskButton { grid-column: 1 / -1; width: 100%; margin-left: 0; }
-  .taskLane { flex-basis: calc(100vw - 56px); }
+  .taskToolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .statusFilters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .statusFilters button { justify-content: center; min-width: 0; padding: 0 8px; }
+  .newTaskButton { width: 100%; margin-left: 0; }
   .taskDialogBackdrop { align-items: end; padding: 0; }
   .taskDialog { width: 100%; max-height: calc(100dvh - 24px); overflow-y: auto; border-radius: 6px 6px 0 0; padding: 20px; box-shadow: 0 -6px 0 var(--ink); }
   .dialog { padding: 20px; }
@@ -250,6 +252,10 @@
   .governanceCard { padding: 16px; }
   .governanceRow { align-items: start; flex-direction: column; }
   .rowActions { justify-content: flex-start; }
+}
+
+@media (min-width: 760px) {
+  .taskSections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
