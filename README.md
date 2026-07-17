@@ -1,7 +1,7 @@
-# Openjob
+# OpenJob
 
-A small public task board for teams. Add tasks with `@name — task`, optionally
-assign a date, then check them off.
+One clear shared Task List for small working Groups. The hosted web and CLI use
+the same authenticated `/api/v1` Group, governance, and Task contracts.
 
 ## Run it
 
@@ -50,14 +50,15 @@ Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
 
 The complete v1 backend contract lives in `openapi/openapi.yaml`. Run
 `npm run openapi:check` to validate the OpenAPI 3.1 document and its checked-in
-examples. The current browser and `/api/tasks` remain the legacy rollback
-surface while `/api/v1` is built.
+examples. The browser and CLI use only `/api/v1`. Issue #20 preserves one
+read-only legacy Worker revision and an owner-only Firestore snapshot for
+rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 
 ## Where things live
 
-- `app/page.tsx` — task-board interface and interactions
+- `app/page.tsx` — authenticated web entry
 - `app/globals.css` — all styling
-- `app/api/tasks/route.ts` — task API
+- `app/api/tasks/route.ts` — frozen or unavailable legacy Task contract
 - `db/tasks.ts` — task storage adapter
 - `db/firestore-rest.ts` — authenticated Firestore REST client
 - `db/firestore.ts` — legacy public-board Task storage adapter
@@ -67,6 +68,7 @@ surface while `/api/v1` is built.
 - `firestore.rules` — browser access is denied; the Worker owns data access
 - `openapi/openapi.yaml` — machine-readable `/api/v1` contract
 - `tests/support/v1-harness.mjs` — isolated Worker HTTP acceptance seam
+- `scripts/legacy-cutover.mjs` — freeze smoke, private snapshot, and zero-count gate
 
 ## Services
 
