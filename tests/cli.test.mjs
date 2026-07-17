@@ -51,6 +51,40 @@ function startCli(args, options = {}) {
   return { child, result };
 }
 
+function shellQuote(value) {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function runCliInPty(args, { env, input, prompt }) {
+  const command = [cliPath, ...args];
+  const quotedCommand = command.map(shellQuote).join(" ");
+  const scriptCommand = process.platform === "darwin"
+    ? `script -q -e /dev/null ${quotedCommand}`
+    : `script -q -e -c ${shellQuote(quotedCommand)} /dev/null`;
+  const feeder = `(sleep 0.1; printf %s ${shellQuote(input)}; sleep 1) | ${scriptCommand}`;
+  const child = spawn("sh", ["-c", feeder], {
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return new Promise((resolve, reject) => {
+    let terminal = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Timed out running PTY prompt: ${prompt}`));
+    }, 10_000);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => (terminal += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (status, signal) => {
+      clearTimeout(timeout);
+      resolve({ status, signal, terminal, stderr });
+    });
+  });
+}
+
 async function listen(handler) {
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -182,6 +216,14 @@ test("group current resolves explicit flag, environment, then local config", () 
     assert.deepEqual(JSON.parse(explicit.stdout), {
       data: { groupId: "grp_explicit", source: "flag" },
     });
+
+    const invalidOption = runCli(
+      ["group", "current", "--user-id", "user_ignored", "--format", "json"],
+      { env: { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "" } },
+    );
+    assert.equal(invalidOption.status, 2);
+    assert.equal(invalidOption.stdout, "");
+    assert.equal(JSON.parse(invalidOption.stderr).error.code, "usage_error");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -679,6 +721,16 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
       response.end(JSON.stringify({ data: renamedGroup }));
       return;
     }
+    if (request.url === "/api/v1/groups/grp_empty" && request.method === "PATCH") {
+      assert.deepEqual(JSON.parse(body), { name: "" });
+      response.statusCode = 400;
+      response.end(JSON.stringify({ error: {
+        code: "group_name_invalid",
+        message: "Group Name is required.",
+        fieldErrors: { name: "required" },
+      } }));
+      return;
+    }
     if (
       request.url === "/api/v1/groups/grp_environment/actions/leave" &&
       request.method === "POST"
@@ -718,6 +770,14 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
     assert.deepEqual(JSON.parse(rename.stdout), { data: renamedGroup });
     assert.equal(rename.stderr, "");
 
+    const emptyName = await runCliAsync(
+      ["group", "rename", "--name", "", "--group", "grp_empty", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(emptyName.status, 2);
+    assert.equal(emptyName.stdout, "");
+    assert.equal(JSON.parse(emptyName.stderr).error.code, "group_name_invalid");
+
     const leaveRefused = runCli(
       ["group", "leave", "--format", "json"],
       { env: { ...environment, OPENJOB_GROUP_ID: "grp_environment" } },
@@ -732,7 +792,7 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
     );
     assert.equal(leave.status, 0, leave.stderr);
     assert.deepEqual(JSON.parse(leave.stdout), {
-      data: { groupId: "grp_environment", left: true },
+      data: { resource: "membership", groupId: "grp_environment", deleted: true },
     });
 
     const endBypassed = runCli(
@@ -749,7 +809,7 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
     );
     assert.equal(end.status, 0, end.stderr);
     assert.deepEqual(JSON.parse(end.stdout), {
-      data: { groupId: "grp_config", ended: true },
+      data: { resource: "group", groupId: "grp_config", deleted: true },
     });
     assert.deepEqual(JSON.parse(readFileSync(configPath, "utf8")), {});
 
@@ -757,6 +817,7 @@ test("Group lifecycle commands preserve input, confirmation, and Group context c
       calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
       [
         "PATCH /api/v1/groups/grp_flag",
+        "PATCH /api/v1/groups/grp_empty",
         "POST /api/v1/groups/grp_environment/actions/leave",
         "POST /api/v1/groups/grp_config/actions/end",
       ],
@@ -879,7 +940,13 @@ test("Member commands list and govern canonical Users through Username inputs", 
     );
     assert.equal(kick.status, 0, kick.stderr);
     assert.deepEqual(JSON.parse(kick.stdout), {
-      data: { userId: "user_alex", username: "alex", kicked: true },
+      data: {
+        resource: "membership",
+        groupId: "grp_members",
+        userId: "user_alex",
+        username: "alex",
+        deleted: true,
+      },
     });
 
     assert.deepEqual(
@@ -1002,13 +1069,25 @@ test("Ban commands cover current and former Members without duplicating service 
     assert.equal(formerMember.status, 0, formerMember.stderr);
     assert.equal(JSON.parse(formerMember.stdout).data.userId, "user_former");
 
+    const jsonInput = await runCliAsync(
+      ["ban", "add", "--input", "-", "--yes", "--format", "json"],
+      { env: environment, input: '{"userId":"user_input"}\n' },
+    );
+    assert.equal(jsonInput.status, 0, jsonInput.stderr);
+    assert.equal(JSON.parse(jsonInput.stdout).data.userId, "user_input");
+
     const remove = await runCliAsync(
       ["ban", "remove", "user_banned", "--format", "json"],
       { env: environment },
     );
     assert.equal(remove.status, 0, remove.stderr);
     assert.deepEqual(JSON.parse(remove.stdout), {
-      data: { userId: "user_banned", unbanned: true },
+      data: {
+        resource: "ban",
+        groupId: "grp_bans",
+        userId: "user_banned",
+        deleted: true,
+      },
     });
 
     assert.deepEqual(
@@ -1027,6 +1106,11 @@ test("Ban commands cover current and former Members without duplicating service 
         },
         {
           body: { userId: "user_former" },
+          method: "POST",
+          url: "/api/v1/groups/grp_bans/bans/actions/ban",
+        },
+        {
+          body: { userId: "user_input" },
           method: "POST",
           url: "/api/v1/groups/grp_bans/bans/actions/ban",
         },
@@ -1178,6 +1262,7 @@ test("Invite commands show, rotate, inspect, and join with tokens or URLs", asyn
 test("interactive Group ending requires typing the current Group Name", async () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-group-end-interactive-"));
   const credentialPath = join(directory, "credential");
+  const outputPath = join(directory, "ended.json");
   writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
   const calls = [];
   const service = await listen(async (request, response) => {
@@ -1219,28 +1304,46 @@ test("interactive Group ending requires typing the current Group Name", async ()
     OPENJOB_TEST_AUTH_URL: service.baseUrl,
     OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
     OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
-    OPENJOB_TEST_INTERACTIVE: "1",
   };
 
   try {
-    const mismatch = await runCliAsync(
+    const mismatch = await runCliInPty(
       ["group", "end", "--group", "grp_interactive", "--format", "json"],
-      { env: environment, input: "Wrong Name\n" },
+      {
+        env: environment,
+        input: "Wrong Name\n",
+        prompt: "Type Exact Group Name to End Group:",
+      },
     );
-    assert.equal(mismatch.status, 2);
-    assert.equal(mismatch.stdout, "");
-    assert.match(mismatch.stderr, /Type Exact Group Name to End Group:/);
-    assert.match(mismatch.stderr, /"code":"confirmation_declined"/);
+    assert.equal(mismatch.status, 2, `${mismatch.stderr}\n${mismatch.terminal}`);
+    assert.equal(mismatch.stderr, "");
+    assert.match(mismatch.terminal, /Type Exact Group Name to End Group:/);
+    assert.match(mismatch.terminal, /"code":"confirmation_declined"/);
 
-    const ended = await runCliAsync(
-      ["group", "end", "--group", "grp_interactive", "--yes", "--format", "json"],
-      { env: environment, input: "Exact Group Name\n" },
+    const ended = await runCliInPty(
+      [
+        "group",
+        "end",
+        "--group",
+        "grp_interactive",
+        "--yes",
+        "--format",
+        "json",
+        "--out",
+        outputPath,
+      ],
+      {
+        env: environment,
+        input: "Exact Group Name\n",
+        prompt: "Type Exact Group Name to End Group:",
+      },
     );
-    assert.equal(ended.status, 0, ended.stderr);
-    assert.deepEqual(JSON.parse(ended.stdout), {
-      data: { groupId: "grp_interactive", ended: true },
+    assert.equal(ended.status, 0, `${ended.stderr}\n${ended.terminal}`);
+    assert.equal(ended.stderr, "");
+    assert.deepEqual(JSON.parse(readFileSync(outputPath, "utf8")), {
+      data: { resource: "group", groupId: "grp_interactive", deleted: true },
     });
-    assert.match(ended.stderr, /Type Exact Group Name to End Group:/);
+    assert.match(ended.terminal, /Type Exact Group Name to End Group:/);
 
     assert.deepEqual(
       calls.filter(({ url }) => url.startsWith("/api/v1/")).map(({ method, url }) => `${method} ${url}`),
@@ -1937,6 +2040,7 @@ test("task show and edit expose server state through explicit edit inputs", asyn
 test("task state commands are explicit and deletion requires confirmation", async () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-task-state-"));
   const credentialPath = join(directory, "credential");
+  const interactiveOutputPath = join(directory, "interactive-delete.json");
   writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
   const states = [];
   const deleted = [];
@@ -2013,17 +2117,18 @@ test("task state commands are explicit and deletion requires confirmation", asyn
       },
     });
 
-    const declined = await runCliAsync(
+    const declined = await runCliInPty(
       ["task", "delete", "task_declined", "--group", "grp_tasks", "--format", "json"],
       {
-        env: { ...environment, OPENJOB_TEST_INTERACTIVE: "1" },
+        env: environment,
         input: "no\n",
+        prompt: "Delete Task task_declined? [y/N]",
       },
     );
-    assert.equal(declined.status, 2);
-    assert.equal(declined.stdout, "");
-    assert.match(declined.stderr, /^Delete Task task_declined\? \[y\/N\] /);
-    assert.match(declined.stderr, /"code":"confirmation_declined"/);
+    assert.equal(declined.status, 2, `${declined.stderr}\n${declined.terminal}`);
+    assert.equal(declined.stderr, "");
+    assert.match(declined.terminal, /Delete Task task_declined\? \[y\/N\]/);
+    assert.match(declined.terminal, /"code":"confirmation_declined"/);
 
     const approved = await runCliAsync(
       [
@@ -2044,16 +2149,28 @@ test("task state commands are explicit and deletion requires confirmation", asyn
     });
     assert.equal(approved.stderr, "");
 
-    const interactive = await runCliAsync(
-      ["task", "delete", "task_interactive", "--group", "grp_tasks", "--format", "json"],
+    const interactive = await runCliInPty(
+      [
+        "task",
+        "delete",
+        "task_interactive",
+        "--group",
+        "grp_tasks",
+        "--format",
+        "json",
+        "--out",
+        interactiveOutputPath,
+      ],
       {
-        env: { ...environment, OPENJOB_TEST_INTERACTIVE: "1" },
+        env: environment,
         input: "yes\n",
+        prompt: "Delete Task task_interactive? [y/N]",
       },
     );
-    assert.equal(interactive.status, 0, interactive.stderr);
-    assert.match(interactive.stderr, /^Delete Task task_interactive\? \[y\/N\] /);
-    assert.deepEqual(JSON.parse(interactive.stdout), {
+    assert.equal(interactive.status, 0, `${interactive.stderr}\n${interactive.terminal}`);
+    assert.equal(interactive.stderr, "");
+    assert.match(interactive.terminal, /Delete Task task_interactive\? \[y\/N\]/);
+    assert.deepEqual(JSON.parse(readFileSync(interactiveOutputPath, "utf8")), {
       data: { taskId: "task_interactive", deleted: true },
     });
     assert.deepEqual(deleted, ["task_deleted", "task_interactive"]);

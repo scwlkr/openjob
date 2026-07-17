@@ -16,6 +16,8 @@ import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 
 const VERSION = "0.0.5";
+const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
+const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
 const TASK_COMMON_OPTIONS = ["--format", "--force", "--group", "--out", "--quiet"];
 const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--due"];
 const TASK_OPTIONS = new Map([
@@ -26,6 +28,32 @@ const TASK_OPTIONS = new Map([
   ["done", new Set(TASK_COMMON_OPTIONS)],
   ["reopen", new Set(TASK_COMMON_OPTIONS)],
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
+]);
+const COMMAND_OPTIONS = new Map([
+  ["auth login", new Set([...OUTPUT_OPTIONS, "--no-open"])],
+  ["auth status", new Set(OUTPUT_OPTIONS)],
+  ["auth logout", new Set(OUTPUT_OPTIONS)],
+  ["user show", new Set(OUTPUT_OPTIONS)],
+  ["username claim", new Set(OUTPUT_OPTIONS)],
+  ["group list", new Set(OUTPUT_OPTIONS)],
+  ["group create", new Set([...OUTPUT_OPTIONS, "--input", "--name"])],
+  ["group show", new Set(GROUP_SCOPED_OPTIONS)],
+  ["group use", new Set(OUTPUT_OPTIONS)],
+  ["group current", new Set(GROUP_SCOPED_OPTIONS)],
+  ["group rename", new Set([...GROUP_SCOPED_OPTIONS, "--input", "--name"])],
+  ["group leave", new Set([...GROUP_SCOPED_OPTIONS, "--yes"])],
+  ["group end", new Set([...GROUP_SCOPED_OPTIONS, "--confirm-name", "--yes"])],
+  ["member list", new Set(GROUP_SCOPED_OPTIONS)],
+  ["member kick", new Set([...GROUP_SCOPED_OPTIONS, "--yes"])],
+  ["member promote", new Set(GROUP_SCOPED_OPTIONS)],
+  ["member demote", new Set([...GROUP_SCOPED_OPTIONS, "--yes"])],
+  ["ban list", new Set(GROUP_SCOPED_OPTIONS)],
+  ["ban add", new Set([...GROUP_SCOPED_OPTIONS, "--input", "--user-id", "--username", "--yes"])],
+  ["ban remove", new Set(GROUP_SCOPED_OPTIONS)],
+  ["invite show", new Set(GROUP_SCOPED_OPTIONS)],
+  ["invite rotate", new Set([...GROUP_SCOPED_OPTIONS, "--yes"])],
+  ["invite inspect", new Set(OUTPUT_OPTIONS)],
+  ["invite join", new Set(OUTPUT_OPTIONS)],
 ]);
 
 process.once("SIGINT", () => process.exit(130));
@@ -80,7 +108,7 @@ const RESOURCE_HELP = {
   openjob member demote <username> [--yes]`,
   ban: `Usage:
   openjob ban list
-  openjob ban add (--username <username> | --user-id <user-id>) [--yes]
+  openjob ban add (--username <username> | --user-id <user-id> | --input <path|->) [--yes]
   openjob ban remove <user-id>`,
   invite: `Usage:
   openjob invite show
@@ -99,14 +127,16 @@ const RESOURCE_HELP = {
   openjob task delete <task-id> [--yes]`,
 };
 
-function validateTaskOptions(command, options) {
-  const allowed = TASK_OPTIONS.get(command);
+function validateCommandOptions(resource, command, options) {
+  const allowed = resource === "task"
+    ? TASK_OPTIONS.get(command)
+    : COMMAND_OPTIONS.get(`${resource} ${command}`);
   if (!allowed) return;
   for (const option of options.keys()) {
     if (!allowed.has(option)) {
       throw new CliError(
         "usage_error",
-        `Option ${option} is not valid for task ${command}.`,
+        `Option ${option} is not valid for ${resource} ${command}.`,
         2,
       );
     }
@@ -157,6 +187,19 @@ function taskMutationBody(command, options) {
     body.dueDate = command === "edit" && dueDate === "none" ? null : dueDate;
   }
   return body;
+}
+
+function groupNameMutationBody(command, options) {
+  const hasName = options.has("--name");
+  const hasInput = options.has("--input");
+  if (hasName === hasInput) {
+    throw new CliError(
+      "usage_error",
+      `group ${command} requires exactly one of --name or --input.`,
+      2,
+    );
+  }
+  return hasInput ? readInputObject(options.get("--input")) : { name: options.get("--name") };
 }
 
 async function memberByUsername(groupId, rawUsername, options) {
@@ -217,11 +260,11 @@ async function main(raw) {
   }
 
   const parsed = parseArguments(raw);
+  const [resource, command, ...rest] = parsed.positionals;
+  validateCommandOptions(resource, command, parsed.options);
   const format = outputFormat(parsed.options);
   preflightOutput(parsed.options);
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
-  const [resource, command, ...rest] = parsed.positionals;
-  if (resource === "task") validateTaskOptions(command, parsed.options);
   if (resource === "group" && command === "current" && rest.length === 0) {
     writeResult({ data: resolveGroup(parsed.options) });
     return;
@@ -359,16 +402,7 @@ async function main(raw) {
     return;
   }
   if (resource === "group" && command === "create" && rest.length === 0) {
-    const name = parsed.options.get("--name");
-    const inputPath = parsed.options.get("--input");
-    if ((!name && !inputPath) || (name && inputPath)) {
-      throw new CliError(
-        "usage_error",
-        "group create requires exactly one of --name or --input.",
-        2,
-      );
-    }
-    const body = inputPath ? readInputObject(inputPath) : { name };
+    const body = groupNameMutationBody("create", parsed.options);
     writeResult(
       await apiRequest("/groups", { method: "POST", body: JSON.stringify(body) }),
     );
@@ -380,16 +414,7 @@ async function main(raw) {
     return;
   }
   if (resource === "group" && command === "rename" && rest.length === 0) {
-    const name = parsed.options.get("--name");
-    const inputPath = parsed.options.get("--input");
-    if ((!name && !inputPath) || (name && inputPath)) {
-      throw new CliError(
-        "usage_error",
-        "group rename requires exactly one of --name or --input.",
-        2,
-      );
-    }
-    const body = inputPath ? readInputObject(inputPath) : { name };
+    const body = groupNameMutationBody("rename", parsed.options);
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
       await apiRequest(`/groups/${encodeURIComponent(groupId)}`, {
@@ -410,7 +435,7 @@ async function main(raw) {
       method: "POST",
     });
     clearCurrentGroup(groupId);
-    writeResult({ data: { groupId, left: true } });
+    writeResult({ data: { resource: "membership", groupId, deleted: true } });
     return;
   }
   if (resource === "group" && command === "end" && rest.length === 0) {
@@ -430,7 +455,7 @@ async function main(raw) {
       body: JSON.stringify({ confirmationName }),
     });
     clearCurrentGroup(groupId);
-    writeResult({ data: { groupId, ended: true } });
+    writeResult({ data: { resource: "group", groupId, deleted: true } });
     return;
   }
   if (resource === "member" && command === "list" && rest.length === 0) {
@@ -464,7 +489,15 @@ async function main(raw) {
     );
     writeResult(
       command === "kick"
-        ? { data: { userId: member.userId, username: member.username, kicked: true } }
+        ? {
+            data: {
+              resource: "membership",
+              groupId,
+              userId: member.userId,
+              username: member.username,
+              deleted: true,
+            },
+          }
         : result,
     );
     return;
@@ -482,26 +515,34 @@ async function main(raw) {
   if (resource === "ban" && command === "add" && rest.length === 0) {
     const username = parsed.options.get("--username");
     const selectedUserId = parsed.options.get("--user-id");
-    if ((!username && !selectedUserId) || (username && selectedUserId)) {
+    const inputPath = parsed.options.get("--input");
+    const inputModes = ["--username", "--user-id", "--input"].filter((option) =>
+      parsed.options.has(option),
+    );
+    if (inputModes.length !== 1) {
       throw new CliError(
         "usage_error",
-        "ban add requires exactly one of --username or --user-id.",
+        "ban add requires exactly one of --username, --user-id, or --input.",
         2,
       );
     }
     const { groupId } = resolveGroup(parsed.options);
     await confirmDestructiveAction(
-      `Ban ${username ? `@${username.replace(/^@/, "")}` : selectedUserId}?`,
+      `Ban ${username ? `@${username.replace(/^@/, "")}` : selectedUserId ?? "the input User"}?`,
       "Non-interactive banning requires --yes.",
       parsed.options,
     );
-    const userId = username
-      ? (await memberByUsername(groupId, username, parsed.options)).userId
-      : selectedUserId;
+    const body = inputPath
+      ? readInputObject(inputPath)
+      : {
+          userId: username
+            ? (await memberByUsername(groupId, username, parsed.options)).userId
+            : selectedUserId,
+        };
     writeResult(
       await apiRequest(`/groups/${encodeURIComponent(groupId)}/bans/actions/ban`, {
         method: "POST",
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify(body),
       }),
     );
     return;
@@ -513,7 +554,7 @@ async function main(raw) {
       `/groups/${encodeURIComponent(groupId)}/bans/${encodeURIComponent(userId)}/actions/unban`,
       { method: "POST" },
     );
-    writeResult({ data: { userId, unbanned: true } });
+    writeResult({ data: { resource: "ban", groupId, userId, deleted: true } });
     return;
   }
   if (resource === "invite" && command === "show" && rest.length === 0) {

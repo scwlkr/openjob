@@ -25,6 +25,46 @@ export type CreateGroupResponse = JsonResponse<
 export type GetGroupResponse = JsonResponse<
   operations["getGroup"]["responses"][200]
 >;
+export type RenameGroupRequest =
+  operations["renameGroup"]["requestBody"]["content"]["application/json"];
+export type RenameGroupResponse = JsonResponse<
+  operations["renameGroup"]["responses"][200]
+>;
+export type LeaveGroupOperation = operations["leaveGroup"];
+export type EndGroupRequest =
+  operations["endGroup"]["requestBody"]["content"]["application/json"];
+export type EndGroupOperation = operations["endGroup"];
+export type ListMembersResponse = JsonResponse<
+  operations["listGroupMembers"]["responses"][200]
+>;
+export type KickMemberOperation = operations["kickGroupMember"];
+export type PromoteMemberResponse = JsonResponse<
+  operations["promoteGroupMember"]["responses"][200]
+>;
+export type DemoteMemberResponse = JsonResponse<
+  operations["demoteGroupMember"]["responses"][200]
+>;
+export type ListBansResponse = JsonResponse<
+  operations["listGroupBans"]["responses"][200]
+>;
+export type BanUserRequest =
+  operations["banGroupUser"]["requestBody"]["content"]["application/json"];
+export type BanUserResponse = JsonResponse<
+  operations["banGroupUser"]["responses"][201]
+>;
+export type UnbanUserOperation = operations["unbanGroupUser"];
+export type GetInviteLinkResponse = JsonResponse<
+  operations["getGroupInviteLink"]["responses"][200]
+>;
+export type RotateInviteLinkResponse = JsonResponse<
+  operations["rotateGroupInviteLink"]["responses"][200]
+>;
+export type InspectInviteResponse = JsonResponse<
+  operations["inspectInviteLink"]["responses"][200]
+>;
+export type JoinInviteResponse = JsonResponse<
+  operations["joinGroupWithInviteLink"]["responses"][200]
+>;
 export type ListTasksResponse = JsonResponse<
   operations["listGroupTasks"]["responses"][200]
 >;

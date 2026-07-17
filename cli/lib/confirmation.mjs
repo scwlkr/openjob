@@ -48,10 +48,7 @@ export async function confirmGroupEnd(groupName, options) {
 }
 
 export function inputIsInteractive() {
-  return Boolean(
-    process.stdin.isTTY ||
-    (process.env.NODE_ENV === "test" && process.env.OPENJOB_TEST_INTERACTIVE === "1"),
-  );
+  return Boolean(process.stdin.isTTY);
 }
 
 async function readAnswer() {
