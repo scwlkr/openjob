@@ -880,7 +880,7 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   await expect(page.getByTestId("ban-row").filter({ hasText: "@elijah" })).toBeVisible();
 
   await page.getByRole("button", { name: "Back to Task List" }).click();
-  const unassigned = page.getByTestId("task-lane").filter({
+  const unassigned = page.getByTestId("member-section").filter({
     has: page.getByRole("heading", { name: "Unassigned" }),
   });
   await expect(unassigned.getByText("Recover removed Member work")).toBeVisible();
@@ -1176,7 +1176,7 @@ test("recovers when a session expires while selecting a Group", async ({ page })
   await expect(page.getByRole("heading", { name: "Choose a Group" })).toBeVisible();
 });
 
-test("renders ordered assignee lanes with combined status and assignee filters", async ({ page }) => {
+test("renders status-filtered Member sections with truthful counts and ordering", async ({ page }) => {
   await startSignedIn(page);
   await page.clock.setFixedTime(new Date("2026-07-16T17:00:00-05:00"));
   const state = await installApi(page, {
@@ -1186,6 +1186,7 @@ test("renders ordered assignee lanes with combined status and assignee filters",
       { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-03T00:00:00.000Z" },
       { userId: "user_elijah", username: "elijah", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+      { userId: "user_all", username: "all", role: "member", joinedAt: "2026-07-04T00:00:00.000Z" },
     ],
     tasks: [
       {
@@ -1229,6 +1230,16 @@ test("renders ordered assignee lanes with combined status and assignee filters",
         completedAt: null,
       },
       {
+        taskId: "task_former_done",
+        groupId: walkerLabs.groupId,
+        text: "Document former campaign owner",
+        assignee: { state: "assigned", userId: "user_zora", username: "zora" },
+        dueDate: null,
+        state: "done",
+        createdAt: "2026-07-04T12:00:00.000Z",
+        completedAt: "2026-07-14T15:00:00.000Z",
+      },
+      {
         taskId: "task_unassigned",
         groupId: walkerLabs.groupId,
         text: "Recover payroll handoff",
@@ -1243,22 +1254,44 @@ test("renders ordered assignee lanes with combined status and assignee filters",
 
   await page.goto("/");
 
-  const lanes = page.getByTestId("task-lane");
-  await expect(lanes).toHaveCount(4);
-  await expect(lanes.nth(0).getByRole("heading")).toHaveText("@elijah");
-  await expect(lanes.nth(1).getByRole("heading")).toHaveText("@morgan");
-  await expect(lanes.nth(2).getByRole("heading")).toHaveText("@shane");
-  await expect(lanes.nth(3).getByRole("heading")).toHaveText("Unassigned");
+  const sections = page.getByTestId("member-section");
+  await expect(page.getByRole("button", { name: "Open 4", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Done 2", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All 6", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Assignee filter")).toHaveCount(0);
+  await expect(sections).toHaveCount(4);
+  await expect(sections.nth(0).getByRole("heading")).toHaveText("@elijah");
+  await expect(sections.nth(1).getByRole("heading")).toHaveText("@morgan");
+  await expect(sections.nth(2).getByRole("heading")).toHaveText("@shane");
+  await expect(sections.nth(3).getByRole("heading")).toHaveText("Unassigned");
+  await expect(page.getByRole("heading", { name: "@all" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "People" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Task List by owner" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New Task" })).toBeVisible();
   await expect(page.getByText("Archive spring campaign")).toHaveCount(0);
+  await expect(page.getByText("Document former campaign owner")).toHaveCount(0);
   await expect(page.getByText("Confirm patio measurements").locator("..")).toContainText("Overdue");
 
-  await page.getByLabel("Task status").selectOption("all");
-  await page.getByLabel("Assignee filter").selectOption({ label: "@morgan" });
-  await expect(lanes).toHaveCount(1);
-  const morganCards = lanes.getByTestId("task-card");
+  await page.getByRole("button", { name: "Done 2", exact: true }).click();
+  await expect(sections).toHaveCount(2);
+  await expect(sections.nth(0).getByRole("heading")).toHaveText("@morgan");
+  await expect(sections.nth(1).getByRole("heading")).toHaveText("@zora");
+  await expect(sections.nth(1).getByText("Former Member")).toBeVisible();
+
+  await page.getByRole("button", { name: "All 6", exact: true }).click();
+  await expect(sections).toHaveCount(5);
+  await expect(sections.nth(0).getByRole("heading")).toHaveText("@elijah");
+  await expect(sections.nth(1).getByRole("heading")).toHaveText("@morgan");
+  await expect(sections.nth(2).getByRole("heading")).toHaveText("@shane");
+  await expect(sections.nth(3).getByRole("heading")).toHaveText("@zora");
+  await expect(sections.nth(4).getByRole("heading")).toHaveText("Unassigned");
+  const morganCards = sections.nth(1).getByTestId("task-card");
   await expect(morganCards.nth(0)).toContainText("Order menu stands");
   await expect(morganCards.nth(1)).toContainText("Archive spring campaign");
-  expect(state.taskQueries.some((query) => query.includes("status=all") && query.includes("assignee=morgan"))).toBe(true);
+  expect(state.taskQueries.every((query) => {
+    const params = new URLSearchParams(query);
+    return params.get("status") === "all" && !params.has("assignee");
+  })).toBe(true);
 });
 
 test("opens one shared Task editor from global and Member actions", async ({ page }) => {
@@ -1269,6 +1302,18 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
     members: [
       { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+    tasks: [
+      {
+        taskId: "task_morgan_entry",
+        groupId: walkerLabs.groupId,
+        text: "Keep Morgan visible",
+        assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        completedAt: null,
+      },
     ],
   });
   await page.goto("/");
@@ -1292,10 +1337,10 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await expect(editor).toHaveCount(0);
   await expect(globalNewTask).toBeFocused();
 
-  const morganLane = page.getByTestId("task-lane").filter({
+  const morganSection = page.getByTestId("member-section").filter({
     has: page.getByRole("heading", { name: "@morgan" }),
   });
-  const memberAddTask = morganLane.getByRole("button", { name: "Add Task" });
+  const memberAddTask = morganSection.getByRole("button", { name: "Add Task" });
   await memberAddTask.click();
   editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
@@ -1314,6 +1359,16 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
     ],
     tasks: [
+      {
+        taskId: "task_morgan_entry",
+        groupId: walkerLabs.groupId,
+        text: "Keep Morgan visible",
+        assignee: { state: "assigned", userId: "user_morgan", username: "morgan" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
       {
         taskId: "task_existing",
         groupId: walkerLabs.groupId,
@@ -1338,12 +1393,12 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   });
   await page.goto("/");
 
-  const morganLane = page.getByTestId("task-lane").filter({ has: page.getByRole("heading", { name: "@morgan" }) });
-  const unassignedLane = page.getByTestId("task-lane").filter({ has: page.getByRole("heading", { name: "Unassigned" }) });
-  await expect(morganLane.getByRole("button", { name: "Add Task" })).toBeVisible();
-  await expect(unassignedLane.getByRole("button", { name: "Add Task" })).toHaveCount(0);
+  const morganSection = page.getByTestId("member-section").filter({ has: page.getByRole("heading", { name: "@morgan" }) });
+  const unassignedSection = page.getByTestId("member-section").filter({ has: page.getByRole("heading", { name: "Unassigned" }) });
+  await expect(morganSection.getByRole("button", { name: "Add Task" })).toBeVisible();
+  await expect(unassignedSection.getByRole("button", { name: "Add Task" })).toHaveCount(0);
 
-  await morganLane.getByRole("button", { name: "Add Task" }).click();
+  await morganSection.getByRole("button", { name: "Add Task" }).click();
   let editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
   await editor.getByLabel("Task text").fill("Order replacement menu stands");
@@ -1365,13 +1420,13 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
 
   await card.getByRole("button", { name: "Complete" }).click();
   await expect(card).toHaveCount(0);
-  await page.getByLabel("Task status").selectOption("done");
+  await page.getByRole("button", { name: "Done 1", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.getByRole("button", { name: "Reopen" }).click();
   await expect(card).toHaveCount(0);
-  await page.getByLabel("Task status").selectOption("open");
+  await page.getByRole("button", { name: "Open 4", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
 
@@ -1386,7 +1441,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   expect(state.taskMutationRequests).toBe(requestsBeforeRequiredSelection);
   await editor.getByLabel("Assignee").selectOption("morgan");
   await editor.getByRole("button", { name: "Assign Task" }).click();
-  await expect(morganLane.getByText("Recover payroll handoff")).toBeVisible();
+  await expect(morganSection.getByText("Recover payroll handoff")).toBeVisible();
 
   await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.getByRole("button", { name: "Edit" }).click();
@@ -1404,7 +1459,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await expect(page.getByText("Order two menu stands")).toHaveCount(0);
 });
 
-test("keeps narrow-screen lanes nearly full width and horizontally interactive", async ({ page }) => {
+test("uses one narrow column and two desktop columns without horizontal overflow", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, {
     user: signedInUser,
@@ -1414,6 +1469,16 @@ test("keeps narrow-screen lanes nearly full width and horizontally interactive",
       { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
     ],
     tasks: [
+      {
+        taskId: "task_mobile_shane",
+        groupId: walkerLabs.groupId,
+        text: "Keep the first section visible",
+        assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-01T09:00:00.000Z",
+        completedAt: null,
+      },
       {
         taskId: "task_mobile",
         groupId: walkerLabs.groupId,
@@ -1429,16 +1494,26 @@ test("keeps narrow-screen lanes nearly full width and horizontally interactive",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  const lanes = page.getByTestId("task-lane");
-  const first = await lanes.nth(0).boundingBox();
-  const second = await lanes.nth(1).boundingBox();
+  const sections = page.getByTestId("member-section");
+  let first = await sections.nth(0).boundingBox();
+  let second = await sections.nth(1).boundingBox();
   expect(first!.width).toBeGreaterThanOrEqual(330);
   expect(first!.width).toBeLessThan(390);
-  expect(second!.x).toBeGreaterThan(first!.x + first!.width);
+  expect(Math.abs(second!.x - first!.x)).toBeLessThanOrEqual(1);
+  expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
-  const morganLane = lanes.filter({ has: page.getByRole("heading", { name: "@morgan" }) });
-  await morganLane.scrollIntoViewIfNeeded();
-  await morganLane.getByRole("button", { name: "Complete" }).click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  first = await sections.nth(0).boundingBox();
+  second = await sections.nth(1).boundingBox();
+  expect(Math.abs(second!.y - first!.y)).toBeLessThanOrEqual(1);
+  expect(second!.x).toBeGreaterThan(first!.x + first!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const morganSection = sections.filter({ has: page.getByRole("heading", { name: "@morgan" }) });
+  await morganSection.scrollIntoViewIfNeeded();
+  await morganSection.getByRole("button", { name: "Complete" }).click();
   await expect(page.getByText("Check the narrow layout")).toHaveCount(0);
 
   await page.getByRole("button", { name: "New Task" }).click();
@@ -1559,9 +1634,10 @@ test("shows loading and empty Task List states", async ({ page }) => {
 
   state.hangTasks = false;
   await page.reload();
-  await expect(page.getByTestId("task-lane")).toHaveCount(1);
-  await expect(page.getByText("No Tasks here.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add Task" })).toBeVisible();
+  await expect(page.getByTestId("member-section")).toHaveCount(0);
+  await expect(page.getByText("No open Tasks.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New Task" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Task" })).toHaveCount(0);
 });
 
 test("recovers Task List permission and network failures", async ({ page }) => {
@@ -1584,7 +1660,8 @@ test("recovers Task List permission and network failures", async ({ page }) => {
 
   state.failTaskNetwork = false;
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.getByTestId("task-lane")).toHaveCount(1);
+  await expect(page.getByTestId("member-section")).toHaveCount(0);
+  await expect(page.getByText("No open Tasks.")).toBeVisible();
 });
 
 test("keeps validation and conflict failures visible and recoverable", async ({ page }) => {
@@ -1724,10 +1801,11 @@ test("returns Task List authentication failures to a working sign-in path", asyn
 
   state.taskFailureStatus = null;
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.getByTestId("task-lane")).toHaveCount(1);
+  await expect(page.getByTestId("member-section")).toHaveCount(0);
+  await expect(page.getByText("No open Tasks.")).toBeVisible();
 });
 
-test("filters a Member whose valid Username is all", async ({ page }) => {
+test("renders a Member whose valid Username is all", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, {
     user: signedInUser,
@@ -1760,16 +1838,16 @@ test("filters a Member whose valid Username is all", async ({ page }) => {
     ],
   });
   await page.goto("/");
-  await page.getByLabel("Assignee filter").selectOption({ label: "@all" });
 
-  const lanes = page.getByTestId("task-lane");
-  await expect(lanes).toHaveCount(1);
-  await expect(lanes.getByRole("heading")).toHaveText("@all");
+  const sections = page.getByTestId("member-section");
+  await expect(sections).toHaveCount(2);
+  await expect(sections.nth(0).getByRole("heading")).toHaveText("@all");
+  await expect(sections.nth(1).getByRole("heading")).toHaveText("@shane");
   await expect(page.getByText("Work assigned to all")).toBeVisible();
-  await expect(page.getByText("Work assigned to shane")).toHaveCount(0);
+  await expect(page.getByText("Work assigned to shane")).toBeVisible();
 });
 
-test("keeps an empty Unassigned lane visible after the final recovery", async ({ page }) => {
+test("removes the Unassigned section after its final Task is recovered", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, {
     user: signedInUser,
@@ -1791,19 +1869,19 @@ test("keeps an empty Unassigned lane visible after the final recovery", async ({
     ],
   });
   await page.goto("/");
-  await page.getByLabel("Assignee filter").selectOption({ label: "Unassigned" });
   await page.getByRole("button", { name: "Assign" }).click();
   const editor = page.getByRole("dialog", { name: "Assign Task" });
   await editor.getByLabel("Assignee").selectOption("shane");
   await editor.getByRole("button", { name: "Assign Task" }).click();
 
-  const lane = page.getByTestId("task-lane");
-  await expect(lane).toHaveCount(1);
-  await expect(lane.getByRole("heading")).toHaveText("Unassigned");
-  await expect(lane.getByText("No Tasks here.")).toBeVisible();
+  const section = page.getByTestId("member-section");
+  await expect(section).toHaveCount(1);
+  await expect(section.getByRole("heading")).toHaveText("@shane");
+  await expect(section.getByText("Recover the last Task")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Unassigned" })).toHaveCount(0);
 });
 
-test("keeps done Tasks visible in departed assignee lanes", async ({ page }) => {
+test("keeps done Tasks visible in Former Member sections", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, {
     user: signedInUser,
@@ -1825,14 +1903,11 @@ test("keeps done Tasks visible in departed assignee lanes", async ({ page }) => 
     ],
   });
   await page.goto("/");
-  await page.getByLabel("Task status").selectOption("done");
+  await page.getByRole("button", { name: "Done 1", exact: true }).click();
 
-  const departedLane = page.getByTestId("task-lane").filter({ has: page.getByRole("heading", { name: "@zora" }) });
-  await expect(departedLane.getByText("Former Member")).toBeVisible();
-  await expect(departedLane.getByText("Completed before departure")).toBeVisible();
-  await expect(departedLane.getByRole("button", { name: "Add Task" })).toHaveCount(0);
-
-  await page.getByLabel("Assignee filter").selectOption({ label: "@zora" });
-  await expect(page.getByTestId("task-lane")).toHaveCount(1);
+  const departedSection = page.getByTestId("member-section").filter({ has: page.getByRole("heading", { name: "@zora" }) });
+  await expect(departedSection.getByText("Former Member")).toBeVisible();
+  await expect(departedSection.getByText("Completed before departure")).toBeVisible();
+  await expect(departedSection.getByRole("button", { name: "Add Task" })).toHaveCount(0);
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });

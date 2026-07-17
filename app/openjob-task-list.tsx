@@ -12,10 +12,6 @@ import {
 import styles from "./openjob.module.css";
 
 type StatusFilter = "open" | "done" | "all";
-type AssigneeFilter =
-  | { kind: "all" }
-  | { kind: "unassigned" }
-  | { kind: "member"; username: string };
 type NamedMember = Member & { username: string };
 type EditorMode = "new" | "edit" | "assign";
 type Editor =
@@ -29,8 +25,7 @@ type StoredEditorDraft = {
   mode: EditorMode;
   taskId: string | null;
 };
-type AssigneeLane = { username: string; current: boolean };
-type TaskLane = {
+type MemberSection = {
   key: string;
   label: string;
   canCreate: boolean;
@@ -38,40 +33,19 @@ type TaskLane = {
   unassigned: boolean;
 };
 
-const ALL_ASSIGNEES_VALUE = "filter:all";
-const UNASSIGNED_VALUE = "filter:unassigned";
-const MEMBER_VALUE_PREFIX = "member:";
 const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
+const ALL_TASKS_FILTER = { status: "all" } as const;
+const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
+  { label: "Open", value: "open" },
+  { label: "Done", value: "done" },
+  { label: "All", value: "all" },
+];
 
 const TASK_FORM_COPY: Record<EditorMode, { kicker: string; title: string; submit: string }> = {
   new: { kicker: "New Task", title: "New Task", submit: "Create Task" },
   edit: { kicker: "Task details", title: "Edit Task", submit: "Save Task" },
   assign: { kicker: "Unassigned recovery", title: "Assign Task", submit: "Assign Task" },
 };
-
-function apiAssignee(filter: AssigneeFilter) {
-  if (filter.kind === "all") return undefined;
-  return filter.kind === "unassigned" ? "unassigned" : filter.username;
-}
-
-function filterSelectValue(filter: AssigneeFilter) {
-  if (filter.kind === "all") return ALL_ASSIGNEES_VALUE;
-  return filter.kind === "unassigned" ? UNASSIGNED_VALUE : `${MEMBER_VALUE_PREFIX}${filter.username}`;
-}
-
-function filterFromSelectValue(value: string): AssigneeFilter {
-  if (value === ALL_ASSIGNEES_VALUE) return { kind: "all" };
-  if (value === UNASSIGNED_VALUE) return { kind: "unassigned" };
-  return { kind: "member", username: value.slice(MEMBER_VALUE_PREFIX.length) };
-}
-
-function filterIncludesMember(filter: AssigneeFilter, username: string) {
-  return filter.kind === "all" || (filter.kind === "member" && filter.username === username);
-}
-
-function filterIncludesUnassigned(filter: AssigneeFilter, hasUnassigned: boolean) {
-  return filter.kind === "unassigned" || (filter.kind === "all" && hasUnassigned);
-}
 
 function localDateKey(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -253,7 +227,6 @@ export function TaskList({
   const [members, setMembers] = useState<Member[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [status, setStatus] = useState<StatusFilter>("open");
-  const [assignee, setAssignee] = useState<AssigneeFilter>({ kind: "all" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -329,17 +302,6 @@ export function TaskList({
     return () => window.clearTimeout(timeout);
   }, [editor, group.groupId, loading, tasks]);
 
-  const taskFilters = useMemo(
-    () => {
-      const filteredAssignee = apiAssignee(assignee);
-      return {
-        status,
-        ...(filteredAssignee ? { assignee: filteredAssignee } : {}),
-      };
-    },
-    [assignee, status],
-  );
-
   const load = useCallback(async () => {
     const loadGeneration = ++activeLoadGeneration.current;
     try {
@@ -350,7 +312,7 @@ export function TaskList({
       setActionError("");
       const [nextMembers, nextTasks] = await Promise.all([
         api.listMembers(token, group.groupId),
-        api.listTasks(token, group.groupId, taskFilters),
+        api.listTasks(token, group.groupId, ALL_TASKS_FILTER),
       ]);
       if (loadGeneration !== activeLoadGeneration.current) return;
       setMembers(nextMembers);
@@ -361,7 +323,7 @@ export function TaskList({
     } finally {
       if (loadGeneration === activeLoadGeneration.current) setLoading(false);
     }
-  }, [api, group.groupId, onSessionExpired, session, taskFilters]);
+  }, [api, group.groupId, onSessionExpired, session]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 0);
@@ -376,31 +338,46 @@ export function TaskList({
     [members],
   );
 
-  const assigneeLanes = useMemo(() => {
-    const currentUsernames = new Set(namedMembers.map((member) => member.username));
-    const usernames = new Set(currentUsernames);
-    for (const task of tasks) {
-      if (task.assignee.state === "assigned") usernames.add(task.assignee.username);
-    }
-    if (assignee.kind === "member") usernames.add(assignee.username);
-    return [...usernames]
-      .sort((left, right) => left === right ? 0 : left < right ? -1 : 1)
-      .map((username): AssigneeLane => ({ username, current: currentUsernames.has(username) }));
-  }, [assignee, namedMembers, tasks]);
+  const taskCounts = useMemo(() => {
+    const open = tasks.filter((task) => task.state === "open").length;
+    return { open, done: tasks.length - open, all: tasks.length };
+  }, [tasks]);
 
-  const lanes = useMemo(() => {
-    const memberLanes: TaskLane[] = assigneeLanes
-      .filter((lane) => filterIncludesMember(assignee, lane.username))
-      .map((lane) => ({
-        key: lane.username,
-        label: `@${lane.username}`,
-        canCreate: lane.current,
-        former: !lane.current,
+  const visibleTasks = useMemo(
+    () => status === "all" ? tasks : tasks.filter((task) => task.state === status),
+    [status, tasks],
+  );
+
+  const sections = useMemo(() => {
+    const currentUsernames = new Set(namedMembers.map((member) => member.username));
+    const memberSections: MemberSection[] = namedMembers
+      .filter((member) => visibleTasks.some(
+        (task) => task.assignee.state === "assigned" && task.assignee.username === member.username,
+      ))
+      .map((member) => ({
+        key: member.username,
+        label: `@${member.username}`,
+        canCreate: true,
+        former: false,
         unassigned: false,
       }));
-    const hasUnassigned = tasks.some((task) => task.assignee.state === "unassigned");
-    if (filterIncludesUnassigned(assignee, hasUnassigned)) {
-      memberLanes.push({
+    const formerUsernames = new Set<string>();
+    for (const task of visibleTasks) {
+      if (task.assignee.state === "assigned" && !currentUsernames.has(task.assignee.username)) {
+        formerUsernames.add(task.assignee.username);
+      }
+    }
+    for (const username of [...formerUsernames].sort()) {
+      memberSections.push({
+        key: username,
+        label: `@${username}`,
+        canCreate: false,
+        former: true,
+        unassigned: false,
+      });
+    }
+    if (visibleTasks.some((task) => task.assignee.state === "unassigned")) {
+      memberSections.push({
         key: "unassigned",
         label: "Unassigned",
         canCreate: false,
@@ -408,8 +385,8 @@ export function TaskList({
         unassigned: true,
       });
     }
-    return memberLanes;
-  }, [assignee, assigneeLanes, tasks]);
+    return memberSections;
+  }, [namedMembers, visibleTasks]);
 
   async function runMutation(action: (token: string) => Promise<unknown>, nextEditorAction: EditorAction | null = null) {
     const editorMutation = nextEditorAction !== null;
@@ -428,7 +405,7 @@ export function TaskList({
         setEditor(null);
         setEditorInput(null);
       }
-      const nextTasks = await api.listTasks(token, group.groupId, taskFilters);
+      const nextTasks = await api.listTasks(token, group.groupId, ALL_TASKS_FILTER);
       setTasks(nextTasks);
       if (editorMutation) {
         window.requestAnimationFrame(() => {
@@ -513,36 +490,20 @@ export function TaskList({
         </div>
       ) : null}
       <div className={styles.taskToolbar}>
-        <label>
-          Task status
-          <select
-            value={status}
-            onChange={(event) => {
-              setLoading(true);
-              setStatus(event.target.value as StatusFilter);
-            }}
-          >
-            <option value="open">Open</option>
-            <option value="done">Done</option>
-            <option value="all">All</option>
-          </select>
-        </label>
-        <label>
-          Assignee filter
-          <select
-            value={filterSelectValue(assignee)}
-            onChange={(event) => {
-              setLoading(true);
-              setAssignee(filterFromSelectValue(event.target.value));
-            }}
-          >
-            <option value={ALL_ASSIGNEES_VALUE}>All assignees</option>
-            {assigneeLanes.map((lane) => (
-              <option key={lane.username} value={`${MEMBER_VALUE_PREFIX}${lane.username}`}>@{lane.username}</option>
-            ))}
-            <option value={UNASSIGNED_VALUE}>Unassigned</option>
-          </select>
-        </label>
+        <div className={styles.statusFilters} role="group" aria-label="Task status">
+          {STATUS_FILTERS.map((filter) => (
+            <button
+              aria-label={`${filter.label} ${taskCounts[filter.value]}`}
+              aria-pressed={status === filter.value}
+              key={filter.value}
+              type="button"
+              onClick={() => setStatus(filter.value)}
+            >
+              {filter.label}
+              <span aria-hidden="true">{taskCounts[filter.value]}</span>
+            </button>
+          ))}
+        </div>
         <button
           className={styles.newTaskButton}
           ref={newTaskButton}
@@ -553,34 +514,39 @@ export function TaskList({
         </button>
       </div>
 
-      <div className={styles.taskLanes}>
-        {lanes.map((lane) => {
-          const laneTasks = tasks.filter((task) =>
-            lane.unassigned
+      {sections.length === 0 ? (
+        <p className={styles.emptyTaskList} role="status">
+          {status === "all" ? "No Tasks yet." : `No ${status === "open" ? "open" : "done"} Tasks.`}
+        </p>
+      ) : null}
+
+      <div className={styles.taskSections}>
+        {sections.map((section) => {
+          const sectionTasks = visibleTasks.filter((task) =>
+            section.unassigned
               ? task.assignee.state === "unassigned"
-              : task.assignee.state === "assigned" && task.assignee.username === lane.key,
+              : task.assignee.state === "assigned" && task.assignee.username === section.key,
           );
           return (
-            <section className={styles.taskLane} data-testid="task-lane" key={lane.key}>
+            <section className={styles.memberSection} data-testid="member-section" key={section.key}>
               <header>
                 <div>
-                  <h2>{lane.label}</h2>
-                  {lane.former ? <small>Former Member</small> : null}
+                  <h2>{section.label}</h2>
+                  {section.former ? <small>Former Member</small> : null}
                 </div>
-                <span>{laneTasks.length}</span>
+                <span>{sectionTasks.length}</span>
               </header>
               <div className={styles.taskCards}>
-                {lane.canCreate ? (
+                {section.canCreate ? (
                   <button
                     className={styles.addTaskButton}
                     type="button"
-                    onClick={(event) => openEditor({ mode: "new", username: lane.key }, event.currentTarget)}
+                    onClick={(event) => openEditor({ mode: "new", username: section.key }, event.currentTarget)}
                   >
                     Add Task
                   </button>
                 ) : null}
-                {laneTasks.length === 0 ? <p className={styles.emptyLane}>No Tasks here.</p> : null}
-                {laneTasks.map((task) => {
+                {sectionTasks.map((task) => {
                   const overdue = task.state === "open" && task.dueDate !== null && task.dueDate < localDateKey();
                   return (
                     <article className={styles.taskCard} data-testid="task-card" key={task.taskId}>
