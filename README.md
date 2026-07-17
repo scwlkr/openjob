@@ -36,11 +36,12 @@ For repository development, run `npm install`, `npm link`, and
 and run its hosted Task workflow with:
 
 ```bash
-OPENJOB_CLI_SMOKE_TOKEN=<firebase-id-token> npm run cli:smoke:production
+OPENJOB_CLI_SMOKE_USE_KEYCHAIN=1 npm run cli:smoke:production
 ```
 
-The token stays in the smoke process and is not passed to the installed
-executable.
+Automation may instead provide a short-lived Firebase ID token through
+`OPENJOB_CLI_SMOKE_TOKEN`; the token stays in the smoke process and is not
+passed to the installed executable.
 
 Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
 `npm run cli:types:check` to verify the checked-in request/response types.
