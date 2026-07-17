@@ -57,6 +57,22 @@ function startCli(args, options = {}) {
   return { child, result };
 }
 
+function waitForLoginUrl(running, message = "login URL was not emitted") {
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const timeout = setTimeout(() => reject(new Error(message)), 5000);
+    running.child.stderr.setEncoding("utf8");
+    running.child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
+      if (match) {
+        clearTimeout(timeout);
+        resolve(new URL(match[1]));
+      }
+    });
+  });
+}
+
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
@@ -399,19 +415,7 @@ test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Fire
     });
     running.child.stdin.end();
 
-    authorizationUrl = await new Promise((resolve, reject) => {
-      let stderr = "";
-      const timeout = setTimeout(() => reject(new Error("login URL was not emitted")), 5000);
-      running.child.stderr.setEncoding("utf8");
-      running.child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-        const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
-        if (match) {
-          clearTimeout(timeout);
-          resolve(new URL(match[1]));
-        }
-      });
-    });
+    authorizationUrl = await waitForLoginUrl(running);
 
     assert.equal(authorizationUrl.origin, service.baseUrl);
     assert.equal(authorizationUrl.pathname, "/oauth/authorize");
@@ -480,22 +484,10 @@ test("production auth login uses the configured Google Desktop client and PKCE",
   running.child.stdin.end();
 
   try {
-    const authorizationUrl = await new Promise((resolve, reject) => {
-      let stderr = "";
-      const timeout = setTimeout(
-        () => reject(new Error("production login URL was not emitted")),
-        5000,
-      );
-      running.child.stderr.setEncoding("utf8");
-      running.child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-        const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
-        if (match) {
-          clearTimeout(timeout);
-          resolve(new URL(match[1]));
-        }
-      });
-    });
+    const authorizationUrl = await waitForLoginUrl(
+      running,
+      "production login URL was not emitted",
+    );
 
     assert.equal(authorizationUrl.origin, "https://accounts.google.com");
     assert.equal(authorizationUrl.pathname, "/o/oauth2/v2/auth");
@@ -553,19 +545,7 @@ test("auth login preserves rate-limit and service exit statuses", async () => {
     });
     try {
       running.child.stdin.end();
-      const authorizationUrl = await new Promise((resolve, reject) => {
-        let stderr = "";
-        const timeout = setTimeout(() => reject(new Error("login URL was not emitted")), 5000);
-        running.child.stderr.setEncoding("utf8");
-        running.child.stderr.on("data", (chunk) => {
-          stderr += chunk;
-          const match = stderr.match(/Open this URL:\n(https?:\/\/[^\n]+)\n/);
-          if (match) {
-            clearTimeout(timeout);
-            resolve(new URL(match[1]));
-          }
-        });
-      });
+      const authorizationUrl = await waitForLoginUrl(running);
       const callbackResponse = await fetch(authorizationUrl.searchParams.get("redirect_uri"), {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
