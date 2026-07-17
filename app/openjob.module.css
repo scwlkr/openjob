@@ -89,6 +89,7 @@
 .inviteActions .primaryButton { margin-top: 0; }
 
 .groupShell { min-width: 0; overflow-x: clip; }
+.groupShell button, .groupShell input, .groupShell select, .groupShell textarea { min-width: 44px; min-height: 44px; }
 .signedInHeader { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px; min-height: 68px; border-bottom: 1px solid #41453e; background: var(--ink); color: var(--paper-light); padding: 10px clamp(18px, 5vw, 72px); }
 .signedInNav { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
 .navMenu { position: relative; min-width: 0; }
@@ -230,8 +231,6 @@
 .governanceError { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
 .governanceError button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .governanceLoading { border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); }
-.governanceSurface button { min-width: 44px; min-height: 44px; }
-.governanceSurface input { height: 44px; min-height: 44px; }
 
 @media (max-width: 720px) {
   .authShell { grid-template-columns: 1fr; }
