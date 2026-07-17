@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { captureLegacySnapshot } from "../scripts/legacy-cutover.mjs";
+import {
+  captureLegacySnapshot,
+  verifyLegacyDeployment,
+} from "../scripts/legacy-cutover.mjs";
 import { createLegacyBoardApi } from "../server/legacy-board.ts";
 
 const repoRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -165,4 +168,29 @@ test("a fresh nonzero snapshot is retained but blocks cutover", async (t) => {
   assert.equal(retained.taskCount, 1);
   assert.deepEqual(retained.rawSnapshot.documents, [document]);
   assert.equal((await stat(outputPath)).mode & 0o777, 0o600);
+});
+
+test("freeze verification rejects one stale write-capable edge response", async () => {
+  let writes = 0;
+  await assert.rejects(
+    verifyLegacyDeployment({
+      baseUrl: "https://openjob.dev",
+      expectedMode: "read-only",
+      fetchImplementation: async (input, init = {}) => {
+        const url = new URL(input);
+        if (url.pathname === "/api/tasks" && init.method === "POST") {
+          writes += 1;
+          return Response.json({}, { status: writes === 2 ? 400 : 410 });
+        }
+        if (url.pathname === "/api/tasks") {
+          return Response.json({ tasks: [] });
+        }
+        if (url.pathname === "/api/v1/me") {
+          return Response.json({}, { status: 401 });
+        }
+        return new Response("OpenJob", { status: 200 });
+      },
+    }),
+    /POST \/api\/tasks probe 2 returned 400; expected 410/,
+  );
 });

@@ -28,6 +28,7 @@ export async function verifyLegacyDeployment({
   baseUrl = DEFAULT_BASE_URL,
   expectedMode,
   fetchImplementation = fetch,
+  probeCount = 5,
 }) {
   if (!new Set(["read-only", "unavailable"]).has(expectedMode)) {
     throw new Error("Expected mode must be read-only or unavailable.");
@@ -41,27 +42,43 @@ export async function verifyLegacyDeployment({
     throw statusError("GET /api/v1/me", identity, 401);
   }
 
-  const legacyUrl = new URL("/api/tasks", origin);
-  const read = await fetchImplementation(legacyUrl);
-  const write = await fetchImplementation(legacyUrl, {
-    body: "{}",
-    headers: { "content-type": "application/json" },
-    method: "POST",
-  });
+  const taskCounts = [];
+  for (let probe = 1; probe <= probeCount; probe += 1) {
+    const legacyUrl = new URL("/api/tasks", origin);
+    legacyUrl.searchParams.set("cutoverProbe", String(probe));
+    const read = await fetchImplementation(legacyUrl, {
+      headers: { "cache-control": "no-cache" },
+    });
+    const write = await fetchImplementation(legacyUrl, {
+      body: "{}",
+      headers: {
+        "cache-control": "no-cache",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+    const readLabel = `GET /api/tasks probe ${probe}`;
+    const writeLabel = `POST /api/tasks probe ${probe}`;
 
-  if (expectedMode === "unavailable") {
-    if (read.status !== 404) throw statusError("GET /api/tasks", read, 404);
-    if (write.status !== 404) throw statusError("POST /api/tasks", write, 404);
-    return { taskCount: null };
-  }
+    if (expectedMode === "unavailable") {
+      if (read.status !== 404) throw statusError(readLabel, read, 404);
+      if (write.status !== 404) throw statusError(writeLabel, write, 404);
+      continue;
+    }
 
-  if (read.status !== 200) throw statusError("GET /api/tasks", read, 200);
-  if (write.status !== 410) throw statusError("POST /api/tasks", write, 410);
-  const body = await json(read, "GET /api/tasks");
-  if (!Array.isArray(body.tasks)) {
-    throw new Error("GET /api/tasks did not return the legacy Task collection.");
+    if (read.status !== 200) throw statusError(readLabel, read, 200);
+    if (write.status !== 410) throw statusError(writeLabel, write, 410);
+    const body = await json(read, readLabel);
+    if (!Array.isArray(body.tasks)) {
+      throw new Error(`${readLabel} did not return the legacy Task collection.`);
+    }
+    taskCounts.push(body.tasks.length);
   }
-  return { taskCount: body.tasks.length };
+  if (expectedMode === "unavailable") return { taskCount: null };
+  if (taskCounts.some((count) => count !== taskCounts[0])) {
+    throw new Error("The legacy Task count changed between freeze probes.");
+  }
+  return { taskCount: taskCounts[0] };
 }
 
 async function fetchLegacyDocuments({
