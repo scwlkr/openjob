@@ -64,6 +64,14 @@ function formatDueDate(dueDate: string) {
   });
 }
 
+function taskFormInput(task: Task): TaskFormInput {
+  return {
+    text: task.text,
+    assigneeUsername: task.assignee.state === "assigned" ? task.assignee.username : "",
+    dueDate: task.dueDate ?? "",
+  };
+}
+
 function loadMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 403) return "You no longer have permission to view this Task List.";
@@ -141,7 +149,8 @@ function TaskForm({
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setValidationError("");
-        if (!text.trim()) {
+        const textLength = [...text.trim()].length;
+        if (textLength < 1 || textLength > 2_000) {
           setValidationError("Use 1 to 2,000 characters.");
           return;
         }
@@ -242,6 +251,7 @@ export function TaskList({
   const [undoableCompletions, setUndoableCompletions] = useState<UndoableCompletion[]>([]);
   const activeLoadGeneration = useRef(0);
   const editorOpener = useRef<HTMLButtonElement | null>(null);
+  const editorDialog = useRef<HTMLElement | null>(null);
   const newTaskButton = useRef<HTMLButtonElement | null>(null);
   const savingRef = useRef(false);
   const statusFilterButtons = useRef<Partial<Record<StatusFilter, HTMLButtonElement | null>>>({});
@@ -261,11 +271,7 @@ export function TaskList({
     setEditor(nextEditor);
     setEditorInput(nextEditor.mode === "new"
       ? { text: "", assigneeUsername: nextEditor.username, dueDate: "" }
-      : {
-          text: nextEditor.task.text,
-          assigneeUsername: nextEditor.task.assignee.state === "assigned" ? nextEditor.task.assignee.username : "",
-          dueDate: nextEditor.task.dueDate ?? "",
-        });
+      : taskFormInput(nextEditor.task));
     setActionError("");
   }, []);
 
@@ -273,9 +279,27 @@ export function TaskList({
     if (!editor) return;
     const fallback = newTaskButton.current;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || savingRef.current) return;
-      event.preventDefault();
-      closeEditor();
+      if (event.key === "Escape" && !savingRef.current) {
+        event.preventDefault();
+        closeEditor();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = editorDialog.current;
+      if (!dialog) return;
+      const controls = [...dialog.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+      )];
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -426,9 +450,8 @@ export function TaskList({
     return memberSections;
   }, [namedMembers, visibleTasks]);
 
-  async function runEditorMutation(action: (token: string) => Promise<unknown>, nextEditorAction: EditorAction | null = null) {
+  async function runEditorMutation(action: (token: string) => Promise<unknown>, nextEditorAction: EditorAction) {
     if (savingRef.current) return;
-    const editorMutation = nextEditorAction !== null;
     const opener = editorOpener.current;
     let mutationCommitted = false;
     savingRef.current = true;
@@ -438,20 +461,16 @@ export function TaskList({
       const token = await session.getIdToken();
       await action(token);
       mutationCommitted = true;
-      if (editorMutation) {
-        window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
-        setEditor(null);
-        setEditorInput(null);
-      }
+      window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+      setEditor(null);
+      setEditorInput(null);
       const nextTasks = await api.listTasks(token, group.groupId, ALL_TASKS_FILTER);
       setTasks(nextTasks);
-      if (editorMutation) {
-        window.requestAnimationFrame(() => {
-          if (!opener?.isConnected && document.activeElement === document.body) {
-            newTaskButton.current?.focus();
-          }
-        });
-      }
+      window.requestAnimationFrame(() => {
+        if (!opener?.isConnected && document.activeElement === document.body) {
+          newTaskButton.current?.focus();
+        }
+      });
     } catch (mutationError) {
       if (!(await onSessionExpired(mutationError))) {
         setActionError(mutationCommitted
@@ -515,9 +534,11 @@ export function TaskList({
       state: desiredState,
       completedAt: desiredState === "done" ? task.completedAt ?? new Date().toISOString() : null,
     };
-    setTasks((current) => current.map((candidate) =>
-      candidate.taskId === task.taskId ? optimisticTask : candidate,
-    ));
+    if (taskAction !== "complete") {
+      setTasks((current) => current.map((candidate) =>
+        candidate.taskId === task.taskId ? optimisticTask : candidate,
+      ));
+    }
     restoreTaskStateFocus(task.taskId);
     try {
       const token = await session.getIdToken();
@@ -589,11 +610,7 @@ export function TaskList({
   function deleteEditorTask() {
     if (!editor || editor.mode === "new") return;
     if (!window.confirm(`This will permanently delete “${editor.task.text}”. Continue?`)) return;
-    storeEditorDraft(editorInput ?? {
-      text: editor.task.text,
-      assigneeUsername: editor.task.assignee.state === "assigned" ? editor.task.assignee.username : "",
-      dueDate: editor.task.dueDate ?? "",
-    });
+    storeEditorDraft(editorInput ?? taskFormInput(editor.task));
     void runEditorMutation(
       (token) => api.deleteTask(token, group.groupId, editor.task.taskId),
       "delete",
@@ -759,7 +776,7 @@ export function TaskList({
                             <input
                               className={styles.taskCompletion}
                               type="checkbox"
-                              checked={task.state === "done"}
+                              checked={task.state === "done" || taskStateAction === "complete"}
                               disabled={taskStateAction !== undefined}
                               data-task-state-control={task.taskId}
                               aria-label={`${taskStateAction === "complete" ? "Completing" : taskStateAction === "undo" ? "Undoing completion of" : "Complete"} ${task.text}`}
@@ -813,6 +830,7 @@ export function TaskList({
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-editor-title"
+            ref={editorDialog}
           >
             <p className={styles.kicker}>{TASK_FORM_COPY[editor.mode].kicker}</p>
             <h2 id="task-editor-title">{TASK_FORM_COPY[editor.mode].title}</h2>

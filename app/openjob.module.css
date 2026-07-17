@@ -230,6 +230,8 @@
 .governanceError { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
 .governanceError button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .governanceLoading { border: 1px solid var(--line); background: var(--paper-light); padding: 28px; color: var(--muted); }
+.governanceSurface button { min-width: 44px; min-height: 44px; }
+.governanceSurface input { height: 44px; min-height: 44px; }
 
 @media (max-width: 720px) {
   .authShell { grid-template-columns: 1fr; }

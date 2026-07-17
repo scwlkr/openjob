@@ -841,6 +841,11 @@ test("lets Admins govern Invite Links, Members, bans, and forced-removal recover
   await openGroupManagement(page, "Manage Group");
 
   await expect(page.getByRole("heading", { name: "Manage Walker Labs" })).toBeVisible();
+  for (const control of await page.getByTestId("governance-surface").locator("button:visible, input:visible").all()) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
   await expect(page.getByLabel("Invite Link")).toHaveValue(state.invite.url);
   await expect(page.getByText("25 joins remaining")).toBeVisible();
   await expect(page.locator("time").filter({ hasText: /Expires/ })).toHaveAttribute("datetime", state.invite.expiresAt);
@@ -1338,6 +1343,10 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   expect(Math.abs(desktopEditor!.x + desktopEditor!.width / 2 - 640)).toBeLessThanOrEqual(1);
   expect(Math.abs(desktopEditor!.y + desktopEditor!.height / 2 - 360)).toBeLessThanOrEqual(1);
   await expect(editor.getByLabel("Task text")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(editor.getByRole("button", { name: "Create Task" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
   await expect(editor.getByLabel("Assignee").getByRole("option")).toHaveText([
     "Choose a Member",
@@ -1434,7 +1443,7 @@ test("separates the touch-first completion control from keyboard Task editing", 
   expect(state.taskStateRequests).toEqual([{ state: "open", taskId: "task_touch_done" }]);
 });
 
-test("completes optimistically and restores the active filtered view with five-second Undo", async ({ page }) => {
+test("keeps completion busy until success and restores the active filtered view with five-second Undo", async ({ page }) => {
   await startSignedIn(page);
   const state = await installApi(page, {
     user: signedInUser,
@@ -1470,15 +1479,22 @@ test("completes optimistically and restores the active filtered view with five-s
 
   let task = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
   await task.getByRole("checkbox", { name: "Complete Publish the Undo menu" }).click();
-  await expect.poll(() => task.count(), { timeout: 150 }).toBe(0);
+  const pendingCompletion = task.getByRole("checkbox", { name: "Completing Publish the Undo menu" });
+  await expect(task).toBeVisible();
+  await expect(pendingCompletion).toBeChecked();
+  await expect(pendingCompletion).toBeDisabled();
   await expect(page.getByRole("status", { name: "Task state update: Publish the Undo menu" })).toContainText("Completing");
-  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeFocused();
-  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 0", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "All 2", exact: true })).toBeVisible();
 
   const undoNotice = page.getByRole("status").filter({ hasText: "Publish the Undo menu" });
   await expect(undoNotice).toContainText("Undo available for 5 seconds");
+  await expect(task).toHaveCount(0);
   const undo = undoNotice.getByRole("button", { name: "Undo completion of Publish the Undo menu" });
+  await expect(undo).toBeFocused();
+  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
   task = page.getByTestId("task-card").filter({ hasText: "Publish the Undo menu" });
   await expect(task).toBeVisible();
@@ -1552,7 +1568,7 @@ test("scopes visible state-action busy controls to the affected Task", async ({ 
   expect(state.taskMutationRequests).toBe(2);
 });
 
-test("rolls back a failed optimistic state change and offers a direct retry", async ({ page }) => {
+test("keeps a failed completion truthful and offers a direct retry", async ({ page }) => {
   await startSignedIn(page);
   const state = await installApi(page, {
     user: signedInUser,
@@ -1579,10 +1595,15 @@ test("rolls back a failed optimistic state change and offers a direct retry", as
 
   const task = page.getByTestId("task-card").filter({ hasText: "Retry the failed completion" });
   await task.getByRole("checkbox", { name: "Complete Retry the failed completion" }).click();
-  await expect.poll(() => task.count(), { timeout: 100 }).toBe(0);
   await expect(task).toBeVisible();
+  const pendingCompletion = task.getByRole("checkbox", { name: "Completing Retry the failed completion" });
+  await expect(pendingCompletion).toBeChecked();
+  await expect(pendingCompletion).toBeDisabled();
   const error = page.getByRole("alert").filter({ hasText: "could not apply that change" });
   await expect(error).toBeVisible();
+  const completion = task.getByRole("checkbox", { name: "Complete Retry the failed completion" });
+  await expect(completion).not.toBeChecked();
+  await expect(completion).toBeEnabled();
   const retry = error.getByRole("button", { name: "Retry completion of Retry the failed completion" });
   await expect(retry).toBeVisible();
   await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeVisible();
@@ -2029,6 +2050,10 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   await editor.getByRole("button", { name: "Create Task" }).click();
   await expect(editor.getByRole("alert")).toContainText("1 to 2,000 characters");
   await expect(editor.getByLabel("Task text")).toHaveValue("   ");
+  await editor.getByLabel("Task text").fill("x".repeat(2_001));
+  await editor.getByRole("button", { name: "Create Task" }).click();
+  await expect(editor.getByRole("alert")).toContainText("1 to 2,000 characters");
+  expect(state.taskMutationRequests).toBe(0);
   await editor.getByLabel("Task text").fill("A valid Task");
   await editor.getByRole("button", { name: "Create Task" }).click();
   await expect(page.getByText("A valid Task")).toBeVisible();
