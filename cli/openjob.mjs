@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 
 import { parseArguments } from "./lib/arguments.mjs";
 import { apiCollection, apiRequest, apiRequestWithIdToken } from "./lib/api.mjs";
@@ -15,6 +16,36 @@ import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 import packageJson from "./package.json" with { type: "json" };
+
+/** @typedef {Map<string, string>} CommandOptions */
+/** @typedef {import("./openapi-types.ts").CurrentUserResponse} CurrentUserResponse */
+/** @typedef {import("./openapi-types.ts").ClaimUsernameRequest} ClaimUsernameRequest */
+/** @typedef {import("./openapi-types.ts").ClaimUsernameResponse} ClaimUsernameResponse */
+/** @typedef {import("./openapi-types.ts").ListGroupsResponse} ListGroupsResponse */
+/** @typedef {import("./openapi-types.ts").CreateGroupRequest} CreateGroupRequest */
+/** @typedef {import("./openapi-types.ts").CreateGroupResponse} CreateGroupResponse */
+/** @typedef {import("./openapi-types.ts").GetGroupResponse} GetGroupResponse */
+/** @typedef {import("./openapi-types.ts").RenameGroupRequest} RenameGroupRequest */
+/** @typedef {import("./openapi-types.ts").RenameGroupResponse} RenameGroupResponse */
+/** @typedef {import("./openapi-types.ts").EndGroupRequest} EndGroupRequest */
+/** @typedef {import("./openapi-types.ts").ListMembersResponse} ListMembersResponse */
+/** @typedef {import("./openapi-types.ts").PromoteMemberResponse} PromoteMemberResponse */
+/** @typedef {import("./openapi-types.ts").DemoteMemberResponse} DemoteMemberResponse */
+/** @typedef {import("./openapi-types.ts").ListBansResponse} ListBansResponse */
+/** @typedef {import("./openapi-types.ts").BanUserRequest} BanUserRequest */
+/** @typedef {import("./openapi-types.ts").BanUserResponse} BanUserResponse */
+/** @typedef {import("./openapi-types.ts").GetInviteLinkResponse} GetInviteLinkResponse */
+/** @typedef {import("./openapi-types.ts").RotateInviteLinkResponse} RotateInviteLinkResponse */
+/** @typedef {import("./openapi-types.ts").InspectInviteResponse} InspectInviteResponse */
+/** @typedef {import("./openapi-types.ts").JoinInviteResponse} JoinInviteResponse */
+/** @typedef {import("./openapi-types.ts").ListTasksResponse} ListTasksResponse */
+/** @typedef {import("./openapi-types.ts").CreateTaskRequest} CreateTaskRequest */
+/** @typedef {import("./openapi-types.ts").CreateTaskResponse} CreateTaskResponse */
+/** @typedef {import("./openapi-types.ts").GetTaskResponse} GetTaskResponse */
+/** @typedef {import("./openapi-types.ts").UpdateTaskRequest} UpdateTaskRequest */
+/** @typedef {import("./openapi-types.ts").UpdateTaskResponse} UpdateTaskResponse */
+/** @typedef {import("./openapi-types.ts").SetTaskStateRequest} SetTaskStateRequest */
+/** @typedef {import("./openapi-types.ts").SetTaskStateResponse} SetTaskStateResponse */
 
 const VERSION = packageJson.version;
 const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
@@ -33,9 +64,9 @@ const TASK_OPTIONS = new Map([
 const COMMAND_OPTIONS = new Map([
   ["auth login", new Set([...OUTPUT_OPTIONS, "--no-open"])],
   ["auth status", new Set(OUTPUT_OPTIONS)],
-  ["auth logout", new Set(OUTPUT_OPTIONS)],
+  ["auth logout", new Set([...OUTPUT_OPTIONS, "--yes"])],
   ["user show", new Set(OUTPUT_OPTIONS)],
-  ["username claim", new Set(OUTPUT_OPTIONS)],
+  ["username claim", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["group list", new Set(OUTPUT_OPTIONS)],
   ["group create", new Set([...OUTPUT_OPTIONS, "--input", "--name"])],
   ["group show", new Set(GROUP_SCOPED_OPTIONS)],
@@ -84,15 +115,17 @@ Global options:
   --help                      Show help
   --version                   Show the version`;
 
+/** @type {Record<string, string>} */
 const RESOURCE_HELP = {
   auth: `Usage:
   openjob auth login [--no-open]
   openjob auth status
-  openjob auth logout`,
+  openjob auth logout [--yes]`,
   user: `Usage:
   openjob user show`,
   username: `Usage:
-  openjob username claim <username>`,
+  openjob username claim <username>
+  openjob username claim --input <path|->`,
   group: `Usage:
   openjob group list
   openjob group create --name <name> | --input <path|->
@@ -128,10 +161,16 @@ const RESOURCE_HELP = {
   openjob task delete <task-id> [--yes]`,
 };
 
-function validateCommandOptions(resource, command, options) {
-  const allowed = resource === "task"
+/** @param {string} resource @param {string} command */
+function commandOptions(resource, command) {
+  return resource === "task"
     ? TASK_OPTIONS.get(command)
     : COMMAND_OPTIONS.get(`${resource} ${command}`);
+}
+
+/** @param {string} resource @param {string} command @param {CommandOptions} options */
+function validateCommandOptions(resource, command, options) {
+  const allowed = commandOptions(resource, command);
   if (!allowed) return;
   for (const option of options.keys()) {
     if (!allowed.has(option)) {
@@ -144,6 +183,39 @@ function validateCommandOptions(resource, command, options) {
   }
 }
 
+/** @param {string[]} rest @param {CommandOptions} options @returns {ClaimUsernameRequest} */
+function usernameMutationBody(rest, options) {
+  const hasUsername = rest.length === 1;
+  const hasInput = options.has("--input");
+  if (hasUsername === hasInput) {
+    throw new CliError(
+      "usage_error",
+      "username claim requires exactly one Username argument or --input.",
+      2,
+    );
+  }
+  if (hasInput) {
+    return /** @type {ClaimUsernameRequest} */ (readInputObject(options.get("--input")));
+  }
+  const username = rest[0];
+  return { username: username.startsWith("@") ? username.slice(1) : username };
+}
+
+/** @param {string[]} raw @param {unknown} error */
+function clearConcealedConfigGroup(raw, error) {
+  if (!(error instanceof CliError) || error.code !== "group_not_found") return;
+  const parsed = parseArguments(raw);
+  const [resource, command] = parsed.positionals;
+  if (!commandOptions(resource, command)?.has("--group")) return;
+  const selected = resolveGroup(parsed.options);
+  if (selected.source === "config") clearCurrentGroup(selected.groupId);
+}
+
+/**
+ * @param {"create" | "edit"} command
+ * @param {CommandOptions} options
+ * @returns {CreateTaskRequest | UpdateTaskRequest}
+ */
 function taskMutationBody(command, options) {
   const hasInput = options.has("--input");
   const selectedFields = TASK_FIELD_OPTIONS.filter((option) => options.has(option));
@@ -177,7 +249,7 @@ function taskMutationBody(command, options) {
   if (options.has("--text")) body.text = options.get("--text");
   if (options.has("--text-file")) body.text = readTextSource(options.get("--text-file"));
   if (options.has("--assignee")) {
-    const assignee = options.get("--assignee").replace(/^@/, "");
+    const assignee = (options.get("--assignee") ?? "").replace(/^@/, "");
     if (assignee === "unassigned") {
       throw new CliError("usage_error", "Task assignees must be Member Usernames.", 2);
     }
@@ -190,6 +262,11 @@ function taskMutationBody(command, options) {
   return body;
 }
 
+/**
+ * @param {"create" | "rename"} command
+ * @param {CommandOptions} options
+ * @returns {CreateGroupRequest | RenameGroupRequest}
+ */
 function groupNameMutationBody(command, options) {
   const hasName = options.has("--name");
   const hasInput = options.has("--input");
@@ -200,15 +277,20 @@ function groupNameMutationBody(command, options) {
       2,
     );
   }
-  return hasInput ? readInputObject(options.get("--input")) : { name: options.get("--name") };
+  return hasInput
+    ? /** @type {CreateGroupRequest | RenameGroupRequest} */ (
+        readInputObject(options.get("--input"))
+      )
+    : { name: options.get("--name") ?? "" };
 }
 
+/** @param {string} groupId @param {string} rawUsername @param {CommandOptions} options */
 async function memberByUsername(groupId, rawUsername, options) {
   const username = rawUsername.replace(/^@/, "");
-  const members = await apiCollection(
+  const members = /** @type {ListMembersResponse} */ (await apiCollection(
     `/groups/${encodeURIComponent(groupId)}/members`,
     { quiet: options.has("--quiet") },
-  );
+  ));
   const member = members.data.find((candidate) => candidate.username === username);
   if (!member) {
     throw new CliError("member_not_found", `Member @${username} was not found.`, 5);
@@ -216,6 +298,7 @@ async function memberByUsername(groupId, rawUsername, options) {
   return member;
 }
 
+/** @param {string} raw */
 function inviteToken(raw) {
   if (!raw.includes("://")) return raw;
   try {
@@ -238,6 +321,7 @@ function inviteToken(raw) {
   }
 }
 
+/** @param {string[]} raw */
 async function main(raw) {
   if (raw.length === 0 || raw.includes("--help")) {
     process.stdout.write(`${HELP}\n`);
@@ -265,13 +349,14 @@ async function main(raw) {
   validateCommandOptions(resource, command, parsed.options);
   const format = outputFormat(parsed.options);
   preflightOutput(parsed.options);
+  /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
   if (resource === "group" && command === "current" && rest.length === 0) {
     writeResult({ data: resolveGroup(parsed.options) });
     return;
   }
   if (resource === "auth" && command === "status" && rest.length === 0) {
-    const currentUser = await apiRequest("/me");
+    const currentUser = /** @type {CurrentUserResponse} */ (await apiRequest("/me"));
     writeResult(
       {
         data: {
@@ -288,31 +373,38 @@ async function main(raw) {
     const idToken = await loginWithGoogle({
       openBrowser: !parsed.options.has("--no-open"),
     });
-    const currentUser = await apiRequestWithIdToken("/me", {}, idToken);
+    const currentUser = /** @type {CurrentUserResponse} */ (
+      await apiRequestWithIdToken("/me", {}, idToken)
+    );
     writeResult(currentUser);
     return;
   }
   if (resource === "auth" && command === "logout" && rest.length === 0) {
+    await confirmDestructiveAction(
+      "Remove the stored OpenJob credential?",
+      "Non-interactive logout requires --yes.",
+      parsed.options,
+    );
     await deleteRefreshCredential();
     writeResult({ data: { signedIn: false } });
     return;
   }
   if (resource === "user" && command === "show" && rest.length === 0) {
-    writeResult(await apiRequest("/me"));
+    writeResult(/** @type {CurrentUserResponse} */ (await apiRequest("/me")));
     return;
   }
-  if (resource === "username" && command === "claim" && rest.length === 1) {
-    const username = rest[0].startsWith("@") ? rest[0].slice(1) : rest[0];
+  if (resource === "username" && command === "claim") {
+    const body = usernameMutationBody(rest, parsed.options);
     writeResult(
-      await apiRequest("/me/username", {
+      /** @type {ClaimUsernameResponse} */ (await apiRequest("/me/username", {
         method: "PUT",
-        body: JSON.stringify({ username }),
-      }),
+        body: JSON.stringify(body),
+      })),
     );
     return;
   }
   if (resource === "group" && command === "list" && rest.length === 0) {
-    writeResult(await apiCollection("/groups"));
+    writeResult(/** @type {ListGroupsResponse} */ (await apiCollection("/groups")));
     return;
   }
   if (resource === "task" && command === "list" && rest.length === 0) {
@@ -334,43 +426,48 @@ async function main(raw) {
     if (assignee !== "all") parameters.set("assignee", assignee);
     const path = `/groups/${encodeURIComponent(groupId)}/tasks?${parameters}`;
     writeResult(
-      await apiCollection(path, {
+      /** @type {ListTasksResponse} */ (await apiCollection(path, {
         limit,
         quiet: parsed.options.has("--quiet"),
-      }),
+      })),
     );
     return;
   }
   if (resource === "task" && command === "create" && rest.length === 0) {
-    const body = taskMutationBody("create", parsed.options);
+    const body = /** @type {CreateTaskRequest} */ (
+      taskMutationBody("create", parsed.options)
+    );
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiRequest(`/groups/${encodeURIComponent(groupId)}/tasks`, {
+      /** @type {CreateTaskResponse} */ (await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/tasks`, {
         method: "POST",
         body: JSON.stringify(body),
-      }),
+      })),
     );
     return;
   }
   if (resource === "task" && command === "show" && rest.length === 1) {
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiRequest(
+      /** @type {GetTaskResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
         {},
         { retryable: true, quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
   if (resource === "task" && command === "edit" && rest.length === 1) {
-    const body = taskMutationBody("edit", parsed.options);
+    const body = /** @type {UpdateTaskRequest} */ (
+      taskMutationBody("edit", parsed.options)
+    );
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiRequest(
+      /** @type {UpdateTaskResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}`,
         { method: "PATCH", body: JSON.stringify(body) },
-      ),
+      )),
     );
     return;
   }
@@ -380,15 +477,18 @@ async function main(raw) {
     rest.length === 1
   ) {
     const { groupId } = resolveGroup(parsed.options);
+    const body = /** @satisfies {SetTaskStateRequest} */ ({
+      state: command === "done" ? "done" : "open",
+    });
     writeResult(
-      await apiRequest(
+      /** @type {SetTaskStateResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/tasks/${encodeURIComponent(rest[0])}/state`,
         {
           method: "PUT",
-          body: JSON.stringify({ state: command === "done" ? "done" : "open" }),
+          body: JSON.stringify(body),
         },
         { retryable: true, quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
@@ -403,25 +503,37 @@ async function main(raw) {
     return;
   }
   if (resource === "group" && command === "create" && rest.length === 0) {
-    const body = groupNameMutationBody("create", parsed.options);
+    const body = /** @type {CreateGroupRequest} */ (
+      groupNameMutationBody("create", parsed.options)
+    );
     writeResult(
-      await apiRequest("/groups", { method: "POST", body: JSON.stringify(body) }),
+      /** @type {CreateGroupResponse} */ (await apiRequest("/groups", {
+        method: "POST",
+        body: JSON.stringify(body),
+      })),
     );
     return;
   }
   if (resource === "group" && command === "show" && rest.length === 0) {
     const { groupId } = resolveGroup(parsed.options);
-    writeResult(await apiRequest(`/groups/${encodeURIComponent(groupId)}`));
+    writeResult(
+      /** @type {GetGroupResponse} */ (
+        await apiRequest(`/groups/${encodeURIComponent(groupId)}`)
+      ),
+    );
     return;
   }
   if (resource === "group" && command === "rename" && rest.length === 0) {
-    const body = groupNameMutationBody("rename", parsed.options);
+    const body = /** @type {RenameGroupRequest} */ (
+      groupNameMutationBody("rename", parsed.options)
+    );
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiRequest(`/groups/${encodeURIComponent(groupId)}`, {
+      /** @type {RenameGroupResponse} */ (await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
-      }),
+      })),
     );
     return;
   }
@@ -443,17 +555,18 @@ async function main(raw) {
     const { groupId } = resolveGroup(parsed.options);
     let groupName;
     if (inputIsInteractive()) {
-      const group = await apiRequest(
+      const group = /** @type {GetGroupResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}`,
         {},
         { retryable: true, quiet: parsed.options.has("--quiet") },
-      );
+      ));
       groupName = group.data.name;
     }
     const confirmationName = await confirmGroupEnd(groupName, parsed.options);
+    const body = /** @satisfies {EndGroupRequest} */ ({ confirmationName });
     await apiRequest(`/groups/${encodeURIComponent(groupId)}/actions/end`, {
       method: "POST",
-      body: JSON.stringify({ confirmationName }),
+      body: JSON.stringify(body),
     });
     clearCurrentGroup(groupId);
     writeResult({ data: { resource: "group", groupId, deleted: true } });
@@ -462,10 +575,10 @@ async function main(raw) {
   if (resource === "member" && command === "list" && rest.length === 0) {
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiCollection(
+      /** @type {ListMembersResponse} */ (await apiCollection(
         `/groups/${encodeURIComponent(groupId)}/members`,
         { quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
@@ -484,9 +597,11 @@ async function main(raw) {
       );
     }
     const member = await memberByUsername(groupId, username, parsed.options);
-    const result = await apiRequest(
+    const result = /** @type {PromoteMemberResponse | DemoteMemberResponse | null} */ (
+      await apiRequest(
       `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(member.userId)}/actions/${command}`,
       { method: "POST" },
+      )
     );
     writeResult(
       command === "kick"
@@ -506,10 +621,10 @@ async function main(raw) {
   if (resource === "ban" && command === "list" && rest.length === 0) {
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiCollection(
+      /** @type {ListBansResponse} */ (await apiCollection(
         `/groups/${encodeURIComponent(groupId)}/bans`,
         { quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
@@ -533,18 +648,19 @@ async function main(raw) {
       "Non-interactive banning requires --yes.",
       parsed.options,
     );
-    const body = inputPath
+    const body = /** @type {BanUserRequest} */ (inputPath
       ? readInputObject(inputPath)
       : {
           userId: username
             ? (await memberByUsername(groupId, username, parsed.options)).userId
             : selectedUserId,
-        };
+        });
     writeResult(
-      await apiRequest(`/groups/${encodeURIComponent(groupId)}/bans/actions/ban`, {
+      /** @type {BanUserResponse} */ (await apiRequest(
+        `/groups/${encodeURIComponent(groupId)}/bans/actions/ban`, {
         method: "POST",
         body: JSON.stringify(body),
-      }),
+      })),
     );
     return;
   }
@@ -561,11 +677,11 @@ async function main(raw) {
   if (resource === "invite" && command === "show" && rest.length === 0) {
     const { groupId } = resolveGroup(parsed.options);
     writeResult(
-      await apiRequest(
+      /** @type {GetInviteLinkResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/invite-link`,
         {},
         { retryable: true, quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
@@ -577,10 +693,10 @@ async function main(raw) {
       parsed.options,
     );
     writeResult(
-      await apiRequest(
+      /** @type {RotateInviteLinkResponse} */ (await apiRequest(
         `/groups/${encodeURIComponent(groupId)}/invite-link/actions/rotate`,
         { method: "POST" },
-      ),
+      )),
     );
     return;
   }
@@ -592,11 +708,11 @@ async function main(raw) {
     const token = inviteToken(rest[0]);
     const action = command === "join" ? "/actions/join" : "";
     writeResult(
-      await apiRequest(
+      /** @type {InspectInviteResponse | JoinInviteResponse} */ (await apiRequest(
         `/invites/${encodeURIComponent(token)}${action}`,
         command === "join" ? { method: "POST" } : {},
         { retryable: true, quiet: parsed.options.has("--quiet") },
-      ),
+      )),
     );
     return;
   }
@@ -610,12 +726,18 @@ async function main(raw) {
   throw new CliError("usage_error", "Unknown command. Run openjob --help.", 2);
 }
 
+const raw = process.argv.slice(2);
 try {
-  await main(process.argv.slice(2));
+  await main(raw);
 } catch (error) {
   let format = "table";
   try {
-    format = outputFormat(parseArguments(process.argv.slice(2)).options);
+    format = outputFormat(parseArguments(raw).options);
   } catch {}
+  try {
+    clearConcealedConfigGroup(raw, error);
+  } catch (clearError) {
+    error = clearError;
+  }
   reportError(error, format);
 }
