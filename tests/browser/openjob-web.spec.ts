@@ -1056,7 +1056,7 @@ test("accepts an 80-character Unicode Group Name from the service", async ({ pag
 
 test("switches Groups and exposes role-appropriate actions from compact signed-in menus", async ({ page }) => {
   await startSignedIn(page);
-  await installApi(page, { user: signedInUser, groups: [walkerLabs, openJobCore] });
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs, openJobCore] });
   await page.goto("/");
 
   await expect(page.getByTestId("group-rail")).toHaveCount(0);
@@ -1071,6 +1071,24 @@ test("switches Groups and exposes role-appropriate actions from compact signed-i
   await openGroupMenu(page);
   await expect(page.getByRole("button", { name: "New Group" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manage Group" })).toBeVisible();
+  await page.getByRole("button", { name: "New Group" }).click();
+  const groupDialog = page.getByRole("dialog", { name: "Create a Group" });
+  for (const control of await groupDialog.locator("button:visible, input:visible").all()) {
+    const box = await control.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  await groupDialog.getByRole("button", { name: "Cancel" }).click();
+  state.getGroupFailureStatus = 500;
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "OpenJob Core", exact: true }).click();
+  const retry = page.getByRole("alert").getByRole("button", { name: "Try again" });
+  const retryBox = await retry.boundingBox();
+  expect(retryBox!.width).toBeGreaterThanOrEqual(44);
+  expect(retryBox!.height).toBeGreaterThanOrEqual(44);
+  state.getGroupFailureStatus = null;
+  await retry.click();
+  await openGroupMenu(page);
   await page.getByRole("button", { name: "OpenJob Core", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "OpenJob Core", exact: true })).toBeVisible();
@@ -1323,7 +1341,7 @@ test("renders status-filtered Member sections with truthful counts and ordering"
 
 test("opens one shared Task editor from global and Member actions", async ({ page }) => {
   await startSignedIn(page);
-  await installApi(page, {
+  const state = await installApi(page, {
     user: signedInUser,
     groups: [walkerLabs],
     members: [
@@ -1364,7 +1382,12 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await memberAddTask.click();
   editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
-  await editor.getByRole("button", { name: "Cancel" }).click();
+  await editor.getByLabel("Task text").fill("Keep focus trapped while saving");
+  state.taskMutationDelayMs = 300;
+  await editor.getByRole("button", { name: "Create Task" }).click();
+  await expect(editor.getByRole("button", { name: "Saving…" })).toBeDisabled();
+  await page.keyboard.press("Tab");
+  await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor).toHaveCount(0);
   await expect(memberAddTask).toBeFocused();
 });
@@ -1433,8 +1456,13 @@ test("separates the touch-first completion control from keyboard Task editing", 
   expect(reopenBox!.height).toBeGreaterThanOrEqual(44);
   state.taskMutationDelayMs = 150;
   await reopen.click();
-  await expect(doneTask).toHaveCount(0);
+  const pendingReopen = doneTask.getByRole("button", { name: "Reopening Archive the old menu" });
+  await expect(doneTask).toBeVisible();
+  await expect(pendingReopen).toBeDisabled();
   await expect(page.getByRole("status", { name: "Task state update: Archive the old menu" })).toContainText("Reopening");
+  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
+  await expect(doneTask).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
   const emptyDoneFilter = page.getByRole("button", { name: "Done 0", exact: true });
   await expect(emptyDoneFilter).toBeFocused();
@@ -1503,7 +1531,10 @@ test("keeps completion busy until success and restores the active filtered view 
   await undo.click();
   await expect(undo).toBeDisabled();
   await expect(undoNotice).toContainText("Undoing…");
-  await expect.poll(() => task.count(), { timeout: 100 }).toBe(0);
+  await expect(task).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done 1", exact: true })).toBeVisible();
+  await expect(task).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open 2", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Done 0", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open 2", exact: true }).click();

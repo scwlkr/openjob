@@ -72,6 +72,12 @@ function taskFormInput(task: Task): TaskFormInput {
   };
 }
 
+function editorFormInput(editor: Editor): TaskFormInput {
+  return editor.mode === "new"
+    ? { text: "", assigneeUsername: editor.username, dueDate: "" }
+    : taskFormInput(editor.task);
+}
+
 function loadMessage(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 403) return "You no longer have permission to view this Task List.";
@@ -269,9 +275,7 @@ export function TaskList({
     editorOpener.current = opener;
     window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
     setEditor(nextEditor);
-    setEditorInput(nextEditor.mode === "new"
-      ? { text: "", assigneeUsername: nextEditor.username, dueDate: "" }
-      : taskFormInput(nextEditor.task));
+    setEditorInput(editorFormInput(nextEditor));
     setActionError("");
   }, []);
 
@@ -293,10 +297,16 @@ export function TaskList({
       const first = controls[0];
       const last = controls.at(-1);
       if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
+      const activeControl = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      if (!activeControl || !controls.includes(activeControl)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && activeControl === first) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && activeControl === last) {
         event.preventDefault();
         first.focus();
       }
@@ -529,16 +539,6 @@ export function TaskList({
     startTaskStateAction(task.taskId, taskAction);
     clearTaskStateFailure(task.taskId);
     setActionError("");
-    const optimisticTask: Task = {
-      ...task,
-      state: desiredState,
-      completedAt: desiredState === "done" ? task.completedAt ?? new Date().toISOString() : null,
-    };
-    if (taskAction !== "complete") {
-      setTasks((current) => current.map((candidate) =>
-        candidate.taskId === task.taskId ? optimisticTask : candidate,
-      ));
-    }
     restoreTaskStateFocus(task.taskId);
     try {
       const token = await session.getIdToken();
@@ -558,9 +558,6 @@ export function TaskList({
         ));
       }
     } catch (mutationError) {
-      setTasks((current) => current.map((candidate) =>
-        candidate.taskId === task.taskId ? task : candidate,
-      ));
       if (!(await onSessionExpired(mutationError))) {
         setTaskStateFailures((current) => ({
           ...current,
@@ -628,6 +625,9 @@ export function TaskList({
       </div>
     );
   }
+  const displayedEditorInput = editor === null
+    ? null
+    : editorInput ?? editorFormInput(editor);
 
   return (
     <section className={styles.taskList} aria-label="Task List">
@@ -837,15 +837,9 @@ export function TaskList({
             <TaskForm
               busyAction={editorAction}
               error={actionError}
-              initialAssignee={
-                editorInput?.assigneeUsername ?? (editor.mode === "new"
-                  ? editor.username
-                  : editor.task.assignee.state === "assigned"
-                    ? editor.task.assignee.username
-                    : "")
-              }
-              initialDueDate={editorInput?.dueDate ?? (editor.mode === "new" ? "" : editor.task.dueDate ?? "")}
-              initialText={editorInput?.text ?? (editor.mode === "new" ? "" : editor.task.text)}
+              initialAssignee={displayedEditorInput?.assigneeUsername ?? ""}
+              initialDueDate={displayedEditorInput?.dueDate ?? ""}
+              initialText={displayedEditorInput?.text ?? ""}
               members={namedMembers}
               mode={editor.mode}
               onCancel={closeEditor}
