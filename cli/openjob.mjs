@@ -18,7 +18,7 @@ import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
 const VERSION = "0.0.5";
 const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
 const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
-const TASK_COMMON_OPTIONS = ["--format", "--force", "--group", "--out", "--quiet"];
+const TASK_COMMON_OPTIONS = GROUP_SCOPED_OPTIONS;
 const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--due"];
 const TASK_OPTIONS = new Map([
   ["list", new Set([...TASK_COMMON_OPTIONS, "--status", "--assignee", "--limit"])],
