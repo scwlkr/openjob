@@ -1,5 +1,6 @@
 const NOTIFICATION_DATABASE = "openjob-notifications";
 const INSTALLATION_STORE = "installation-state";
+const PENDING_LAUNCH_RECORD = "pending-launch";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -39,6 +40,38 @@ function readInstallationState() {
       };
     } catch {
       resolve(null);
+    }
+  });
+}
+
+function writePendingLaunch(groupId) {
+  return new Promise((resolve, reject) => {
+    try {
+      const request = indexedDB.open(NOTIFICATION_DATABASE, 1);
+      request.onerror = () => reject(request.error);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(INSTALLATION_STORE)) {
+          request.result.createObjectStore(INSTALLATION_STORE);
+        }
+      };
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(INSTALLATION_STORE, "readwrite");
+        transaction.objectStore(INSTALLATION_STORE).put(
+          { groupId },
+          PENDING_LAUNCH_RECORD,
+        );
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => {
+          database.close();
+          reject(transaction.error);
+        };
+      };
+    } catch (error) {
+      reject(error);
     }
   });
 }
@@ -121,6 +154,7 @@ async function selectNotificationGroup(notification) {
   ) {
     return;
   }
+  await writePendingLaunch(groupId).catch(() => undefined);
   const windows = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,

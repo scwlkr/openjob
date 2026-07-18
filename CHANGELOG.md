@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- Notification taps reliably select their Group when an installed iPhone or iPad app is launching or resuming.
+
 ### Security
 
 ## [0.3.0] - 2026-07-18

@@ -167,6 +167,34 @@ test("the notification worker displays only matching recipient payloads with Tas
 test("notification selection focuses an existing OpenJob client or opens the Group launch target", async () => {
   const listeners = new Map();
   const calls = [];
+  const records = new Map();
+  const indexedDB = {
+    open() {
+      const request = {};
+      queueMicrotask(() => {
+        request.result = {
+          close() {},
+          objectStoreNames: { contains: () => true },
+          transaction() {
+            const transaction = {
+              objectStore() {
+                return {
+                  put(value, key) {
+                    records.set(key, value);
+                    calls.push({ pendingLaunch: { key, value } });
+                  },
+                };
+              },
+            };
+            queueMicrotask(() => transaction.oncomplete?.());
+            return transaction;
+          },
+        };
+        request.onsuccess?.();
+      });
+      return request;
+    },
+  };
   let windows = [{
     async navigate(target) { calls.push({ navigate: target }); return this; },
     async focus() { calls.push("focus"); },
@@ -181,7 +209,7 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
     },
     skipWaiting() {},
   };
-  vm.runInNewContext(await workerSource(), { self });
+  vm.runInNewContext(await workerSource(), { indexedDB, queueMicrotask, self });
 
   async function click() {
     let completion;
@@ -201,6 +229,10 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
   await click();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     "close",
+    { pendingLaunch: {
+      key: "pending-launch",
+      value: { groupId: "grp_notifications" },
+    } },
     { options: { type: "window", includeUncontrolled: true } },
     { navigate: "/?notification-group=grp_notifications" },
     "focus",
@@ -215,6 +247,10 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
   await click();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     "close",
+    { pendingLaunch: {
+      key: "pending-launch",
+      value: { groupId: "grp_notifications" },
+    } },
     { options: { type: "window", includeUncontrolled: true } },
     { openWindow: "/?notification-group=grp_notifications" },
   ]);
