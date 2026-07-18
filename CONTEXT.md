@@ -36,6 +36,10 @@ _Avoid_: Task owner, author
 A User-enabled alert that can appear outside the active OpenJob app when a relevant Task event matters to that User. It is an ephemeral alert, not a durable inbox item.
 _Avoid_: In-app notification, Notification inbox
 
+**Notification Subscription**:
+A User-approved link between one OpenJob installation and one User that allows Push Notifications. Signing out pauses delivery without discarding it; returning as the same User resumes it.
+_Avoid_: Session, notification preference
+
 **Priority**:
 A Task's primary relative order within one assignee's open work: High before Normal before Low, then due date within each level. Every Task has exactly one Priority; Normal is the default, and completed work remains completion-ordered.
 _Avoid_: Urgency, severity
