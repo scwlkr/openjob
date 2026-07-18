@@ -130,8 +130,10 @@ async function selectNotificationGroup(notification) {
     return;
   }
   const client = windows[0];
-  await client.focus();
-  client.postMessage({
+  const navigatedClient = await client.navigate(launchTarget);
+  const targetClient = navigatedClient ?? client;
+  await targetClient.focus();
+  targetClient.postMessage({
     type: "openjob:select-notification-group",
     groupId,
   });
