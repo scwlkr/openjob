@@ -14,6 +14,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- Production release smoke preserves pre-existing User Groups while proving pagination.
+
 ### Security
 
 ## [0.2.0] - 2026-07-17
