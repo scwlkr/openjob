@@ -77,6 +77,55 @@ export async function runV1AcceptanceScenario({
 
   const initialAdmin = await claimIdentity("initialAdmin", proposedUsernames.initialAdmin);
   const memberUser = await claimIdentity("memberUser", proposedUsernames.memberUser);
+  const installationId = "installation_backend_acceptance_01";
+  const notificationContractPath =
+    "/api/v1/me/notification-subscriptions/{installationId}";
+  const notificationPath =
+    `/api/v1/me/notification-subscriptions/${installationId}`;
+  const capability = {
+    endpoint: "https://push.example.test/subscriptions/backend-acceptance-capability",
+    keys: {
+      p256dh: "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+      auth: "auth_0123456789abcdef",
+    },
+  };
+  await expectError({
+    actor: "initialAdmin",
+    contractPath: notificationContractPath,
+    method: "GET",
+    path: notificationPath,
+    status: 404,
+  });
+  await expectSuccess({
+    actor: "initialAdmin",
+    body: capability,
+    contractPath: notificationContractPath,
+    method: "PUT",
+    path: notificationPath,
+    status: 200,
+  });
+  await expectSuccess({
+    actor: "initialAdmin",
+    contractPath: notificationContractPath,
+    method: "GET",
+    path: notificationPath,
+    status: 200,
+  });
+  await expectError({
+    actor: "memberUser",
+    contractPath: notificationContractPath,
+    method: "GET",
+    path: notificationPath,
+    status: 404,
+  });
+  await expectSuccess({
+    actor: "initialAdmin",
+    body: { state: "paused" },
+    contractPath: notificationContractPath,
+    method: "PATCH",
+    path: notificationPath,
+    status: 200,
+  });
   const groupName = `OpenJob backend acceptance ${Date.now()}`;
   const group = await expectSuccess({
     actor: "initialAdmin",
@@ -452,6 +501,9 @@ export async function runV1AcceptanceScenario({
   const unauthenticatedExamples = [
     ["GET", "/api/v1/me", "/api/v1/me", undefined, "invalid"],
     ["PUT", "/api/v1/me/username", "/api/v1/me/username", { username: initialAdmin.username }],
+    ["GET", notificationContractPath, notificationPath],
+    ["PUT", notificationContractPath, notificationPath, capability],
+    ["PATCH", notificationContractPath, notificationPath, { state: "paused" }],
     ["GET", "/api/v1/groups", "/api/v1/groups"],
     ["POST", "/api/v1/groups", "/api/v1/groups", { name: "Denied" }],
     ["GET", "/api/v1/groups/{groupId}", groupPath],

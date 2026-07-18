@@ -16,6 +16,7 @@ servers:
     description: Hosted OpenJob service
 tags:
   - name: Identity
+  - name: Notifications
   - name: Groups
   - name: Membership
   - name: Invite Links
@@ -66,6 +67,82 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/UsernameConflictResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
+  /api/v1/me/notification-subscriptions/{installationId}:
+    parameters:
+      - $ref: "#/components/parameters/InstallationId"
+    get:
+      tags: [Notifications]
+      summary: Read this installation's Notification Subscription state
+      description: |
+        Returns only active or paused state when this installation belongs to
+        the authenticated User. Push endpoint and encryption-key capabilities
+        are never returned. Missing and differently owned installations use the
+        same concealed response.
+      operationId: getNotificationSubscription
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/NotificationSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/NotificationSubscriptionNotFoundResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    put:
+      tags: [Notifications]
+      summary: Register or refresh this installation's Notification Subscription
+      description: |
+        Registers one bounded browser Push capability, makes delivery active,
+        and associates the opaque installation with the authenticated User. An
+        explicit PUT may reassign an installation from a previous User. The
+        response never echoes endpoint or encryption-key capability data.
+      operationId: registerNotificationSubscription
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/RegisterNotificationSubscriptionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NotificationSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+    patch:
+      tags: [Notifications]
+      summary: Activate or pause this installation's Notification Subscription
+      description: |
+        Changes delivery state for an installation already owned by the current
+        User. Pausing retains the browser Push capability and permission.
+      operationId: setNotificationSubscriptionState
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/SetNotificationSubscriptionStateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NotificationSubscriptionResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "404":
+          $ref: "#/components/responses/NotificationSubscriptionNotFoundResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -718,6 +795,14 @@ components:
         every request.
 
   parameters:
+    InstallationId:
+      name: installationId
+      in: path
+      required: true
+      description: Opaque browser-installation identity generated and retained locally.
+      schema:
+        $ref: "#/components/schemas/InstallationId"
+      example: installation_0123456789abcdef
     GroupId:
       name: groupId
       in: path
@@ -794,6 +879,27 @@ components:
       example: maya
 
   requestBodies:
+    RegisterNotificationSubscriptionRequest:
+      description: Bounded serialized browser Push subscription capability.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PushSubscriptionInput"
+          example:
+            endpoint: https://push.example.test/subscriptions/example-capability
+            keys:
+              p256dh: p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG
+              auth: auth_0123456789abcdef
+    SetNotificationSubscriptionStateRequest:
+      description: Desired delivery state; pausing retains the browser capability.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotificationSubscriptionStateInput"
+          example:
+            state: paused
     ClaimUsernameRequest:
       description: Immutable Username claim.
       required: true
@@ -876,6 +982,16 @@ components:
             state: done
 
   responses:
+    NotificationSubscriptionResponse:
+      description: Redacted installation state without Push capability data.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotificationSubscriptionEnvelope"
+          example:
+            data:
+              installationId: installation_0123456789abcdef
+              state: active
     CurrentUserResponse:
       description: Authenticated User and accessible Groups.
       content:
@@ -1126,6 +1242,19 @@ components:
               code: group_not_found
               message: Group was not found.
               requestId: req_01J0GROUP404
+    NotificationSubscriptionNotFoundResponse:
+      description: |
+        Notification Subscription is missing or belongs to another User. The
+        same response prevents installation-ownership discovery.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotificationSubscriptionNotFoundErrorEnvelope"
+          example:
+            error:
+              code: notification_subscription_not_found
+              message: Notification Subscription was not found.
+              requestId: req_01J0NOTIFY404
     ConcealedGroupOrMemberNotFoundResponse:
       description: Group is inaccessible or the target is not a current Member; no private Group details are disclosed.
       content:
@@ -1323,6 +1452,12 @@ components:
               requestId: req_01J0INTERNAL
 
   schemas:
+    InstallationId:
+      type: string
+      minLength: 16
+      maxLength: 128
+      pattern: '^[A-Za-z0-9_-]+$'
+      description: Opaque installation identifier with no User information.
     UserId:
       type: string
       minLength: 1
@@ -1388,6 +1523,53 @@ components:
       type: string
       enum: [high, normal, low]
       default: normal
+    NotificationSubscriptionState:
+      type: string
+      enum: [active, paused]
+
+    PushSubscriptionKeysInput:
+      type: object
+      additionalProperties: false
+      required: [p256dh, auth]
+      properties:
+        p256dh:
+          type: string
+          minLength: 43
+          maxLength: 128
+          pattern: '^[A-Za-z0-9_-]+$'
+        auth:
+          type: string
+          minLength: 16
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_-]+$'
+    PushSubscriptionInput:
+      type: object
+      additionalProperties: false
+      required: [endpoint, keys]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: '^https://'
+        keys:
+          $ref: "#/components/schemas/PushSubscriptionKeysInput"
+    NotificationSubscriptionStateInput:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/NotificationSubscriptionState"
+    NotificationSubscription:
+      type: object
+      additionalProperties: false
+      required: [installationId, state]
+      properties:
+        installationId:
+          $ref: "#/components/schemas/InstallationId"
+        state:
+          $ref: "#/components/schemas/NotificationSubscriptionState"
 
     AssignedAssignee:
       type: object
@@ -1576,6 +1758,7 @@ components:
         - ban_not_found
         - task_not_found
         - invite_not_found
+        - notification_subscription_not_found
         - username_taken
         - username_immutable
         - username_required
@@ -1700,6 +1883,14 @@ components:
               properties:
                 code:
                   const: invite_not_found
+    NotificationSubscriptionNotFoundErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: notification_subscription_not_found
     UsernameConflictErrorEnvelope:
       allOf:
         - $ref: "#/components/schemas/ErrorEnvelope"
@@ -1804,6 +1995,13 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/CurrentUser"
+    NotificationSubscriptionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/NotificationSubscription"
     GroupEnvelope:
       type: object
       additionalProperties: false

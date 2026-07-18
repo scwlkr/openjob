@@ -1,10 +1,12 @@
 import {
   ApiError,
   type Ban,
+  type BrowserPushSubscription,
   type Group,
   type InviteLink,
   type InvitePreview,
   type Member,
+  type NotificationSubscriptionState,
   type OpenJobApi,
   type Task,
   type User,
@@ -264,6 +266,36 @@ export function createOpenJobApi(): OpenJobApi {
         token,
         { method: "DELETE" },
       );
+    },
+
+    async getNotificationSubscription(token, installationId) {
+      const response = await request<{ data: NotificationSubscriptionState }>(
+        `/api/v1/me/notification-subscriptions/${encodeURIComponent(installationId)}`,
+        token,
+      );
+      return response.data;
+    },
+
+    async registerNotificationSubscription(
+      token,
+      installationId,
+      subscription: BrowserPushSubscription,
+    ) {
+      const response = await request<{ data: NotificationSubscriptionState }>(
+        `/api/v1/me/notification-subscriptions/${encodeURIComponent(installationId)}`,
+        token,
+        { method: "PUT", body: JSON.stringify(subscription) },
+      );
+      return response.data;
+    },
+
+    async setNotificationSubscriptionState(token, installationId, state) {
+      const response = await request<{ data: NotificationSubscriptionState }>(
+        `/api/v1/me/notification-subscriptions/${encodeURIComponent(installationId)}`,
+        token,
+        { method: "PATCH", body: JSON.stringify({ state }) },
+      );
+      return response.data;
     },
   });
 }
