@@ -50,6 +50,16 @@ export type Task = {
   completedAt: string | null;
 };
 
+export type NotificationSubscriptionState = {
+  installationId: string;
+  state: "active" | "paused";
+};
+
+export type BrowserPushSubscription = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+};
+
 export type AuthSession = { getIdToken(): Promise<string> };
 
 export type OpenJobAuth = {
@@ -114,6 +124,20 @@ export type OpenJobApi = {
     state: "open" | "done",
   ): Promise<Task>;
   deleteTask(token: string, groupId: string, taskId: string): Promise<void>;
+  getNotificationSubscription(
+    token: string,
+    installationId: string,
+  ): Promise<NotificationSubscriptionState>;
+  registerNotificationSubscription(
+    token: string,
+    installationId: string,
+    subscription: BrowserPushSubscription,
+  ): Promise<NotificationSubscriptionState>;
+  setNotificationSubscriptionState(
+    token: string,
+    installationId: string,
+    state: "active" | "paused",
+  ): Promise<NotificationSubscriptionState>;
 };
 
 export class ApiError extends Error {

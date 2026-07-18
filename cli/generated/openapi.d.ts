@@ -48,6 +48,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/notification-subscriptions/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque browser-installation identity generated and retained locally.
+                 * @example installation_0123456789abcdef
+                 */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read this installation's Notification Subscription state
+         * @description Returns only active or paused state when this installation belongs to
+         *     the authenticated User. Push endpoint and encryption-key capabilities
+         *     are never returned. Missing and differently owned installations use the
+         *     same concealed response.
+         */
+        get: operations["getNotificationSubscription"];
+        /**
+         * Register or refresh this installation's Notification Subscription
+         * @description Registers one bounded browser Push capability, makes delivery active,
+         *     and associates the opaque installation with the authenticated User. An
+         *     explicit PUT may reassign an installation from a previous User. The
+         *     response never echoes endpoint or encryption-key capability data.
+         */
+        put: operations["registerNotificationSubscription"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Activate or pause this installation's Notification Subscription
+         * @description Changes delivery state for an installation already owned by the current
+         *     User. Pausing retains the browser Push capability and permission.
+         */
+        patch: operations["setNotificationSubscriptionState"];
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -601,6 +642,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Opaque installation identifier with no User information. */
+        InstallationId: string;
         /** @description Canonical opaque OpenJob User ID derived from verified Firebase identity. */
         UserId: string;
         /** @description Immutable, opaque, never-reused Group ID. */
@@ -646,6 +689,24 @@ export interface components {
          * @enum {string}
          */
         TaskPriority: "high" | "normal" | "low";
+        /** @enum {string} */
+        NotificationSubscriptionState: "active" | "paused";
+        PushSubscriptionKeysInput: {
+            p256dh: string;
+            auth: string;
+        };
+        PushSubscriptionInput: {
+            /** Format: uri */
+            endpoint: string;
+            keys: components["schemas"]["PushSubscriptionKeysInput"];
+        };
+        NotificationSubscriptionStateInput: {
+            state: components["schemas"]["NotificationSubscriptionState"];
+        };
+        NotificationSubscription: {
+            installationId: components["schemas"]["InstallationId"];
+            state: components["schemas"]["NotificationSubscriptionState"];
+        };
         AssignedAssignee: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -733,7 +794,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "invalid_request" | "authentication_required" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "invalid_request" | "authentication_required" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -806,6 +867,12 @@ export interface components {
             error?: {
                 /** @constant */
                 code?: "invite_not_found";
+            };
+        };
+        NotificationSubscriptionNotFoundErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @constant */
+                code?: "notification_subscription_not_found";
             };
         };
         UsernameConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
@@ -883,6 +950,9 @@ export interface components {
         CurrentUserEnvelope: {
             data: components["schemas"]["CurrentUser"];
         };
+        NotificationSubscriptionEnvelope: {
+            data: components["schemas"]["NotificationSubscription"];
+        };
         GroupEnvelope: {
             data: components["schemas"]["Group"];
         };
@@ -947,6 +1017,23 @@ export interface components {
         };
     };
     responses: {
+        /** @description Redacted installation state without Push capability data. */
+        NotificationSubscriptionResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": {
+                 *         "installationId": "installation_0123456789abcdef",
+                 *         "state": "active"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["NotificationSubscriptionEnvelope"];
+            };
+        };
         /** @description Authenticated User and accessible Groups. */
         CurrentUserResponse: {
             headers: {
@@ -1269,6 +1356,27 @@ export interface components {
                 "application/json": components["schemas"]["GroupNotFoundErrorEnvelope"];
             };
         };
+        /**
+         * @description Notification Subscription is missing or belongs to another User. The
+         *     same response prevents installation-ownership discovery.
+         */
+        NotificationSubscriptionNotFoundResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "notification_subscription_not_found",
+                 *         "message": "Notification Subscription was not found.",
+                 *         "requestId": "req_01J0NOTIFY404"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["NotificationSubscriptionNotFoundErrorEnvelope"];
+            };
+        };
         /** @description Group is inaccessible or the target is not a current Member; no private Group details are disclosed. */
         ConcealedGroupOrMemberNotFoundResponse: {
             headers: {
@@ -1583,6 +1691,11 @@ export interface components {
     };
     parameters: {
         /**
+         * @description Opaque browser-installation identity generated and retained locally.
+         * @example installation_0123456789abcdef
+         */
+        InstallationId: components["schemas"]["InstallationId"];
+        /**
          * @description Immutable, opaque, never-reused Group ID.
          * @example grp_acme_ops
          */
@@ -1625,6 +1738,32 @@ export interface components {
         TaskAssignee: "unassigned" | components["schemas"]["Username"];
     };
     requestBodies: {
+        /** @description Bounded serialized browser Push subscription capability. */
+        RegisterNotificationSubscriptionRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "endpoint": "https://push.example.test/subscriptions/example-capability",
+                 *       "keys": {
+                 *         "p256dh": "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+                 *         "auth": "auth_0123456789abcdef"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["PushSubscriptionInput"];
+            };
+        };
+        /** @description Desired delivery state; pausing retains the browser capability. */
+        SetNotificationSubscriptionStateRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "state": "paused"
+                 *     }
+                 */
+                "application/json": components["schemas"]["NotificationSubscriptionStateInput"];
+            };
+        };
         /** @description Immutable Username claim. */
         ClaimUsernameRequest: {
             content: {
@@ -1753,6 +1892,74 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["UsernameConflictResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    getNotificationSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque browser-installation identity generated and retained locally.
+                 * @example installation_0123456789abcdef
+                 */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["NotificationSubscriptionResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    registerNotificationSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque browser-installation identity generated and retained locally.
+                 * @example installation_0123456789abcdef
+                 */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RegisterNotificationSubscriptionRequest"];
+        responses: {
+            200: components["responses"]["NotificationSubscriptionResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    setNotificationSubscriptionState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque browser-installation identity generated and retained locally.
+                 * @example installation_0123456789abcdef
+                 */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SetNotificationSubscriptionStateRequest"];
+        responses: {
+            200: components["responses"]["NotificationSubscriptionResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

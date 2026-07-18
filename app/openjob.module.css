@@ -186,6 +186,13 @@
 .taskLoadError p { margin: 0 0 14px; color: #74221c; }
 .taskLoadError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--blue); padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
 .notice, .errorBanner, .updateBanner { width: min(calc(100% - 24px), 1120px); margin: 18px auto 24px; padding: 13px 16px; font-size: 13px; }
+.notificationInvitation { display: flex; align-items: center; justify-content: space-between; gap: 22px; width: min(calc(100% - 24px), 1120px); margin: 18px auto 24px; border: 1px solid var(--ink); background: var(--paper-light); padding: 18px; box-shadow: 6px 6px 0 var(--blue); }
+.notificationInvitation h2 { margin: 5px 0 0; font-size: 24px; letter-spacing: -.04em; }
+.notificationInvitation p:not(.kicker) { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.notificationActions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 22px; }
+.notificationInvitation .notificationActions { flex: 0 0 auto; margin-top: 0; }
+.notificationDialog > p:not(.kicker) { color: var(--muted); line-height: 1.5; }
+.notificationDialog .notificationStatus { margin-top: 18px; color: var(--ink); }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
 .errorBanner button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
@@ -274,6 +281,9 @@
   .governanceGrid { grid-template-columns: minmax(0, 1fr); }
   .governanceCard { padding: 16px; }
   .governanceRow { align-items: start; flex-direction: column; }
+  .notificationInvitation { align-items: stretch; flex-direction: column; }
+  .notificationInvitation .notificationActions { justify-content: stretch; }
+  .notificationInvitation .notificationActions button { flex: 1; }
   .rowActions { justify-content: flex-start; }
 }
 

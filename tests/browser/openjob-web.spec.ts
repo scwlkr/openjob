@@ -68,6 +68,13 @@ type ApiState = {
   hangTasks: boolean;
   membershipDenied: boolean;
   taskMutationDelayMs: number;
+  notificationSubscription: {
+    installationId: string;
+    userId: string;
+    state: "active" | "paused";
+    capability: { endpoint: string; keys: { p256dh: string; auth: string } };
+  } | null;
+  notificationRequests: { method: string; userId: string }[];
 };
 
 const signedInUser = {
@@ -145,9 +152,121 @@ async function expectNoHorizontalOverflow(page: Page) {
   )).toBe(true);
 }
 
+async function installNotificationEnvironment(
+  page: Page,
+  options: {
+    permission?: "default" | "denied" | "granted";
+    permissionResult?: "denied" | "granted";
+    supported?: boolean;
+    ios?: boolean;
+    standalone?: boolean;
+  } = {},
+) {
+  await page.addInitScript((settings) => {
+    const testState = {
+      permissionCalls: 0,
+      subscribeCalls: 0,
+      subscription: null as PushSubscription | null,
+    };
+    Object.defineProperty(window, "__openjobNotificationTest", {
+      configurable: true,
+      value: testState,
+    });
+    if (settings.supported === false) {
+      Reflect.deleteProperty(window, "Notification");
+      Reflect.deleteProperty(window, "PushManager");
+      Object.defineProperty(navigator, "serviceWorker", {
+        configurable: true,
+        value: undefined,
+      });
+      return;
+    }
+
+    let permission = (window.localStorage.getItem(
+      "openjob-test:notification-permission",
+    ) as NotificationPermission | null) ?? settings.permission ?? "default";
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: {
+        get permission() {
+          return permission;
+        },
+        async requestPermission() {
+          testState.permissionCalls += 1;
+          permission = settings.permissionResult ?? "granted";
+          window.localStorage.setItem("openjob-test:notification-permission", permission);
+          return permission;
+        },
+      },
+    });
+    Object.defineProperty(window, "PushManager", {
+      configurable: true,
+      value: class TestPushManager {},
+    });
+    const createSubscription = () => ({
+      endpoint: window.localStorage.getItem("openjob-test:push-endpoint") ??
+        "https://push.example.test/subscriptions/browser-capability",
+      expirationTime: null,
+      getKey() {
+        return null;
+      },
+      async unsubscribe() {
+        window.localStorage.removeItem("openjob-test:push-subscription");
+        testState.subscription = null;
+        return true;
+      },
+      toJSON() {
+        return {
+          endpoint: window.localStorage.getItem("openjob-test:push-endpoint") ??
+            "https://push.example.test/subscriptions/browser-capability",
+          keys: {
+            p256dh: "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+            auth: "auth_0123456789abcdef",
+          },
+        };
+      },
+    } as unknown as PushSubscription);
+    if (window.localStorage.getItem("openjob-test:push-subscription")) {
+      testState.subscription = createSubscription();
+    }
+    const pushManager = {
+      async getSubscription() {
+        return testState.subscription;
+      },
+      async subscribe() {
+        testState.subscribeCalls += 1;
+        window.localStorage.setItem("openjob-test:push-subscription", "present");
+        testState.subscription = createSubscription();
+        return testState.subscription;
+      },
+    };
+    const registration = { active: {}, pushManager };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        ready: Promise.resolve(registration),
+        async register() {
+          return registration;
+        },
+      },
+    });
+    if (settings.ios) {
+      Object.defineProperty(navigator, "userAgent", {
+        configurable: true,
+        value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+      });
+    }
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = (query) =>
+      query === "(display-mode: standalone)"
+        ? ({ matches: Boolean(settings.standalone) } as MediaQueryList)
+        : nativeMatchMedia(query);
+  }, options);
+}
+
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription">> = {},
 ) {
   const members = [...(initial.members ?? [])];
   const bans = [...(initial.bans ?? [])];
@@ -193,6 +312,8 @@ async function installApi(
     hangTasks: initial.hangTasks ?? false,
     membershipDenied: initial.membershipDenied ?? false,
     taskMutationDelayMs: initial.taskMutationDelayMs ?? 0,
+    notificationSubscription: initial.notificationSubscription ?? null,
+    notificationRequests: [],
   };
 
   const removeMember = (userId: string) => {
@@ -286,6 +407,52 @@ async function installApi(
       }
       state.user = { ...state.user, username, usernameRequired: false };
       await reply(200, { data: state.user });
+      return;
+    }
+
+    const notificationMatch = url.pathname.match(
+      /^\/api\/v1\/me\/notification-subscriptions\/([^/]+)$/,
+    );
+    if (notificationMatch) {
+      const installationId = decodeURIComponent(notificationMatch[1]);
+      state.notificationRequests.push({ method: request.method(), userId: state.user.userId });
+      if (request.method() === "PUT") {
+        const capability = request.postDataJSON() as {
+          endpoint: string;
+          keys: { p256dh: string; auth: string };
+        };
+        state.notificationSubscription = {
+          installationId,
+          userId: state.user.userId,
+          state: "active",
+          capability,
+        };
+        await reply(200, { data: { installationId, state: "active" } });
+        return;
+      }
+      if (
+        !state.notificationSubscription ||
+        state.notificationSubscription.userId !== state.user.userId
+      ) {
+        await error(
+          404,
+          "notification_subscription_not_found",
+          "Notification Subscription was not found.",
+        );
+        return;
+      }
+      if (request.method() === "PATCH") {
+        const { state: nextState } = request.postDataJSON() as {
+          state: "active" | "paused";
+        };
+        state.notificationSubscription.state = nextState;
+      }
+      await reply(200, {
+        data: {
+          installationId,
+          state: state.notificationSubscription.state,
+        },
+      });
       return;
     }
 
@@ -730,12 +897,15 @@ async function installApi(
 }
 
 test("runs the production sign-in, Username, Group creation, persistence, and sign-out path", async ({ page }) => {
+  await installNotificationEnvironment(page);
   const state = await installApi(page);
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Your team. One clear list." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
 
   await page.getByLabel("Username").fill("Shane");
   await page.getByRole("button", { name: "Claim Username" }).click();
@@ -744,12 +914,15 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await page.getByRole("button", { name: "Claim Username" }).click();
 
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
   await openGroupMenu(page);
   await page.getByRole("button", { name: "New Group" }).click();
   await expect(page.getByLabel("Group Name")).toBeFocused();
   await page.getByLabel("Group Name").fill("Walker Labs");
   await page.getByRole("button", { name: "Create Group" }).click();
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toBeVisible();
+  await page.getByRole("button", { name: "Not now" }).click();
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
@@ -760,6 +933,202 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("offers notifications once only after entry into a usable Group", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as unknown as { __openjobNotificationTest: { permissionCalls: number } })
+      .__openjobNotificationTest.permissionCalls
+  )).toBe(0);
+
+  await page.getByRole("button", { name: "Not now" }).click();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByRole("button", { name: "Notifications — Paused" })).toBeVisible();
+});
+
+test("enables, pauses, and re-enables without repeating browser permission or subscription", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  expect(await page.evaluate(() =>
+    (window as unknown as {
+      __openjobNotificationTest: { permissionCalls: number; subscribeCalls: number };
+    }).__openjobNotificationTest
+  )).toEqual({
+    permissionCalls: 1,
+    subscribeCalls: 1,
+    subscription: expect.anything(),
+  });
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Enabled" }).click();
+  await expect(page.getByText("Status: Enabled")).toBeVisible();
+  await page.getByRole("button", { name: "Pause notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("paused");
+  await expect(page.getByText("Status: Paused")).toBeVisible();
+
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  const browserCalls = await page.evaluate(() => {
+    const value = (window as unknown as {
+      __openjobNotificationTest: { permissionCalls: number; subscribeCalls: number };
+    }).__openjobNotificationTest;
+    return {
+      permissionCalls: value.permissionCalls,
+      subscribeCalls: value.subscribeCalls,
+    };
+  });
+  expect(browserCalls).toEqual({ permissionCalls: 1, subscribeCalls: 1 });
+});
+
+test("pauses before sign-out, resumes the same User, and protects the installation from a different User", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+
+  await signOut(page);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(state.notificationSubscription?.state).toBe("paused");
+  expect(await page.evaluate(async () => {
+    const request = indexedDB.open("openjob-notifications", 1);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const record = await new Promise<{ active: boolean }>((resolve, reject) => {
+      const read = database.transaction("installation-state").objectStore("installation-state").get("current");
+      read.onsuccess = () => resolve(read.result);
+      read.onerror = () => reject(read.error);
+    });
+    database.close();
+    return record.active;
+  })).toBe(false);
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByRole("button", { name: "Notifications — Enabled" })).toBeVisible();
+  await page.getByRole("button", { name: "User menu" }).click();
+
+  await signOut(page);
+  state.user = { userId: "user_eli", username: "eli", usernameRequired: false };
+  const requestsBeforeSwitch = state.notificationRequests.length;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Signed in as @eli")).toHaveCount(0);
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByText("Signed in as @eli")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Notifications — Paused" })).toBeVisible();
+  expect(state.notificationSubscription?.userId).toBe("user_shane");
+  expect(state.notificationRequests.slice(requestsBeforeSwitch).some(
+    (entry) => entry.userId === "user_eli" && entry.method === "PUT",
+  )).toBe(false);
+
+  await page.getByRole("button", { name: "Notifications — Paused" }).click();
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.userId).toBe("user_eli");
+  expect(state.notificationSubscription?.state).toBe("active");
+  expect(await page.evaluate(() =>
+    (window as unknown as {
+      __openjobNotificationTest: { permissionCalls: number };
+    }).__openjobNotificationTest.permissionCalls
+  )).toBe(1);
+});
+
+test("reports denied permission permanently without automatically returning the invitation", async ({ page }) => {
+  await installNotificationEnvironment(page, { permissionResult: "denied" });
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Denied" }).click();
+  await expect(page.getByText("Status: Denied")).toBeVisible();
+  await expect(page.getByText(/Allow them there/)).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+});
+
+test("reports unsupported browsers without offering permission", async ({ page }) => {
+  await installNotificationEnvironment(page, { supported: false });
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Unsupported" }).click();
+  await expect(page.getByText("Status: Unsupported")).toBeVisible();
+  await expect(page.getByText(/does not support/)).toBeVisible();
+});
+
+test("guides iPhone browser Users to install before permission is offered", async ({ page }) => {
+  await installNotificationEnvironment(page, { ios: true, standalone: false });
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Install required" }).click();
+  await expect(page.getByText("Status: Install required")).toBeVisible();
+  await expect(page.getByText(/add OpenJob to the Home Screen/)).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as unknown as {
+      __openjobNotificationTest: { permissionCalls: number };
+    }).__openjobNotificationTest.permissionCalls
+  )).toBe(0);
+});
+
+test("reconciles missing and changed browser subscriptions on authenticated bootstrap", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+
+  await page.evaluate(() => {
+    window.localStorage.removeItem("openjob-test:push-subscription");
+    (window as unknown as {
+      __openjobNotificationTest: { subscription: PushSubscription | null };
+    }).__openjobNotificationTest.subscription = null;
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as {
+      __openjobNotificationTest: { subscribeCalls: number };
+    }).__openjobNotificationTest.subscribeCalls
+  )).toBe(1);
+
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "openjob-test:push-endpoint",
+      "https://push.example.test/subscriptions/changed-capability",
+    );
+  });
+  await page.reload();
+  await expect.poll(() => state.notificationSubscription?.capability.endpoint).toBe(
+    "https://push.example.test/subscriptions/changed-capability",
+  );
 });
 
 test("shows the signed-in build version and offers a user-controlled refresh for a newer release", async ({ page }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   type AuthSession,
@@ -17,6 +17,7 @@ import {
   SignedOut,
   UsernameOnboarding,
 } from "./openjob-screens";
+import { useOpenJobNotifications } from "./openjob-notifications";
 
 const SELECTED_GROUP_KEY = "openjob:selected-group-id";
 
@@ -60,10 +61,21 @@ export function OpenJobApp({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [inviteToken, setInviteToken] = useState(initialInviteToken ?? null);
+  const notifications = useOpenJobNotifications({
+    api,
+    hasUsableGroup: Boolean(selectedGroup),
+    session: session ?? null,
+    user,
+  });
+  const prepareNotificationSignOut = useRef(notifications.prepareSignOut);
+  useEffect(() => {
+    prepareNotificationSignOut.current = notifications.prepareSignOut;
+  }, [notifications.prepareSignOut]);
 
   const recoverExpiredSession = useCallback(async (candidate: unknown) => {
     if (!(candidate instanceof ApiError) || candidate.status !== 401) return false;
     setError(readableError(candidate));
+    await prepareNotificationSignOut.current();
     await auth.signOut().catch(() => undefined);
     setSession(null);
     return true;
@@ -174,6 +186,11 @@ export function OpenJobApp({
     } finally {
       setSigningIn(false);
     }
+  }
+
+  async function signOut() {
+    await notifications.prepareSignOut();
+    await auth.signOut();
   }
 
   async function runSavingAction(
@@ -308,13 +325,14 @@ export function OpenJobApp({
       error={error}
       groups={groups}
       notice={notice}
+      notifications={notifications}
       onSessionExpired={recoverExpiredSession}
       onCreate={createGroup}
       onGroupRemoved={removeGroup}
       onGroupUpdated={updateGroup}
       onRetry={() => void bootstrap(session)}
       onSelect={(group) => void selectGroup(group)}
-      onSignOut={() => void auth.signOut()}
+      onSignOut={() => void signOut()}
       saving={saving}
       selectedGroup={selectedGroup}
       selectingGroupId={selectingGroupId}

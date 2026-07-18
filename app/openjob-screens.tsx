@@ -13,6 +13,12 @@ import { GroupGovernance } from "./openjob-governance";
 import { OPENJOB_VERSION } from "./release";
 import { useReleaseUpdate } from "./release-update";
 import { TaskList } from "./openjob-task-list";
+import {
+  NotificationInvitation,
+  NotificationSettings,
+  notificationStateLabel,
+  type NotificationController,
+} from "./openjob-notifications";
 import styles from "./openjob.module.css";
 
 function initials(name: string) {
@@ -337,6 +343,7 @@ export type GroupShellProps = {
   error: string;
   groups: Group[];
   notice: string;
+  notifications: NotificationController;
   onSessionExpired: (error: unknown) => Promise<boolean>;
   onCreate: (name: string) => void;
   onGroupRemoved: (group: Group, message: string) => void;
@@ -355,6 +362,7 @@ export function GroupShell(props: GroupShellProps) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"tasks" | "governance">("tasks");
   const [openMenu, setOpenMenu] = useState<"group" | "user" | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const availableVersion = useReleaseUpdate();
   const groupMenuButton = useRef<HTMLButtonElement>(null);
   const userMenuButton = useRef<HTMLButtonElement>(null);
@@ -461,6 +469,13 @@ export function GroupShell(props: GroupShellProps) {
                     type="button"
                     onClick={() => {
                       setOpenMenu(null);
+                      setNotificationsOpen(true);
+                    }}
+                  >Notifications — {notificationStateLabel(props.notifications.state)}</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
                       props.onSignOut();
                     }}
                   >Sign out</button>
@@ -472,6 +487,7 @@ export function GroupShell(props: GroupShellProps) {
       </header>
 
       <section className={styles.groupSurface} data-testid="group-surface">
+        <NotificationInvitation notifications={props.notifications} />
         {availableVersion ? (
           <div className={styles.updateBanner} role="status">
             <span>OpenJob {availableVersion} is available.</span>
@@ -540,6 +556,12 @@ export function GroupShell(props: GroupShellProps) {
             setCreating(false);
           }}
           saving={props.saving}
+        />
+      ) : null}
+      {notificationsOpen ? (
+        <NotificationSettings
+          notifications={props.notifications}
+          onClose={() => setNotificationsOpen(false)}
         />
       ) : null}
     </main>

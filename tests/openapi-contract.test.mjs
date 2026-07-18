@@ -22,8 +22,10 @@ const expectedOperations = [
   "get /api/v1/groups/{groupId}/tasks/{taskId} getGroupTask",
   "get /api/v1/invites/{token} inspectInviteLink",
   "get /api/v1/me getMe",
+  "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "patch /api/v1/groups/{groupId} renameGroup",
   "patch /api/v1/groups/{groupId}/tasks/{taskId} updateGroupTask",
+  "patch /api/v1/me/notification-subscriptions/{installationId} setNotificationSubscriptionState",
   "post /api/v1/groups createGroup",
   "post /api/v1/groups/{groupId}/actions/end endGroup",
   "post /api/v1/groups/{groupId}/actions/leave leaveGroup",
@@ -37,6 +39,7 @@ const expectedOperations = [
   "post /api/v1/invites/{token}/actions/join joinGroupWithInviteLink",
   "put /api/v1/groups/{groupId}/tasks/{taskId}/state setGroupTaskState",
   "put /api/v1/me/username claimUsername",
+  "put /api/v1/me/notification-subscriptions/{installationId} registerNotificationSubscription",
 ].sort();
 
 const httpMethods = new Set([
@@ -76,7 +79,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 20);
+  assert.equal(Object.keys(contract.paths).length, 21);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -148,6 +151,7 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
     "InviteLinkEnvelope",
     "InvitePreviewEnvelope",
     "MemberEnvelope",
+    "NotificationSubscriptionEnvelope",
     "TaskEnvelope",
   ]) {
     assert.deepEqual(schemas[name].required, ["data"], name);
@@ -170,6 +174,9 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   );
   assert.deepEqual(schemas.AssignedAssignee.required, ["state", "userId", "username"]);
   assert.deepEqual(schemas.UnassignedAssignee.required, ["state"]);
+  assert.deepEqual(schemas.NotificationSubscription.required, ["installationId", "state"]);
+  assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "endpoint"), false);
+  assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "keys"), false);
 
   const requiredConflictCodes = [
     "assignee_not_member",
