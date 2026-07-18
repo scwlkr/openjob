@@ -2165,11 +2165,15 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   await dueDate.fill("");
   await expect(editor.getByRole("radio")).toHaveCount(3);
   await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
+  const priorityBoxes = [];
   for (const priority of ["High", "Normal", "Low"]) {
     const choice = editor.getByRole("radio", { name: priority }).locator("..");
     const choiceBox = await choice.boundingBox();
     expect(Math.round(choiceBox!.height)).toBeGreaterThanOrEqual(44);
+    priorityBoxes.push(choiceBox!);
   }
+  expect(priorityBoxes[1].x - (priorityBoxes[0].x + priorityBoxes[0].width)).toBeGreaterThanOrEqual(8);
+  expect(priorityBoxes[2].x - (priorityBoxes[1].x + priorityBoxes[1].width)).toBeGreaterThanOrEqual(8);
 
   await editor.getByLabel("Task text").fill("Discard this draft");
   await editor.getByLabel("Assignee").selectOption("morgan");
@@ -2190,17 +2194,21 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   const sheet = await editor.boundingBox();
   const handle = editor.getByTestId("task-sheet-handle");
   let handleBox = await handle.boundingBox();
-  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  expect(handleBox!.width).toBeGreaterThanOrEqual(44);
+  expect(handleBox!.height).toBeGreaterThanOrEqual(44);
+  let handleCenterY = handleBox!.y + handleBox!.height / 2;
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleCenterY);
   await page.mouse.down();
-  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y - 90, { steps: 4 });
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleCenterY - 90, { steps: 4 });
   await page.mouse.up();
   await expect(editor).toBeVisible();
   await expect.poll(async () => (await editor.boundingBox())?.y).toBeCloseTo(sheet!.y, 0);
 
   handleBox = await handle.boundingBox();
-  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  handleCenterY = handleBox!.y + handleBox!.height / 2;
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleCenterY);
   await page.mouse.down();
-  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + 90, { steps: 4 });
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleCenterY + 90, { steps: 4 });
   await page.mouse.up();
   await expect(editor).toHaveCount(0);
 });
