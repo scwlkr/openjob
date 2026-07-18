@@ -177,9 +177,9 @@ async function installNotificationEnvironment(
       value: testState,
     });
     if (settings.ios) {
-      Object.defineProperty(navigator, "userAgent", {
+      Object.defineProperty(navigator, "standalone", {
         configurable: true,
-        value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+        value: Boolean(settings.standalone),
       });
     }
     const nativeMatchMedia = window.matchMedia.bind(window);
@@ -1078,6 +1078,31 @@ test("pauses before sign-out, resumes the same User, and protects the installati
       __openjobNotificationTest: { permissionCalls: number };
     }).__openjobNotificationTest.permissionCalls
   )).toBe(1);
+});
+
+test("keeps the User signed in when local notification suppression cannot be persisted", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  await page.evaluate(() => {
+    Object.defineProperty(window.indexedDB, "open", {
+      configurable: true,
+      value() {
+        throw new Error("Test IndexedDB failure.");
+      },
+    });
+  });
+  await signOut(page);
+
+  await expect(page.getByRole("button", { name: "User menu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    "OpenJob could not safely sign out. Try again.",
+  );
+  expect(state.notificationSubscription?.state).toBe("active");
 });
 
 test("serializes bootstrap registration before the sign-out pause", async ({ page }) => {
