@@ -10,6 +10,8 @@ import {
   type User,
 } from "./openjob-contracts";
 import { GroupGovernance } from "./openjob-governance";
+import { OPENJOB_VERSION } from "./release";
+import { useReleaseUpdate } from "./release-update";
 import { TaskList } from "./openjob-task-list";
 import styles from "./openjob.module.css";
 
@@ -353,6 +355,7 @@ export function GroupShell(props: GroupShellProps) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"tasks" | "governance">("tasks");
   const [openMenu, setOpenMenu] = useState<"group" | "user" | null>(null);
+  const availableVersion = useReleaseUpdate();
   const groupMenuButton = useRef<HTMLButtonElement>(null);
   const userMenuButton = useRef<HTMLButtonElement>(null);
 
@@ -452,6 +455,7 @@ export function GroupShell(props: GroupShellProps) {
             {openMenu === "user" ? (
               <div className={`${styles.navMenuPanel} ${styles.userMenuPanel}`} id="user-menu-panel">
                 <p className={styles.menuLabel}>Signed in as @{props.user.username}</p>
+                <p className={styles.menuVersion}>OpenJob v{OPENJOB_VERSION}</p>
                 <div className={styles.menuActions}>
                   <button
                     type="button"
@@ -468,6 +472,12 @@ export function GroupShell(props: GroupShellProps) {
       </header>
 
       <section className={styles.groupSurface} data-testid="group-surface">
+        {availableVersion ? (
+          <div className={styles.updateBanner} role="status">
+            <span>OpenJob {availableVersion} is available.</span>
+            <button type="button" onClick={() => window.location.reload()}>Refresh</button>
+          </div>
+        ) : null}
         {props.notice ? <p className={styles.notice} role="status">{props.notice}</p> : null}
         {props.error && props.groups.length > 0 ? (
           <div className={styles.errorBanner} role="alert">

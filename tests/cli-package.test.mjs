@@ -11,6 +11,9 @@ const cliPackagePath = fileURLToPath(new URL("../cli/", import.meta.url));
 const cliManifest = JSON.parse(
   readFileSync(join(cliPackagePath, "package.json"), "utf8"),
 );
+const rootManifest = JSON.parse(
+  readFileSync(join(repoPath, "package.json"), "utf8"),
+);
 const cliVersion = cliManifest.version;
 const releaseTag = `v${cliVersion}`;
 const installCommand = `npm install --global https://github.com/scwlkr/openjob/releases/download/${releaseTag}/openjob-${cliVersion}.tgz`;
@@ -18,7 +21,7 @@ const installCommand = `npm install --global https://github.com/scwlkr/openjob/r
 test("the repository documents one clean-Mac CLI install command", () => {
   const readme = readFileSync(join(repoPath, "README.md"), "utf8");
   const cliReadme = readFileSync(join(cliPackagePath, "README.md"), "utf8");
-  assert.equal(cliVersion, "0.1.1");
+  assert.equal(cliVersion, rootManifest.version);
   assert.match(readme, /Requires macOS and Node\.js 22\.13 or newer\./);
   assert.equal(readme.split(installCommand).length - 1, 1);
   assert.equal(cliReadme.split(installCommand).length - 1, 1);

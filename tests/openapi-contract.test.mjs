@@ -7,7 +7,9 @@ import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 
 const contractUrl = new URL("../openapi/openapi.yaml", import.meta.url);
-const EXPECTED_RELEASE_VERSION = "0.1.1";
+const EXPECTED_RELEASE_VERSION = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 
 const expectedOperations = [
   "delete /api/v1/groups/{groupId}/tasks/{taskId} deleteGroupTask",
@@ -110,7 +112,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   }
 });
 
-test("release metadata identifies the hosted backend and CLI as v0.1.1", async () => {
+test("release metadata matches the root product version", async () => {
   const contract = await validateOpenApiContract(contractUrl);
   const packageJson = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),

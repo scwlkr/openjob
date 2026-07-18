@@ -32,8 +32,7 @@ credential in the macOS credential store; local config stores only the current
 Group ID. It has no local Task database or offline mode.
 
 For repository development, run `npm install`, `npm link`, and
-`openjob --help`. Maintainers build the release artifact with `npm run cli:pack`
-and run its hosted Task workflow with:
+`openjob --help`. Maintainers can run the packaged CLI's hosted Task workflow with:
 
 ```bash
 OPENJOB_CLI_SMOKE_USE_KEYCHAIN=1 npm run cli:smoke:production
@@ -45,6 +44,24 @@ passed to the installed executable.
 
 Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
 `npm run cli:types:check` to verify the checked-in request/response types.
+
+## Releases
+
+The root package version is authoritative for the web app, hosted API contract,
+CLI package, Git tag, and GitHub release. Curate `CHANGELOG.md`, then prepare and
+publish a release from a clean, synchronized `main`:
+
+```bash
+npm run release:prepare -- minor
+git push origin main
+npm run release:publish
+```
+
+Preparation accepts `patch`, `minor`, `major`, or an explicit greater SemVer
+such as `0.3.0-rc.1`. Publishing creates a draft with a versioned CLI artifact and checksum
+before any stable production deploy, runs production API and installed-CLI
+smokes, then publishes the release. A failed publish keeps its draft resumable.
+`npm run deploy` is guarded; release internals alone use `deploy:raw`.
 
 ## v1 API contract
 
@@ -77,9 +94,10 @@ Cloudflare Workers hosts the app at `openjob.dev`. Firebase project
 `openjob-dev` stores task records in Firestore. The Firebase service-account
 credentials live only in Cloudflare Worker secrets.
 
-Deploy Firestore rules and the site with:
+Deploy Firestore rules separately when their contract changes:
 
 ```bash
 npm run firebase:deploy:rules
-npm run deploy
 ```
+
+Production site deploys happen through `npm run release:publish`.
