@@ -23,6 +23,7 @@ declare const dueDateBrand: unique symbol;
 export type TaskId = string & { readonly [taskIdBrand]: true };
 export type TaskText = string & { readonly [taskTextBrand]: true };
 export type DueDate = string & { readonly [dueDateBrand]: true };
+export type TaskPriority = "high" | "normal" | "low";
 
 export type AssignedTaskAssignee = {
   state: "assigned";
@@ -37,6 +38,7 @@ export type OpenJobTask = {
   groupId: GroupId;
   text: TaskText;
   assignee: TaskAssignee;
+  priority: TaskPriority;
   dueDate: DueDate | null;
   state: "open" | "done";
   createdAt: string;
@@ -49,7 +51,7 @@ export type TaskStore = {
     actorUserId: string,
     groupId: GroupId,
     assignee: { userId: string; username: Username },
-    input: { text: TaskText; dueDate: DueDate | null },
+    input: { text: TaskText; priority: TaskPriority; dueDate: DueDate | null },
   ): Promise<
     | { kind: "created"; task: OpenJobTask }
     | { kind: "assignee_not_member" }
@@ -71,6 +73,7 @@ export type TaskStore = {
     input: {
       text?: TaskText;
       assignee?: { userId: string; username: Username };
+      priority?: TaskPriority;
       dueDate?: DueDate | null;
     },
   ): Promise<
@@ -220,6 +223,14 @@ function dueDateField(
       };
 }
 
+function priorityField(value: unknown):
+  | { value: TaskPriority }
+  | { error: string } {
+  return typeof value === "string" && ["high", "normal", "low"].includes(value)
+    ? { value: value as TaskPriority }
+    : { error: "Use high, normal, or low." };
+}
+
 async function readCreateTask(
   request: Request,
 ): Promise<
@@ -228,6 +239,7 @@ async function readCreateTask(
       input: {
         text: TaskText;
         assigneeUsername: Username;
+        priority: TaskPriority;
         dueDate: DueDate | null;
       };
     }
@@ -238,7 +250,7 @@ async function readCreateTask(
       return { fields: { text: "Must contain 1 to 2,000 characters." } };
     }
     const keys = Object.keys(input);
-    const allowedKeys = new Set(["text", "assigneeUsername", "dueDate"]);
+    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate"]);
     if (
       keys.some((key) => !allowedKeys.has(key)) ||
       !("text" in input) ||
@@ -262,6 +274,13 @@ async function readCreateTask(
       else dueDate = parsedDueDate.value;
     }
 
+    let priority: TaskPriority = "normal";
+    if ("priority" in input) {
+      const parsedPriority = priorityField(input.priority);
+      if ("error" in parsedPriority) fields.priority = parsedPriority.error;
+      else priority = parsedPriority.value;
+    }
+
     if (
       "error" in parsedText ||
       "error" in parsedAssignee ||
@@ -273,6 +292,7 @@ async function readCreateTask(
       input: {
         text: parsedText.value,
         assigneeUsername: parsedAssignee.value,
+        priority,
         dueDate,
       },
     };
@@ -289,6 +309,7 @@ async function readUpdateTask(
       input: {
         text?: TaskText;
         assigneeUsername?: Username;
+        priority?: TaskPriority;
         dueDate?: DueDate | null;
       };
     }
@@ -299,7 +320,7 @@ async function readUpdateTask(
       return { fields: { text: "Send a JSON Task object." } };
     }
     const keys = Object.keys(input);
-    const allowedKeys = new Set(["text", "assigneeUsername", "dueDate"]);
+    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate"]);
     if (keys.length === 0 || keys.some((key) => !allowedKeys.has(key))) {
       return { fields: { text: "Send at least one documented Task field." } };
     }
@@ -308,6 +329,7 @@ async function readUpdateTask(
     const update: {
       text?: TaskText;
       assigneeUsername?: Username;
+      priority?: TaskPriority;
       dueDate?: DueDate | null;
     } = {};
     if ("text" in input) {
@@ -319,6 +341,11 @@ async function readUpdateTask(
       const parsed = assigneeUsernameField(input.assigneeUsername);
       if ("error" in parsed) fields.assigneeUsername = parsed.error;
       else update.assigneeUsername = parsed.value;
+    }
+    if ("priority" in input) {
+      const parsed = priorityField(input.priority);
+      if ("error" in parsed) fields.priority = parsed.error;
+      else update.priority = parsed.value;
     }
     if ("dueDate" in input) {
       const parsed = dueDateField(input.dueDate, true);
@@ -511,6 +538,15 @@ function compareTasks(left: OpenJobTask, right: OpenJobTask) {
   }
   if (left.state !== right.state) return left.state === "open" ? -1 : 1;
   if (left.state === "open" && right.state === "open") {
+    const priorityOrder: Record<TaskPriority, number> = {
+      high: 0,
+      normal: 1,
+      low: 2,
+    };
+    const priorityDifference =
+      priorityOrder[left.priority ?? "normal"] -
+      priorityOrder[right.priority ?? "normal"];
+    if (priorityDifference !== 0) return priorityDifference;
     if (left.dueDate === null && right.dueDate !== null) return 1;
     if (left.dueDate !== null && right.dueDate === null) return -1;
     if (left.dueDate !== right.dueDate) {
@@ -694,6 +730,9 @@ export function createV1TasksApi({
           const result = await tasks.update(user.userId, path.groupId, path.taskId, {
             ...(parsed.input.text !== undefined ? { text: parsed.input.text } : {}),
             ...(assignee ? { assignee } : {}),
+            ...(parsed.input.priority !== undefined
+              ? { priority: parsed.input.priority }
+              : {}),
             ...("dueDate" in parsed.input ? { dueDate: parsed.input.dueDate } : {}),
           });
           if (result.kind === "updated") {

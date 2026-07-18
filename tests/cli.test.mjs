@@ -2039,6 +2039,8 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
         textPath,
         "--assignee",
         "@scwlkr",
+        "--priority",
+        "high",
         "--due",
         "2026-07-18",
         "--format",
@@ -2050,10 +2052,11 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
     assert.deepEqual(bodies[0], {
       text: "Line one\n\nLine two",
       assigneeUsername: "scwlkr",
+      priority: "high",
       dueDate: "2026-07-18",
     });
 
-    const input = { text: "From stdin", assigneeUsername: "maya" };
+    const input = { text: "From stdin", assigneeUsername: "maya", priority: "low" };
     const json = await runCliAsync(
       ["task", "create", "--group", "grp_tasks", "--input", "-", "--format", "json"],
       { env: environment, input: JSON.stringify(input) },
@@ -2077,6 +2080,13 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
     );
     assert.equal(leadingDashes.status, 0, leadingDashes.stderr);
     assert.equal(bodies[2].text, "--urgent");
+
+    const invalidPriority = runCli([
+      "task", "create", "--group", "grp_tasks", "--text", "Invalid",
+      "--assignee", "maya", "--priority", "urgent", "--format", "json",
+    ], { env: environment });
+    assert.equal(invalidPriority.status, 2);
+    assert.match(invalidPriority.stderr, /--priority must be high, normal, or low/);
 
     const mixed = runCli(
       [
@@ -2121,6 +2131,7 @@ test("task show and edit expose server state through explicit edit inputs", asyn
     groupId: "grp_tasks",
     text: "Original",
     assigneeUsername: "maya",
+    priority: "normal",
     dueDate: "2026-07-18",
     state: "open",
   };
@@ -2180,6 +2191,8 @@ test("task show and edit expose server state through explicit edit inputs", asyn
         "-",
         "--assignee",
         "@scwlkr",
+        "--priority",
+        "low",
         "--due",
         "none",
         "--format",
@@ -2191,6 +2204,7 @@ test("task show and edit expose server state through explicit edit inputs", asyn
     assert.deepEqual(patches[0], {
       text: "Edited\n\nfrom stdin",
       assigneeUsername: "scwlkr",
+      priority: "low",
       dueDate: null,
     });
 
@@ -2648,8 +2662,8 @@ test("Task table and JSON Lines output stay stable when redirected", async () =>
   const outputPath = join(directory, "tasks.jsonl");
   writeFileSync(credentialPath, "firebase-refresh-keychain-only-secret", { mode: 0o600 });
   const tasks = [
-    { taskId: "task_1", text: "Line one\nLine two", state: "open" },
-    { taskId: "task_2", text: "Second", state: "done" },
+    { taskId: "task_1", text: "Line one\nLine two", priority: "high", state: "open" },
+    { taskId: "task_2", text: "Second", priority: "normal", state: "done" },
   ];
   const service = await listen(async (request, response) => {
     await requestBody(request);
@@ -2686,9 +2700,9 @@ test("Task table and JSON Lines output stay stable when redirected", async () =>
     assert.equal(table.status, 0, table.stderr);
     assert.equal(
       table.stdout,
-      "TASK_ID\tTEXT\tSTATE\n" +
-        "task_1\tLine one\\nLine two\topen\n" +
-        "task_2\tSecond\tdone\n",
+      "TASK_ID\tTEXT\tPRIORITY\tSTATE\n" +
+        "task_1\tLine one\\nLine two\thigh\topen\n" +
+        "task_2\tSecond\tnormal\tdone\n",
     );
     assert.equal(table.stderr, "");
 

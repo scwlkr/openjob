@@ -35,6 +35,7 @@ type Task = {
   assignee:
     | { state: "assigned"; userId: string; username: string }
     | { state: "unassigned" };
+  priority?: "high" | "normal" | "low";
   dueDate: string | null;
   state: "open" | "done";
   createdAt: string;
@@ -601,6 +602,7 @@ async function installApi(
       const input = request.postDataJSON() as {
         text?: unknown;
         assigneeUsername?: unknown;
+        priority?: unknown;
         dueDate?: unknown;
       };
       const text = typeof input.text === "string" ? input.text.trim() : "";
@@ -620,6 +622,9 @@ async function installApi(
         groupId: decodeURIComponent(tasksMatch[1]),
         text,
         assignee: { state: "assigned", userId: member.userId, username: member.username },
+        priority: ["high", "normal", "low"].includes(String(input.priority))
+          ? input.priority as "high" | "normal" | "low"
+          : "normal",
         dueDate: typeof input.dueDate === "string" ? input.dueDate : null,
         state: "open",
         createdAt: "2026-07-16T18:00:00.000Z",
@@ -646,6 +651,7 @@ async function installApi(
       const input = request.postDataJSON() as {
         text?: string;
         assigneeUsername?: string;
+        priority?: "high" | "normal" | "low";
         dueDate?: string | null;
       };
       let nextAssignee = task.assignee;
@@ -660,6 +666,7 @@ async function installApi(
       const updated = {
         ...task,
         ...(input.text !== undefined ? { text: input.text.trim() } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
         ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
         assignee: nextAssignee,
       };
@@ -1366,6 +1373,7 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await page.keyboard.press("Tab");
   await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
+  await expect(editor.getByLabel("Priority")).toHaveValue("normal");
   await expect(editor.getByLabel("Assignee").getByRole("option")).toHaveText([
     "Choose a Member",
     "@morgan",
@@ -1781,6 +1789,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   let editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
   await editor.getByLabel("Task text").fill("Order replacement menu stands");
+  await editor.getByLabel("Priority").selectOption("high");
   await editor.getByLabel("Due date").fill("2026-07-20");
   state.taskMutationDelayMs = 150;
   await editor.getByRole("button", { name: "Create Task" }).click();
@@ -1789,18 +1798,23 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   state.taskMutationDelayMs = 0;
 
   let card = page.getByTestId("task-card").filter({ hasText: "Order replacement menu stands" });
+  await expect(card.getByText("High", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Edit" }).click();
   editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expect(editor.getByLabel("Priority")).toHaveValue("high");
   await editor.getByLabel("Task text").fill("Order two menu stands");
   await editor.getByLabel("Assignee").selectOption("shane");
+  await editor.getByLabel("Priority").selectOption("low");
   await editor.getByRole("button", { name: "Save Task" }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
+  await expect(card.getByText("Low", { exact: true })).toBeVisible();
 
   await card.getByRole("checkbox", { name: "Complete Order two menu stands" }).click();
   await expect(card).toHaveCount(0);
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
+  await expect(card.getByText("Low", { exact: true })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.getByRole("button", { name: "Reopen" }).click();
@@ -1808,6 +1822,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await page.getByRole("button", { name: "Open 4", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
+  await expect(card.getByText("Low", { exact: true })).toBeVisible();
 
   const unassignedCard = page.getByTestId("task-card").filter({ hasText: "Recover payroll handoff" });
   await unassignedCard.getByRole("button", { name: "Assign" }).click();

@@ -12,6 +12,7 @@ import type {
   DueDate,
   OpenJobTask,
   TaskId,
+  TaskPriority,
   TaskStore,
   TaskText,
 } from "../server/v1-tasks.ts";
@@ -43,6 +44,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   const assigneeState = document.fields?.assigneeState?.stringValue;
   const assigneeMembershipId =
     document.fields?.assigneeMembershipId?.stringValue ?? null;
+  const priority = document.fields?.priority?.stringValue ?? "normal";
   const dueDate = document.fields?.dueDate?.stringValue ?? null;
   const state = document.fields?.state?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
@@ -52,6 +54,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     !groupId ||
     text === undefined ||
     !["assigned", "unassigned"].includes(assigneeState ?? "") ||
+    !["high", "normal", "low"].includes(priority) ||
     !["open", "done"].includes(state ?? "") ||
     !createdAt ||
     !document.updateTime ||
@@ -84,6 +87,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     assignee,
     assigneeMembershipId:
       assigneeState === "assigned" ? assigneeMembershipId : null,
+    priority: priority as TaskPriority,
     dueDate: dueDate as DueDate | null,
     state: state as OpenJobTask["state"],
     createdAt,
@@ -99,6 +103,7 @@ function publicTask(task: PersistedTask): OpenJobTask {
     groupId: task.groupId,
     text: task.text,
     assignee: task.assignee,
+    priority: task.priority,
     dueDate: task.dueDate,
     state: task.state,
     createdAt: task.createdAt,
@@ -139,6 +144,7 @@ function taskFields(task: PersistedTask) {
           assigneeUsername: { stringValue: task.assignee.username },
         }
       : {}),
+    priority: { stringValue: task.priority },
     ...(task.dueDate !== null
       ? { dueDate: { stringValue: task.dueDate } }
       : {}),
@@ -380,6 +386,7 @@ export function createFirestoreTaskStore(
             username: assignee.username,
           },
           assigneeMembershipId: membershipId(assigneeMember),
+          priority: input.priority,
           dueDate: input.dueDate,
           state: "open",
           createdAt,
@@ -457,6 +464,7 @@ export function createFirestoreTaskStore(
                   assigneeMembershipId: membershipId(assigneeMember!),
                 }
               : {}),
+            ...(input.priority !== undefined ? { priority: input.priority } : {}),
             ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
           };
           const actorMemberName = access.member.name;

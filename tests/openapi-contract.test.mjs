@@ -161,6 +161,7 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
 
   assert.equal(schemas.Date.format, "date");
   assert.equal(schemas.Timestamp.format, "date-time");
+  assert.deepEqual(schemas.TaskPriority.enum, ["high", "normal", "low"]);
   assert.deepEqual(
     schemas.Assignee.oneOf.map(({ properties }) => properties.state.const).sort(),
     ["assigned", "unassigned"],
@@ -251,6 +252,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
       groupId: "grp_acme_ops",
       text: "Finish recovered work",
       assignee: { state: "unassigned" },
+      priority: "normal",
       dueDate: null,
       state: "done",
       createdAt: "2026-07-15T16:00:00Z",

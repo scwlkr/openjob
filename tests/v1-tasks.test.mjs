@@ -44,6 +44,7 @@ function createMemoryTaskStore(controls) {
             userId: assignee.userId,
             username: assignee.username,
           },
+          priority: input.priority,
           dueDate: input.dueDate,
           state: "open",
           createdAt: controls.clock.now(),
@@ -88,6 +89,7 @@ function createMemoryTaskStore(controls) {
           ...(input.assignee !== undefined
             ? { assignee: { state: "assigned", ...input.assignee } }
             : {}),
+          ...(input.priority !== undefined ? { priority: input.priority } : {}),
           ...("dueDate" in input ? { dueDate: input.dueDate } : {}),
         };
         await state.put(path, updated);
@@ -210,6 +212,7 @@ test("a Member creates an assigned Task and another Member retrieves it", async 
       userId: USERS.eli.userId,
       username: USERS.eli.username,
     },
+    priority: "normal",
     dueDate: "2026-07-18",
     state: "open",
     createdAt: "2026-07-15T12:00:00.000Z",
@@ -684,6 +687,7 @@ test("Task listing orders Username columns, Unassigned last, and Tasks within ea
   const common = {
     groupId: GROUP_ID,
     completedAt: null,
+    priority: "normal",
     state: "open",
   };
   const assigned = {
@@ -702,6 +706,7 @@ test("Task listing orders Username columns, Unassigned last, and Tasks within ea
       taskId: "task_undated_later",
       text: "Undated later",
       assignee: assigned,
+      priority: "low",
       dueDate: null,
       createdAt: "2026-07-15T12:05:00.000Z",
     },
@@ -710,6 +715,7 @@ test("Task listing orders Username columns, Unassigned last, and Tasks within ea
       taskId: "task_due_later",
       text: "Due later",
       assignee: assigned,
+      priority: "high",
       dueDate: "2026-07-20",
       createdAt: "2026-07-15T12:01:00.000Z",
     },
@@ -769,9 +775,9 @@ test("Task listing orders Username columns, Unassigned last, and Tasks within ea
   assert.deepEqual(
     body.data.map(({ taskId }) => taskId),
     [
+      "task_due_later",
       "task_due_same_a",
       "task_due_same_b",
-      "task_due_later",
       "task_undated_later",
       "task_shane_earliest",
       "task_unassigned",
@@ -996,6 +1002,7 @@ test("Task creation rejects invalid text, dates, and non-Member assignees", asyn
       { text: "No null date", assigneeUsername: "eli", dueDate: null },
       "dueDate",
     ],
+    [{ text: "Invalid priority", assigneeUsername: "eli", priority: "urgent" }, "priority"],
     [{ text: "No manual clearing", assigneeUsername: "unassigned" }, "assigneeUsername"],
   ]) {
     const response = await harness.request({

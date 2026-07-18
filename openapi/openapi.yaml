@@ -550,9 +550,10 @@ paths:
       description: |
         Filters combine and are applied before stable service ordering. Assignee
         columns sort by Username, with Unassigned last. Within each column, open
-        Tasks precede done Tasks in an all-state view. Open Tasks with due dates
-        sort by dueDate ascending, followed by undated open Tasks; equal dates
-        and undated Tasks sort by createdAt ascending, then taskId ascending.
+        Tasks precede done Tasks in an all-state view. Open Tasks sort by
+        priority high, normal, then low. Within each priority, dated Tasks sort
+        by dueDate ascending, followed by undated Tasks; equal dates and undated
+        Tasks sort by createdAt ascending, then taskId ascending.
         Done Tasks sort by completedAt descending, then createdAt ascending,
         then taskId ascending. Omit assignee for all assignee states, pass
         unassigned, or pass an exact Username. Every current Member has equal
@@ -631,7 +632,7 @@ paths:
       tags: [Tasks]
       summary: Edit an open Task
       description: |
-        Updates any supplied text, dueDate, or assigneeUsername field using
+        Updates any supplied text, priority, dueDate, or assigneeUsername field using
         last-accepted-write behavior. null clears dueDate. Assignees cannot be
         cleared manually, and done Tasks return task_done until reopened.
       operationId: updateGroupTask
@@ -850,6 +851,7 @@ components:
               Publish the v1 API contract
               Verify generated client types.
             assigneeUsername: maya
+            priority: high
             dueDate: "2026-07-18"
     UpdateTaskRequest:
       description: One or more editable fields for an open Task.
@@ -861,6 +863,7 @@ components:
           example:
             text: Publish and review the v1 API contract
             assigneeUsername: shane
+            priority: low
             dueDate: null
     SetTaskStateRequest:
       description: Desired Task state; this is not a toggle.
@@ -1003,6 +1006,7 @@ components:
                 state: assigned
                 userId: user_maya
                 username: maya
+              priority: high
               dueDate: "2026-07-18"
               state: open
               createdAt: "2026-07-15T16:00:00Z"
@@ -1025,6 +1029,7 @@ components:
                       state: assigned
                       userId: user_maya
                       username: maya
+                    priority: high
                     dueDate: "2026-07-18"
                     state: open
                     createdAt: "2026-07-15T16:00:00Z"
@@ -1041,6 +1046,7 @@ components:
                       state: assigned
                       userId: user_maya
                       username: maya
+                    priority: normal
                     dueDate: "2026-07-17"
                     state: done
                     createdAt: "2026-07-15T15:00:00Z"
@@ -1055,6 +1061,7 @@ components:
                     text: Reassign release checklist
                     assignee:
                       state: unassigned
+                    priority: low
                     dueDate: null
                     state: open
                     createdAt: "2026-07-14T10:00:00Z"
@@ -1377,6 +1384,10 @@ components:
     TaskState:
       type: string
       enum: [open, done]
+    TaskPriority:
+      type: string
+      enum: [high, normal, low]
+      default: normal
 
     AssignedAssignee:
       type: object
@@ -1484,6 +1495,7 @@ components:
         - groupId
         - text
         - assignee
+        - priority
         - dueDate
         - state
         - createdAt
@@ -1497,6 +1509,8 @@ components:
           $ref: "#/components/schemas/TaskText"
         assignee:
           $ref: "#/components/schemas/Assignee"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
         dueDate:
           oneOf:
             - $ref: "#/components/schemas/Date"
@@ -1925,6 +1939,8 @@ components:
           $ref: "#/components/schemas/TaskText"
         assigneeUsername:
           $ref: "#/components/schemas/Username"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
         dueDate:
           $ref: "#/components/schemas/Date"
     UpdateTaskInput:
@@ -1936,6 +1952,8 @@ components:
           $ref: "#/components/schemas/TaskText"
         assigneeUsername:
           $ref: "#/components/schemas/Username"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
         dueDate:
           oneOf:
             - $ref: "#/components/schemas/Date"

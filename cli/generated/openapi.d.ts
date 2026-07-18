@@ -500,9 +500,10 @@ export interface paths {
          * List Group Tasks
          * @description Filters combine and are applied before stable service ordering. Assignee
          *     columns sort by Username, with Unassigned last. Within each column, open
-         *     Tasks precede done Tasks in an all-state view. Open Tasks with due dates
-         *     sort by dueDate ascending, followed by undated open Tasks; equal dates
-         *     and undated Tasks sort by createdAt ascending, then taskId ascending.
+         *     Tasks precede done Tasks in an all-state view. Open Tasks sort by
+         *     priority high, normal, then low. Within each priority, dated Tasks sort
+         *     by dueDate ascending, followed by undated Tasks; equal dates and undated
+         *     Tasks sort by createdAt ascending, then taskId ascending.
          *     Done Tasks sort by completedAt descending, then createdAt ascending,
          *     then taskId ascending. Omit assignee for all assignee states, pass
          *     unassigned, or pass an exact Username. Every current Member has equal
@@ -557,7 +558,7 @@ export interface paths {
         head?: never;
         /**
          * Edit an open Task
-         * @description Updates any supplied text, dueDate, or assigneeUsername field using
+         * @description Updates any supplied text, priority, dueDate, or assigneeUsername field using
          *     last-accepted-write behavior. null clears dueDate. Assignees cannot be
          *     cleared manually, and done Tasks return task_done until reopened.
          */
@@ -640,6 +641,11 @@ export interface components {
         Role: "member" | "admin";
         /** @enum {string} */
         TaskState: "open" | "done";
+        /**
+         * @default normal
+         * @enum {string}
+         */
+        TaskPriority: "high" | "normal" | "low";
         AssignedAssignee: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -694,6 +700,7 @@ export interface components {
             groupId: components["schemas"]["GroupId"];
             text: components["schemas"]["TaskText"];
             assignee: components["schemas"]["Assignee"];
+            priority: components["schemas"]["TaskPriority"];
             dueDate: components["schemas"]["Date"] | null;
             state: components["schemas"]["TaskState"];
             createdAt: components["schemas"]["Timestamp"];
@@ -926,11 +933,13 @@ export interface components {
         CreateTaskInput: {
             text: components["schemas"]["TaskText"];
             assigneeUsername: components["schemas"]["Username"];
+            priority?: components["schemas"]["TaskPriority"];
             dueDate?: components["schemas"]["Date"];
         };
         UpdateTaskInput: {
             text?: components["schemas"]["TaskText"];
             assigneeUsername?: components["schemas"]["Username"];
+            priority?: components["schemas"]["TaskPriority"];
             dueDate?: components["schemas"]["Date"] | null;
         };
         SetTaskStateInput: {
@@ -1144,6 +1153,7 @@ export interface components {
                  *           "userId": "user_maya",
                  *           "username": "maya"
                  *         },
+                 *         "priority": "high",
                  *         "dueDate": "2026-07-18",
                  *         "state": "open",
                  *         "createdAt": "2026-07-15T16:00:00Z",
@@ -1677,6 +1687,7 @@ export interface components {
                  * @example {
                  *       "text": "Publish the v1 API contract\nVerify generated client types.",
                  *       "assigneeUsername": "maya",
+                 *       "priority": "high",
                  *       "dueDate": "2026-07-18"
                  *     }
                  */
@@ -1690,6 +1701,7 @@ export interface components {
                  * @example {
                  *       "text": "Publish and review the v1 API contract",
                  *       "assigneeUsername": "shane",
+                 *       "priority": "low",
                  *       "dueDate": null
                  *     }
                  */
