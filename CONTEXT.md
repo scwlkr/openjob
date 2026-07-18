@@ -28,6 +28,10 @@ _Avoid_: Project, Kanban board
 A smallest unit of work on a Task List. An open Task is normally assigned to exactly one current Member by Username; forced removal of that Member can make it Unassigned. A done Task keeps its User as historical attribution if they later leave the Group.
 _Avoid_: Job, ticket, card
 
+**Push Notification**:
+A User-enabled alert that can appear outside the active OpenJob app when a relevant Task event matters to that User. It is an ephemeral alert, not a durable inbox item.
+_Avoid_: In-app notification, Notification inbox
+
 **Priority**:
 A Task's primary relative order within one assignee's open work: High before Normal before Low, then due date within each level. Every Task has exactly one Priority; Normal is the default, and completed work remains completion-ordered.
 _Avoid_: Urgency, severity
