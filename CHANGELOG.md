@@ -1,0 +1,26 @@
+# Changelog
+
+All notable OpenJob changes are recorded here. Releases follow Semantic Versioning.
+
+## [Unreleased]
+
+### Added
+
+- High, Normal, and Low Task Priority across the hosted API, web app, and CLI.
+- One synchronized release-version workflow with browser update detection.
+
+## [0.1.1] - 2026-07-17
+
+### Fixed
+
+- Completed the v1 parent acceptance gaps across CLI logout, stale Group recovery, OpenAPI-shaped Username input, and generated API types.
+
+## [0.1.0] - 2026-07-17
+
+### Added
+
+- First complete hosted OpenJob release with shared web, API, and CLI Group, governance, and Task workflows.
+
+[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/scwlkr/openjob/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/scwlkr/openjob/releases/tag/v0.1.0
