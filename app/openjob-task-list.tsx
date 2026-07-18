@@ -1,6 +1,15 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   ApiError,
@@ -45,6 +54,8 @@ type MemberSection =
   | { kind: "unassigned"; key: "unassigned"; label: "Unassigned" };
 
 const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
+const TASK_EDITOR_EXIT_MS = 140;
+const NARROW_TASK_EDITOR_QUERY = "(max-width: 720px)";
 const ALL_TASKS_FILTER = { status: "all" } as const;
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: "Open", value: "open" },
@@ -52,11 +63,50 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: "All", value: "all" },
 ];
 
-const TASK_FORM_COPY: Record<EditorMode, { kicker: string; title: string; submit: string }> = {
-  new: { kicker: "New Task", title: "New Task", submit: "Create Task" },
-  edit: { kicker: "Task details", title: "Edit Task", submit: "Save Task" },
-  assign: { kicker: "Unassigned recovery", title: "Assign Task", submit: "Assign Task" },
+const TASK_FORM_COPY: Record<EditorMode, { title: string; submit: string }> = {
+  new: { title: "New Task", submit: "Create" },
+  edit: { title: "Edit Task", submit: "Save" },
+  assign: { title: "Assign Task", submit: "Assign" },
 };
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="m7 9 5 5 5-5" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" />
+    </svg>
+  );
+}
+
+function PriorityIcon({ priority }: { priority: TaskPriority }) {
+  if (priority === "normal") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M6 12h12" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d={priority === "high" ? "m7 14 5-5 5 5M12 9v9" : "m7 10 5 5 5-5M12 6v9"} />
+    </svg>
+  );
+}
 
 function localDateKey(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -150,7 +200,6 @@ function TaskForm({
   initialText = "",
   members,
   mode,
-  onCancel,
   onInputChange,
   onDelete,
   onSave,
@@ -163,7 +212,6 @@ function TaskForm({
   initialText?: string;
   members: NamedMember[];
   mode: EditorMode;
-  onCancel: () => void;
   onInputChange: (input: TaskFormInput) => void;
   onDelete?: () => void;
   onSave: (input: TaskFormInput) => void;
@@ -195,66 +243,86 @@ function TaskForm({
       }}
       noValidate
     >
-      <label>
-        Task text
-        <textarea
-          value={text}
-          onChange={(event) => {
-            const nextText = event.target.value;
-            setText(nextText);
-            setValidationError("");
-            onInputChange({ text: nextText, assigneeUsername: assignee, priority, dueDate });
-          }}
-          autoFocus
-          required
-        />
-      </label>
-      <label>
-        Assignee
-        <select
-          value={assignee}
-          onChange={(event) => {
-            const nextAssignee = event.target.value;
-            setAssignee(nextAssignee);
-            setValidationError("");
-            onInputChange({ text, assigneeUsername: nextAssignee, priority, dueDate });
-          }}
-          required
-        >
-          <option value="" disabled>Choose a Member</option>
-          {members.map((member) => <option key={member.userId} value={member.username}>@{member.username}</option>)}
-        </select>
-      </label>
-      <label>
-        Priority
-        <select
-          value={priority}
-          onChange={(event) => {
-            const nextPriority = event.target.value as TaskPriority;
-            setPriority(nextPriority);
-            setValidationError("");
-            onInputChange({ text, assigneeUsername: assignee, priority: nextPriority, dueDate });
-          }}
-        >
-          <option value="high">High</option>
-          <option value="normal">Normal</option>
-          <option value="low">Low</option>
-        </select>
-      </label>
-      <label>
-        Due date
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(event) => {
-            const nextDueDate = event.target.value;
-            setDueDate(nextDueDate);
-            setValidationError("");
-            onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
-          }}
-        />
-      </label>
-      {validationError || error ? <p className={styles.fieldError} role="alert">{validationError || error}</p> : null}
+      <div className={styles.taskFormFields}>
+        <label className={styles.taskTextField}>
+          <span className={styles.taskFieldLabel}>Task text</span>
+          <textarea
+            value={text}
+            onChange={(event) => {
+              const nextText = event.target.value;
+              setText(nextText);
+              setValidationError("");
+              onInputChange({ text: nextText, assigneeUsername: assignee, priority, dueDate });
+            }}
+            required
+          />
+        </label>
+        <label className={styles.taskAssigneeField}>
+          <span className={styles.taskFieldLabel}>Assignee</span>
+          <span className={styles.taskSelectShell}>
+            <span className={styles.taskAssigneeAvatar} aria-hidden="true">
+              {assignee ? memberInitials(assignee) : "?"}
+            </span>
+            <select
+              aria-label="Assignee"
+              value={assignee}
+              onChange={(event) => {
+                const nextAssignee = event.target.value;
+                setAssignee(nextAssignee);
+                setValidationError("");
+                onInputChange({ text, assigneeUsername: nextAssignee, priority, dueDate });
+              }}
+              required
+            >
+              <option value="" disabled>Choose a Member</option>
+              {members.map((member) => <option key={member.userId} value={member.username}>@{member.username}</option>)}
+            </select>
+            <ChevronDownIcon />
+          </span>
+        </label>
+        <div className={styles.taskFormDetails}>
+          <fieldset className={styles.taskPriorityField}>
+            <legend>Priority</legend>
+            <div className={styles.taskPriorityChoices}>
+              {(["high", "normal", "low"] as const).map((choice) => (
+                <label className={styles.taskPriorityChoice} key={choice}>
+                  <input
+                    type="radio"
+                    name="task-priority"
+                    value={choice}
+                    checked={priority === choice}
+                    onChange={() => {
+                      setPriority(choice);
+                      setValidationError("");
+                      onInputChange({ text, assigneeUsername: assignee, priority: choice, dueDate });
+                    }}
+                  />
+                  <PriorityIcon priority={choice} />
+                  <span>{choice[0].toUpperCase() + choice.slice(1)}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className={styles.taskDueField}>
+            <span className={styles.taskFieldLabel}>Due date</span>
+            <span className={styles.taskDateShell}>
+              <CalendarIcon />
+              <input
+                aria-label="Due date"
+                type="date"
+                value={dueDate}
+                onChange={(event) => {
+                  const nextDueDate = event.target.value;
+                  setDueDate(nextDueDate);
+                  setValidationError("");
+                  onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
+                }}
+              />
+            </span>
+          </label>
+        </div>
+        {validationError || error ? <p className={styles.fieldError} role="alert">{validationError || error}</p> : null}
+      </div>
       <div className={styles.taskFormActions}>
         {onDelete ? (
           <button
@@ -266,7 +334,6 @@ function TaskForm({
             {busyAction === "delete" ? "Deleting…" : "Delete Task"}
           </button>
         ) : null}
-        <button className={styles.taskCancelButton} type="button" disabled={busyAction !== null} onClick={onCancel}>Cancel</button>
         <button className={styles.primaryButton} type="submit" disabled={busyAction !== null}>
           {busyAction === "save" ? "Saving…" : copy.submit}
         </button>
@@ -295,11 +362,15 @@ export function TaskList({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorInput, setEditorInput] = useState<TaskFormInput | null>(null);
   const [editorAction, setEditorAction] = useState<EditorAction | null>(null);
+  const [editorClosing, setEditorClosing] = useState(false);
+  const [editorViewport, setEditorViewport] = useState({ height: 0, offsetTop: 0, keyboardOpen: false });
   const [taskStateActions, setTaskStateActions] = useState<Record<string, TaskStateAction>>({});
   const [taskStateFailures, setTaskStateFailures] = useState<Record<string, TaskStateFailure>>({});
   const [undoableCompletions, setUndoableCompletions] = useState<UndoableCompletion[]>([]);
   const [taskActionTarget, setTaskActionTarget] = useState<HTMLElement | null>(null);
   const activeLoadGeneration = useRef(0);
+  const editorCloseTimeout = useRef<number | null>(null);
+  const editorDrag = useRef<{ offset: number; pointerId: number; startY: number } | null>(null);
   const editorOpener = useRef<HTMLButtonElement | null>(null);
   const editorDialog = useRef<HTMLElement | null>(null);
   const newTaskButton = useRef<HTMLButtonElement | null>(null);
@@ -312,16 +383,32 @@ export function TaskList({
     setTaskActionTarget(document.getElementById("signed-in-task-action"));
   }, []);
 
-  const closeEditor = useCallback(() => {
+  const finishEditorClose = useCallback((clearActionError: boolean) => {
     window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
     setEditor(null);
     setEditorInput(null);
-    setActionError("");
+    setEditorClosing(false);
+    if (clearActionError) setActionError("");
+    editorCloseTimeout.current = null;
   }, []);
 
+  const beginEditorClose = useCallback((clearActionError = true) => {
+    if (editorCloseTimeout.current !== null) return;
+    setEditorClosing(true);
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : TASK_EDITOR_EXIT_MS;
+    editorCloseTimeout.current = window.setTimeout(() => finishEditorClose(clearActionError), delay);
+  }, [finishEditorClose]);
+
+  const closeEditor = useCallback(() => beginEditorClose(), [beginEditorClose]);
+
   const openEditor = useCallback((nextEditor: Editor, opener: HTMLButtonElement) => {
+    if (editorCloseTimeout.current !== null) {
+      window.clearTimeout(editorCloseTimeout.current);
+      editorCloseTimeout.current = null;
+    }
     editorOpener.current = opener;
     window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+    setEditorClosing(false);
     setEditor(nextEditor);
     setEditorInput(editorFormInput(nextEditor));
     setActionError("");
@@ -330,6 +417,12 @@ export function TaskList({
   useEffect(() => {
     if (!editor) return;
     const fallback = newTaskButton.current;
+    const focusFrame = window.requestAnimationFrame(() => {
+      const dialog = editorDialog.current;
+      if (!dialog) return;
+      if (window.matchMedia(NARROW_TASK_EDITOR_QUERY).matches) dialog.focus();
+      else dialog.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    });
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !savingRef.current) {
         event.preventDefault();
@@ -361,6 +454,7 @@ export function TaskList({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
       const opener = editorOpener.current;
       window.requestAnimationFrame(() => {
@@ -369,6 +463,32 @@ export function TaskList({
       });
     };
   }, [closeEditor, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const visualViewport = window.visualViewport;
+    const syncViewport = () => {
+      const height = visualViewport?.height ?? window.innerHeight;
+      setEditorViewport({
+        height,
+        offsetTop: visualViewport?.offsetTop ?? 0,
+        keyboardOpen: height < window.innerHeight - 120,
+      });
+    };
+    syncViewport();
+    visualViewport?.addEventListener("resize", syncViewport);
+    visualViewport?.addEventListener("scroll", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      visualViewport?.removeEventListener("resize", syncViewport);
+      visualViewport?.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, [editor]);
+
+  useEffect(() => () => {
+    if (editorCloseTimeout.current !== null) window.clearTimeout(editorCloseTimeout.current);
+  }, []);
 
   useEffect(() => {
     if (loading || editor) return;
@@ -520,8 +640,7 @@ export function TaskList({
       await action(token);
       mutationCommitted = true;
       window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
-      setEditor(null);
-      setEditorInput(null);
+      beginEditorClose(false);
       const nextTasks = await api.listTasks(token, group.groupId, ALL_TASKS_FILTER);
       setTasks(nextTasks);
       window.requestAnimationFrame(() => {
@@ -664,6 +783,37 @@ export function TaskList({
     );
   }
 
+  function startEditorDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (
+      editorClosing ||
+      savingRef.current ||
+      !window.matchMedia(NARROW_TASK_EDITOR_QUERY).matches
+    ) return;
+    editorDrag.current = { offset: 0, pointerId: event.pointerId, startY: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveEditorDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = editorDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.offset = Math.max(0, event.clientY - drag.startY);
+    editorDialog.current?.style.setProperty("--editor-sheet-drag-offset", `${drag.offset}px`);
+  }
+
+  function finishEditorDrag(event: ReactPointerEvent<HTMLDivElement>, dismiss: boolean) {
+    const drag = editorDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    editorDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (dismiss && drag.offset >= 72) {
+      closeEditor();
+      return;
+    }
+    editorDialog.current?.style.setProperty("--editor-sheet-drag-offset", "0px");
+  }
+
   if (loading) {
     return <div className={styles.taskLoading} aria-busy="true">Loading Task List…</div>;
   }
@@ -678,6 +828,12 @@ export function TaskList({
   const displayedEditorInput = editor === null
     ? null
     : editorInput ?? editorFormInput(editor);
+  const editorViewportStyle = editorViewport.height > 0
+    ? {
+      "--editor-viewport-height": `${editorViewport.height}px`,
+      "--editor-viewport-offset": `${editorViewport.offsetTop}px`,
+    } as CSSProperties
+    : undefined;
 
   return (
     <section className={styles.taskList} aria-label="Task List">
@@ -892,16 +1048,44 @@ export function TaskList({
       </div>
 
       {editor ? (
-        <div className={`${styles.dialogBackdrop} ${styles.taskDialogBackdrop}`} role="presentation">
+        <div
+          className={`${styles.dialogBackdrop} ${styles.taskDialogBackdrop} ${editorClosing ? styles.taskDialogBackdropClosing : ""} ${editorViewport.keyboardOpen ? styles.taskDialogBackdropKeyboard : ""}`}
+          role="presentation"
+          style={editorViewportStyle}
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget && !savingRef.current) closeEditor();
+          }}
+        >
           <section
             className={styles.taskDialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-editor-title"
             ref={editorDialog}
+            tabIndex={-1}
           >
-            <p className={styles.kicker}>{TASK_FORM_COPY[editor.mode].kicker}</p>
-            <h2 id="task-editor-title">{TASK_FORM_COPY[editor.mode].title}</h2>
+            <div
+              className={styles.taskDialogHandle}
+              data-testid="task-sheet-handle"
+              onPointerDown={startEditorDrag}
+              onPointerMove={moveEditorDrag}
+              onPointerUp={(event) => finishEditorDrag(event, true)}
+              onPointerCancel={(event) => finishEditorDrag(event, false)}
+            >
+              <span aria-hidden="true" />
+            </div>
+            <header className={styles.taskDialogHeader}>
+              <h2 id="task-editor-title">{TASK_FORM_COPY[editor.mode].title}</h2>
+              <button
+                className={styles.taskDialogClose}
+                type="button"
+                aria-label="Close Task Editor"
+                disabled={editorAction !== null}
+                onClick={closeEditor}
+              >
+                <CloseIcon />
+              </button>
+            </header>
             <TaskForm
               busyAction={editorAction}
               error={actionError}
@@ -911,7 +1095,6 @@ export function TaskList({
               initialText={displayedEditorInput?.text ?? ""}
               members={namedMembers}
               mode={editor.mode}
-              onCancel={closeEditor}
               onDelete={editor.mode === "new" ? undefined : deleteEditorTask}
               onInputChange={setEditorInput}
               onSave={saveEditor}
