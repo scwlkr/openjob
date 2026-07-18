@@ -260,6 +260,8 @@ async function publish() {
     const filename = packed[0]?.filename;
     if (typeof filename !== "string") throw new Error("npm pack did not report a CLI artifact.");
     const artifact = join(releaseDirectory, filename);
+    const installationPrefix = join(releaseDirectory, "cli-installation");
+    run("npm", ["install", "--global", "--prefix", installationPrefix, artifact]);
     const checksum = `${artifact}.sha256`;
     const digest = createHash("sha256").update(await readFile(artifact)).digest("hex");
     await Promise.all([
@@ -308,7 +310,11 @@ async function publish() {
       };
       run("npm", ["run", "smoke:production"], { env: proofEnvironment });
       run("npm", ["run", "cli:smoke:production"], {
-        env: { ...proofEnvironment, OPENJOB_CLI_SMOKE_USE_KEYCHAIN: "1" },
+        env: {
+          ...proofEnvironment,
+          OPENJOB_CLI_BIN: join(installationPrefix, "bin", "openjob"),
+          OPENJOB_CLI_SMOKE_USE_KEYCHAIN: "1",
+        },
       });
       run("gh", ["release", "edit", tag, "--draft=false", "--latest"]);
     } else {
