@@ -157,6 +157,27 @@ test("release prepare synchronizes a minor version, promotes notes, verifies, an
   assert.equal(git(fixture.root, ["status", "--short"]), "");
 });
 
+test("release prepare rejects untracked files before changing the version", async () => {
+  const fixture = await createReleaseFixture();
+  await writeFile(join(fixture.root, "untracked-source.ts"), "export const draft = true;\n");
+  const result = spawnSync(process.execPath, [RELEASE_SCRIPT, "prepare", "minor"], {
+    cwd: fixture.root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      OPENJOB_RELEASE_COMMAND_LOG: fixture.commandLog,
+      PATH: `${fixture.fakeBin}:${process.env.PATH}`,
+    },
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /working tree must be clean/i);
+  assert.equal(
+    JSON.parse(await readFile(join(fixture.root, "package.json"), "utf8")).version,
+    "0.1.1",
+  );
+});
+
 test("release publish creates a tagged draft before deploy proof and then publishes it", async () => {
   const fixture = await createReleaseFixture();
   const env = {
@@ -196,6 +217,35 @@ test("release publish creates a tagged draft before deploy proof and then publis
   assert.ok(draft >= 0 && draft < deploy, commands);
   assert.ok(deploy < apiSmoke && apiSmoke < cliSmoke && cliSmoke < publish, commands);
   assert.equal(git(fixture.root, ["status", "--short"]), "");
+});
+
+test("release publish rejects commits made after release preparation", async () => {
+  const fixture = await createReleaseFixture();
+  const env = {
+    ...process.env,
+    OPENJOB_RELEASE_COMMAND_LOG: fixture.commandLog,
+    PATH: `${fixture.fakeBin}:${process.env.PATH}`,
+  };
+  const prepared = spawnSync(process.execPath, [RELEASE_SCRIPT, "prepare", "minor"], {
+    cwd: fixture.root,
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  await writeFile(join(fixture.root, "README.md"), "Post-prepare change\n", { flag: "a" });
+  git(fixture.root, ["add", "README.md"]);
+  git(fixture.root, ["commit", "-m", "Change after preparation"]);
+  git(fixture.root, ["push", "origin", "main"]);
+
+  const result = spawnSync(process.execPath, [RELEASE_SCRIPT, "publish"], {
+    cwd: fixture.root,
+    encoding: "utf8",
+    env,
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /prepared release commit/i);
+  assert.equal(git(fixture.root, ["tag", "--list", "v0.2.0"]), "");
 });
 
 test("release candidates publish as prereleases without deploying production", async () => {
