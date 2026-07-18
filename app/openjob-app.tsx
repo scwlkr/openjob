@@ -20,6 +20,26 @@ import {
 import { useOpenJobNotifications } from "./openjob-notifications";
 
 const SELECTED_GROUP_KEY = "openjob:selected-group-id";
+const NOTIFICATION_GROUP_PARAMETER = "notification-group";
+
+function notificationLaunchGroup() {
+  const url = new URL(window.location.href);
+  const values = url.searchParams.getAll(NOTIFICATION_GROUP_PARAMETER);
+  const candidate = values.length === 1 ? values[0] : null;
+  url.searchParams.delete(NOTIFICATION_GROUP_PARAMETER);
+  window.history.replaceState(
+    {},
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+  return {
+    present: values.length > 0,
+    groupId:
+      candidate && /^grp_[A-Za-z0-9_-]+$/.test(candidate)
+        ? candidate
+        : null,
+  };
+}
 
 function readableError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
@@ -86,9 +106,20 @@ export function OpenJobApp({
     const accessibleGroups = await api.listGroups(token);
     setSelectedGroup(null);
 
+    const notificationLaunch = notificationLaunchGroup();
+    const notifiedGroup = accessibleGroups.find(
+      (group) => group.groupId === notificationLaunch.groupId,
+    );
     const rememberedId = window.localStorage.getItem(SELECTED_GROUP_KEY);
     const remembered = accessibleGroups.find((group) => group.groupId === rememberedId);
-    const candidate = remembered ?? (accessibleGroups.length === 1 ? accessibleGroups[0] : null);
+    const candidate =
+      notifiedGroup ??
+      remembered ??
+      (accessibleGroups.length === 1 ? accessibleGroups[0] : null);
+
+    if (notificationLaunch.present && !notifiedGroup) {
+      setNotice("That Group is no longer accessible.");
+    }
 
     if (rememberedId && !remembered) {
       window.localStorage.removeItem(SELECTED_GROUP_KEY);
@@ -270,7 +301,7 @@ export function OpenJobApp({
     }
   }
 
-  async function selectGroup(group: Group) {
+  const selectGroup = useCallback(async (group: Group) => {
     if (!session) return;
     setSelectingGroupId(group.groupId);
     setError("");
@@ -282,8 +313,12 @@ export function OpenJobApp({
     } catch (selectError) {
       if (selectError instanceof ApiError && selectError.status === 404) {
         setGroups((current) => current.filter((item) => item.groupId !== group.groupId));
-        setSelectedGroup(null);
-        window.localStorage.removeItem(SELECTED_GROUP_KEY);
+        setSelectedGroup((current) =>
+          current?.groupId === group.groupId ? null : current
+        );
+        if (window.localStorage.getItem(SELECTED_GROUP_KEY) === group.groupId) {
+          window.localStorage.removeItem(SELECTED_GROUP_KEY);
+        }
         setNotice("That Group is no longer accessible.");
       } else if (!(await recoverExpiredSession(selectError))) {
         setError(readableError(selectError));
@@ -291,7 +326,41 @@ export function OpenJobApp({
     } finally {
       setSelectingGroupId(null);
     }
-  }
+  }, [api, recoverExpiredSession, session]);
+
+  useEffect(() => {
+    if (!session || !navigator.serviceWorker?.addEventListener) return;
+    const handleNotificationSelection = (event: MessageEvent) => {
+      const message = event.data as unknown;
+      if (
+        !message ||
+        typeof message !== "object" ||
+        Array.isArray(message) ||
+        Object.keys(message).sort().join(",") !== "groupId,type" ||
+        !("type" in message) ||
+        message.type !== "openjob:select-notification-group" ||
+        !("groupId" in message) ||
+        typeof message.groupId !== "string" ||
+        !/^grp_[A-Za-z0-9_-]+$/.test(message.groupId)
+      ) {
+        return;
+      }
+      const group = groups.find(({ groupId }) => groupId === message.groupId);
+      if (!group) {
+        setNotice("That Group is no longer accessible.");
+        return;
+      }
+      void selectGroup(group);
+    };
+    navigator.serviceWorker.addEventListener(
+      "message",
+      handleNotificationSelection,
+    );
+    return () => navigator.serviceWorker.removeEventListener(
+      "message",
+      handleNotificationSelection,
+    );
+  }, [groups, selectGroup, session]);
 
   if (session === undefined || (session && loading)) return <LoadingScreen />;
   if (session === null) {

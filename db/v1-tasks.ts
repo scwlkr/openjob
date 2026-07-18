@@ -28,6 +28,7 @@ type TaskUpdateInput = Parameters<TaskStore["update"]>[3];
 
 type PersistedTask = OpenJobTask & {
   assigneeMembershipId: string | null;
+  creatorUserId: string | null;
 };
 
 type StoredTask = PersistedTask & {
@@ -44,6 +45,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   const assigneeState = document.fields?.assigneeState?.stringValue;
   const assigneeMembershipId =
     document.fields?.assigneeMembershipId?.stringValue ?? null;
+  const creatorUserId = document.fields?.creatorUserId?.stringValue ?? null;
   const priority = document.fields?.priority?.stringValue ?? "normal";
   const dueDate = document.fields?.dueDate?.stringValue ?? null;
   const state = document.fields?.state?.stringValue;
@@ -87,6 +89,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     assignee,
     assigneeMembershipId:
       assigneeState === "assigned" ? assigneeMembershipId : null,
+    creatorUserId,
     priority: priority as TaskPriority,
     dueDate: dueDate as DueDate | null,
     state: state as OpenJobTask["state"],
@@ -143,6 +146,9 @@ function taskFields(task: PersistedTask) {
           assigneeUserId: { stringValue: task.assignee.userId },
           assigneeUsername: { stringValue: task.assignee.username },
         }
+      : {}),
+    ...(task.creatorUserId !== null
+      ? { creatorUserId: { stringValue: task.creatorUserId } }
       : {}),
     priority: { stringValue: task.priority },
     ...(task.dueDate !== null
@@ -386,6 +392,7 @@ export function createFirestoreTaskStore(
             username: assignee.username,
           },
           assigneeMembershipId: membershipId(assigneeMember),
+          creatorUserId: actorUserId,
           priority: input.priority,
           dueDate: input.dueDate,
           state: "open",
@@ -420,7 +427,15 @@ export function createFirestoreTaskStore(
               currentDocument: { exists: false },
             },
           ]);
-          return { kind: "created" as const, task: publicTask(task) };
+          return {
+            kind: "created" as const,
+            task: publicTask(task),
+            change: {
+              creatorUserId: task.creatorUserId,
+              previousAssigneeUserId: null,
+              previousState: null,
+            },
+          };
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
         }
@@ -487,7 +502,18 @@ export function createFirestoreTaskStore(
               currentDocument: { updateTime: task.updateTime },
             },
           ]);
-          return { kind: "updated" as const, task: publicTask(updated) };
+          return {
+            kind: "updated" as const,
+            task: publicTask(updated),
+            change: {
+              creatorUserId: task.creatorUserId,
+              previousAssigneeUserId:
+                task.assignee.state === "assigned"
+                  ? task.assignee.userId
+                  : null,
+              previousState: task.state,
+            },
+          };
         },
         "Task update could not resolve concurrent writes.",
       );
@@ -505,7 +531,18 @@ export function createFirestoreTaskStore(
                 currentDocument: { updateTime: task.updateTime },
               },
             ]);
-            return { kind: "updated" as const, task: publicTask(task) };
+            return {
+              kind: "updated" as const,
+              task: publicTask(task),
+              change: {
+                creatorUserId: task.creatorUserId,
+                previousAssigneeUserId:
+                  task.assignee.state === "assigned"
+                    ? task.assignee.userId
+                    : null,
+                previousState: task.state,
+              },
+            };
           }
           const transitioned: StoredTask = {
             ...task,
@@ -524,7 +561,18 @@ export function createFirestoreTaskStore(
               currentDocument: { updateTime: task.updateTime },
             },
           ]);
-          return { kind: "updated" as const, task: publicTask(updated) };
+          return {
+            kind: "updated" as const,
+            task: publicTask(updated),
+            change: {
+              creatorUserId: task.creatorUserId,
+              previousAssigneeUserId:
+                task.assignee.state === "assigned"
+                  ? task.assignee.userId
+                  : null,
+              previousState: task.state,
+            },
+          };
         },
         "Task state update could not resolve concurrent writes.",
       );

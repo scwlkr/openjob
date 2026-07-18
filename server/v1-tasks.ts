@@ -45,6 +45,20 @@ export type OpenJobTask = {
   completedAt: string | null;
 };
 
+export type TaskMutationChange = {
+  creatorUserId: string | null;
+  previousAssigneeUserId: string | null;
+  previousState: "open" | "done" | null;
+};
+
+export type TaskNotificationIntent = {
+  eventKind: "assignment" | "completion";
+  groupId: GroupId;
+  taskId: TaskId;
+  taskText: TaskText;
+  recipientUserIds: string[];
+};
+
 export type TaskStore = {
   hasAccess(actorUserId: string, groupId: GroupId): Promise<boolean>;
   create(
@@ -53,7 +67,7 @@ export type TaskStore = {
     assignee: { userId: string; username: Username },
     input: { text: TaskText; priority: TaskPriority; dueDate: DueDate | null },
   ): Promise<
-    | { kind: "created"; task: OpenJobTask }
+    | { kind: "created"; task: OpenJobTask; change: TaskMutationChange }
     | { kind: "assignee_not_member" }
     | { kind: "not_found" }
   >;
@@ -77,7 +91,7 @@ export type TaskStore = {
       dueDate?: DueDate | null;
     },
   ): Promise<
-    | { kind: "updated"; task: OpenJobTask }
+    | { kind: "updated"; task: OpenJobTask; change: TaskMutationChange }
     | { kind: "assignee_not_member" }
     | { kind: "group_not_found" }
     | { kind: "task_not_found" }
@@ -89,7 +103,7 @@ export type TaskStore = {
     taskId: TaskId,
     state: "open" | "done",
   ): Promise<
-    | { kind: "updated"; task: OpenJobTask }
+    | { kind: "updated"; task: OpenJobTask; change: TaskMutationChange }
     | { kind: "group_not_found" }
     | { kind: "task_not_found" }
   >;
@@ -117,6 +131,10 @@ type UserStore = {
 };
 
 type TasksApiOptions = {
+  notifications?: {
+    dispatch(intent: TaskNotificationIntent): Promise<void>;
+    schedule(delivery: () => Promise<void>): void;
+  };
   requestId?: () => string;
   tasks: TaskStore;
   users: UserStore;
@@ -566,11 +584,64 @@ function compareTasks(left: OpenJobTask, right: OpenJobTask) {
 }
 
 export function createV1TasksApi({
+  notifications,
   requestId = defaultRequestId,
   tasks,
   users,
   verifyIdToken,
 }: TasksApiOptions) {
+  function scheduleAssignment(
+    task: OpenJobTask,
+    actorUserId: string,
+    previousAssigneeUserId: string | null,
+  ) {
+    if (
+      !notifications ||
+      task.assignee.state !== "assigned" ||
+      task.assignee.userId === actorUserId ||
+      task.assignee.userId === previousAssigneeUserId
+    ) {
+      return;
+    }
+    const intent: TaskNotificationIntent = {
+      eventKind: "assignment",
+      groupId: task.groupId,
+      taskId: task.taskId,
+      taskText: task.text,
+      recipientUserIds: [task.assignee.userId],
+    };
+    notifications.schedule(() => notifications.dispatch(intent));
+  }
+
+  function scheduleCompletion(
+    task: OpenJobTask,
+    actorUserId: string,
+    change: TaskMutationChange,
+  ) {
+    if (
+      !notifications ||
+      change.previousState !== "open" ||
+      task.state !== "done"
+    ) {
+      return;
+    }
+    const recipientUserIds = [...new Set([
+      change.creatorUserId,
+      task.assignee.state === "assigned" ? task.assignee.userId : null,
+    ])].filter(
+      (userId): userId is string => userId !== null && userId !== actorUserId,
+    );
+    if (recipientUserIds.length === 0) return;
+    const intent: TaskNotificationIntent = {
+      eventKind: "completion",
+      groupId: task.groupId,
+      taskId: task.taskId,
+      taskText: task.text,
+      recipientUserIds,
+    };
+    notifications.schedule(() => notifications.dispatch(intent));
+  }
+
   return Object.freeze({
     async fetch(request: Request) {
       try {
@@ -603,7 +674,13 @@ export function createV1TasksApi({
             username: assignee.username as Username,
           }, parsed.input);
           if (result.kind === "created") {
-            return jsonResponse({ data: result.task }, 201);
+            const response = jsonResponse({ data: result.task }, 201);
+            scheduleAssignment(
+              result.task,
+              user.userId,
+              result.change?.previousAssigneeUserId ?? null,
+            );
+            return response;
           }
           if (result.kind === "assignee_not_member") {
             return assigneeNotMember(requestId);
@@ -736,7 +813,13 @@ export function createV1TasksApi({
             ...("dueDate" in parsed.input ? { dueDate: parsed.input.dueDate } : {}),
           });
           if (result.kind === "updated") {
-            return jsonResponse({ data: result.task });
+            const response = jsonResponse({ data: result.task });
+            scheduleAssignment(
+              result.task,
+              user.userId,
+              result.change?.previousAssigneeUserId ?? null,
+            );
+            return response;
           }
           if (result.kind === "assignee_not_member") {
             return assigneeNotMember(requestId);
@@ -769,9 +852,10 @@ export function createV1TasksApi({
             path.taskId,
             parsed.state,
           );
-          return result.kind === "updated"
-            ? jsonResponse({ data: result.task })
-            : taskNotFound(requestId);
+          if (result.kind !== "updated") return taskNotFound(requestId);
+          const response = jsonResponse({ data: result.task });
+          scheduleCompletion(result.task, user.userId, result.change);
+          return response;
         }
 
         return errorResponse(requestId, {

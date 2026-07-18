@@ -166,6 +166,44 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     createdAt: NOW,
     completedAt: null,
   });
+  const taskDocumentName = `${database}/v1Groups/${group.groupId}/tasks/${task.taskId}`;
+  assert.equal(
+    firestore.documents.get(taskDocumentName)?.fields?.creatorUserId?.stringValue,
+    eli.userId,
+  );
+  assert.equal("creatorUserId" in task, false);
+
+  const legacyTaskId = "task_legacy_unknown_creator";
+  const legacyTaskDocumentName =
+    `${database}/v1Groups/${group.groupId}/tasks/${legacyTaskId}`;
+  firestore.documents.set(legacyTaskDocumentName, {
+    name: legacyTaskDocumentName,
+    fields: {
+      taskId: { stringValue: legacyTaskId },
+      groupId: { stringValue: group.groupId },
+      text: { stringValue: "Legacy Task with Unknown Creator" },
+      assigneeState: { stringValue: "unassigned" },
+      priority: { stringValue: "normal" },
+      state: { stringValue: "open" },
+      createdAt: { timestampValue: "2026-07-14T12:00:00.000Z" },
+    },
+    updateTime: "2026-07-18T12:00:00.000000Z",
+  });
+  const legacyResponse = await harness.request({
+    headers: shaneHeaders,
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks/${legacyTaskId}`,
+  });
+  assert.equal(legacyResponse.status, 200);
+  const legacyPublicTask = (await legacyResponse.json()).data;
+  assert.equal(legacyPublicTask.text, "Legacy Task with Unknown Creator");
+  assert.equal("creatorUserId" in legacyPublicTask, false);
+  const removedLegacy = await harness.request({
+    headers: shaneHeaders,
+    method: "DELETE",
+    path: `/api/v1/groups/${group.groupId}/tasks/${legacyTaskId}`,
+  });
+  assert.equal(removedLegacy.status, 204);
 
   const editedResponse = await harness.request({
     body: {
@@ -216,6 +254,10 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   );
   task = (await completedResponse.json()).data;
   assert.equal(task.completedAt, "2026-07-15T12:10:00.000Z");
+  assert.equal(
+    firestore.documents.get(taskDocumentName)?.fields?.creatorUserId?.stringValue,
+    eli.userId,
+  );
 
   harness.setNow("2026-07-15T12:20:00.000Z");
   const commitsBeforeRepeatedCompletion = firestore.commitAttempts();
