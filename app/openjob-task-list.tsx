@@ -307,6 +307,9 @@ function TaskForm({
             <span className={styles.taskFieldLabel}>Due date</span>
             <span className={styles.taskDateShell}>
               <CalendarIcon />
+              <span className={styles.taskDateValue} aria-hidden="true">
+                {dueDate ? formatDueDate(dueDate) : "Add date"}
+              </span>
               <input
                 aria-label="Due date"
                 type="date"

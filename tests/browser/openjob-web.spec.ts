@@ -2157,7 +2157,12 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   await open.click();
   let editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveJSProperty("tagName", "SELECT");
-  await expect(editor.getByLabel("Due date")).toHaveAttribute("type", "date");
+  const dueDate = editor.getByLabel("Due date");
+  await expect(dueDate).toHaveAttribute("type", "date");
+  await expect(editor.getByText("Add date", { exact: true })).toBeVisible();
+  await dueDate.fill("2026-07-30");
+  await expect(editor.getByText("Jul 30", { exact: true })).toBeVisible();
+  await dueDate.fill("");
   await expect(editor.getByRole("radio")).toHaveCount(3);
   await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
   for (const priority of ["High", "Normal", "Low"]) {
