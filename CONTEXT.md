@@ -28,6 +28,10 @@ _Avoid_: Project, Kanban board
 A smallest unit of work on a Task List. An open Task is normally assigned to exactly one current Member by Username; forced removal of that Member can make it Unassigned. A done Task keeps its User as historical attribution if they later leave the Group.
 _Avoid_: Job, ticket, card
 
+**Task Creator**:
+The User who originally adds a Task, distinct from its current Assignee. A Task Creator does not change when the Task is edited or reassigned.
+_Avoid_: Task owner, author
+
 **Push Notification**:
 A User-enabled alert that can appear outside the active OpenJob app when a relevant Task event matters to that User. It is an ephemeral alert, not a durable inbox item.
 _Avoid_: In-app notification, Notification inbox
