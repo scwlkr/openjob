@@ -10,6 +10,7 @@ const VALUE_OPTIONS = new Set([
   "--limit",
   "--name",
   "--out",
+  "--priority",
   "--status",
   "--text",
   "--text-file",

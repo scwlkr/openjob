@@ -9,6 +9,7 @@ import {
   type Member,
   type OpenJobApi,
   type Task,
+  type TaskPriority,
 } from "./openjob-contracts";
 import styles from "./openjob.module.css";
 
@@ -18,7 +19,12 @@ type EditorMode = "new" | "edit" | "assign";
 type Editor =
   | { mode: "new"; username: string }
   | { mode: "edit" | "assign"; task: Task };
-type TaskFormInput = { text: string; assigneeUsername: string; dueDate: string };
+type TaskFormInput = {
+  text: string;
+  assigneeUsername: string;
+  priority: TaskPriority;
+  dueDate: string;
+};
 type EditorAction = "save" | "delete";
 type TaskStateAction = "complete" | "reopen" | "undo";
 type TaskStateSubject = { taskId: string; taskText: string };
@@ -81,13 +87,14 @@ function taskFormInput(task: Task): TaskFormInput {
   return {
     text: task.text,
     assigneeUsername: task.assignee.state === "assigned" ? task.assignee.username : "",
+    priority: task.priority ?? "normal",
     dueDate: task.dueDate ?? "",
   };
 }
 
 function editorFormInput(editor: Editor): TaskFormInput {
   return editor.mode === "new"
-    ? { text: "", assigneeUsername: editor.username, dueDate: "" }
+    ? { text: "", assigneeUsername: editor.username, priority: "normal", dueDate: "" }
     : taskFormInput(editor.task);
 }
 
@@ -120,11 +127,15 @@ function readEditorDraft(): StoredEditorDraft | null {
       !value.input ||
       typeof value.input.text !== "string" ||
       typeof value.input.assigneeUsername !== "string" ||
+      !["high", "normal", "low"].includes(value.input.priority ?? "normal") ||
       typeof value.input.dueDate !== "string" ||
       !["new", "edit", "assign"].includes(value.mode ?? "") ||
       !(value.taskId === null || typeof value.taskId === "string")
     ) return null;
-    return value as StoredEditorDraft;
+    return {
+      ...value,
+      input: { ...value.input, priority: value.input.priority ?? "normal" },
+    } as StoredEditorDraft;
   } catch {
     return null;
   }
@@ -135,6 +146,7 @@ function TaskForm({
   error,
   initialAssignee,
   initialDueDate = "",
+  initialPriority = "normal",
   initialText = "",
   members,
   mode,
@@ -147,6 +159,7 @@ function TaskForm({
   error: string;
   initialAssignee: string;
   initialDueDate?: string;
+  initialPriority?: TaskPriority;
   initialText?: string;
   members: NamedMember[];
   mode: EditorMode;
@@ -157,6 +170,7 @@ function TaskForm({
 }) {
   const [text, setText] = useState(initialText);
   const [assignee, setAssignee] = useState(initialAssignee);
+  const [priority, setPriority] = useState<TaskPriority>(initialPriority);
   const [dueDate, setDueDate] = useState(initialDueDate);
   const [validationError, setValidationError] = useState("");
   const copy = TASK_FORM_COPY[mode];
@@ -177,7 +191,7 @@ function TaskForm({
           setValidationError("Choose a current Member before saving.");
           return;
         }
-        onSave({ text, assigneeUsername: assignee, dueDate });
+        onSave({ text, assigneeUsername: assignee, priority, dueDate });
       }}
       noValidate
     >
@@ -189,7 +203,7 @@ function TaskForm({
             const nextText = event.target.value;
             setText(nextText);
             setValidationError("");
-            onInputChange({ text: nextText, assigneeUsername: assignee, dueDate });
+            onInputChange({ text: nextText, assigneeUsername: assignee, priority, dueDate });
           }}
           autoFocus
           required
@@ -203,12 +217,28 @@ function TaskForm({
             const nextAssignee = event.target.value;
             setAssignee(nextAssignee);
             setValidationError("");
-            onInputChange({ text, assigneeUsername: nextAssignee, dueDate });
+            onInputChange({ text, assigneeUsername: nextAssignee, priority, dueDate });
           }}
           required
         >
           <option value="" disabled>Choose a Member</option>
           {members.map((member) => <option key={member.userId} value={member.username}>@{member.username}</option>)}
+        </select>
+      </label>
+      <label>
+        Priority
+        <select
+          value={priority}
+          onChange={(event) => {
+            const nextPriority = event.target.value as TaskPriority;
+            setPriority(nextPriority);
+            setValidationError("");
+            onInputChange({ text, assigneeUsername: assignee, priority: nextPriority, dueDate });
+          }}
+        >
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
         </select>
       </label>
       <label>
@@ -220,7 +250,7 @@ function TaskForm({
             const nextDueDate = event.target.value;
             setDueDate(nextDueDate);
             setValidationError("");
-            onInputChange({ text, assigneeUsername: assignee, dueDate: nextDueDate });
+            onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
           }}
         />
       </label>
@@ -611,6 +641,7 @@ export function TaskList({
       void runEditorMutation((token) => api.createTask(token, group.groupId, {
         text: input.text,
         assigneeUsername: input.assigneeUsername,
+        priority: input.priority,
         ...(input.dueDate ? { dueDate: input.dueDate } : {}),
       }), "save");
       return;
@@ -618,6 +649,7 @@ export function TaskList({
     void runEditorMutation((token) => api.updateTask(token, group.groupId, editor.task.taskId, {
       text: input.text,
       assigneeUsername: input.assigneeUsername,
+      priority: input.priority,
       dueDate: input.dueDate || null,
     }), "save");
   }
@@ -776,6 +808,7 @@ export function TaskList({
               <div className={styles.taskCards}>
                 {sectionTasks.map((task) => {
                   const overdue = task.state === "open" && task.dueDate !== null && task.dueDate < localDateKey();
+                  const priority = task.priority ?? "normal";
                   const taskStateAction = taskStateActions[task.taskId];
                   const showCompletionControl = (task.state === "open" && taskStateAction !== "reopen")
                     || taskStateAction === "complete"
@@ -789,6 +822,11 @@ export function TaskList({
                         </span>
                         <span aria-hidden="true">·</span>
                         <span className={styles.taskState}>{task.state === "open" ? "Open" : "Done"}</span>
+                        {task.state === "open" && priority !== "normal" ? (
+                          <span className={`${styles.taskPriority} ${priority === "high" ? styles.taskPriorityHigh : styles.taskPriorityLow}`}>
+                            {priority === "high" ? "High" : "Low"}
+                          </span>
+                        ) : null}
                         {task.dueDate ? (
                           <span className={styles.taskDue}>
                             <time dateTime={task.dueDate}>Due {formatDueDate(task.dueDate)}</time>
@@ -869,6 +907,7 @@ export function TaskList({
               error={actionError}
               initialAssignee={displayedEditorInput?.assigneeUsername ?? ""}
               initialDueDate={displayedEditorInput?.dueDate ?? ""}
+              initialPriority={displayedEditorInput?.priority ?? "normal"}
               initialText={displayedEditorInput?.text ?? ""}
               members={namedMembers}
               mode={editor.mode}

@@ -34,6 +34,8 @@ export type InviteLink = {
 
 export type InvitePreview = { groupName: string };
 
+export type TaskPriority = "high" | "normal" | "low";
+
 export type Task = {
   taskId: string;
   groupId: string;
@@ -41,6 +43,7 @@ export type Task = {
   assignee:
     | { state: "assigned"; userId: string; username: string }
     | { state: "unassigned" };
+  priority: TaskPriority;
   dueDate: string | null;
   state: "open" | "done";
   createdAt: string;
@@ -86,13 +89,23 @@ export type OpenJobApi = {
   createTask(
     token: string,
     groupId: string,
-    input: { text: string; assigneeUsername: string; dueDate?: string },
+    input: {
+      text: string;
+      assigneeUsername: string;
+      priority?: TaskPriority;
+      dueDate?: string;
+    },
   ): Promise<Task>;
   updateTask(
     token: string,
     groupId: string,
     taskId: string,
-    input: { text?: string; assigneeUsername?: string; dueDate?: string | null },
+    input: {
+      text?: string;
+      assigneeUsername?: string;
+      priority?: TaskPriority;
+      dueDate?: string | null;
+    },
   ): Promise<Task>;
   setTaskState(
     token: string,

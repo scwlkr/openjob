@@ -160,6 +160,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
       userId: shane.userId,
       username: "shane",
     },
+    priority: "normal",
     dueDate: "2026-07-18",
     state: "open",
     createdAt: NOW,
@@ -170,6 +171,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     body: {
       text: "Publish release notes",
       assigneeUsername: "eli",
+      priority: "high",
       dueDate: null,
     },
     headers: shaneHeaders,
@@ -192,6 +194,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
       userId: eli.userId,
       username: "eli",
     },
+    priority: "high",
     dueDate: null,
     state: "open",
     createdAt: NOW,
@@ -321,7 +324,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   });
   await assertContract(listed, "/api/v1/groups/{groupId}/tasks", "get");
   assert.deepEqual(await listed.json(), {
-    data: [soonerForEli, laterForEli, task],
+    data: [task, soonerForEli, laterForEli],
     nextCursor: null,
   });
 

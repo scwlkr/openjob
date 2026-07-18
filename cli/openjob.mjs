@@ -51,7 +51,7 @@ const VERSION = packageJson.version;
 const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
 const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
 const TASK_COMMON_OPTIONS = GROUP_SCOPED_OPTIONS;
-const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--due"];
+const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--priority", "--due"];
 const TASK_OPTIONS = new Map([
   ["list", new Set([...TASK_COMMON_OPTIONS, "--status", "--assignee", "--limit"])],
   ["create", new Set([...TASK_COMMON_OPTIONS, "--input", ...TASK_FIELD_OPTIONS])],
@@ -151,10 +151,10 @@ const RESOURCE_HELP = {
   openjob invite join <token-or-url>`,
   task: `Usage:
   openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
-  openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--due <YYYY-MM-DD>]
+  openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--priority <high|normal|low>] [--due <YYYY-MM-DD>]
   openjob task create --input <path|->
   openjob task show <task-id>
-  openjob task edit <task-id> [--text <text> | --text-file <path|->] [--assignee <username>] [--due <YYYY-MM-DD|none>]
+  openjob task edit <task-id> [--text <text> | --text-file <path|->] [--assignee <username>] [--priority <high|normal|low>] [--due <YYYY-MM-DD|none>]
   openjob task edit <task-id> --input <path|->
   openjob task done <task-id>
   openjob task reopen <task-id>
@@ -258,6 +258,13 @@ function taskMutationBody(command, options) {
   if (options.has("--due")) {
     const dueDate = options.get("--due");
     body.dueDate = command === "edit" && dueDate === "none" ? null : dueDate;
+  }
+  if (options.has("--priority")) {
+    const priority = options.get("--priority") ?? "";
+    if (!new Set(["high", "normal", "low"]).has(priority)) {
+      throw new CliError("usage_error", "--priority must be high, normal, or low.", 2);
+    }
+    body.priority = /** @type {"high" | "normal" | "low"} */ (priority);
   }
   return body;
 }
