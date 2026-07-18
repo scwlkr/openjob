@@ -64,11 +64,17 @@ async function createReleaseFixture() {
       "#!/bin/sh",
       "printf 'npm %s\\n' \"$*\" >> \"$OPENJOB_RELEASE_COMMAND_LOG\"",
       "if [ \"$OPENJOB_FAKE_DEPLOY_FAIL\" = \"1\" ] && [ \"$1 $2\" = \"run deploy:raw\" ]; then exit 1; fi",
+      "if [ \"$1 $2\" = \"run cli:smoke:production\" ] && [ ! -x \"$OPENJOB_CLI_BIN\" ]; then exit 1; fi",
       "if [ \"$1\" = \"pack\" ]; then",
       "  version=$(node -p \"require('./cli/package.json').version\")",
       "  mkdir -p \"$5\"",
       "  printf 'openjob cli artifact' > \"$5/openjob-$version.tgz\"",
       "  printf '[{\"filename\":\"openjob-%s.tgz\"}]\\n' \"$version\"",
+      "fi",
+      "if [ \"$1\" = \"install\" ]; then",
+      "  mkdir -p \"$4/bin\"",
+      "  printf '#!/bin/sh\\n' > \"$4/bin/openjob\"",
+      "  chmod +x \"$4/bin/openjob\"",
       "fi",
       "",
     ].join("\n")),
@@ -213,6 +219,7 @@ test("release publish creates a tagged draft before deploy proof and then publis
   const cliSmoke = commands.indexOf("npm run cli:smoke:production");
   const publish = commands.indexOf("gh release edit v0.2.0 --draft=false --latest");
   assert.match(commands, /npm pack \.\/cli --json --pack-destination /);
+  assert.match(commands, /npm install --global --prefix .*\/cli-installation .*\/openjob-0\.2\.0\.tgz/);
   assert.match(commands, /gh release create v0\.2\.0 .*openjob-0\.2\.0\.tgz.*openjob-0\.2\.0\.tgz\.sha256.*--draft.*--verify-tag/);
   assert.ok(draft >= 0 && draft < deploy, commands);
   assert.ok(deploy < apiSmoke && apiSmoke < cliSmoke && cliSmoke < publish, commands);
