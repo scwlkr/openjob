@@ -65,10 +65,35 @@ test("explicit registration refreshes or reassigns one installation record", asy
   assert.equal(refreshed.state, "active");
   assert.equal(refreshed.createdAt, first.createdAt);
   assert.notEqual(refreshed.endpoint, first.endpoint);
+  assert.deepEqual(await store.listActive("user_shane"), []);
+  assert.deepEqual(
+    (await store.listActive("user_eli")).map(({ installationId }) => installationId),
+    [INSTALLATION_ID],
+  );
   assert.equal(
     [...firestore.documents.keys()].filter((name) =>
       name.includes("/v1NotificationSubscriptions/"),
     ).length,
     1,
   );
+});
+
+test("delivery lists every active installation for one User and removes only its rejected endpoint", async () => {
+  const { store } = await createStore();
+  const activeId = "installation_active_0123456789";
+  const pausedId = "installation_paused_0123456789";
+  const foreignId = "installation_foreign_0123456789";
+  await store.register({ installationId: activeId, userId: "user_shane", ...CAPABILITY });
+  await store.register({ installationId: pausedId, userId: "user_shane", ...CAPABILITY });
+  await store.setState(pausedId, "user_shane", "paused");
+  await store.register({ installationId: foreignId, userId: "user_eli", ...CAPABILITY });
+
+  assert.deepEqual(
+    (await store.listActive("user_shane")).map(({ installationId }) => installationId),
+    [activeId],
+  );
+  assert.equal(await store.remove(activeId, "user_eli"), false);
+  assert.equal(await store.remove(activeId, "user_shane"), true);
+  assert.deepEqual(await store.listActive("user_shane"), []);
+  assert.equal((await store.get(foreignId)).userId, "user_eli");
 });

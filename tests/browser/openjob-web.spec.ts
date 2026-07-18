@@ -170,6 +170,7 @@ async function installNotificationEnvironment(
       subscribeCalls: 0,
       unsubscribeCalls: 0,
       subscription: null as PushSubscription | null,
+      serviceWorkerMessageListener: null as ((event: MessageEvent) => void) | null,
     };
     Object.defineProperty(window, "__openjobNotificationTest", {
       configurable: true,
@@ -264,6 +265,17 @@ async function installNotificationEnvironment(
       configurable: true,
       value: {
         ready: Promise.resolve(registration),
+        addEventListener(type: string, listener: (event: MessageEvent) => void) {
+          if (type === "message") testState.serviceWorkerMessageListener = listener;
+        },
+        removeEventListener(type: string, listener: (event: MessageEvent) => void) {
+          if (
+            type === "message" &&
+            testState.serviceWorkerMessageListener === listener
+          ) {
+            testState.serviceWorkerMessageListener = null;
+          }
+        },
         async register() {
           return registration;
         },
@@ -1568,6 +1580,41 @@ test("clears stale or concealed Group access without exposing private details", 
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Choose a Group" })).toBeVisible();
   await expect(page.getByText("That Group is no longer accessible.")).toHaveCount(0);
+});
+
+test("notification selection opens only an accessible Group and uses a generic stale fallback", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs, openJobCore],
+  });
+
+  await page.goto(`/?notification-group=${openJobCore.groupId}`);
+  await expect(page.getByRole("heading", { name: "OpenJob Core", exact: true })).toBeVisible();
+  await expect.poll(() =>
+    page.evaluate(() => window.localStorage.getItem("openjob:selected-group-id")),
+  ).toBe(openJobCore.groupId);
+  await expect.poll(() => page.evaluate(() => window.location.search)).toBe("");
+
+  await page.evaluate((groupId) => {
+    const testState = (window as typeof window & {
+      __openjobNotificationTest: {
+        serviceWorkerMessageListener: ((event: MessageEvent) => void) | null;
+      };
+    }).__openjobNotificationTest;
+    testState.serviceWorkerMessageListener?.({
+      data: { type: "openjob:select-notification-group", groupId },
+    } as MessageEvent);
+  }, walkerLabs.groupId);
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+
+  state.concealedGroupIds.add(openJobCore.groupId);
+  state.groups = [walkerLabs];
+  await page.goto("/?notification-group=grp_private-retired");
+  await expect(page.getByText("That Group is no longer accessible.")).toBeVisible();
+  await expect(page.getByText("grp_private-retired")).toHaveCount(0);
+  await expect(page.getByText("OpenJob Core")).toHaveCount(0);
 });
 
 test("accepts an 80-character Unicode Group Name from the service", async ({ page }) => {

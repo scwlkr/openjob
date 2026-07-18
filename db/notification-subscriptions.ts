@@ -100,6 +100,10 @@ export function createFirestoreNotificationSubscriptionStore(
     return `v1NotificationSubscriptions/${installationId}`;
   }
 
+  function deliveryIndexPath(userId: string, installationId: string) {
+    return `v1NotificationSubscriptionUsers/${userId}/installations/${installationId}`;
+  }
+
   async function read(installationId: string) {
     const path = pathFor(installationId);
     const response = await firestore.request(path, {}, { allowNotFound: true });
@@ -107,10 +111,10 @@ export function createFirestoreNotificationSubscriptionStore(
     return parseSubscription((await response.json()) as FirestoreDocument, path);
   }
 
-  async function commit(write: unknown) {
+  async function commit(writes: unknown | unknown[]) {
     await firestore.request(":commit", {
       method: "POST",
-      body: JSON.stringify({ writes: [write] }),
+      body: JSON.stringify({ writes: Array.isArray(writes) ? writes : [writes] }),
     });
   }
 
@@ -128,10 +132,85 @@ export function createFirestoreNotificationSubscriptionStore(
     };
   }
 
+  function deliveryIndexFields(subscription: StoredNotificationSubscription) {
+    return {
+      installationId: { stringValue: subscription.installationId },
+      userId: { stringValue: subscription.userId },
+      state: { stringValue: subscription.state },
+    };
+  }
+
   return Object.freeze({
     async get(installationId: string) {
       const subscription = await read(installationId);
       return subscription ? stored(subscription) : null;
+    },
+
+    async listActive(userId: string) {
+      const active: StoredNotificationSubscription[] = [];
+      let pageToken: string | null = null;
+      do {
+        const parameters = new URLSearchParams({
+          pageSize: "500",
+          orderBy: "__name__",
+        });
+        if (pageToken !== null) parameters.set("pageToken", pageToken);
+        const response = await firestore.request(
+          `v1NotificationSubscriptionUsers/${userId}/installations?${parameters}`,
+        );
+        const page = (await response.json()) as {
+          documents?: FirestoreDocument[];
+          nextPageToken?: string;
+        };
+        for (const document of page.documents ?? []) {
+          const installationId = document.fields?.installationId?.stringValue;
+          const indexedUserId = document.fields?.userId?.stringValue;
+          const state = document.fields?.state?.stringValue;
+          if (
+            !installationId ||
+            indexedUserId !== userId ||
+            (state !== "active" && state !== "paused")
+          ) {
+            throw new Error(
+              "Firestore returned an invalid Notification Subscription delivery index.",
+            );
+          }
+          if (state !== "active") continue;
+          const subscription = await read(installationId);
+          if (
+            subscription?.userId === userId &&
+            subscription.state === "active"
+          ) {
+            active.push(stored(subscription));
+          }
+        }
+        pageToken = page.nextPageToken ?? null;
+      } while (pageToken !== null);
+      return active;
+    },
+
+    async remove(installationId: string, userId: string) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const existing = await read(installationId);
+        if (!existing || existing.userId !== userId) return false;
+        try {
+          await commit([
+            {
+              delete: firestore.documentName(existing.path),
+              currentDocument: { updateTime: existing.updateTime },
+            },
+            {
+              delete: firestore.documentName(
+                deliveryIndexPath(userId, installationId),
+              ),
+            },
+          ]);
+          return true;
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Notification Subscription removal could not be resolved.");
     },
 
     async register(input: {
@@ -155,15 +234,32 @@ export function createFirestoreNotificationSubscriptionStore(
               : timestamp,
         };
         try {
-          await commit({
-            update: {
-              name: firestore.documentName(pathFor(input.installationId)),
-              fields: fields(next),
+          await commit([
+            {
+              update: {
+                name: firestore.documentName(pathFor(input.installationId)),
+                fields: fields(next),
+              },
+              currentDocument: existing
+                ? { updateTime: existing.updateTime }
+                : { exists: false },
             },
-            currentDocument: existing
-              ? { updateTime: existing.updateTime }
-              : { exists: false },
-          });
+            ...(existing && existing.userId !== input.userId
+              ? [{
+                  delete: firestore.documentName(
+                    deliveryIndexPath(existing.userId, input.installationId),
+                  ),
+                }]
+              : []),
+            {
+              update: {
+                name: firestore.documentName(
+                  deliveryIndexPath(input.userId, input.installationId),
+                ),
+                fields: deliveryIndexFields(next),
+              },
+            },
+          ]);
           return next;
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
@@ -189,20 +285,30 @@ export function createFirestoreNotificationSubscriptionStore(
           stateChangedAt: timestamp,
         };
         try {
-          await commit({
-            update: {
-              name: firestore.documentName(existing.path),
-              fields: {
-                state: { stringValue: state },
-                updatedAt: { timestampValue: timestamp },
-                stateChangedAt: { timestampValue: timestamp },
+          await commit([
+            {
+              update: {
+                name: firestore.documentName(existing.path),
+                fields: {
+                  state: { stringValue: state },
+                  updatedAt: { timestampValue: timestamp },
+                  stateChangedAt: { timestampValue: timestamp },
+                },
+              },
+              updateMask: {
+                fieldPaths: ["state", "updatedAt", "stateChangedAt"],
+              },
+              currentDocument: { updateTime: existing.updateTime },
+            },
+            {
+              update: {
+                name: firestore.documentName(
+                  deliveryIndexPath(userId, installationId),
+                ),
+                fields: deliveryIndexFields(next),
               },
             },
-            updateMask: {
-              fieldPaths: ["state", "updatedAt", "stateChangedAt"],
-            },
-            currentDocument: { updateTime: existing.updateTime },
-          });
+          ]);
           return next;
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;

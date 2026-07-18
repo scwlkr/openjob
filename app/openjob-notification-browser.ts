@@ -1,11 +1,10 @@
 import type { BrowserPushSubscription } from "./openjob-contracts";
+import { VAPID_PUBLIC_KEY } from "../shared/push";
 
 const LOCAL_STATE_KEY = "openjob:notification-installation";
 const DATABASE_NAME = "openjob-notifications";
 const DATABASE_STORE = "installation-state";
 const DATABASE_RECORD = "current";
-const APPLICATION_SERVER_KEY =
-  "BAjmkCDWNiVDAavAHLX0Jq4WiwcifG0Oy_p_TjOb_X8KUjc7aUSoRYJWz6-gSCuqSeRnjRYNZ8dQCwNxCneHNgc";
 
 export type LocalInstallationState = {
   installationId: string;
@@ -104,9 +103,9 @@ export function supportsNotifications() {
 }
 
 function applicationServerKey() {
-  const padding = "=".repeat((4 - (APPLICATION_SERVER_KEY.length % 4)) % 4);
+  const padding = "=".repeat((4 - (VAPID_PUBLIC_KEY.length % 4)) % 4);
   const binary = atob(
-    APPLICATION_SERVER_KEY.replaceAll("-", "+").replaceAll("_", "/") + padding,
+    VAPID_PUBLIC_KEY.replaceAll("-", "+").replaceAll("_", "/") + padding,
   );
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }

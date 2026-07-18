@@ -1,9 +1,11 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { createFirestoreGroupStore } from "@/db/groups";
 import { createFirestoreNotificationSubscriptionStore } from "@/db/notification-subscriptions";
 import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestoreUserStore } from "@/db/users";
+import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
+import { createTaskNotificationDispatcher } from "./task-notifications";
 import { createV1GroupsApi, createV1GroupsHandler } from "./v1-groups";
 import { createV1IdentityApi, createV1IdentityHandler } from "./v1-identity";
 import {
@@ -11,11 +13,13 @@ import {
   createV1NotificationSubscriptionsHandler,
 } from "./v1-notification-subscriptions";
 import { createV1TasksApi, createV1TasksHandler } from "./v1-tasks";
+import { createWebPushSender } from "./web-push";
 
 type FirebaseBindings = {
   FIREBASE_CLIENT_EMAIL?: string;
   FIREBASE_PRIVATE_KEY?: string;
   FIREBASE_PROJECT_ID?: string;
+  VAPID_PRIVATE_KEY?: string;
 };
 
 type V1Runtime = {
@@ -50,6 +54,20 @@ function getRuntime() {
   const tasks = createFirestoreTaskStore(firebase);
   const notificationSubscriptions =
     createFirestoreNotificationSubscriptionStore(firebase);
+  const notificationDispatcher = createTaskNotificationDispatcher({
+    groups,
+    subscriptions: notificationSubscriptions,
+    push: createWebPushSender({
+      vapid: {
+        subject: "https://openjob.dev",
+        publicKey: VAPID_PUBLIC_KEY,
+        privateKey: requiredBinding(bindings, "VAPID_PRIVATE_KEY"),
+      },
+    }),
+    reportFailure(failure) {
+      console.warn("Push Notification delivery failed.", failure);
+    },
+  });
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId });
   runtime = {
     groupsApi: createV1GroupsApi({ groups, users, verifyIdToken }),
@@ -59,7 +77,19 @@ function getRuntime() {
       users,
       verifyIdToken,
     }),
-    tasksApi: createV1TasksApi({ tasks, users, verifyIdToken }),
+    tasksApi: createV1TasksApi({
+      notifications: {
+        dispatch: notificationDispatcher.dispatch,
+        schedule(delivery) {
+          waitUntil(delivery().catch(() => {
+            console.warn("Task notification dispatch failed.");
+          }));
+        },
+      },
+      tasks,
+      users,
+      verifyIdToken,
+    }),
   };
   return runtime;
 }
