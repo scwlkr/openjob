@@ -301,22 +301,27 @@ export function OpenJobApp({
     }
   }
 
-  const selectGroup = useCallback(async (group: Group) => {
+  const selectGroup = useCallback(async (groupId: string) => {
     if (!session) return;
-    setSelectingGroupId(group.groupId);
+    setSelectingGroupId(groupId);
     setError("");
     setNotice("");
     try {
-      const verified = await api.getGroup(await session.getIdToken(), group.groupId);
+      const verified = await api.getGroup(await session.getIdToken(), groupId);
+      setGroups((current) => {
+        const existing = current.findIndex((group) => group.groupId === groupId);
+        if (existing < 0) return [...current, verified];
+        return current.map((group, index) => index === existing ? verified : group);
+      });
       setSelectedGroup(verified);
       window.localStorage.setItem(SELECTED_GROUP_KEY, verified.groupId);
     } catch (selectError) {
       if (selectError instanceof ApiError && selectError.status === 404) {
-        setGroups((current) => current.filter((item) => item.groupId !== group.groupId));
+        setGroups((current) => current.filter((item) => item.groupId !== groupId));
         setSelectedGroup((current) =>
-          current?.groupId === group.groupId ? null : current
+          current?.groupId === groupId ? null : current
         );
-        if (window.localStorage.getItem(SELECTED_GROUP_KEY) === group.groupId) {
+        if (window.localStorage.getItem(SELECTED_GROUP_KEY) === groupId) {
           window.localStorage.removeItem(SELECTED_GROUP_KEY);
         }
         setNotice("That Group is no longer accessible.");
@@ -345,12 +350,7 @@ export function OpenJobApp({
       ) {
         return;
       }
-      const group = groups.find(({ groupId }) => groupId === message.groupId);
-      if (!group) {
-        setNotice("That Group is no longer accessible.");
-        return;
-      }
-      void selectGroup(group);
+      void selectGroup(message.groupId);
     };
     navigator.serviceWorker.addEventListener(
       "message",
@@ -360,7 +360,7 @@ export function OpenJobApp({
       "message",
       handleNotificationSelection,
     );
-  }, [groups, selectGroup, session]);
+  }, [selectGroup, session]);
 
   if (session === undefined || (session && loading)) return <LoadingScreen />;
   if (session === null) {
@@ -400,7 +400,7 @@ export function OpenJobApp({
       onGroupRemoved={removeGroup}
       onGroupUpdated={updateGroup}
       onRetry={() => void bootstrap(session)}
-      onSelect={(group) => void selectGroup(group)}
+      onSelect={(group) => void selectGroup(group.groupId)}
       onSignOut={() => void signOut()}
       saving={saving}
       selectedGroup={selectedGroup}

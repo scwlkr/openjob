@@ -590,6 +590,15 @@ export function createV1TasksApi({
   users,
   verifyIdToken,
 }: TasksApiOptions) {
+  function scheduleNotification(intent: TaskNotificationIntent) {
+    if (!notifications) return;
+    try {
+      notifications.schedule(() => notifications.dispatch(intent));
+    } catch {
+      // Notification delivery is best-effort and cannot change Task success.
+    }
+  }
+
   function scheduleAssignment(
     task: OpenJobTask,
     actorUserId: string,
@@ -610,7 +619,7 @@ export function createV1TasksApi({
       taskText: task.text,
       recipientUserIds: [task.assignee.userId],
     };
-    notifications.schedule(() => notifications.dispatch(intent));
+    scheduleNotification(intent);
   }
 
   function scheduleCompletion(
@@ -639,7 +648,7 @@ export function createV1TasksApi({
       taskText: task.text,
       recipientUserIds,
     };
-    notifications.schedule(() => notifications.dispatch(intent));
+    scheduleNotification(intent);
   }
 
   return Object.freeze({

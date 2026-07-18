@@ -1609,6 +1609,24 @@ test("notification selection opens only an accessible Group and uses a generic s
   }, walkerLabs.groupId);
   await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
 
+  const newlyAccessible = {
+    ...openJobCore,
+    groupId: "grp_newly-accessible",
+    name: "Newly Accessible",
+  };
+  state.groups.push(newlyAccessible);
+  await page.evaluate((groupId) => {
+    const testState = (window as typeof window & {
+      __openjobNotificationTest: {
+        serviceWorkerMessageListener: ((event: MessageEvent) => void) | null;
+      };
+    }).__openjobNotificationTest;
+    testState.serviceWorkerMessageListener?.({
+      data: { type: "openjob:select-notification-group", groupId },
+    } as MessageEvent);
+  }, newlyAccessible.groupId);
+  await expect(page.getByRole("heading", { name: "Newly Accessible", exact: true })).toBeVisible();
+
   state.concealedGroupIds.add(openJobCore.groupId);
   state.groups = [walkerLabs];
   await page.goto("/?notification-group=grp_private-retired");
