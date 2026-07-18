@@ -2039,14 +2039,17 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   const desktopEditor = await editor.boundingBox();
   expect(desktopEditor!.width).toBeLessThanOrEqual(560);
   expect(Math.abs(desktopEditor!.x + desktopEditor!.width / 2 - 640)).toBeLessThanOrEqual(1);
-  expect(Math.abs(desktopEditor!.y + desktopEditor!.height / 2 - 360)).toBeLessThanOrEqual(1);
+  await expect.poll(async () => {
+    const box = await editor.boundingBox();
+    return box ? Math.abs(box.y + box.height / 2 - 360) : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
   await expect(editor.getByLabel("Task text")).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(editor.getByRole("button", { name: "Create Task" })).toBeFocused();
+  await expect(editor.getByRole("button", { name: "Close Task Editor" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
-  await expect(editor.getByLabel("Priority")).toHaveValue("normal");
+  await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
   await expect(editor.getByLabel("Assignee").getByRole("option")).toHaveText([
     "Choose a Member",
     "@morgan",
@@ -2065,12 +2068,159 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
   await editor.getByLabel("Task text").fill("Keep focus trapped while saving");
   state.taskMutationDelayMs = 300;
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByRole("button", { name: "Saving…" })).toBeDisabled();
   await page.keyboard.press("Tab");
   await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor).toHaveCount(0);
   await expect(memberAddTask).toBeFocused();
+});
+
+test("opens a zoom-safe half-height Task sheet on narrow screens", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+    tasks: [],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New Task" }).click();
+  const editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor).toBeVisible();
+  await expect(editor).toBeFocused();
+  await expect(editor.getByText("New Task", { exact: true })).toHaveCount(1);
+  await expect(editor.getByRole("button", { name: "Create", exact: true })).toBeVisible();
+
+  await expect.poll(async () => {
+    const box = await editor.boundingBox();
+    return box ? Math.abs(box.y + box.height - 844) : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
+  const sheet = await editor.boundingBox();
+  expect(sheet).not.toBeNull();
+  expect(sheet!.height).toBeGreaterThanOrEqual(420);
+  expect(sheet!.height).toBeLessThanOrEqual(450);
+
+  const taskText = editor.getByLabel("Task text");
+  await expect(taskText).not.toBeFocused();
+  for (const control of [taskText, editor.getByLabel("Assignee"), editor.getByLabel("Due date")]) {
+    expect(Number.parseFloat(await control.evaluate((element) => getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16);
+  }
+
+  const close = editor.getByRole("button", { name: "Close Task Editor" });
+  const closeBox = await close.boundingBox();
+  expect(closeBox).not.toBeNull();
+  expect(closeBox!.width).toBeGreaterThanOrEqual(44);
+  expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+  const createBox = await editor.getByRole("button", { name: "Create", exact: true }).boundingBox();
+  expect(createBox!.width).toBeGreaterThanOrEqual(44);
+  expect(createBox!.height).toBeGreaterThanOrEqual(44);
+  expect(createBox!.y + createBox!.height).toBeLessThanOrEqual(sheet!.y + sheet!.height);
+
+  for (const viewport of [
+    { width: 375, height: 812 },
+    { width: 430, height: 932 },
+    { width: 667, height: 375 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(async () => {
+      const box = await editor.boundingBox();
+      return box ? Math.abs(box.y + box.height - viewport.height) : Number.POSITIVE_INFINITY;
+    }).toBeLessThanOrEqual(1);
+    const resizedSheet = await editor.boundingBox();
+    expect(resizedSheet!.height).toBeGreaterThanOrEqual(Math.min(viewport.height * .5, 470));
+    expect(resizedSheet!.height).toBeLessThanOrEqual(Math.min(viewport.height * .54, 481));
+    await expectNoHorizontalOverflow(page);
+  }
+});
+
+test("keeps compact Task controls clear and mobile dismissal immediate", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+      { userId: "user_morgan", username: "morgan", role: "member", joinedAt: "2026-07-02T00:00:00.000Z" },
+    ],
+    tasks: [],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const open = page.getByRole("button", { name: "New Task" });
+  await open.click();
+  let editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor.getByLabel("Assignee")).toHaveJSProperty("tagName", "SELECT");
+  await expect(editor.getByLabel("Due date")).toHaveAttribute("type", "date");
+  await expect(editor.getByRole("radio")).toHaveCount(3);
+  await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
+  for (const priority of ["High", "Normal", "Low"]) {
+    const choice = editor.getByRole("radio", { name: priority }).locator("..");
+    const choiceBox = await choice.boundingBox();
+    expect(Math.round(choiceBox!.height)).toBeGreaterThanOrEqual(44);
+  }
+
+  await editor.getByLabel("Task text").fill("Discard this draft");
+  await editor.getByLabel("Assignee").selectOption("morgan");
+  await editor.getByRole("radio", { name: "Low" }).check();
+  await page.mouse.click(12, 80);
+  await expect(editor).toHaveCount(0);
+
+  await open.click();
+  editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor.getByLabel("Task text")).toHaveValue("");
+  await expect(editor.getByLabel("Assignee")).toHaveValue("");
+  await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
+
+  await expect.poll(async () => {
+    const box = await editor.boundingBox();
+    return box ? Math.abs(box.y + box.height - 844) : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
+  const sheet = await editor.boundingBox();
+  const handle = editor.getByTestId("task-sheet-handle");
+  let handleBox = await handle.boundingBox();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y - 90, { steps: 4 });
+  await page.mouse.up();
+  await expect(editor).toBeVisible();
+  await expect.poll(async () => (await editor.boundingBox())?.y).toBeCloseTo(sheet!.y, 0);
+
+  handleBox = await handle.boundingBox();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + 90, { steps: 4 });
+  await page.mouse.up();
+  await expect(editor).toHaveCount(0);
+});
+
+test("keeps the reduced-motion Task sheet immediately operable", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New Task" }).click();
+  const editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor).toBeFocused();
+  expect(await editor.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
+  await editor.getByLabel("Task text").fill("Reduced motion remains usable");
+  await editor.getByRole("button", { name: "Close Task Editor" }).click();
+  await expect(editor).toHaveCount(0);
 });
 
 test("separates the touch-first completion control from keyboard Task editing", async ({ page }) => {
@@ -2462,10 +2612,10 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   let editor = page.getByRole("dialog", { name: "New Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("morgan");
   await editor.getByLabel("Task text").fill("Order replacement menu stands");
-  await editor.getByLabel("Priority").selectOption("high");
+  await editor.getByRole("radio", { name: "High" }).check();
   await editor.getByLabel("Due date").fill("2026-07-20");
   state.taskMutationDelayMs = 150;
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByRole("button", { name: "Saving…" })).toBeDisabled();
   await expect(page.getByText("Order replacement menu stands")).toBeVisible();
   state.taskMutationDelayMs = 0;
@@ -2474,11 +2624,11 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await expect(card.getByText("High", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Edit" }).click();
   editor = page.getByRole("dialog", { name: "Edit Task" });
-  await expect(editor.getByLabel("Priority")).toHaveValue("high");
+  await expect(editor.getByRole("radio", { name: "High" })).toBeChecked();
   await editor.getByLabel("Task text").fill("Order two menu stands");
   await editor.getByLabel("Assignee").selectOption("shane");
-  await editor.getByLabel("Priority").selectOption("low");
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("radio", { name: "Low" }).check();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
   await expect(card.getByText("Low", { exact: true })).toBeVisible();
@@ -2502,12 +2652,12 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   editor = page.getByRole("dialog", { name: "Assign Task" });
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
   const requestsBeforeRequiredSelection = state.taskMutationRequests;
-  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await editor.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(editor).toBeVisible();
   await expect(editor.getByRole("alert")).toContainText("Choose a current Member");
   expect(state.taskMutationRequests).toBe(requestsBeforeRequiredSelection);
   await editor.getByLabel("Assignee").selectOption("morgan");
-  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await editor.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(morganSection.getByText("Recover payroll handoff")).toBeVisible();
 
   await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
@@ -2593,13 +2743,17 @@ test("uses one narrow column and two desktop columns without horizontal overflow
 
   await page.getByRole("button", { name: "New Task" }).click();
   const editor = page.getByRole("dialog", { name: "New Task" });
+  await expect.poll(async () => {
+    const box = await editor.boundingBox();
+    return box ? Math.abs(box.y + box.height - 812) : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
   const narrowEditor = await editor.boundingBox();
   expect(narrowEditor!.x).toBe(0);
   expect(narrowEditor!.width).toBe(375);
-  expect(Math.abs(narrowEditor!.y + narrowEditor!.height - 812)).toBeLessThanOrEqual(1);
   await editor.getByLabel("Task text").fill("Created from the bottom sheet");
   await editor.getByLabel("Assignee").selectOption("shane");
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(page.getByText("Created from the bottom sheet")).toBeVisible();
 });
 
@@ -2644,12 +2798,12 @@ test("runs edit, recovery, failure, focus, and delete flows in the narrow Task s
     .getByRole("button", { name: "Edit" });
   await editButton.click();
   let editor = page.getByRole("dialog", { name: "Edit Task" });
-  await expect(editor.getByLabel("Task text")).toBeFocused();
+  await expect(editor).toBeFocused();
   await editor.getByLabel("Task text").fill("Preserve this narrow draft");
   await editor.getByLabel("Assignee").selectOption("morgan");
   await editor.getByLabel("Due date").fill("2026-07-30");
   state.taskMutationFailureStatus = 409;
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("Task changed");
   await expect(editor.getByLabel("Task text")).toHaveValue("Preserve this narrow draft");
   state.taskMutationFailureStatus = null;
@@ -2659,7 +2813,7 @@ test("runs edit, recovery, failure, focus, and delete flows in the narrow Task s
   await expect(editButton).toBeFocused();
   await editButton.click();
   editor = page.getByRole("dialog", { name: "Edit Task" });
-  await editor.getByRole("button", { name: "Cancel" }).click();
+  await editor.getByRole("button", { name: "Close Task Editor" }).click();
   await expect(editor).toHaveCount(0);
   await expect(editButton).toBeFocused();
 
@@ -2668,17 +2822,18 @@ test("runs edit, recovery, failure, focus, and delete flows in the narrow Task s
   await editor.getByLabel("Task text").fill("Narrow edited Task");
   await editor.getByLabel("Assignee").selectOption("morgan");
   await editor.getByLabel("Due date").fill("2026-07-30");
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(page.getByText("Narrow edited Task")).toBeVisible();
   await expect(globalNewTask).toBeFocused();
 
   const unassignedCard = page.getByTestId("task-card").filter({ hasText: "Recover this narrow Task" });
   await unassignedCard.getByRole("button", { name: "Assign" }).click();
   editor = page.getByRole("dialog", { name: "Assign Task" });
-  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await editor.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("Choose a current Member");
   await editor.getByLabel("Assignee").selectOption("morgan");
-  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await editor.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.getByTestId("task-card").filter({ hasText: "Recover this narrow Task" })).toBeVisible();
 
@@ -2766,15 +2921,15 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   await page.getByRole("button", { name: "Add Task" }).click();
   let editor = page.getByRole("dialog", { name: "New Task" });
   await editor.getByLabel("Task text").fill("   ");
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("1 to 2,000 characters");
   await expect(editor.getByLabel("Task text")).toHaveValue("   ");
   await editor.getByLabel("Task text").fill("x".repeat(2_001));
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("1 to 2,000 characters");
   expect(state.taskMutationRequests).toBe(0);
   await editor.getByLabel("Task text").fill("A valid Task");
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByText("A valid Task")).toBeVisible();
 
   state.taskMutationFailureStatus = 409;
@@ -2783,21 +2938,21 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   editor = page.getByRole("dialog", { name: "Edit Task" });
   await editor.getByLabel("Task text").fill("Keep this recovered draft");
   await editor.getByLabel("Due date").fill("2026-07-25");
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("Task changed");
   await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
   await expect(editor.getByLabel("Due date")).toHaveValue("2026-07-25");
   state.taskMutationFailureStatus = 403;
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("no longer have permission");
   await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
   state.taskMutationFailureStatus = null;
   state.failTaskMutationNetwork = true;
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(editor.getByRole("alert")).toContainText("Check your connection");
   await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
   state.failTaskMutationNetwork = false;
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Keep this recovered draft")).toBeVisible();
 });
 
@@ -2817,7 +2972,7 @@ test("closes a committed editor mutation when the Task List refresh fails", asyn
   await editor.getByLabel("Task text").fill("Created before refresh failed");
   await editor.getByLabel("Assignee").selectOption("shane");
   state.failTaskNetwork = true;
-  await editor.getByRole("button", { name: "Create Task" }).click();
+  await editor.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("saved, but the Task List could not refresh");
@@ -2854,7 +3009,7 @@ test("restores a Task editor draft after authentication recovery", async ({ page
   await editor.getByLabel("Task text").fill("Restore this exact draft");
   await editor.getByLabel("Due date").fill("2026-07-29");
   state.taskMutationFailureStatus = 401;
-  await editor.getByRole("button", { name: "Save Task" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
 
   state.taskMutationFailureStatus = null;
@@ -2952,7 +3107,7 @@ test("removes the Unassigned section after its final Task is recovered", async (
   await page.getByRole("button", { name: "Assign" }).click();
   const editor = page.getByRole("dialog", { name: "Assign Task" });
   await editor.getByLabel("Assignee").selectOption("shane");
-  await editor.getByRole("button", { name: "Assign Task" }).click();
+  await editor.getByRole("button", { name: "Assign", exact: true }).click();
 
   const section = page.getByTestId("member-section");
   await expect(section).toHaveCount(1);
