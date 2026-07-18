@@ -296,9 +296,7 @@ export function useOpenJobNotifications({
         const local = readLocalState();
         local.enabled = false;
         saveLocalState(local);
-        await writeWorkerState(local.installationId, user.userId, false).catch(
-          () => undefined,
-        );
+        await writeWorkerState(local.installationId, user.userId, false);
         setState("paused");
         await api.setNotificationSubscriptionState(
           await session.getIdToken(),

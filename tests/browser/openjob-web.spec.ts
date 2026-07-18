@@ -284,6 +284,17 @@ async function installNotificationEnvironment(
   }, options);
 }
 
+async function failIndexedDbWrites(page: Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(window.indexedDB, "open", {
+      configurable: true,
+      value() {
+        throw new Error("Test IndexedDB failure.");
+      },
+    });
+  });
+}
+
 async function installApi(
   page: Page,
   initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs">> = {},
@@ -1080,6 +1091,26 @@ test("pauses before sign-out, resumes the same User, and protects the installati
   )).toBe(1);
 });
 
+test("keeps notifications enabled when local pause suppression cannot be persisted", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  await failIndexedDbWrites(page);
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Enabled" }).click();
+  await page.getByRole("button", { name: "Pause notifications" }).click();
+
+  await expect(page.getByText("Status: Enabled")).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText(
+    "OpenJob could not update notifications. Try again.",
+  );
+  expect(state.notificationSubscription?.state).toBe("active");
+});
+
 test("keeps the User signed in when local notification suppression cannot be persisted", async ({ page }) => {
   await installNotificationEnvironment(page);
   await startSignedIn(page);
@@ -1087,14 +1118,7 @@ test("keeps the User signed in when local notification suppression cannot be per
   await page.goto("/");
   await page.getByRole("button", { name: "Enable notifications" }).click();
   await expect.poll(() => state.notificationSubscription?.state).toBe("active");
-  await page.evaluate(() => {
-    Object.defineProperty(window.indexedDB, "open", {
-      configurable: true,
-      value() {
-        throw new Error("Test IndexedDB failure.");
-      },
-    });
-  });
+  await failIndexedDbWrites(page);
   await signOut(page);
 
   await expect(page.getByRole("button", { name: "User menu" })).toBeVisible();
