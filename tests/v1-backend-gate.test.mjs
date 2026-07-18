@@ -47,7 +47,7 @@ function formatLogArguments(arguments_) {
     .join(" ");
 }
 
-test("the complete hosted backend passes one clean two-identity black-box gate", async (t) => {
+test("the complete hosted backend preserves existing Groups during its two-identity gate", async (t) => {
   const authority = await createTestFirebaseAuthority({ now: NOW });
   const firestore = createFakeFirestore();
   const privateKey = await createPrivateKey();
@@ -176,13 +176,41 @@ test("the complete hosted backend passes one clean two-identity black-box gate",
     console[method] = (...arguments_) => logs.push(formatLogArguments(arguments_));
   }
   let result;
+  let baselineGroup;
   try {
+    const usernameResponse = await request({
+      actor: "initialAdmin",
+      body: { username: "shane" },
+      method: "PUT",
+      path: "/api/v1/me/username",
+    });
+    assert.equal(usernameResponse.status, 200);
+    const baselineResponse = await request({
+      actor: "initialAdmin",
+      body: { name: "Existing production Group" },
+      method: "POST",
+      path: "/api/v1/groups",
+    });
+    assert.equal(baselineResponse.status, 201);
+    baselineGroup = (await baselineResponse.json()).data;
     result = await runV1AcceptanceScenario({
       checkpoint: () => harness.restart(),
       proposedUsernames: { initialAdmin: "shane", memberUser: "eli" },
       request,
       validate,
     });
+    const groupsAfter = await request({
+      actor: "initialAdmin",
+      method: "GET",
+      path: "/api/v1/groups",
+    });
+    assert.equal(groupsAfter.status, 200);
+    assert.equal(
+      (await groupsAfter.json()).data.some(
+        ({ groupId }) => groupId === baselineGroup.groupId,
+      ),
+      true,
+    );
   } finally {
     Object.assign(console, originalConsole);
   }
