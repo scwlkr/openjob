@@ -168,6 +168,7 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
   const listeners = new Map();
   const calls = [];
   let windows = [{
+    async navigate(target) { calls.push({ navigate: target }); return this; },
     async focus() { calls.push("focus"); },
     postMessage(message) { calls.push({ message }); },
   }];
@@ -201,6 +202,7 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     "close",
     { options: { type: "window", includeUncontrolled: true } },
+    { navigate: "/?notification-group=grp_notifications" },
     "focus",
     { message: {
       type: "openjob:select-notification-group",
