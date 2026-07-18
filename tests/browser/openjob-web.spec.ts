@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import packageMetadata from "../../package.json" with { type: "json" };
 
 type Group = {
   groupId: string;
@@ -759,6 +760,50 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("shows the signed-in build version and offers a user-controlled refresh for a newer release", async ({ page }) => {
+  let deployedVersion = packageMetadata.version;
+  await page.route("**/api/version", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ version: deployedVersion, commit: "fedcba987654" }),
+  }));
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByText(`OpenJob v${packageMetadata.version}`, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+  await page.getByRole("button", { name: "User menu" }).click();
+
+  deployedVersion = "9.0.0-rc.1";
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+
+  deployedVersion = "9.0.0";
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+
+  await expect(page.getByText("OpenJob 9.0.0 is available.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+
+  deployedVersion = packageMetadata.version;
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+});
+
+test("keeps Task work available when release discovery fails", async ({ page }) => {
+  await page.route("**/api/version", (route) => route.abort("failed"));
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
 });
 
 test("returns a signed-out Invite Link visitor to an explicit Group join confirmation", async ({ page }) => {

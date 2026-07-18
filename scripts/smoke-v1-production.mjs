@@ -27,6 +27,29 @@ const packageJson = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
 
+const releaseResponse = await fetch(new URL("/api/version", baseUrl), {
+  cache: "no-store",
+  headers: { accept: "application/json" },
+});
+if (!releaseResponse.ok) {
+  throw new Error(`Production release metadata returned ${releaseResponse.status}.`);
+}
+const releaseMetadata = await releaseResponse.json();
+const expectedVersion = process.env.OPENJOB_EXPECTED_VERSION ?? packageJson.version;
+if (releaseMetadata.version !== expectedVersion) {
+  throw new Error(
+    `Expected production OpenJob ${expectedVersion}, received ${String(releaseMetadata.version)}.`,
+  );
+}
+if (
+  process.env.OPENJOB_EXPECTED_COMMIT &&
+  releaseMetadata.commit !== process.env.OPENJOB_EXPECTED_COMMIT
+) {
+  throw new Error(
+    `Expected production commit ${process.env.OPENJOB_EXPECTED_COMMIT}, received ${String(releaseMetadata.commit)}.`,
+  );
+}
+
 async function request({ actor, body, method, path }) {
   const headers = new Headers({ accept: "application/json" });
   const token = tokens.get(actor);
@@ -53,5 +76,5 @@ const result = await runV1AcceptanceScenario({
   validate: assertContract,
 });
 process.stdout.write(
-  `Production v${packageJson.version} smoke passed: ${result.operationCount} operations; disposable Group ended.\n`,
+  `Production v${releaseMetadata.version} (${releaseMetadata.commit}) smoke passed: ${result.operationCount} operations; disposable Group ended.\n`,
 );

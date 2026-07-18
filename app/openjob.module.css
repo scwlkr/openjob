@@ -103,6 +103,7 @@
 .navMenuPanel { position: absolute; top: calc(100% + 8px); right: 0; width: min(320px, calc(100vw - 28px)); max-height: min(620px, calc(100vh - 90px)); overflow-y: auto; border: 1px solid var(--ink); background: var(--paper-light); color: var(--ink); box-shadow: 0 14px 34px rgba(21,23,19,.16); padding: 8px; }
 .userMenuPanel { width: min(260px, calc(100vw - 28px)); }
 .menuLabel { margin: 7px 8px 9px; color: var(--muted); font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.menuVersion { margin: 0 8px 8px; color: var(--muted); font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; }
 .menuGroupList { display: grid; gap: 4px; }
 .menuGroupList button { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 44px; border: 1px solid transparent; background: transparent; color: var(--ink); padding: 6px 8px; text-align: left; cursor: pointer; }
 .menuGroupList button > span { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line); color: var(--blue); font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; }
@@ -184,10 +185,12 @@
 .taskLoading, .taskLoadError { width: min(calc(100% - 24px), 1120px); margin: 34px auto 0; border: 1px solid var(--line); background: var(--paper-light); padding: 28px; }
 .taskLoadError p { margin: 0 0 14px; color: #74221c; }
 .taskLoadError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--blue); padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
-.notice, .errorBanner { width: min(calc(100% - 24px), 1120px); margin: 18px auto 24px; padding: 13px 16px; font-size: 13px; }
+.notice, .errorBanner, .updateBanner { width: min(calc(100% - 24px), 1120px); margin: 18px auto 24px; padding: 13px 16px; font-size: 13px; }
 .notice { border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .errorBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; }
 .errorBanner button { border: 0; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.updateBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
+.updateBanner button { border: 1px solid currentColor; background: transparent; color: inherit; padding: 0 12px; font-weight: 850; cursor: pointer; }
 
 .dialogBackdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(21,23,19,.58); padding: 20px; }
 .dialog { width: min(100%, 620px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }

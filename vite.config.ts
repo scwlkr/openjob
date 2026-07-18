@@ -1,5 +1,7 @@
+import { execFileSync } from "node:child_process";
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import packageMetadata from "./package.json" with { type: "json" };
 
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -13,8 +15,17 @@ export default defineConfig(async () => {
   const prototypeConfigPath = process.env.OPENJOB_ASSIGNEE_COLUMNS_PROTOTYPE
     ? "app/prototype/assignee-columns/wrangler.prototype.jsonc"
     : undefined;
+  const gitCommit = process.env.OPENJOB_GIT_COMMIT ?? execFileSync(
+    "git",
+    ["rev-parse", "--short=12", "HEAD"],
+    { encoding: "utf8" },
+  ).trim();
 
   return {
+    define: {
+      __OPENJOB_GIT_COMMIT__: JSON.stringify(gitCommit),
+      __OPENJOB_VERSION__: JSON.stringify(packageMetadata.version),
+    },
     plugins: [
       vinext(),
       cloudflare({
