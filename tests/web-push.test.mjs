@@ -78,3 +78,39 @@ test("Web Push encrypts a JSON Task payload with VAPID and a 24-hour lifetime", 
   assert.equal(requests[0].endpoint, subscription.endpoint);
   assert.equal(requests[0].init.method, "POST");
 });
+
+test("missing Push credentials fail delivery without failing sender construction", async () => {
+  const sender = createWebPushSender({
+    vapid: {
+      subject: "https://openjob.dev",
+      publicKey: "BAjmkCDWNiVDAavAHLX0Jq4WiwcifG0Oy_p_TjOb_X8KUjc7aUSoRYJWz6-gSCuqSeRnjRYNZ8dQCwNxCneHNgc",
+      privateKey: undefined,
+    },
+  });
+
+  await assert.rejects(
+    sender.send({
+      installationId: "installation_0123456789",
+      userId: "user_eli",
+      endpoint: "https://push.example.test/capability",
+      p256dh: "p256dh-key",
+      auth: "auth-secret",
+      state: "active",
+      createdAt: "2026-07-18T12:00:00.000Z",
+      updatedAt: "2026-07-18T12:00:00.000Z",
+      stateChangedAt: "2026-07-18T12:00:00.000Z",
+    }, {
+      data: {
+        recipientUserId: "user_eli",
+        eventKind: "assignment",
+        groupId: "grp_notifications",
+        groupName: "Release Team",
+        taskId: "task_release",
+        taskPreview: "Prepare release notes",
+        launchTarget: "/?notification-group=grp_notifications",
+      },
+      ttl: 86_400,
+    }),
+    /VAPID_PRIVATE_KEY binding is unavailable/,
+  );
+});

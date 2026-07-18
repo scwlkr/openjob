@@ -80,18 +80,16 @@ export function writeWorkerState(
   });
 }
 
-export function isIosBrowser() {
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)
-  );
-}
-
 export function isStandalone() {
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
     Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
   );
+}
+
+export function requiresHomeScreenInstallation() {
+  const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
+  return typeof standaloneNavigator.standalone === "boolean" && !isStandalone();
 }
 
 export function supportsNotifications() {

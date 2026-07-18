@@ -6,7 +6,11 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Added
 
+- Opt-in Push Notifications for Task assignments and completions triggered by web or CLI Task actions.
+
 ### Changed
+
+- Installable PWA notification delivery with per-installation pause, sign-out suppression, and same-User resume.
 
 ### Fixed
 

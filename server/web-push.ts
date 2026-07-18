@@ -10,7 +10,7 @@ type WebPushSenderOptions = {
   vapid: {
     subject: string;
     publicKey: string;
-    privateKey: string;
+    privateKey?: string;
   };
   buildRequest?: (options: BuilderOptions) => ReturnType<typeof buildPushHTTPRequest>;
   fetchImplementation?: typeof fetch;
@@ -31,7 +31,8 @@ function base64Url(bytes: Uint8Array) {
     .replace(/=+$/u, "");
 }
 
-function privateJwk(publicKey: string, privateKey: string): JsonWebKey {
+function privateJwk(publicKey: string, privateKey?: string): JsonWebKey {
+  if (!privateKey) throw new Error("The VAPID_PRIVATE_KEY binding is unavailable.");
   const publicBytes = base64UrlBytes(publicKey);
   const privateBytes = base64UrlBytes(privateKey);
   if (

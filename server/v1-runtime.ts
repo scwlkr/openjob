@@ -61,7 +61,7 @@ function getRuntime() {
       vapid: {
         subject: "https://openjob.dev",
         publicKey: VAPID_PUBLIC_KEY,
-        privateKey: requiredBinding(bindings, "VAPID_PRIVATE_KEY"),
+        privateKey: bindings.VAPID_PRIVATE_KEY,
       },
     }),
     reportFailure(failure) {

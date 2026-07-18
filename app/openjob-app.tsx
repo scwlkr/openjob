@@ -220,8 +220,13 @@ export function OpenJobApp({
   }
 
   async function signOut() {
-    await notifications.prepareSignOut();
-    await auth.signOut();
+    setError("");
+    try {
+      await notifications.prepareSignOut();
+      await auth.signOut();
+    } catch {
+      setError("OpenJob could not safely sign out. Try again.");
+    }
   }
 
   async function runSavingAction(

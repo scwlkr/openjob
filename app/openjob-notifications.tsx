@@ -9,9 +9,8 @@ import {
 } from "./openjob-contracts";
 import {
   browserSubscription,
-  isIosBrowser,
-  isStandalone,
   readLocalState,
+  requiresHomeScreenInstallation,
   saveLocalState,
   serializeSubscription,
   supportsNotifications,
@@ -139,7 +138,7 @@ export function useOpenJobNotifications({
 
     void enqueueOperation(async () => {
       const local = readLocalState();
-      if (isIosBrowser() && !isStandalone()) {
+      if (requiresHomeScreenInstallation()) {
         if (current) setState("installation-required");
         return;
       }
@@ -226,7 +225,7 @@ export function useOpenJobNotifications({
 
   const enable = useCallback(async () => {
     if (!session || !user) return;
-    if (isIosBrowser() && !isStandalone()) {
+    if (requiresHomeScreenInstallation()) {
       setState("installation-required");
       return;
     }
@@ -318,9 +317,7 @@ export function useOpenJobNotifications({
     if (!session || !user) return;
     await enqueueOperation(async () => {
       const local = readLocalState();
-      await writeWorkerState(local.installationId, local.ownerUserId, false).catch(
-        () => undefined,
-      );
+      await writeWorkerState(local.installationId, local.ownerUserId, false);
       if (local.ownerUserId !== user.userId) return;
       await api.setNotificationSubscriptionState(
         await session.getIdToken(),
