@@ -186,7 +186,9 @@
 .taskPriorityChoice input { position: absolute; width: 1px; min-width: 1px; height: 1px; min-height: 1px; opacity: 0; }
 .taskPriorityChoice svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .taskDateShell > svg { left: 12px; color: var(--blue); }
-.taskDateShell input { width: 100%; min-width: 0; min-height: 48px; border: 0; background: transparent; color: var(--ink); padding: 0 8px 0 38px; font-size: 16px; font-weight: 720; color-scheme: light; cursor: pointer; }
+.taskDateValue { overflow: hidden; width: 100%; padding: 0 10px 0 38px; color: var(--ink); font-size: 16px; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.taskDateShell input { position: absolute; z-index: 2; inset: 0; width: 100%; min-width: 0; min-height: 48px; appearance: none; border: 0; background: transparent; color: transparent; padding: 0; font-size: 16px; opacity: 0; color-scheme: light; cursor: pointer; }
+.taskDateShell:has(input:focus-visible) { outline: 3px solid #7d9aff; outline-offset: 1px; }
 .taskForm .fieldError { margin: 0; }
 .taskFormActions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #d8dbd3; padding-top: 12px; }
 .taskFormActions .taskDeleteButton { min-width: 44px; min-height: 44px; margin-right: auto; border: 0; background: transparent; color: #982f27; padding: 0 10px; font-weight: 800; cursor: pointer; }
