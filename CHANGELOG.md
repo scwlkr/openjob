@@ -10,10 +10,19 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+### Security
+
+## [0.3.3] - 2026-07-18
+
+### Added
+
+### Changed
+
+### Fixed
+
 - The iPhone Task Editor can explicitly clear Due date and keeps Task text fully visible during keyboard transitions.
 
 ### Security
-
 ## [0.3.2] - 2026-07-18
 
 ### Added
@@ -69,7 +78,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 - First complete hosted OpenJob release with shared web, API, and CLI Group, governance, and Task workflows.
 
-[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/scwlkr/openjob/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/scwlkr/openjob/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/scwlkr/openjob/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/scwlkr/openjob/compare/v0.2.0...v0.3.0
