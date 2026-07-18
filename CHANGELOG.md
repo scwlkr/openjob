@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- The iPhone Task Editor now opens as a zoom-safe half-height sheet with compact touch-first controls and keyboard-aware layout.
+
 ### Security
 
 ## [0.3.1] - 2026-07-18
