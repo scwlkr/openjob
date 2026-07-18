@@ -211,6 +211,33 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       ),
       true,
     );
+    await assert.rejects(
+      runV1AcceptanceScenario({
+        checkpoint: () => harness.restart(),
+        proposedUsernames: { initialAdmin: "shane", memberUser: "eli" },
+        request: async (options) => {
+          if (
+            options.method === "GET" &&
+            /^\/api\/v1\/groups\/[^/?]+$/u.test(options.path)
+          ) {
+            throw new Error("injected mid-scenario failure");
+          }
+          return request(options);
+        },
+        validate,
+      }),
+      /injected mid-scenario failure/u,
+    );
+    const groupsAfterFailure = await request({
+      actor: "initialAdmin",
+      method: "GET",
+      path: "/api/v1/groups",
+    });
+    assert.equal(groupsAfterFailure.status, 200);
+    assert.deepEqual(
+      (await groupsAfterFailure.json()).data.map(({ groupId }) => groupId),
+      [baselineGroup.groupId],
+    );
   } finally {
     Object.assign(console, originalConsole);
   }
