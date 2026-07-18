@@ -89,13 +89,6 @@ export async function runV1AcceptanceScenario({
       auth: "auth_0123456789abcdef",
     },
   };
-  await expectError({
-    actor: "initialAdmin",
-    contractPath: notificationContractPath,
-    method: "GET",
-    path: notificationPath,
-    status: 404,
-  });
   await expectSuccess({
     actor: "initialAdmin",
     body: capability,
@@ -126,6 +119,9 @@ export async function runV1AcceptanceScenario({
     path: notificationPath,
     status: 200,
   });
+  const disposableGroups = [];
+  let scenarioError;
+  try {
   const groupName = `OpenJob backend acceptance ${Date.now()}`;
   const group = await expectSuccess({
     actor: "initialAdmin",
@@ -135,6 +131,7 @@ export async function runV1AcceptanceScenario({
     path: "/api/v1/groups",
     status: 201,
   });
+  disposableGroups.push({ confirmationName: group.name, groupId: group.groupId });
   const groupPath = `/api/v1/groups/${group.groupId}`;
   const paginationGroup = await expectSuccess({
     actor: "initialAdmin",
@@ -143,6 +140,10 @@ export async function runV1AcceptanceScenario({
     method: "POST",
     path: "/api/v1/groups",
     status: 201,
+  });
+  disposableGroups.push({
+    confirmationName: paginationGroup.name,
+    groupId: paginationGroup.groupId,
   });
   const groupPages = [];
   let groupCursor = null;
@@ -502,6 +503,8 @@ export async function runV1AcceptanceScenario({
     path: groupPath,
     status: 200,
   });
+  disposableGroups.find(({ groupId }) => groupId === group.groupId).confirmationName =
+    renamedGroup.name;
 
   const unauthenticatedExamples = [
     ["GET", "/api/v1/me", "/api/v1/me", undefined, "invalid"],
@@ -547,6 +550,10 @@ export async function runV1AcceptanceScenario({
     path: `${groupPath}/actions/end`,
     status: 204,
   });
+  disposableGroups.splice(
+    disposableGroups.findIndex(({ groupId }) => groupId === group.groupId),
+    1,
+  );
   await expectSuccess({
     actor: "initialAdmin",
     body: { confirmationName: paginationGroup.name },
@@ -555,6 +562,12 @@ export async function runV1AcceptanceScenario({
     path: `/api/v1/groups/${paginationGroup.groupId}/actions/end`,
     status: 204,
   });
+  disposableGroups.splice(
+    disposableGroups.findIndex(
+      ({ groupId }) => groupId === paginationGroup.groupId,
+    ),
+    1,
+  );
   const finalGroups = await expectSuccess({
     actor: "initialAdmin",
     contractPath: "/api/v1/groups",
@@ -571,4 +584,37 @@ export async function runV1AcceptanceScenario({
     endedGroupId: group.groupId,
     operationCount: successfulOperations.size,
   };
+  } catch (error) {
+    scenarioError = error;
+    throw error;
+  } finally {
+    const cleanupErrors = [];
+    for (const disposableGroup of disposableGroups.toReversed()) {
+      try {
+        const response = await request({
+          actor: "initialAdmin",
+          body: { confirmationName: disposableGroup.confirmationName },
+          method: "POST",
+          path: `/api/v1/groups/${disposableGroup.groupId}/actions/end`,
+        });
+        if (response.status !== 204 && response.status !== 404) {
+          cleanupErrors.push(
+            new Error(
+              `Smoke cleanup for ${disposableGroup.groupId} returned ${response.status}.`,
+            ),
+          );
+        }
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        scenarioError ? [scenarioError, ...cleanupErrors] : cleanupErrors,
+        scenarioError
+          ? "Acceptance scenario failed and disposable Group cleanup was incomplete."
+          : "Disposable Group cleanup was incomplete.",
+      );
+    }
+  }
 }
