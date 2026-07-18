@@ -10,10 +10,19 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+### Security
+
+## [0.3.1] - 2026-07-18
+
+### Added
+
+### Changed
+
+### Fixed
+
 - Notification taps reliably select their Group when an installed iPhone or iPad app is launching or resuming.
 
 ### Security
-
 ## [0.3.0] - 2026-07-18
 
 ### Added
@@ -47,7 +56,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 - First complete hosted OpenJob release with shared web, API, and CLI Group, governance, and Task workflows.
 
-[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/scwlkr/openjob/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/scwlkr/openjob/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/scwlkr/openjob/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/scwlkr/openjob/compare/v0.1.0...v0.1.1
