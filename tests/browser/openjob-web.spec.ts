@@ -1684,6 +1684,46 @@ test("notification selection opens only an accessible Group and uses a generic s
   await expect(page.getByText("OpenJob Core")).toHaveCount(0);
 });
 
+test("notification selection survives an installed app cold launch or resume", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs, openJobCore],
+  });
+
+  await page.goto("/");
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+
+  const savePendingLaunch = (groupId: string) => page.evaluate(async (pendingGroupId) => {
+    const request = indexedDB.open("openjob-notifications", 1);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction("installation-state", "readwrite");
+      transaction.objectStore("installation-state").put(
+        { groupId: pendingGroupId },
+        "pending-launch",
+      );
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, groupId);
+
+  await savePendingLaunch(openJobCore.groupId);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "OpenJob Core", exact: true })).toBeVisible();
+
+  await savePendingLaunch(walkerLabs.groupId);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+});
+
 test("accepts an 80-character Unicode Group Name from the service", async ({ page }) => {
   await startSignedIn(page);
   await installApi(page, { user: signedInUser });

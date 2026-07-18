@@ -5,6 +5,7 @@ const LOCAL_STATE_KEY = "openjob:notification-installation";
 const DATABASE_NAME = "openjob-notifications";
 const DATABASE_STORE = "installation-state";
 const DATABASE_RECORD = "current";
+const PENDING_LAUNCH_RECORD = "pending-launch";
 
 export type LocalInstallationState = {
   installationId: string;
@@ -77,6 +78,55 @@ export function writeWorkerState(
         reject(transaction.error);
       };
     };
+  });
+}
+
+export function consumePendingNotificationGroup() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  return new Promise<string | null>((resolve) => {
+    try {
+      const request = window.indexedDB.open(DATABASE_NAME, 1);
+      request.onerror = () => resolve(null);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(DATABASE_STORE)) {
+          request.result.createObjectStore(DATABASE_STORE);
+        }
+      };
+      request.onsuccess = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains(DATABASE_STORE)) {
+          database.close();
+          resolve(null);
+          return;
+        }
+        const transaction = database.transaction(DATABASE_STORE, "readwrite");
+        const store = transaction.objectStore(DATABASE_STORE);
+        const read = store.get(PENDING_LAUNCH_RECORD);
+        let groupId: string | null = null;
+        read.onsuccess = () => {
+          const candidate = read.result?.groupId;
+          if (
+            typeof candidate === "string" &&
+            /^grp_[A-Za-z0-9_-]+$/.test(candidate)
+          ) {
+            groupId = candidate;
+          }
+          store.delete(PENDING_LAUNCH_RECORD);
+        };
+        read.onerror = () => transaction.abort();
+        transaction.oncomplete = () => {
+          database.close();
+          resolve(groupId);
+        };
+        transaction.onabort = () => {
+          database.close();
+          resolve(null);
+        };
+        transaction.onerror = () => undefined;
+      };
+    } catch {
+      resolve(null);
+    }
   });
 }
 

@@ -18,14 +18,16 @@ import {
   UsernameOnboarding,
 } from "./openjob-screens";
 import { useOpenJobNotifications } from "./openjob-notifications";
+import { consumePendingNotificationGroup } from "./openjob-notification-browser";
 
 const SELECTED_GROUP_KEY = "openjob:selected-group-id";
 const NOTIFICATION_GROUP_PARAMETER = "notification-group";
 
-function notificationLaunchGroup() {
+async function notificationLaunchGroup() {
   const url = new URL(window.location.href);
   const values = url.searchParams.getAll(NOTIFICATION_GROUP_PARAMETER);
   const candidate = values.length === 1 ? values[0] : null;
+  const pendingGroupId = await consumePendingNotificationGroup();
   url.searchParams.delete(NOTIFICATION_GROUP_PARAMETER);
   window.history.replaceState(
     {},
@@ -37,7 +39,9 @@ function notificationLaunchGroup() {
     groupId:
       candidate && /^grp_[A-Za-z0-9_-]+$/.test(candidate)
         ? candidate
-        : null,
+        : values.length === 0
+          ? pendingGroupId
+          : null,
   };
 }
 
@@ -106,7 +110,7 @@ export function OpenJobApp({
     const accessibleGroups = await api.listGroups(token);
     setSelectedGroup(null);
 
-    const notificationLaunch = notificationLaunchGroup();
+    const notificationLaunch = await notificationLaunchGroup();
     const notifiedGroup = accessibleGroups.find(
       (group) => group.groupId === notificationLaunch.groupId,
     );
@@ -355,6 +359,7 @@ export function OpenJobApp({
       ) {
         return;
       }
+      void consumePendingNotificationGroup();
       void selectGroup(message.groupId);
     };
     navigator.serviceWorker.addEventListener(
@@ -366,6 +371,33 @@ export function OpenJobApp({
       handleNotificationSelection,
     );
   }, [selectGroup, session]);
+
+  useEffect(() => {
+    if (!session || !user || user.usernameRequired || !groupsReady) return;
+    let consuming = false;
+    const consumeSelection = async () => {
+      if (consuming) return;
+      consuming = true;
+      try {
+        const groupId = await consumePendingNotificationGroup();
+        if (groupId) await selectGroup(groupId);
+      } finally {
+        consuming = false;
+      }
+    };
+    const handleFocus = () => void consumeSelection();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void consumeSelection();
+    };
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [groupsReady, selectGroup, session, user]);
 
   if (session === undefined || (session && loading)) return <LoadingScreen />;
   if (session === null) {
