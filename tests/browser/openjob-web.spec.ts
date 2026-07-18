@@ -75,6 +75,8 @@ type ApiState = {
     capability: { endpoint: string; keys: { p256dh: string; auth: string } };
   } | null;
   notificationRequests: { method: string; userId: string }[];
+  notificationRegistrationDelayMs: number;
+  notificationRegistrationsCompleted: number;
 };
 
 const signedInUser = {
@@ -156,7 +158,7 @@ async function installNotificationEnvironment(
   page: Page,
   options: {
     permission?: "default" | "denied" | "granted";
-    permissionResult?: "denied" | "granted";
+    permissionResult?: "default" | "denied" | "granted";
     supported?: boolean;
     ios?: boolean;
     standalone?: boolean;
@@ -166,12 +168,24 @@ async function installNotificationEnvironment(
     const testState = {
       permissionCalls: 0,
       subscribeCalls: 0,
+      unsubscribeCalls: 0,
       subscription: null as PushSubscription | null,
     };
     Object.defineProperty(window, "__openjobNotificationTest", {
       configurable: true,
       value: testState,
     });
+    if (settings.ios) {
+      Object.defineProperty(navigator, "userAgent", {
+        configurable: true,
+        value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+      });
+    }
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = (query) =>
+      query === "(display-mode: standalone)"
+        ? ({ matches: Boolean(settings.standalone) } as MediaQueryList)
+        : nativeMatchMedia(query);
     if (settings.supported === false) {
       Reflect.deleteProperty(window, "Notification");
       Reflect.deleteProperty(window, "PushManager");
@@ -206,12 +220,16 @@ async function installNotificationEnvironment(
     const createSubscription = () => ({
       endpoint: window.localStorage.getItem("openjob-test:push-endpoint") ??
         "https://push.example.test/subscriptions/browser-capability",
-      expirationTime: null,
+      expirationTime: window.localStorage.getItem("openjob-test:push-expired")
+        ? Date.now() - 1
+        : null,
       getKey() {
         return null;
       },
       async unsubscribe() {
+        testState.unsubscribeCalls += 1;
         window.localStorage.removeItem("openjob-test:push-subscription");
+        window.localStorage.removeItem("openjob-test:push-expired");
         testState.subscription = null;
         return true;
       },
@@ -236,6 +254,7 @@ async function installNotificationEnvironment(
       async subscribe() {
         testState.subscribeCalls += 1;
         window.localStorage.setItem("openjob-test:push-subscription", "present");
+        window.localStorage.removeItem("openjob-test:push-expired");
         testState.subscription = createSubscription();
         return testState.subscription;
       },
@@ -250,23 +269,12 @@ async function installNotificationEnvironment(
         },
       },
     });
-    if (settings.ios) {
-      Object.defineProperty(navigator, "userAgent", {
-        configurable: true,
-        value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
-      });
-    }
-    const nativeMatchMedia = window.matchMedia.bind(window);
-    window.matchMedia = (query) =>
-      query === "(display-mode: standalone)"
-        ? ({ matches: Boolean(settings.standalone) } as MediaQueryList)
-        : nativeMatchMedia(query);
   }, options);
 }
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs">> = {},
 ) {
   const members = [...(initial.members ?? [])];
   const bans = [...(initial.bans ?? [])];
@@ -314,6 +322,8 @@ async function installApi(
     taskMutationDelayMs: initial.taskMutationDelayMs ?? 0,
     notificationSubscription: initial.notificationSubscription ?? null,
     notificationRequests: [],
+    notificationRegistrationDelayMs: initial.notificationRegistrationDelayMs ?? 0,
+    notificationRegistrationsCompleted: 0,
   };
 
   const removeMember = (userId: string) => {
@@ -417,6 +427,11 @@ async function installApi(
       const installationId = decodeURIComponent(notificationMatch[1]);
       state.notificationRequests.push({ method: request.method(), userId: state.user.userId });
       if (request.method() === "PUT") {
+        if (state.notificationRegistrationDelayMs > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, state.notificationRegistrationDelayMs),
+          );
+        }
         const capability = request.postDataJSON() as {
           endpoint: string;
           keys: { p256dh: string; auth: string };
@@ -427,6 +442,7 @@ async function installApi(
           state: "active",
           capability,
         };
+        state.notificationRegistrationsCompleted += 1;
         await reply(200, { data: { installationId, state: "active" } });
         return;
       }
@@ -971,6 +987,7 @@ test("enables, pauses, and re-enables without repeating browser permission or su
   )).toEqual({
     permissionCalls: 1,
     subscribeCalls: 1,
+    unsubscribeCalls: 0,
     subscription: expect.anything(),
   });
 
@@ -1051,6 +1068,33 @@ test("pauses before sign-out, resumes the same User, and protects the installati
   )).toBe(1);
 });
 
+test("serializes bootstrap registration before the sign-out pause", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await startSignedIn(page);
+  const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+  await expect.poll(() => state.notificationSubscription?.state).toBe("active");
+  await signOut(page);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+
+  state.notificationRegistrationDelayMs = 200;
+  const completedBeforeReturn = state.notificationRegistrationsCompleted;
+  const registrationsBeforeReturn = state.notificationRequests.filter(
+    (request) => request.method === "PUT",
+  ).length;
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect.poll(() => state.notificationRequests.filter(
+    (request) => request.method === "PUT",
+  ).length).toBe(registrationsBeforeReturn + 1);
+  await signOut(page);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect.poll(
+    () => state.notificationRegistrationsCompleted > completedBeforeReturn,
+  ).toBe(true);
+  expect(state.notificationSubscription?.state).toBe("paused");
+});
+
 test("reports denied permission permanently without automatically returning the invitation", async ({ page }) => {
   await installNotificationEnvironment(page, { permissionResult: "denied" });
   await startSignedIn(page);
@@ -1062,6 +1106,21 @@ test("reports denied permission permanently without automatically returning the 
   await page.getByRole("button", { name: "Notifications — Denied" }).click();
   await expect(page.getByText("Status: Denied")).toBeVisible();
   await expect(page.getByText(/Allow them there/)).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
+});
+
+test("keeps a dismissed browser permission prompt paused without returning the invitation", async ({ page }) => {
+  await installNotificationEnvironment(page, { permissionResult: "default" });
+  await startSignedIn(page);
+  await installApi(page, { user: signedInUser, groups: [walkerLabs] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enable notifications" }).click();
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Notifications — Paused" }).click();
+  await expect(page.getByText("Status: Paused")).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Turn on notifications?" })).toHaveCount(0);
@@ -1081,7 +1140,11 @@ test("reports unsupported browsers without offering permission", async ({ page }
 });
 
 test("guides iPhone browser Users to install before permission is offered", async ({ page }) => {
-  await installNotificationEnvironment(page, { ios: true, standalone: false });
+  await installNotificationEnvironment(page, {
+    ios: true,
+    standalone: false,
+    supported: false,
+  });
   await startSignedIn(page);
   await installApi(page, { user: signedInUser, groups: [walkerLabs] });
   await page.goto("/");
@@ -1098,7 +1161,7 @@ test("guides iPhone browser Users to install before permission is offered", asyn
   )).toBe(0);
 });
 
-test("reconciles missing and changed browser subscriptions on authenticated bootstrap", async ({ page }) => {
+test("reconciles missing, expired, and changed browser subscriptions on authenticated bootstrap", async ({ page }) => {
   await installNotificationEnvironment(page);
   await startSignedIn(page);
   const state = await installApi(page, { user: signedInUser, groups: [walkerLabs] });
@@ -1129,6 +1192,20 @@ test("reconciles missing and changed browser subscriptions on authenticated boot
   await expect.poll(() => state.notificationSubscription?.capability.endpoint).toBe(
     "https://push.example.test/subscriptions/changed-capability",
   );
+
+  await page.evaluate(() => {
+    window.localStorage.setItem("openjob-test:push-expired", "true");
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => {
+    const testState = (window as unknown as {
+      __openjobNotificationTest: { subscribeCalls: number; unsubscribeCalls: number };
+    }).__openjobNotificationTest;
+    return {
+      subscribeCalls: testState.subscribeCalls,
+      unsubscribeCalls: testState.unsubscribeCalls,
+    };
+  })).toEqual({ subscribeCalls: 1, unsubscribeCalls: 1 });
 });
 
 test("shows the signed-in build version and offers a user-controlled refresh for a newer release", async ({ page }) => {
