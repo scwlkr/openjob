@@ -18,10 +18,10 @@ Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
 The real `openjob` executable lives under `cli/`; the no-network command in
 `prototypes/cli/` remains disposable. Requires macOS and Node.js 22.13 or newer.
-Install OpenJob v0.1.1 from GitHub with one command:
+Install OpenJob v0.2.0 from GitHub with one command:
 
 ```bash
-npm install --global https://github.com/scwlkr/openjob/releases/download/v0.1.1/openjob-0.1.1.tgz
+npm install --global https://github.com/scwlkr/openjob/releases/download/v0.2.0/openjob-0.2.0.tgz
 ```
 
 Run `openjob auth login`, then `openjob --help`. The production command surface
