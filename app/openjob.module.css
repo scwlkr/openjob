@@ -179,10 +179,11 @@
 .taskFormDetails { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(128px, .9fr); gap: 12px; }
 .taskPriorityField { min-width: 0; margin: 0; border: 0; padding: 0; }
 .taskPriorityField legend { margin-bottom: 5px; padding: 0; }
-.taskPriorityChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; min-height: 52px; border-radius: 10px; background: rgba(255,255,255,.72); padding: 4px; }
+.taskPriorityChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-height: 52px; border-radius: 10px; background: rgba(255,255,255,.72); padding: 4px; }
 .taskPriorityChoice { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; gap: 3px; border-radius: 7px; color: var(--muted); font-size: 10px; font-weight: 800; cursor: pointer; }
 .taskPriorityChoice:has(input:checked) { background: var(--blue); color: #fff; }
 .taskPriorityChoice:has(input:focus-visible) { outline: 3px solid #7d9aff; outline-offset: 1px; }
+.taskSelectShell:has(select:active), .taskDateShell:has(input:active), .taskPriorityChoice:active { transform: translateY(1px); filter: brightness(.94); }
 .taskPriorityChoice input { position: absolute; width: 1px; min-width: 1px; height: 1px; min-height: 1px; opacity: 0; }
 .taskPriorityChoice svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .taskDateShell > svg { left: 12px; color: var(--blue); }
@@ -193,6 +194,7 @@
 .taskFormActions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #d8dbd3; padding-top: 12px; }
 .taskFormActions .taskDeleteButton { min-width: 44px; min-height: 44px; margin-right: auto; border: 0; background: transparent; color: #982f27; padding: 0 10px; font-weight: 800; cursor: pointer; }
 .taskFormActions button:disabled { cursor: not-allowed; opacity: .5; }
+.taskFormActions button:active:not(:disabled) { transform: translateY(1px); filter: brightness(.9); }
 .taskFormActions .primaryButton { min-width: 132px; min-height: 48px; border-radius: 9px; padding: 0 18px; }
 .taskActionError { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: min(calc(100% - 24px), 1120px); margin: 0 auto 18px; border-left: 4px solid #a9342b; background: #fae7e3; color: #74221c; padding: 12px 14px; font-size: 12px; }
 .taskActionError button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; padding: 0 8px; font-weight: 800; text-decoration: underline; cursor: pointer; }
@@ -201,11 +203,12 @@
 .taskUndo button { min-width: 64px; min-height: 44px; border: 1px solid currentColor; background: transparent; color: inherit; font-weight: 850; cursor: pointer; }
 .taskUndo button:disabled { cursor: not-allowed; opacity: .5; }
 .taskDialogBackdrop { animation: taskBackdropIn 200ms ease-out both; }
-.taskDialog { display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 40px); overflow: hidden; border: 1px solid var(--ink); border-radius: 14px; background: var(--paper-light); padding: 24px; box-shadow: 0 24px 64px rgba(21,23,19,.28); animation: taskDialogIn 200ms ease-out both; }
+.taskDialog { position: relative; display: flex; flex-direction: column; width: min(100%, 560px); max-height: calc(100% - 40px); overflow: hidden; border: 1px solid var(--ink); border-radius: 14px; background: var(--paper-light); padding: 24px; box-shadow: 0 24px 64px rgba(21,23,19,.28); animation: taskDialogIn 200ms ease-out both; }
 .taskDialogHeader { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 16px; }
 .taskDialog h2 { margin: 0; font-size: 34px; letter-spacing: -.055em; }
 .taskDialogClose { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255,255,255,.72); color: var(--ink); padding: 0; cursor: pointer; }
 .taskDialogClose:hover { background: #fff; }
+.taskDialogClose:active:not(:disabled) { transform: translateY(1px); background: #fff; filter: brightness(.9); }
 .taskDialogClose:disabled { cursor: not-allowed; opacity: .5; }
 .taskDialogClose svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
 .taskDialogHandle { display: none; }
@@ -314,8 +317,8 @@
   .taskDialog { width: 100%; height: min(52%, 480px); max-height: 100%; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 18px 18px 0 0; padding: 8px 16px 0; box-shadow: 0 -18px 48px rgba(21,23,19,.24); transform: translateY(var(--editor-sheet-drag-offset, 0)); animation-name: taskSheetIn; }
   .taskDialogBackdropKeyboard .taskDialog { height: calc(100% - 8px); }
   .taskDialogBackdropClosing .taskDialog { animation-name: taskSheetOut; }
-  .taskDialogHandle { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; height: 20px; touch-action: none; cursor: grab; }
-  .taskDialogHandle span { width: 42px; height: 5px; border-radius: 999px; background: #c6cac1; }
+  .taskDialogHandle { display: flex; flex: 0 0 44px; align-self: center; align-items: center; justify-content: center; width: 96px; height: 44px; touch-action: none; cursor: grab; }
+  .taskDialogHandle span { width: 42px; height: 5px; border-radius: 999px; background: #c6cac1; pointer-events: none; }
   .taskDialogHeader { min-height: 48px; }
   .taskDialog h2 { font-size: 28px; }
   .taskForm { margin-top: 10px; }
