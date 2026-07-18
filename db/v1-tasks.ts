@@ -12,6 +12,7 @@ import type {
   DueDate,
   OpenJobTask,
   TaskId,
+  TaskMutationChange,
   TaskPriority,
   TaskStore,
   TaskText,
@@ -111,6 +112,15 @@ function publicTask(task: PersistedTask): OpenJobTask {
     state: task.state,
     createdAt: task.createdAt,
     completedAt: task.completedAt,
+  };
+}
+
+function taskMutationChange(task: PersistedTask): TaskMutationChange {
+  return {
+    creatorUserId: task.creatorUserId,
+    previousAssigneeUserId:
+      task.assignee.state === "assigned" ? task.assignee.userId : null,
+    previousState: task.state,
   };
 }
 
@@ -505,14 +515,7 @@ export function createFirestoreTaskStore(
           return {
             kind: "updated" as const,
             task: publicTask(updated),
-            change: {
-              creatorUserId: task.creatorUserId,
-              previousAssigneeUserId:
-                task.assignee.state === "assigned"
-                  ? task.assignee.userId
-                  : null,
-              previousState: task.state,
-            },
+            change: taskMutationChange(task),
           };
         },
         "Task update could not resolve concurrent writes.",
@@ -534,14 +537,7 @@ export function createFirestoreTaskStore(
             return {
               kind: "updated" as const,
               task: publicTask(task),
-              change: {
-                creatorUserId: task.creatorUserId,
-                previousAssigneeUserId:
-                  task.assignee.state === "assigned"
-                    ? task.assignee.userId
-                    : null,
-                previousState: task.state,
-              },
+              change: taskMutationChange(task),
             };
           }
           const transitioned: StoredTask = {
@@ -564,14 +560,7 @@ export function createFirestoreTaskStore(
           return {
             kind: "updated" as const,
             task: publicTask(updated),
-            change: {
-              creatorUserId: task.creatorUserId,
-              previousAssigneeUserId:
-                task.assignee.state === "assigned"
-                  ? task.assignee.userId
-                  : null,
-              previousState: task.state,
-            },
+            change: taskMutationChange(task),
           };
         },
         "Task state update could not resolve concurrent writes.",

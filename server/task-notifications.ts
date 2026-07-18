@@ -1,6 +1,6 @@
 import type { StoredNotificationSubscription } from "../db/notification-subscriptions.ts";
 import type { GroupId, OpenJobGroup } from "./v1-groups.ts";
-import type { TaskNotificationIntent } from "./v1-tasks.ts";
+import type { TaskId, TaskNotificationIntent } from "./v1-tasks.ts";
 
 export type TaskPushMessage = {
   data: {
@@ -8,7 +8,7 @@ export type TaskPushMessage = {
     eventKind: "assignment" | "completion";
     groupId: GroupId;
     groupName: string;
-    taskId: string;
+    taskId: TaskId;
     taskPreview: string;
     launchTarget: string;
   };
