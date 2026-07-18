@@ -29,7 +29,7 @@ A smallest unit of work on a Task List. An open Task is normally assigned to exa
 _Avoid_: Job, ticket, card
 
 **Task Creator**:
-The User who originally adds a Task, distinct from its current Assignee. A Task Creator does not change when the Task is edited or reassigned.
+The User who originally adds a Task, distinct from its current Assignee. It never changes; Tasks created before Creator attribution have an Unknown Creator rather than an inferred one.
 _Avoid_: Task owner, author
 
 **Push Notification**:
