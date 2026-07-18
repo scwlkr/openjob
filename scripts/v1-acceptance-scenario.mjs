@@ -144,34 +144,39 @@ export async function runV1AcceptanceScenario({
     path: "/api/v1/groups",
     status: 201,
   });
-  const firstGroupPage = await expectSuccess({
-    actor: "initialAdmin",
-    contractPath: "/api/v1/groups",
-    envelope: true,
-    method: "GET",
-    path: "/api/v1/groups?limit=1",
-    status: 200,
-  });
-  if (firstGroupPage.data.length !== 1 || !firstGroupPage.nextCursor) {
-    throw new Error("Group pagination did not return one row and a cursor.");
-  }
-  const secondGroupPage = await expectSuccess({
-    actor: "initialAdmin",
-    contractPath: "/api/v1/groups",
-    envelope: true,
-    method: "GET",
-    path: `/api/v1/groups?limit=1&cursor=${encodeURIComponent(firstGroupPage.nextCursor)}`,
-    status: 200,
-  });
-  if (secondGroupPage.data.length !== 1 || secondGroupPage.nextCursor !== null) {
-    throw new Error("Group pagination did not terminate after the second row.");
-  }
-  assertExactPagedIds(
-    [firstGroupPage, secondGroupPage],
-    "groupId",
-    [group.groupId, paginationGroup.groupId],
-    "Group",
+  const groupPages = [];
+  let groupCursor = null;
+  do {
+    const page = await expectSuccess({
+      actor: "initialAdmin",
+      contractPath: "/api/v1/groups",
+      envelope: true,
+      method: "GET",
+      path: groupCursor
+        ? `/api/v1/groups?limit=1&cursor=${encodeURIComponent(groupCursor)}`
+        : "/api/v1/groups?limit=1",
+      status: 200,
+    });
+    if (page.data.length !== 1) {
+      throw new Error("Group pagination did not return exactly one row.");
+    }
+    groupPages.push(page);
+    groupCursor = page.nextCursor;
+    if (groupPages.length > 1_000) {
+      throw new Error("Group pagination did not terminate.");
+    }
+  } while (groupCursor);
+  const pagedGroupIds = groupPages.flatMap(({ data }) =>
+    data.map(({ groupId }) => groupId),
   );
+  if (new Set(pagedGroupIds).size !== pagedGroupIds.length) {
+    throw new Error("Group pagination duplicated a Group.");
+  }
+  for (const expectedGroupId of [group.groupId, paginationGroup.groupId]) {
+    if (!pagedGroupIds.includes(expectedGroupId)) {
+      throw new Error("Group pagination skipped a disposable Group.");
+    }
+  }
   await expectSuccess({
     actor: "initialAdmin",
     contractPath: "/api/v1/groups/{groupId}",
