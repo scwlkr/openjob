@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- The iPhone Task Editor can explicitly clear Due date and keeps Task text fully visible during keyboard transitions.
+
 ### Security
 
 ## [0.3.2] - 2026-07-18

@@ -2074,6 +2074,7 @@ test("opens one shared Task editor from global and Member actions", async ({ pag
   await expect(editor.getByLabel("Task text")).toBeFocused();
   await expect(editor).toHaveCount(0);
   await expect(memberAddTask).toBeFocused();
+  expect(state.tasks.find((task) => task.text === "Keep focus trapped while saving")?.dueDate).toBeNull();
 });
 
 test("opens a zoom-safe half-height Task sheet on narrow screens", async ({ page }) => {
@@ -2159,10 +2160,16 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   await expect(editor.getByLabel("Assignee")).toHaveJSProperty("tagName", "SELECT");
   const dueDate = editor.getByLabel("Due date");
   await expect(dueDate).toHaveAttribute("type", "date");
-  await expect(editor.getByText("Add date", { exact: true })).toBeVisible();
+  await expect(editor.getByText("None", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Clear selected date" })).toHaveCount(0);
   await dueDate.fill("2026-07-30");
-  await expect(editor.getByText("Jul 30", { exact: true })).toBeVisible();
-  await dueDate.fill("");
+  const selectedDate = editor.getByText("Jul 30", { exact: true });
+  await expect(selectedDate).toBeVisible();
+  expect(await selectedDate.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await editor.getByRole("button", { name: "Clear selected date" }).click();
+  await expect(dueDate).toHaveValue("");
+  await expect(editor.getByText("None", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Clear selected date" })).toHaveCount(0);
   await expect(editor.getByRole("radio")).toHaveCount(3);
   await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
   const priorityBoxes = [];
@@ -2211,6 +2218,66 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleCenterY + 90, { steps: 4 });
   await page.mouse.up();
   await expect(editor).toHaveCount(0);
+});
+
+test("keeps Task text fully visible when iOS resizes both viewports for the keyboard", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    user: signedInUser,
+    groups: [walkerLabs],
+    members: [
+      { userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" },
+    ],
+    tasks: [],
+  });
+  await page.addInitScript(() => {
+    const viewportState = { height: 844, width: 390 };
+    const visualViewport = new EventTarget();
+    Object.defineProperties(visualViewport, {
+      height: { get: () => viewportState.height },
+      offsetTop: { get: () => 0 },
+      width: { get: () => viewportState.width },
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: visualViewport,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      get: () => viewportState.height,
+    });
+    const testWindow = window as typeof window & {
+      __setTestVisualViewportHeight: (height: number) => void;
+    };
+    testWindow.__setTestVisualViewportHeight = (height) => {
+      viewportState.height = height;
+      visualViewport.dispatchEvent(new Event("resize"));
+      window.dispatchEvent(new Event("resize"));
+    };
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New Task" }).click();
+  const editor = page.getByRole("dialog", { name: "New Task" });
+  const taskText = editor.getByLabel("Task text");
+  await taskText.click();
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __setTestVisualViewportHeight: (height: number) => void;
+    }).__setTestVisualViewportHeight(420);
+  });
+
+  await expect.poll(async () => (await editor.boundingBox())?.height).toBeGreaterThanOrEqual(400);
+  const editorBox = await editor.boundingBox();
+  const textBox = await taskText.boundingBox();
+  const actionBox = await editor.getByRole("button", { name: "Create", exact: true }).boundingBox();
+  expect(editorBox!.y).toBeGreaterThanOrEqual(0);
+  expect(editorBox!.y + editorBox!.height).toBeLessThanOrEqual(420);
+  expect(textBox!.height).toBeGreaterThanOrEqual(76);
+  expect(textBox!.y).toBeGreaterThanOrEqual(editorBox!.y);
+  expect(textBox!.y + textBox!.height).toBeLessThanOrEqual(actionBox!.y);
+  expect(await editor.evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration))).toBeGreaterThan(0);
 });
 
 test("keeps the reduced-motion Task sheet immediately operable", async ({ page }) => {
@@ -2638,6 +2705,9 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await card.getByRole("button", { name: "Edit" }).click();
   editor = page.getByRole("dialog", { name: "Edit Task" });
   await expect(editor.getByRole("radio", { name: "High" })).toBeChecked();
+  await expect(editor.getByLabel("Due date")).toHaveValue("2026-07-20");
+  await editor.getByRole("button", { name: "Clear selected date" }).click();
+  await expect(editor.getByLabel("Due date")).toHaveValue("");
   await editor.getByLabel("Task text").fill("Order two menu stands");
   await editor.getByLabel("Assignee").selectOption("shane");
   await editor.getByRole("radio", { name: "Low" }).check();
@@ -2645,6 +2715,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
   await expect(card).toBeVisible();
   await expect(card.getByText("Low", { exact: true })).toBeVisible();
+  expect(state.tasks.find((task) => task.text === "Order two menu stands")?.dueDate).toBeNull();
 
   await card.getByRole("checkbox", { name: "Complete Order two menu stands" }).click();
   await expect(card).toHaveCount(0);

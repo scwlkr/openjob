@@ -198,6 +198,7 @@ function TaskForm({
   initialDueDate = "",
   initialPriority = "normal",
   initialText = "",
+  keyboardOpen,
   members,
   mode,
   onInputChange,
@@ -210,6 +211,7 @@ function TaskForm({
   initialDueDate?: string;
   initialPriority?: TaskPriority;
   initialText?: string;
+  keyboardOpen: boolean;
   members: NamedMember[];
   mode: EditorMode;
   onInputChange: (input: TaskFormInput) => void;
@@ -221,7 +223,20 @@ function TaskForm({
   const [priority, setPriority] = useState<TaskPriority>(initialPriority);
   const [dueDate, setDueDate] = useState(initialDueDate);
   const [validationError, setValidationError] = useState("");
+  const formFields = useRef<HTMLDivElement | null>(null);
+  const taskText = useRef<HTMLTextAreaElement | null>(null);
   const copy = TASK_FORM_COPY[mode];
+
+  useEffect(() => {
+    if (!keyboardOpen || document.activeElement !== taskText.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      formFields.current?.scrollTo({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        top: 0,
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [keyboardOpen]);
 
   return (
     <form
@@ -243,10 +258,11 @@ function TaskForm({
       }}
       noValidate
     >
-      <div className={styles.taskFormFields}>
+      <div className={styles.taskFormFields} ref={formFields}>
         <label className={styles.taskTextField}>
           <span className={styles.taskFieldLabel}>Task text</span>
           <textarea
+            ref={taskText}
             value={text}
             onChange={(event) => {
               const nextText = event.target.value;
@@ -303,26 +319,42 @@ function TaskForm({
               ))}
             </div>
           </fieldset>
-          <label className={styles.taskDueField}>
+          <div className={styles.taskDueField}>
             <span className={styles.taskFieldLabel}>Due date</span>
-            <span className={styles.taskDateShell}>
-              <CalendarIcon />
-              <span className={styles.taskDateValue} aria-hidden="true">
-                {dueDate ? formatDueDate(dueDate) : "Add date"}
-              </span>
-              <input
-                aria-label="Due date"
-                type="date"
-                value={dueDate}
-                onChange={(event) => {
-                  const nextDueDate = event.target.value;
-                  setDueDate(nextDueDate);
-                  setValidationError("");
-                  onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
-                }}
-              />
-            </span>
-          </label>
+            <div className={styles.taskDueControls}>
+              <label className={styles.taskDateShell}>
+                <CalendarIcon />
+                <span className={styles.taskDateValue} aria-hidden="true">
+                  {dueDate ? formatDueDate(dueDate) : "None"}
+                </span>
+                <input
+                  aria-label="Due date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => {
+                    const nextDueDate = event.target.value;
+                    setDueDate(nextDueDate);
+                    setValidationError("");
+                    onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
+                  }}
+                />
+              </label>
+              {dueDate ? (
+                <button
+                  className={styles.taskDateClear}
+                  type="button"
+                  aria-label="Clear selected date"
+                  onClick={() => {
+                    setDueDate("");
+                    setValidationError("");
+                    onInputChange({ text, assigneeUsername: assignee, priority, dueDate: "" });
+                  }}
+                >
+                  <CloseIcon />
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
         {validationError || error ? <p className={styles.fieldError} role="alert">{validationError || error}</p> : null}
       </div>
@@ -374,6 +406,7 @@ export function TaskList({
   const activeLoadGeneration = useRef(0);
   const editorCloseTimeout = useRef<number | null>(null);
   const editorDrag = useRef<{ offset: number; pointerId: number; startY: number } | null>(null);
+  const editorViewportBaseline = useRef({ height: 0, width: 0 });
   const editorOpener = useRef<HTMLButtonElement | null>(null);
   const editorDialog = useRef<HTMLElement | null>(null);
   const newTaskButton = useRef<HTMLButtonElement | null>(null);
@@ -470,12 +503,22 @@ export function TaskList({
   useEffect(() => {
     if (!editor) return;
     const visualViewport = window.visualViewport;
+    const initialHeight = visualViewport?.height ?? window.innerHeight;
+    const initialWidth = visualViewport?.width ?? window.innerWidth;
+    editorViewportBaseline.current = { height: initialHeight, width: initialWidth };
     const syncViewport = () => {
       const height = visualViewport?.height ?? window.innerHeight;
+      const width = visualViewport?.width ?? window.innerWidth;
+      const currentBaseline = editorViewportBaseline.current;
+      const orientationChanged = Math.abs(width - currentBaseline.width) > 80;
+      if (orientationChanged || height > currentBaseline.height) {
+        editorViewportBaseline.current = { height, width };
+      }
+      const baseline = editorViewportBaseline.current;
       setEditorViewport({
         height,
         offsetTop: visualViewport?.offsetTop ?? 0,
-        keyboardOpen: height < window.innerHeight - 120,
+        keyboardOpen: height < baseline.height - 120,
       });
     };
     syncViewport();
@@ -483,6 +526,7 @@ export function TaskList({
     visualViewport?.addEventListener("scroll", syncViewport);
     window.addEventListener("resize", syncViewport);
     return () => {
+      editorViewportBaseline.current = { height: 0, width: 0 };
       visualViewport?.removeEventListener("resize", syncViewport);
       visualViewport?.removeEventListener("scroll", syncViewport);
       window.removeEventListener("resize", syncViewport);
@@ -1096,6 +1140,7 @@ export function TaskList({
               initialDueDate={displayedEditorInput?.dueDate ?? ""}
               initialPriority={displayedEditorInput?.priority ?? "normal"}
               initialText={displayedEditorInput?.text ?? ""}
+              keyboardOpen={editorViewport.keyboardOpen}
               members={namedMembers}
               mode={editor.mode}
               onDelete={editor.mode === "new" ? undefined : deleteEditorTask}
