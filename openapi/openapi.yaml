@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenJob API
-  version: 0.3.0
+  version: 0.3.1
   summary: Shared backend contract for equal web and CLI clients
   description: |
     OpenJob exposes one versioned JSON API. Firebase Authentication is the only

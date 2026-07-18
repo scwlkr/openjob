@@ -18,10 +18,10 @@ Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
 The real `openjob` executable lives under `cli/`; the no-network command in
 `prototypes/cli/` remains disposable. Requires macOS and Node.js 22.13 or newer.
-Install OpenJob v0.3.0 from GitHub with one command:
+Install OpenJob v0.3.1 from GitHub with one command:
 
 ```bash
-npm install --global https://github.com/scwlkr/openjob/releases/download/v0.3.0/openjob-0.3.0.tgz
+npm install --global https://github.com/scwlkr/openjob/releases/download/v0.3.1/openjob-0.3.1.tgz
 ```
 
 Run `openjob auth login`, then `openjob --help`. The production command surface
@@ -58,7 +58,7 @@ npm run release:publish
 ```
 
 Preparation accepts `patch`, `minor`, `major`, or an explicit greater SemVer
-such as `0.3.0-rc.1`. Publishing creates a draft with a versioned CLI artifact and checksum
+such as `0.3.1-rc.1`. Publishing creates a draft with a versioned CLI artifact and checksum
 before any stable production deploy, runs production API and installed-CLI
 smokes, then publishes the release. A failed publish keeps its draft resumable.
 `npm run deploy` is guarded; release internals alone use `deploy:raw`.
