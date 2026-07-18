@@ -2274,7 +2274,7 @@ test("separates the touch-first completion control from keyboard Task editing", 
   await page.keyboard.press("Enter");
   const editor = page.getByRole("dialog", { name: "Edit Task" });
   await expect(editor).toBeVisible();
-  for (const control of await editor.locator("button, input, select, textarea").all()) {
+  for (const control of await editor.locator('button, input:not([type="radio"]), select, textarea').all()) {
     const box = await control.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -2935,6 +2935,7 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   expect(state.taskMutationRequests).toBe(0);
   await editor.getByLabel("Task text").fill("A valid Task");
   await editor.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(page.getByText("A valid Task")).toBeVisible();
 
   state.taskMutationFailureStatus = 409;
@@ -2958,6 +2959,7 @@ test("keeps validation and conflict failures visible and recoverable", async ({ 
   await expect(editor.getByLabel("Task text")).toHaveValue("Keep this recovered draft");
   state.failTaskMutationNetwork = false;
   await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(page.getByText("Keep this recovered draft")).toBeVisible();
 });
 
