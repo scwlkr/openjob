@@ -822,7 +822,7 @@ export function TaskList({
                         </span>
                         <span aria-hidden="true">·</span>
                         <span className={styles.taskState}>{task.state === "open" ? "Open" : "Done"}</span>
-                        {task.state === "open" && priority !== "normal" ? (
+                        {priority !== "normal" ? (
                           <span className={`${styles.taskPriority} ${priority === "high" ? styles.taskPriorityHigh : styles.taskPriorityLow}`}>
                             {priority === "high" ? "High" : "Low"}
                           </span>

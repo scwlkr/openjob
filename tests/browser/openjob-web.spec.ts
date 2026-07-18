@@ -764,15 +764,28 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
 
 test("shows the signed-in build version and offers a user-controlled refresh for a newer release", async ({ page }) => {
   let deployedVersion = packageMetadata.version;
+  let releaseChecks = 0;
+  await page.addInitScript(() => {
+    let now = Date.now();
+    Date.now = () => now;
+    Object.defineProperty(window, "advanceOpenJobReleaseClock", {
+      value: (milliseconds: number) => {
+        now += milliseconds;
+      },
+    });
+  });
   await page.route("**/api/version", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({ version: deployedVersion, commit: "fedcba987654" }),
+  }).finally(() => {
+    releaseChecks += 1;
   }));
   await startSignedIn(page);
   await installApi(page, { user: signedInUser, groups: [walkerLabs] });
 
   await page.goto("/");
+  await expect.poll(() => releaseChecks).toBe(1);
   await page.getByRole("button", { name: "User menu" }).click();
   await expect(page.getByText(`OpenJob v${packageMetadata.version}`, { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
@@ -780,10 +793,25 @@ test("shows the signed-in build version and offers a user-controlled refresh for
 
   deployedVersion = "9.0.0-rc.1";
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.waitForTimeout(50);
+  expect(releaseChecks).toBe(1);
+  await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+
+  await page.evaluate((milliseconds) => {
+    (window as typeof window & { advanceOpenJobReleaseClock(value: number): void })
+      .advanceOpenJobReleaseClock(milliseconds);
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, 15 * 60 * 1000);
+  await expect.poll(() => releaseChecks).toBe(2);
   await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
 
   deployedVersion = "9.0.0";
-  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.evaluate((milliseconds) => {
+    (window as typeof window & { advanceOpenJobReleaseClock(value: number): void })
+      .advanceOpenJobReleaseClock(milliseconds);
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, 15 * 60 * 1000);
+  await expect.poll(() => releaseChecks).toBe(3);
 
   await expect(page.getByText("OpenJob 9.0.0 is available.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
@@ -1859,7 +1887,7 @@ test("runs the complete Task lifecycle through the shared editor", async ({ page
   await expect(card).toHaveCount(0);
   await page.getByRole("button", { name: "Done 1", exact: true }).click();
   card = page.getByTestId("task-card").filter({ hasText: "Order two menu stands" });
-  await expect(card.getByText("Low", { exact: true })).toHaveCount(0);
+  await expect(card.getByText("Low", { exact: true })).toBeVisible();
   await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(card.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.getByRole("button", { name: "Reopen" }).click();

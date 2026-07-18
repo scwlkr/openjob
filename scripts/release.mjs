@@ -49,8 +49,8 @@ function assertReleaseBranch() {
   if (output("git", ["branch", "--show-current"]) !== "main") {
     throw new Error("Releases must run from main.");
   }
-  if (output("git", ["status", "--porcelain", "--untracked-files=no"])) {
-    throw new Error("Tracked files must be clean before a release.");
+  if (output("git", ["status", "--porcelain"])) {
+    throw new Error("The working tree must be clean before a release.");
   }
   run("git", ["fetch", "origin", "main"]);
   const [behind, ahead] = output("git", [
@@ -243,6 +243,9 @@ function deploy(version) {
 async function publish() {
   assertReleaseBranch();
   const release = await synchronizedRelease();
+  if (output("git", ["log", "-1", "--pretty=%s"]) !== `Prepare OpenJob v${release.version}`) {
+    throw new Error(`Publishing requires the prepared release commit for v${release.version}.`);
+  }
   const tag = ensureReleaseTag(release.version);
   const releaseDirectory = await mkdtemp(join(tmpdir(), "openjob-publish-"));
 
