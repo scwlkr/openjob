@@ -1,0 +1,3 @@
+# Protect native content with system authentication
+
+OpenJob replaces live Task content with a branded privacy curtain whenever the native app appears in the app switcher or background snapshot, while allowing ordinary screenshots during active use. Each installation also offers an optional **App Lock**, disabled by default, that uses only the operating system's authentication prompt: Face ID, Touch ID, strong Android biometrics, or the device credential fallback. When enabled, it protects cold launch and resume after at least five minutes in the background. App Lock has no OpenJob-specific PIN or recovery secret and does not replace Google or Apple account authentication.
