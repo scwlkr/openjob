@@ -231,6 +231,9 @@
   "environments": {
     "development": {
       "tier": "nonproduction",
+      "api": {
+        "baseUrl": "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1"
+      },
       "auth": {
         "appScheme": "openjob-dev",
         "firebaseHandlerUrl": "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
@@ -243,6 +246,7 @@
         "environment": "development"
       },
       "firebase": {
+        "apiKey": "AIzaSyDcONX1KOS-mIg5koGzh5saWHZCf5-HISo",
         "authDomain": "openjob-nonprod.firebaseapp.com",
         "googleWebClientId": "550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com",
         "projectId": "openjob-nonprod",
@@ -278,6 +282,9 @@
     },
     "preview": {
       "tier": "nonproduction",
+      "api": {
+        "baseUrl": "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1"
+      },
       "auth": {
         "appScheme": "openjob-preview",
         "firebaseHandlerUrl": "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
@@ -290,6 +297,7 @@
         "environment": "preview"
       },
       "firebase": {
+        "apiKey": "AIzaSyDcONX1KOS-mIg5koGzh5saWHZCf5-HISo",
         "authDomain": "openjob-nonprod.firebaseapp.com",
         "googleWebClientId": "550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com",
         "projectId": "openjob-nonprod",
@@ -325,6 +333,9 @@
     },
     "production": {
       "tier": "production",
+      "api": {
+        "baseUrl": "https://openjob.dev/api/v1"
+      },
       "auth": {
         "appScheme": "openjob",
         "firebaseHandlerUrl": "https://openjob-dev.firebaseapp.com/__/auth/handler",
@@ -337,6 +348,7 @@
         "environment": "production"
       },
       "firebase": {
+        "apiKey": "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU",
         "authDomain": "openjob-dev.firebaseapp.com",
         "googleWebClientId": "1015996869029-8jjj5dttgi3iea9geo9nt9lh7q7e631f.apps.googleusercontent.com",
         "projectId": "openjob-dev",

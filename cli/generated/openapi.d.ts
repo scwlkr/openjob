@@ -15,11 +15,54 @@ export interface paths {
          * Get the current User
          * @description Returns the authenticated User and their accessible Groups. A User who
          *     has not completed onboarding has a null username and usernameRequired
-         *     set to true. Google identity details are never exposed.
+         *     set to true. Provider identity details are never exposed. An unknown
+         *     Sign-in Method is never allowed to create a User implicitly.
          */
         get: operations["getMe"];
         put?: never;
-        post?: never;
+        /**
+         * Explicitly create the current User
+         * @description Creates a User only after the client explicitly confirms creation.
+         *     Repeating the request for an already recognized Sign-in Method returns
+         *     the same canonical User without changing Username or Group history.
+         */
+        post: operations["createCurrentUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sign-in-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current User's Sign-in Methods
+         * @description Returns only the safe provider labels apple and google. Provider
+         *     subjects, email addresses, profile data, and credential tokens are
+         *     never returned.
+         */
+        get: operations["listSignInMethods"];
+        put?: never;
+        /**
+         * Explicitly link an additional Sign-in Method
+         * @description Links Google and Apple only after explicit confirmation with a freshly
+         *     authenticated second credential. The request may add an unknown
+         *     provider, confirm an already-linked pair, or remap only a proven empty
+         *     onboarding shell. It never merges two Users with history. Email and
+         *     profile similarity are never used.
+         *     Authorization always carries the current primary session, including an
+         *     unrecognized session in the Link existing flow. credentialToken always
+         *     carries the freshly authenticated additional provider proof, and
+         *     expectedTargetUserId binds the confirmation to the displayed surviving
+         *     User. Credential tokens are never logged, placed in a URL, persisted, or
+         *     returned.
+         */
+        post: operations["linkSignInMethod"];
         delete?: never;
         options?: never;
         head?: never;
@@ -644,7 +687,7 @@ export interface components {
     schemas: {
         /** @description Opaque installation identifier with no User information. */
         InstallationId: string;
-        /** @description Canonical opaque OpenJob User ID derived from verified Firebase identity. */
+        /** @description Canonical opaque OpenJob User ID independent of provider subjects. */
         UserId: string;
         /** @description Immutable, opaque, never-reused Group ID. */
         GroupId: string;
@@ -691,6 +734,29 @@ export interface components {
         TaskPriority: "high" | "normal" | "low";
         /** @enum {string} */
         NotificationSubscriptionState: "active" | "paused";
+        /**
+         * @description Safe public label for an allowed Firebase Sign-in Method.
+         * @enum {string}
+         */
+        SignInProvider: "apple" | "google";
+        CreateCurrentUserInput: {
+            /** @constant */
+            confirmation: "create";
+        };
+        LinkSignInMethodInput: {
+            /** @constant */
+            confirmation: "link";
+            /**
+             * @description Fresh Firebase ID token for the additional Sign-in Method. Sensitive:
+             *     never log, persist, place in a URL, or return this value.
+             */
+            credentialToken: string;
+            /**
+             * @description User ID displayed during explicit confirmation. The atomic link is
+             *     rejected if the resolved surviving User changed before commit.
+             */
+            expectedTargetUserId: components["schemas"]["UserId"];
+        };
         PushSubscriptionKeysInput: {
             p256dh: string;
             auth: string;
@@ -789,12 +855,14 @@ export interface components {
             /** @constant */
             usernameRequired?: false;
         });
+        /** @description Linked providers sorted lexically and stripped of provider identifiers. */
+        SignInMethodCollection: components["schemas"]["SignInProvider"][];
         /**
          * @description Complete v1 machine-readable error vocabulary. Clients branch on these
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "invalid_request" | "authentication_required" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "invalid_request" | "authentication_required" | "fresh_authentication_required" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -819,6 +887,24 @@ export interface components {
             error?: {
                 /** @constant */
                 code?: "authentication_required";
+            };
+        };
+        LinkAuthenticationErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @enum {unknown} */
+                code?: "authentication_required" | "fresh_authentication_required";
+            };
+        };
+        SignInMethodUnrecognizedErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @constant */
+                code?: "sign_in_method_unrecognized";
+            };
+        };
+        LinkSignInMethodConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @enum {unknown} */
+                code?: "link_target_changed" | "sign_in_method_conflict" | "sign_in_method_unrecognized";
             };
         };
         AdminRequiredErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
@@ -878,61 +964,61 @@ export interface components {
         UsernameConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "username_taken" | "username_immutable";
+                code?: "sign_in_method_unrecognized" | "username_taken" | "username_immutable";
             };
         };
         LeaveGroupConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "last_admin" | "open_tasks_assigned";
+                code?: "last_admin" | "open_tasks_assigned" | "sign_in_method_unrecognized";
             };
         };
         EndGroupConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "confirmation_mismatch" | "members_remain";
+                code?: "confirmation_mismatch" | "members_remain" | "sign_in_method_unrecognized";
             };
         };
         KickMemberConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "last_admin" | "self_removal";
+                code?: "last_admin" | "self_removal" | "sign_in_method_unrecognized";
             };
         };
         PromoteMemberConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
-                /** @constant */
-                code?: "member_role_conflict";
+                /** @enum {unknown} */
+                code?: "member_role_conflict" | "sign_in_method_unrecognized";
             };
         };
         DemoteMemberConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "last_admin" | "member_role_conflict";
+                code?: "last_admin" | "member_role_conflict" | "sign_in_method_unrecognized";
             };
         };
         BanUserConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "ban_not_allowed" | "last_admin" | "self_removal";
+                code?: "ban_not_allowed" | "last_admin" | "self_removal" | "sign_in_method_unrecognized";
             };
         };
         JoinGroupConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
-                /** @constant */
-                code?: "username_required";
+                /** @enum {unknown} */
+                code?: "sign_in_method_unrecognized" | "username_required";
             };
         };
         CreateTaskConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
-                /** @constant */
-                code?: "assignee_not_member";
+                /** @enum {unknown} */
+                code?: "assignee_not_member" | "sign_in_method_unrecognized";
             };
         };
         UpdateTaskConflictErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
             error?: {
                 /** @enum {unknown} */
-                code?: "assignee_not_member" | "task_done";
+                code?: "assignee_not_member" | "sign_in_method_unrecognized" | "task_done";
             };
         };
         RateLimitedErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
@@ -949,6 +1035,9 @@ export interface components {
         };
         CurrentUserEnvelope: {
             data: components["schemas"]["CurrentUser"];
+        };
+        SignInMethodCollectionEnvelope: {
+            data: components["schemas"]["SignInMethodCollection"];
         };
         NotificationSubscriptionEnvelope: {
             data: components["schemas"]["NotificationSubscription"];
@@ -1058,6 +1147,23 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["CurrentUserEnvelope"];
+            };
+        };
+        /** @description Safe provider labels linked to the canonical User. */
+        SignInMethodCollectionResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": [
+                 *         "apple",
+                 *         "google"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["SignInMethodCollectionEnvelope"];
             };
         };
         /** @description One Group in a single-resource success envelope. */
@@ -1281,7 +1387,7 @@ export interface components {
                 "application/json": components["schemas"]["InvalidRequestErrorEnvelope"];
             };
         };
-        /** @description Bearer token is missing, invalid, expired, or not an allowed Google-backed Firebase identity. */
+        /** @description Bearer token is missing, invalid, expired, or not an allowed Google- or Apple-backed Firebase identity. */
         UnauthorizedResponse: {
             headers: {
                 [name: string]: unknown;
@@ -1297,6 +1403,27 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["AuthenticationErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Either the request is unauthenticated or the additional credential is
+         *     invalid, stale, or not freshly reauthenticated.
+         */
+        LinkAuthenticationErrorResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "fresh_authentication_required",
+                 *         "message": "Authenticate the additional Sign-in Method again.",
+                 *         "requestId": "req_01J0FRESH"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["LinkAuthenticationErrorEnvelope"];
             };
         };
         /** @description The resource is visible to the User, but the requested Admin operation is forbidden. */
@@ -1486,6 +1613,52 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["UsernameConflictErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The credential is valid but is not linked to a User. The client must
+         *     explicitly choose User creation or linking.
+         */
+        SignInMethodUnrecognizedResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "sign_in_method_unrecognized",
+                 *         "message": "Choose whether to create a new User or link an existing User.",
+                 *         "requestId": "req_01J0METHOD"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["SignInMethodUnrecognizedErrorEnvelope"];
+            };
+        };
+        /**
+         * @description When neither credential identifies a User, the client receives
+         *     sign_in_method_unrecognized and must explicitly choose creation or a
+         *     different linking session. An occupied provider slot or an attempted
+         *     merge of two historical Users returns sign_in_method_conflict. If the
+         *     surviving User no longer matches expectedTargetUserId at commit,
+         *     link_target_changed requires fresh authentication and confirmation.
+         */
+        LinkSignInMethodConflictResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "sign_in_method_conflict",
+                 *         "message": "That Sign-in Method cannot be linked.",
+                 *         "requestId": "req_01J0LINK"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["LinkSignInMethodConflictErrorEnvelope"];
             };
         };
         /** @description Leaving would abandon open work or remove the final Admin. */
@@ -1764,6 +1937,34 @@ export interface components {
                 "application/json": components["schemas"]["NotificationSubscriptionStateInput"];
             };
         };
+        /** @description Explicit confirmation that an unknown Sign-in Method should create a User. */
+        CreateCurrentUserRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "confirmation": "create"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateCurrentUserInput"];
+            };
+        };
+        /**
+         * @description Explicit link confirmation for the current Authorization session.
+         *     credentialToken is the fresh additional-provider proof and is sensitive
+         *     write-only data. expectedTargetUserId is the displayed surviving User.
+         */
+        LinkSignInMethodRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "confirmation": "link",
+                 *       "credentialToken": "fresh-firebase-id-token",
+                 *       "expectedTargetUserId": "user_maya"
+                 *     }
+                 */
+                "application/json": components["schemas"]["LinkSignInMethodInput"];
+            };
+        };
         /** @description Immutable Username claim. */
         ClaimUsernameRequest: {
             content: {
@@ -1875,6 +2076,57 @@ export interface operations {
         responses: {
             200: components["responses"]["CurrentUserResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    createCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["CreateCurrentUserRequest"];
+        responses: {
+            200: components["responses"]["CurrentUserResponse"];
+            201: components["responses"]["CurrentUserResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    listSignInMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["SignInMethodCollectionResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    linkSignInMethod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["LinkSignInMethodRequest"];
+        responses: {
+            200: components["responses"]["CurrentUserResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["LinkAuthenticationErrorResponse"];
+            409: components["responses"]["LinkSignInMethodConflictResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -1915,6 +2167,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -1937,6 +2190,7 @@ export interface operations {
             200: components["responses"]["NotificationSubscriptionResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -1960,6 +2214,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -1987,6 +2242,7 @@ export interface operations {
             200: components["responses"]["GroupCollectionResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2003,6 +2259,7 @@ export interface operations {
             201: components["responses"]["GroupResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2025,6 +2282,7 @@ export interface operations {
             200: components["responses"]["GroupResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2049,6 +2307,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2143,6 +2402,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2271,6 +2531,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2330,6 +2591,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrBanNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2353,6 +2615,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2376,6 +2639,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2398,6 +2662,7 @@ export interface operations {
             200: components["responses"]["InvitePreviewResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["InvalidInviteResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2467,6 +2732,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2518,6 +2784,7 @@ export interface operations {
             200: components["responses"]["TaskResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2551,6 +2818,7 @@ export interface operations {
             };
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2608,6 +2876,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

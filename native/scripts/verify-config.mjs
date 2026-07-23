@@ -99,7 +99,9 @@ async function readTextTree(directory) {
       if (entry.isDirectory()) await visit(child);
       else if (
         entry.isFile() &&
-        /\.(?:gradle|json|pbxproj|plist|properties|strings|xml)$/iu.test(entry.name)
+        /\.(?:entitlements|gradle|json|pbxproj|plist|properties|strings|xml)$/iu.test(
+          entry.name,
+        )
       ) {
         parts.push(await readFile(child, "utf8"));
       }
@@ -140,6 +142,26 @@ for (const environment of environments) {
         identities.environments[environment].android.applicationId,
       ),
       `${environment} Android identity was not generated`,
+    );
+    assert.ok(
+      ios.includes(
+        identities.environments[environment].ios.googleReversedClientId,
+      ),
+      `${environment} Google callback scheme was not generated`,
+    );
+    assert.match(
+      ios,
+      /com\.apple\.developer\.applesignin[\s\S]{0,180}(?:Default|<string>Default<\/string>)/u,
+    );
+    assert.match(
+      android,
+      /android:fullBackupContent="@xml\/secure_store_backup_rules"/u,
+      `${environment} Android protected-storage backup exclusion was not generated`,
+    );
+    assert.match(
+      android,
+      /android:dataExtractionRules="@xml\/secure_store_data_extraction_rules"/u,
+      `${environment} Android protected-storage extraction exclusion was not generated`,
     );
     assert.match(ios, /EXUpdatesEnabled[\s\S]{0,120}<false\s*\/>/u);
     assert.match(

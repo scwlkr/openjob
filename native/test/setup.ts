@@ -26,3 +26,43 @@ jest.mock("expo-updates", () => ({
   isUsingEmbeddedAssets: true,
   updateId: null,
 }));
+
+jest.mock("@react-native-google-signin/google-signin", () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(async () => true),
+    signIn: jest.fn(async () => ({ type: "cancelled" })),
+    signOut: jest.fn(async () => undefined),
+  },
+  isErrorWithCode: (error: unknown) =>
+    Boolean(error && typeof error === "object" && "code" in error),
+  isSuccessResponse: (response: { type?: string }) =>
+    response.type === "success",
+  statusCodes: {
+    IN_PROGRESS: "IN_PROGRESS",
+    PLAY_SERVICES_NOT_AVAILABLE: "PLAY_SERVICES_NOT_AVAILABLE",
+    SIGN_IN_CANCELLED: "SIGN_IN_CANCELLED",
+  },
+}));
+
+jest.mock("@invertase/react-native-apple-authentication", () => ({
+  appleAuth: {
+    Error: { CANCELED: "1001" },
+    isSupported: true,
+    Operation: { LOGIN: 1 },
+    performRequest: jest.fn(),
+    Scope: { EMAIL: 0, FULL_NAME: 1 },
+  },
+  appleAuthAndroid: {
+    configure: jest.fn(),
+    Error: {
+      NOT_CONFIGURED: "NOT_CONFIGURED",
+      SIGNIN_CANCELLED: "SIGNIN_CANCELLED",
+      SIGNIN_FAILED: "SIGNIN_FAILED",
+    },
+    isSupported: true,
+    ResponseType: { ALL: "ALL" },
+    Scope: { ALL: "ALL" },
+    signIn: jest.fn(),
+  },
+}));

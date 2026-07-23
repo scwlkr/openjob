@@ -169,13 +169,19 @@ function createTasksHarness({
         async getByUsername(username) {
           return USERS[username] ?? null;
         },
-        async getOrCreate(firebaseUid) {
-          return USERS[firebaseUid.replace("firebase_", "")];
+        async resolve(identity) {
+          return USERS[identity.uid.replace("firebase_", "")];
         },
       };
       const verifyIdToken = async (request) => {
         const identity = controls.identities.authenticate(request);
-        return identity ? { uid: identity.claims.sub } : null;
+        return identity
+          ? {
+              authenticatedAt: Date.now(),
+              provider: "google",
+              uid: identity.claims.sub,
+            }
+          : null;
       };
       return createV1TasksApi({
         requestId: () => "req_tasks_test",

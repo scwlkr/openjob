@@ -14,8 +14,8 @@ const CAPABILITY = {
 function createApi() {
   const records = new Map();
   const users = {
-    async getOrCreate(firebaseUid) {
-      return { userId: `user_${firebaseUid}`, username: firebaseUid };
+    async resolve(identity) {
+      return { userId: `user_${identity.uid}`, username: identity.uid };
     },
   };
   const subscriptions = {
@@ -40,7 +40,9 @@ function createApi() {
     users,
     verifyIdToken: async (request) => {
       const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
-      return token ? { uid: token } : null;
+      return token
+        ? { authenticatedAt: Date.now(), provider: "google", uid: token }
+        : null;
     },
   });
 }

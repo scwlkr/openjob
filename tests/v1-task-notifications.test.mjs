@@ -54,11 +54,13 @@ test("a Task assigned by another Member schedules one server-owned assignment no
           ? { userId: "user_eli", username: "eli" }
           : null;
       },
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -127,11 +129,13 @@ test("reassigning an open Task schedules its new Assignee notification", async (
           ? { userId: "user_eli", username: "eli" }
           : null;
       },
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -194,11 +198,13 @@ test("a real completion schedules the current Task Creator and Assignee without 
       },
     },
     users: {
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -278,11 +284,13 @@ test("self-assignment, unrelated edits, and deletion do not schedule notificatio
       async getByUsername(username) {
         return { userId: `user_${username}`, username };
       },
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -350,11 +358,15 @@ test("assigning an Unassigned Task schedules recovery for the new Assignee", asy
       async getByUsername() {
         return { userId: "user_eli", username: "eli" };
       },
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
-    verifyIdToken: async () => ({ uid: "shane" }),
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
+      uid: "shane",
+    }),
   });
 
   const response = await request(api, {
@@ -423,11 +435,13 @@ test("completion tolerates an unknown Creator, excludes the actor, and ignores r
       },
     },
     users: {
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -486,11 +500,13 @@ test("completion deduplicates overlapping roles and ignores repeated done state"
       },
     },
     users: {
-      async getOrCreate(firebaseUid) {
-        return { userId: `user_${firebaseUid}`, username: firebaseUid };
+      async resolve(identity) {
+        return { userId: `user_${identity.uid}`, username: identity.uid };
       },
     },
     verifyIdToken: async (incoming) => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
       uid: incoming.headers.get("authorization").replace("Bearer ", ""),
     }),
   });
@@ -541,9 +557,13 @@ test("a synchronous notification scheduler failure cannot change Task success", 
     },
     users: {
       async getByUsername() { return { userId: "user_eli", username: "eli" }; },
-      async getOrCreate() { return { userId: "user_shane", username: "shane" }; },
+      async resolve() { return { userId: "user_shane", username: "shane" }; },
     },
-    verifyIdToken: async () => ({ uid: "shane" }),
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
+      uid: "shane",
+    }),
   });
 
   const response = await request(api, {

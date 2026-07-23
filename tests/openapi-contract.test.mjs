@@ -23,6 +23,7 @@ const expectedOperations = [
   "get /api/v1/invites/{token} inspectInviteLink",
   "get /api/v1/me getMe",
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
+  "get /api/v1/me/sign-in-methods listSignInMethods",
   "patch /api/v1/groups/{groupId} renameGroup",
   "patch /api/v1/groups/{groupId}/tasks/{taskId} updateGroupTask",
   "patch /api/v1/me/notification-subscriptions/{installationId} setNotificationSubscriptionState",
@@ -37,6 +38,8 @@ const expectedOperations = [
   "post /api/v1/groups/{groupId}/members/{userId}/actions/promote promoteGroupMember",
   "post /api/v1/groups/{groupId}/tasks createGroupTask",
   "post /api/v1/invites/{token}/actions/join joinGroupWithInviteLink",
+  "post /api/v1/me createCurrentUser",
+  "post /api/v1/me/sign-in-methods linkSignInMethod",
   "put /api/v1/groups/{groupId}/tasks/{taskId}/state setGroupTaskState",
   "put /api/v1/me/username claimUsername",
   "put /api/v1/me/notification-subscriptions/{installationId} registerNotificationSubscription",
@@ -79,7 +82,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 21);
+  assert.equal(Object.keys(contract.paths).length, 22);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -138,7 +141,10 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   const contract = await validateOpenApiContract(contractUrl);
   const { parameters, schemas, securitySchemes } = contract.components;
 
-  assert.match(securitySchemes.firebaseBearer.description, /Google sign-in\s+provider/);
+  assert.match(
+    securitySchemes.firebaseBearer.description,
+    /Google and Apple\s+sign-in\s+providers/,
+  );
   assert.deepEqual(
     [parameters.Limit.schema.default, parameters.Limit.schema.maximum],
     [100, 500],
@@ -152,6 +158,7 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
     "InvitePreviewEnvelope",
     "MemberEnvelope",
     "NotificationSubscriptionEnvelope",
+    "SignInMethodCollectionEnvelope",
     "TaskEnvelope",
   ]) {
     assert.deepEqual(schemas[name].required, ["data"], name);
@@ -177,12 +184,39 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   assert.deepEqual(schemas.NotificationSubscription.required, ["installationId", "state"]);
   assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "endpoint"), false);
   assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "keys"), false);
+  assert.deepEqual(schemas.SignInProvider.enum, ["apple", "google"]);
+  assert.equal(
+    schemas.LinkSignInMethodInput.properties.credentialToken.writeOnly,
+    true,
+  );
+  const linkOperation =
+    contract.paths["/api/v1/me/sign-in-methods"].post;
+  assert.match(
+    linkOperation.description,
+    /Authorization always carries the current primary session/,
+  );
+  assert.match(
+    linkOperation.description,
+    /credentialToken always\s+carries the freshly authenticated additional provider proof/,
+  );
+  assert.match(
+    linkOperation.description,
+    /expectedTargetUserId binds the confirmation/,
+  );
+  assert.match(
+    contract.components.responses.LinkSignInMethodConflictResponse.description,
+    /link_target_changed/,
+  );
 
   const requiredConflictCodes = [
     "assignee_not_member",
     "confirmation_mismatch",
+    "fresh_authentication_required",
     "last_admin",
+    "link_target_changed",
     "open_tasks_assigned",
+    "sign_in_method_conflict",
+    "sign_in_method_unrecognized",
     "task_done",
     "username_immutable",
     "username_taken",
@@ -277,7 +311,15 @@ test("contract schemas enforce normalized domain rules and status-specific error
     }),
     false,
   );
-  const expectedConflictCodes = new Map([
+  const expectedConflictCodes = new Map(
+    operations(contract)
+      .filter(({ operation }) => operation.operationId !== "createCurrentUser")
+      .map(({ operation }) => [
+        operation.operationId,
+        ["sign_in_method_unrecognized"],
+      ]),
+  );
+  const domainConflictCodes = new Map([
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
     ["claimUsername", ["username_immutable", "username_taken"]],
     ["createGroupTask", ["assignee_not_member"]],
@@ -286,9 +328,13 @@ test("contract schemas enforce normalized domain rules and status-specific error
     ["joinGroupWithInviteLink", ["username_required"]],
     ["kickGroupMember", ["last_admin", "self_removal"]],
     ["leaveGroup", ["last_admin", "open_tasks_assigned"]],
+    ["linkSignInMethod", ["sign_in_method_conflict"]],
     ["promoteGroupMember", ["member_role_conflict"]],
     ["updateGroupTask", ["assignee_not_member", "task_done"]],
   ]);
+  for (const [operationId, codes] of domainConflictCodes) {
+    expectedConflictCodes.get(operationId).push(...codes);
+  }
   const allConflictCodes = new Set([...expectedConflictCodes.values()].flat());
   const conflictOperations = operations(contract).filter(
     ({ operation }) => operation.responses["409"],

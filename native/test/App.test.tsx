@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   AccessibilityInfo,
   AppState,
+  Dimensions,
   type AppStateStatus,
 } from "react-native";
 import {
@@ -13,20 +14,73 @@ import {
 } from "@testing-library/react-native";
 import { OpenJobNativeApp } from "../App";
 import { confirmsEmbeddedBundle } from "../src/OpenJobShell";
+import type { NativeAuthController } from "../src/auth/AuthGate";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
 
 const previewConfig: OpenJobRuntimeConfig = {
   apiBasePath: "/api/v1",
+  apiBaseUrl:
+    "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1",
+  appleRedirectUri:
+    "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
+  appleServiceId: "dev.openjob.auth.nonprod",
   environment: "preview",
   environmentBadge: "Preview",
+  firebaseApiKey: "public-key",
+  firebaseAuthDomain: "openjob-nonprod.firebaseapp.com",
+  googleIosClientId: "ios.apps.googleusercontent.com",
+  googleWebClientId: "web.apps.googleusercontent.com",
+  keychainService: "dev.openjob.app.preview.auth",
   releaseVersion: "0.3.3",
+  sessionStorageKey: "openjob.native.auth.preview.v1",
 };
 
 const productionConfig: OpenJobRuntimeConfig = {
   ...previewConfig,
+  apiBaseUrl: "https://openjob.dev/api/v1",
+  appleRedirectUri:
+    "https://openjob-dev.firebaseapp.com/__/auth/handler",
+  appleServiceId: "dev.openjob.auth",
   environment: "production",
   environmentBadge: null,
+  firebaseAuthDomain: "openjob-dev.firebaseapp.com",
+  keychainService: "dev.openjob.app.auth",
+  sessionStorageKey: "openjob.native.auth.production.v1",
 };
+
+const signedIn = {
+  kind: "signed-in" as const,
+  methods: ["google" as const],
+  user: {
+    userId: "usr_one",
+    username: "walker",
+    usernameRequired: false,
+  },
+};
+
+function authController(): NativeAuthController {
+  return {
+    authenticateExistingUser: jest.fn(async () => signedIn),
+    authenticateNewMethod: jest.fn(async () => signedIn),
+    cancelPending: jest.fn(async () => signedIn),
+    confirmLink: jest.fn(async () => signedIn),
+    createUser: jest.fn(async () => signedIn),
+    restore: jest.fn(async () => signedIn),
+    signIn: jest.fn(async () => signedIn),
+    signOut: jest.fn(async () => ({ kind: "signed-out" as const })),
+    subscribeToCredentialRevocation: jest.fn(() => () => undefined),
+    switchUser: jest.fn(async () => ({ kind: "signed-out" as const })),
+  };
+}
+
+function renderNativeApp(runtimeConfig: OpenJobRuntimeConfig) {
+  return render(
+    <OpenJobNativeApp
+      authController={authController()}
+      runtimeConfig={runtimeConfig}
+    />,
+  );
+}
 
 beforeEach(async () => {
   jest.restoreAllMocks();
@@ -63,7 +117,7 @@ test("does not confirm Metro or OTA-enabled launches as embedded", () => {
 });
 
 test("bootstraps the branded preview shell from its embedded bundle", async () => {
-  await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+  await renderNativeApp(previewConfig);
 
   expect(
     await screen.findByText("One clear list for your team."),
@@ -82,7 +136,7 @@ test("bootstraps the branded preview shell from its embedded bundle", async () =
 });
 
 test("production omits the non-production build badge", async () => {
-  await render(<OpenJobNativeApp runtimeConfig={productionConfig} />);
+  await renderNativeApp(productionConfig);
 
   expect(
     await screen.findByText("One clear list for your team."),
@@ -90,8 +144,43 @@ test("production omits the non-production build badge", async () => {
   expect(screen.queryByText(/build$/iu)).not.toBeOnTheScreen();
 });
 
+test("wraps every account action inside a narrow phone header", async () => {
+  const original = Dimensions.get("window");
+  await act(() => {
+    Dimensions.set({
+      window: { ...original, height: 700, width: 320 },
+    });
+  });
+  let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
+
+  try {
+    rendered = await renderNativeApp(previewConfig);
+
+    expect(await screen.findByTestId("openjob-top-bar")).toHaveStyle({
+      flexDirection: "column",
+    });
+    expect(screen.getByTestId("openjob-top-bar-actions")).toHaveStyle({
+      flexWrap: "wrap",
+      width: "100%",
+    });
+    for (const label of [
+      "Manage Sign-in Methods",
+      "Switch User",
+      "Sign out",
+      "Open appearance settings",
+    ]) {
+      expect(screen.getByRole("button", { name: label })).toBeOnTheScreen();
+    }
+  } finally {
+    await rendered?.unmount();
+    await act(() => {
+      Dimensions.set({ window: original });
+    });
+  }
+});
+
 test("restores the selected appearance and pushed native-stack screen", async () => {
-  const first = await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+  const first = await renderNativeApp(previewConfig);
 
   await fireEvent.press(
     await screen.findByLabelText("Open appearance settings"),
@@ -106,14 +195,14 @@ test("restores the selected appearance and pushed native-stack screen", async ()
     expect(AsyncStorage.setItem).toHaveBeenCalled();
   });
   await first.unmount();
-  await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+  await renderNativeApp(previewConfig);
 
   expect(await screen.findByRole("header", { name: "Appearance" })).toBeOnTheScreen();
   expect(screen.getByText("Dark selected")).toBeOnTheScreen();
 });
 
 test("keeps selected dark-mode labels legible and exposes focus and hover states", async () => {
-  await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+  await renderNativeApp(previewConfig);
 
   const appearanceButton = await screen.findByRole("button", {
     name: "Open appearance settings",
@@ -153,7 +242,7 @@ test("survives lifecycle changes and respects system Reduced Motion", async () =
     return { remove: jest.fn() };
   });
 
-  await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+  await renderNativeApp(previewConfig);
 
   expect(await screen.findByText("Reduced Motion on")).toBeOnTheScreen();
   await act(() => appStateListener?.("active"));

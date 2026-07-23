@@ -39,6 +39,19 @@ export default function createAppConfig({ config = {} } = {}) {
     plugins: [
       "expo-font",
       [
+        "expo-secure-store",
+        {
+          configureAndroidBackup: true,
+          faceIDPermission: false,
+        },
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          iosUrlScheme: identity.ios.googleReversedClientId,
+        },
+      ],
+      [
         "expo-splash-screen",
         {
           backgroundColor: "#eef0ea",
@@ -55,8 +68,13 @@ export default function createAppConfig({ config = {} } = {}) {
     ios: {
       ...config.ios,
       bundleIdentifier: identity.ios.bundleId,
+      entitlements: {
+        ...config.ios?.entitlements,
+        "com.apple.developer.applesignin": ["Default"],
+      },
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
       supportsTablet: true,
+      usesAppleSignIn: true,
     },
     android: {
       ...config.android,
@@ -82,11 +100,21 @@ export default function createAppConfig({ config = {} } = {}) {
       openjobEnvironment: environment,
       openjob: {
         apiBasePath: "/api/v1",
+        apiBaseUrl: identity.api.baseUrl,
+        appleRedirectUri: identity.auth.firebaseHandlerUrl,
+        appleServiceId:
+          identities.apple.signInServices[identity.tier].serviceId,
         environment,
+        firebaseApiKey: identity.firebase.apiKey,
+        firebaseAuthDomain: identity.firebase.authDomain,
+        googleIosClientId: identity.ios.googleClientId,
+        googleWebClientId: identity.firebase.googleWebClientId,
         ...(environmentBadges[environment]
           ? { environmentBadge: environmentBadges[environment] }
           : {}),
+        keychainService: `${identity.ios.bundleId}.auth`,
         releaseVersion: rootPackage.version,
+        sessionStorageKey: `openjob.native.auth.${environment}.v1`,
       },
     },
   };

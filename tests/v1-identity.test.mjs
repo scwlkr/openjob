@@ -22,20 +22,34 @@ function createHarnessUserStore(controls) {
   }
 
   return {
-    async getOrCreate(firebaseUid) {
+    async create(identity) {
       return controls.state.transaction(async (state) => {
-        const path = ["v1", "users", firebaseUid];
+        const path = ["v1", "sign-in-methods", identity.provider, identity.uid];
         const existing = await state.get(path);
-        if (existing) return existing;
+        if (existing) return { kind: "existing", user: existing };
         const user = newUser();
         await state.put(path, user);
-        return user;
+        return { kind: "created", user };
       });
     },
-    async claimUsername(firebaseUid, username) {
+    async resolve(identity) {
+      return controls.state.get([
+        "v1",
+        "sign-in-methods",
+        identity.provider,
+        identity.uid,
+      ]);
+    },
+    async claimUsername(identity, username) {
       return controls.state.transaction(async (state) => {
-        const userPath = ["v1", "users", firebaseUid];
-        const user = (await state.get(userPath)) ?? newUser();
+        const userPath = [
+          "v1",
+          "sign-in-methods",
+          identity.provider,
+          identity.uid,
+        ];
+        const user = await state.get(userPath);
+        if (!user) return { kind: "unrecognized" };
         if (user.username === username) return { kind: "claimed", user };
         if (user.username !== null) return { kind: "immutable" };
 
@@ -58,8 +72,11 @@ async function createIdentityHarness({ failKeyFetch = false, failUsers = false }
       return createV1IdentityApi({
         groups: emptyGroupStore,
         users: failUsers
-          ? {
-              async getOrCreate() {
+            ? {
+              async create() {
+                throw new Error("Test storage outage.");
+              },
+              async resolve() {
                 throw new Error("Test storage outage.");
               },
               async claimUsername() {
@@ -86,7 +103,55 @@ function authorization(token) {
   return { authorization: `Bearer ${token}` };
 }
 
-test("GET /me persists one OpenJob User per verified Firebase identity", async (t) => {
+test("Firebase verification returns only safe Google and Apple Sign-in Method identity", async () => {
+  const authority = await createTestFirebaseAuthority({ now: NOW });
+  const verifyIdToken = createFirebaseIdTokenVerifier({
+    fetchImplementation: authority.fetch,
+    now: () => Date.parse(NOW),
+    projectId: "openjob-dev",
+  });
+
+  for (const [providerClaim, provider] of [
+    ["google.com", "google"],
+    ["apple.com", "apple"],
+  ]) {
+    const token = await authority.issue({
+      uid: `firebase_${provider}`,
+      claims: {
+        email: "shared@example.test",
+        firebase: { sign_in_provider: providerClaim },
+        name: "Ignored provider profile",
+      },
+    });
+    assert.deepEqual(
+      await verifyIdToken(
+        new Request("https://openjob.test/api/v1/me", {
+          headers: authorization(token),
+        }),
+      ),
+      {
+        authenticatedAt: Date.parse(NOW) - 60_000,
+        provider,
+        uid: `firebase_${provider}`,
+      },
+    );
+  }
+
+  const passwordToken = await authority.issue({
+    uid: "firebase_password",
+    claims: { firebase: { sign_in_provider: "password" } },
+  });
+  assert.equal(
+    await verifyIdToken(
+      new Request("https://openjob.test/api/v1/me", {
+        headers: authorization(passwordToken),
+      }),
+    ),
+    null,
+  );
+});
+
+test("GET /me resolves only an explicitly created OpenJob User", async (t) => {
   const { authority, harness } = await createIdentityHarness();
   t.after(() => harness.close());
 
@@ -99,6 +164,23 @@ test("GET /me persists one OpenJob User per verified Firebase identity", async (
   ]);
 
   const shaneToken = await authority.issue({ uid: "firebase_shane" });
+  const unrecognized = await harness.request({
+    headers: authorization(shaneToken),
+    method: "GET",
+    path: "/api/v1/me",
+  });
+  assert.equal(unrecognized.status, 409);
+  assert.equal(
+    (await unrecognized.json()).error.code,
+    "sign_in_method_unrecognized",
+  );
+  const creation = await harness.request({
+    body: { confirmation: "create" },
+    headers: authorization(shaneToken),
+    method: "POST",
+    path: "/api/v1/me",
+  });
+  assert.equal(creation.status, 201);
   const first = await harness.request({
     headers: authorization(shaneToken),
     method: "GET",
@@ -127,6 +209,13 @@ test("GET /me persists one OpenJob User per verified Firebase identity", async (
   assert.deepEqual((await persisted.json()).data, firstUser);
 
   const eliToken = await authority.issue({ uid: "firebase_eli" });
+  const eliCreation = await harness.request({
+    body: { confirmation: "create" },
+    headers: authorization(eliToken),
+    method: "POST",
+    path: "/api/v1/me",
+  });
+  assert.equal(eliCreation.status, 201);
   const second = await harness.request({
     headers: authorization(eliToken),
     method: "GET",
@@ -135,7 +224,7 @@ test("GET /me persists one OpenJob User per verified Firebase identity", async (
   assert.notEqual((await second.json()).data.userId, firstUser.userId);
 });
 
-test("the Worker rejects every invalid or non-Google Firebase identity", async (t) => {
+test("the Worker rejects every invalid or unsupported Firebase identity", async (t) => {
   const { authority, harness } = await createIdentityHarness();
   t.after(() => harness.close());
   const now = Math.floor(Date.parse(NOW) / 1000);
@@ -211,6 +300,13 @@ test("PUT /me/username persists one idempotent Username claim", async (t) => {
   t.after(() => harness.close());
   const token = await authority.issue({ uid: "firebase_shane" });
   const headers = authorization(token);
+  const creation = await harness.request({
+    body: { confirmation: "create" },
+    headers,
+    method: "POST",
+    path: "/api/v1/me",
+  });
+  assert.equal(creation.status, 201);
 
   const claimed = await harness.request({
     body: { username: "shane" },
@@ -253,6 +349,15 @@ test("Username claims are immutable and globally first-come", async (t) => {
   const eliHeaders = authorization(
     await authority.issue({ uid: "firebase_eli" }),
   );
+  for (const headers of [shaneHeaders, eliHeaders]) {
+    const creation = await harness.request({
+      body: { confirmation: "create" },
+      headers,
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    assert.equal(creation.status, 201);
+  }
 
   const first = await harness.request({
     body: { username: "shane" },

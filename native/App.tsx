@@ -11,6 +11,10 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { OpenJobShell } from "./src/OpenJobShell";
+import {
+  NativeAuthGate,
+  type NativeAuthController,
+} from "./src/auth/AuthGate";
 import { useReducedMotion } from "./src/device-state";
 import {
   readRuntimeConfig,
@@ -32,9 +36,11 @@ type BootstrapState = {
 };
 
 function AppSurface({
+  authController,
   bootstrap,
   runtimeConfig,
 }: {
+  authController?: NativeAuthController;
   bootstrap: BootstrapState;
   runtimeConfig: OpenJobRuntimeConfig;
 }) {
@@ -51,6 +57,7 @@ function AppSurface({
       setPreference={selectAppearance}
     >
       <ThemedSurface
+        authController={authController}
         bootstrap={bootstrap}
         reducedMotion={reducedMotion}
         runtimeConfig={runtimeConfig}
@@ -60,10 +67,12 @@ function AppSurface({
 }
 
 function ThemedSurface({
+  authController,
   bootstrap,
   reducedMotion,
   runtimeConfig,
 }: {
+  authController?: NativeAuthController;
   bootstrap: BootstrapState;
   reducedMotion: boolean;
   runtimeConfig: OpenJobRuntimeConfig;
@@ -72,9 +81,27 @@ function ThemedSurface({
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
-      <OpenJobShell
-        initialState={bootstrap.navigationState}
-        reducedMotion={reducedMotion}
+      <NativeAuthGate
+        controller={authController}
+        renderSignedIn={({
+          onManageSignInMethods,
+          onSignOut,
+          onSwitchUser,
+          result,
+        }) => (
+          <OpenJobShell
+            account={{
+              methods: result.methods,
+              onManageSignInMethods,
+              onSignOut,
+              onSwitchUser,
+              user: result.user,
+            }}
+            initialState={bootstrap.navigationState}
+            reducedMotion={reducedMotion}
+            runtimeConfig={runtimeConfig}
+          />
+        )}
         runtimeConfig={runtimeConfig}
       />
     </>
@@ -82,8 +109,10 @@ function ThemedSurface({
 }
 
 export function OpenJobNativeApp({
+  authController,
   runtimeConfig = readRuntimeConfig(),
 }: {
+  authController?: NativeAuthController;
   runtimeConfig?: OpenJobRuntimeConfig;
 }) {
   const [fontsLoaded, fontError] = useFonts({
@@ -114,7 +143,11 @@ export function OpenJobNativeApp({
   if (!ready || !bootstrap) return null;
   return (
     <SafeAreaProvider>
-      <AppSurface bootstrap={bootstrap} runtimeConfig={runtimeConfig} />
+      <AppSurface
+        authController={authController}
+        bootstrap={bootstrap}
+        runtimeConfig={runtimeConfig}
+      />
     </SafeAreaProvider>
   );
 }

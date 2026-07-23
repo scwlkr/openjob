@@ -33,10 +33,11 @@ After #34, #36, and #37 are complete:
 5. Confirm both Users list only the disposable QA Group before running release
    acceptance.
 
-The current repository cannot complete those steps: #34, #36, and #37 remain
-open, there is no runnable native preview client, and Apple/provider-linking
-authentication is not implemented. Issue #35 must remain open until the real
-provider and physical-device evidence exists.
+The repository now contains Google and Apple authentication, explicit
+provider-linking, and a deployed isolated preview API. Issue #35 must remain
+open until #34's provider/account gates are complete and real provider sign-in
+is proven on physical iOS and Android preview builds. Issue #37 must remain open
+until its corresponding real-provider and physical-device proof is complete.
 
 ## Reset
 
@@ -65,9 +66,14 @@ identity records, deletes collections, repairs non-QA access, or accepts User
 IDs on the command line.
 
 After reset, use the same preview `/api/v1` origin in native, PWA, API harness,
-and CLI (`OPENJOB_API_URL`). Verify both `/me` responses, both Group lists, the
-seven-Task matrix, and one state change observed in each direction. The preview
-API origin itself is owned by #36/#37 and must not be guessed.
+and CLI (`OPENJOB_API_URL`):
+
+```text
+https://openjob-preview.walkerworlddiscord.workers.dev/api/v1
+```
+
+Verify both `/me` responses, both Group lists, the seven-Task matrix, and one
+state change observed in each direction.
 
 The fixture anchors date-only due dates to `America/Chicago`. Keep acceptance
 devices on that calendar time zone when proving the today/overdue matrix near a

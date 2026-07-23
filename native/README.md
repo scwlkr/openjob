@@ -3,8 +3,25 @@
 The Expo client is one strict-TypeScript React Native application for iOS and
 Android. It uses native-stack navigation with no tabs, carries the OpenJob
 blue/paper/ink identity and Geist typography, and keeps `/api/v1` as its only
-future domain boundary. This shell intentionally contains no authentication,
-Firestore access, Group data, Task data, or duplicated service validation.
+domain boundary. Google and Apple credentials resolve through the canonical
+OpenJob User API; the client never reads Firestore or duplicates service
+validation.
+
+## Authentication and restoration
+
+Google and Apple use their system provider SDKs. An unknown credential presents
+an explicit Create User or Link existing User choice. Linking requires a fresh
+credential from the second provider plus explicit confirmation; email is never
+used to infer identity.
+
+Only the Firebase refresh token and its provider are persisted in Expo
+SecureStore. ID and provider access tokens remain in memory. Sign out, Switch
+User, provider revocation, and an invalid refresh token clear the secure
+credential and the reserved local domain-cache boundary. Offline restoration
+keeps the credential and presents Retry instead of signing the User out.
+A non-secret cleanup-pending tombstone is mirrored in AsyncStorage and
+SecureStore so an interrupted purge is retried after relaunch; it contains no
+credential, User, Group, or Task data.
 
 ## Install and run
 
@@ -83,9 +100,10 @@ Run this matrix on both platforms:
 ## Generated configuration and embedded bundles
 
 The repository gate exports every public environment, performs clean temporary
-iOS and Android prebuilds, and proves OTA is disabled, launch checks are
-`NEVER`, the embedded update is retained, and update URL/signing metadata is
-absent:
+iOS and Android prebuilds, and proves the Google callback scheme, Apple sign-in
+entitlement, and Android protected-storage backup exclusions are generated. It
+also proves OTA is disabled, launch checks are `NEVER`, the embedded update is
+retained, and update URL/signing metadata is absent:
 
 ```sh
 npm --prefix native run config:verify
@@ -137,3 +155,5 @@ npm run native:check
 Firebase configuration files come only from same-named EAS environment file
 secrets. Credentials, tokens, keystores, provisioning profiles, and provider
 configuration files never belong in this directory or in build evidence.
+Firebase API keys and provider client IDs in `config/native-identities.json`
+are public identifiers, not service credentials.

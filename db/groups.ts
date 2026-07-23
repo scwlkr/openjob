@@ -324,6 +324,19 @@ export function createFirestoreGroupStore(
     });
   }
 
+  function userHistoryWrite(userId: string) {
+    return {
+      update: {
+        name: firestore.documentName(`v1UserDirectory/${userId}`),
+        fields: {
+          emptyShellEligible: { booleanValue: false },
+        },
+      },
+      updateMask: { fieldPaths: ["emptyShellEligible"] },
+      currentDocument: { exists: true },
+    };
+  }
+
   function groupPath(groupId: GroupId) {
     return `v1Groups/${groupId}`;
   }
@@ -675,6 +688,7 @@ export function createFirestoreGroupStore(
         try {
           await commit([
             groupIdReservationWrite(groupId),
+            userHistoryWrite(user.userId),
             {
               update: {
                 name: firestore.documentName(groupDocumentPath),
@@ -901,6 +915,7 @@ export function createFirestoreGroupStore(
             verify: firestore.documentName(userBanPath),
             currentDocument: { exists: false },
           },
+          userHistoryWrite(user.userId),
           {
             update: {
               name: firestore.documentName(memberDocumentPath),

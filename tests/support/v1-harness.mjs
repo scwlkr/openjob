@@ -224,6 +224,9 @@ export function createV1TestHarness({
   }
 
   return Object.freeze({
+    credentialTokenFor(name) {
+      return identity.tokenFor(name);
+    },
     async request({ as, body, headers: providedHeaders, method = "GET", path }) {
       if (closed) throw new Error("The v1 test harness is closed.");
       const url =

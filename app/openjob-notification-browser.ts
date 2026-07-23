@@ -81,6 +81,37 @@ export function writeWorkerState(
   });
 }
 
+export function clearWorkerPrivateState(installationId: string) {
+  if (!("indexedDB" in window)) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const request = window.indexedDB.open(DATABASE_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DATABASE_STORE)) {
+        request.result.createObjectStore(DATABASE_STORE);
+      }
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(DATABASE_STORE, "readwrite");
+      const store = transaction.objectStore(DATABASE_STORE);
+      store.put(
+        { installationId, ownerUserId: null, active: false },
+        DATABASE_RECORD,
+      );
+      store.delete(PENDING_LAUNCH_RECORD);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error);
+      };
+    };
+  });
+}
+
 export function consumePendingNotificationGroup() {
   if (!("indexedDB" in window)) return Promise.resolve(null);
   return new Promise<string | null>((resolve) => {
