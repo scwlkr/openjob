@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "openjob-two-user-qa-v1",
+  "environments": {
+    "preview": {
+      "firebaseProjectId": "openjob-nonprod",
+      "groupId": "grp_qa_two_user_preview_v1",
+      "groupName": "OpenJob QA Preview (Disposable)",
+      "confirmation": "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1"
+    }
+  },
+  "users": {
+    "qaOne": {
+      "username": "qa-one",
+      "role": "admin",
+      "membershipId": "qa_one_preview_v1"
+    },
+    "qaTwo": {
+      "username": "qa-two",
+      "role": "member",
+      "membershipId": "qa_two_preview_v1"
+    }
+  },
+  "tasks": [
+    {
+      "taskId": "task_qa_one_open_high_overdue",
+      "text": "QA one overdue High Task",
+      "assignee": "qaOne",
+      "priority": "high",
+      "dueOffsetDays": -7,
+      "state": "open"
+    },
+    {
+      "taskId": "task_qa_two_open_normal_today",
+      "text": "QA two Normal Task due today",
+      "assignee": "qaTwo",
+      "priority": "normal",
+      "dueOffsetDays": 0,
+      "state": "open"
+    },
+    {
+      "taskId": "task_qa_unassigned_open_low_future",
+      "text": "Unassigned future Low Task",
+      "assignee": "unassigned",
+      "priority": "low",
+      "dueOffsetDays": 7,
+      "state": "open"
+    },
+    {
+      "taskId": "task_qa_one_open_normal_none",
+      "text": "QA one Normal Task without due date",
+      "assignee": "qaOne",
+      "priority": "normal",
+      "dueOffsetDays": null,
+      "state": "open"
+    },
+    {
+      "taskId": "task_qa_two_done_high_none",
+      "text": "QA two completed High Task",
+      "assignee": "qaTwo",
+      "priority": "high",
+      "dueOffsetDays": null,
+      "state": "done"
+    },
+    {
+      "taskId": "task_qa_one_done_low_today",
+      "text": "QA one completed Low Task",
+      "assignee": "qaOne",
+      "priority": "low",
+      "dueOffsetDays": 0,
+      "state": "done"
+    },
+    {
+      "taskId": "task_qa_unassigned_done_normal_future",
+      "text": "Unassigned completed Normal Task",
+      "assignee": "unassigned",
+      "priority": "normal",
+      "dueOffsetDays": 7,
+      "state": "done"
+    }
+  ]
+}

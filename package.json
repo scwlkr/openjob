@@ -30,6 +30,7 @@
     "legacy:smoke": "node scripts/legacy-cutover.mjs smoke",
     "legacy:snapshot": "node scripts/legacy-cutover.mjs snapshot",
     "legacy:retire": "node scripts/legacy-cutover.mjs retire",
+    "qa:fixture:reset": "node scripts/reset-qa-fixture.mjs",
     "smoke:production": "node scripts/smoke-v1-production.mjs",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv",
     "typecheck": "npm run cf:typegen && tsc --noEmit",
