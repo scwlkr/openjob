@@ -1,0 +1,3 @@
+# Cache mobile state without queuing writes
+
+The native mobile client caches the last successfully loaded Group and Task List so it can launch quickly and remain useful as a clearly marked read-only reference when offline. The hosted service remains the sole source of truth: the app does not queue Task or Group mutations, preserves unsaved editor input for an explicit retry after reconnection, refreshes cached content when online, and purges cached Group and Task data when the User signs out or changes. This trades offline action for predictable behavior without introducing synchronization conflicts, duplicate operations, or a second write model.
