@@ -1,3 +1,5 @@
 # Stage and sign native over-the-air updates
 
 OpenJob uses Expo over-the-air updates for small JavaScript and asset fixes that remain compatible with the installed native runtime. Every production update is signed, verified on an internal channel on both iOS and Android, introduced through a gradual rollout, and kept rollback-ready. The app always retains a working embedded bundle, downloads compatible updates without blocking launch, and applies them on the next cold launch rather than restarting an active session. Native-code changes and substantial product changes continue through App Store and Play Store builds. If signed delivery is unavailable, OpenJob uses store builds instead of weakening update authenticity.
+
+Routine releases never block app use. OpenJob may remotely enforce a minimum store build only when a serious security issue or a genuinely incompatible API makes continued use unsafe. An unsupported build presents one clear explanation and a direct App Store or Play Store action rather than failing ordinary requests mysteriously; all other available updates remain optional and may be suggested quietly.
