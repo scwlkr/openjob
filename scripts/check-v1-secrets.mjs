@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -31,6 +33,32 @@ const forbiddenCredentialArtifacts = [
   ["Firebase iOS configuration", /(?:^|\/)GoogleService-Info\.plist$/u],
   ["Firebase Android configuration", /(?:^|\/)google-services\.json$/u],
 ];
+const generatedAndroidDebugKeystore = "native/android/app/debug.keystore";
+const generatedAndroidDebugKeystoreSha256 =
+  "221e0a3106aa4c3ccc154e0a418b55020b3f9ea6e84f92e8749cd9e2f39f5e58";
+const scanOverlapLength = 64 * 1024;
+
+async function sha256(path) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
+}
+
+async function scanContents(path) {
+  const matches = new Set();
+  let overlap = "";
+
+  for await (const chunk of createReadStream(path)) {
+    if (chunk.includes(0)) return [];
+    const text = overlap + chunk.toString("utf8");
+    for (const [label, pattern] of secretPatterns) {
+      if (pattern.test(text)) matches.add(label);
+    }
+    overlap = text.slice(-scanOverlapLength);
+  }
+
+  return [...matches];
+}
 
 async function walk(directory, files) {
   let entries;
@@ -70,10 +98,7 @@ async function walkIgnoredNative(directory, files) {
       if (!ignoredNativeBuildDirectories.has(entry.name)) {
         await walkIgnoredNative(path, files);
       }
-    } else if (
-      entry.isFile() &&
-      path !== `${root}native/android/app/debug.keystore`
-    ) {
+    } else if (entry.isFile()) {
       files.add(path);
     }
   }
@@ -109,20 +134,19 @@ await Promise.all(
 const findings = [];
 for (const path of files) {
   const relativePath = path.slice(root.length);
+  if (
+    relativePath === generatedAndroidDebugKeystore &&
+    (await sha256(path)) === generatedAndroidDebugKeystoreSha256
+  ) {
+    continue;
+  }
   for (const [label, pattern] of forbiddenCredentialArtifacts) {
     if (pattern.test(relativePath)) {
       findings.push(`${relativePath}: ${label}`);
     }
   }
-  const metadata = await stat(path);
-  if (metadata.size > 5 * 1024 * 1024) continue;
-  const contents = await readFile(path);
-  if (contents.includes(0)) continue;
-  const text = contents.toString("utf8");
-  for (const [label, pattern] of secretPatterns) {
-    if (pattern.test(text)) {
-      findings.push(`${relativePath}: ${label}`);
-    }
+  for (const label of await scanContents(path)) {
+    findings.push(`${relativePath}: ${label}`);
   }
 }
 

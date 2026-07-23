@@ -16,6 +16,7 @@ export type OpenJobPalette = {
   ink: string;
   line: string;
   muted: string;
+  onBlue: string;
   paper: string;
   wordmarkPeriod: string;
 };
@@ -28,6 +29,7 @@ const lightPalette: OpenJobPalette = {
   ink: "#151713",
   line: "#c6cac1",
   muted: "#62675e",
+  onBlue: "#ffffff",
   paper: "#ffffff",
   wordmarkPeriod: "#6387ff",
 };
@@ -40,6 +42,7 @@ const darkPalette: OpenJobPalette = {
   ink: "#f4f5ef",
   line: "#3a4358",
   muted: "#aab2c3",
+  onBlue: "#11141a",
   paper: "#151b28",
   wordmarkPeriod: "#6387ff",
 };

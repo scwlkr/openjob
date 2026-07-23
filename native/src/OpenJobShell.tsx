@@ -8,7 +8,7 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import * as Updates from "expo-updates";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -36,6 +36,22 @@ type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+function useControlInteraction() {
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  return {
+    focused,
+    hovered,
+    interactionProps: {
+      onBlur: () => setFocused(false),
+      onFocus: () => setFocused(true),
+      onHoverIn: () => setHovered(true),
+      onHoverOut: () => setHovered(false),
+    },
+  };
+}
 
 function Wordmark() {
   const { palette } = useOpenJobTheme();
@@ -67,8 +83,45 @@ function BuildBadge({ label }: { label: string }) {
         { backgroundColor: palette.blue, borderColor: palette.blue },
       ]}
     >
-      <Text style={styles.buildBadgeText}>{label} build</Text>
+      <Text style={[styles.buildBadgeText, { color: palette.onBlue }]}>
+        {label} build
+      </Text>
     </View>
+  );
+}
+
+function IconButton({
+  accessibilityLabel,
+  icon,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  icon: keyof typeof Feather.glyphMap;
+  onPress: () => void;
+}) {
+  const { palette } = useOpenJobTheme();
+  const { focused, hovered, interactionProps } = useControlInteraction();
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={onPress}
+      {...interactionProps}
+      style={({ pressed }) => [
+        styles.iconButton,
+        {
+          backgroundColor:
+            pressed || hovered ? palette.card : "transparent",
+          borderColor:
+            focused || hovered ? palette.blue : palette.line,
+          borderWidth: focused ? 3 : 1,
+        },
+      ]}
+    >
+      <Feather color={palette.ink} name={icon} size={21} />
+    </Pressable>
   );
 }
 
@@ -126,21 +179,11 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
           {runtimeConfig.environmentBadge ? (
             <BuildBadge label={runtimeConfig.environmentBadge} />
           ) : null}
-          <Pressable
+          <IconButton
             accessibilityLabel="Open appearance settings"
-            accessibilityRole="button"
-            hitSlop={6}
+            icon="sliders"
             onPress={() => navigation.push("Appearance")}
-            style={({ pressed }) => [
-              styles.iconButton,
-              {
-                backgroundColor: pressed ? palette.card : "transparent",
-                borderColor: palette.line,
-              },
-            ]}
-          >
-            <Feather color={palette.ink} name="sliders" size={21} />
-          </Pressable>
+          />
         </View>
       </View>
       <ScrollView
@@ -249,28 +292,34 @@ function AppearanceOption({
 }) {
   const { palette, preference: selected, setPreference } = useOpenJobTheme();
   const isSelected = preference === selected;
+  const { focused, hovered, interactionProps } = useControlInteraction();
   return (
     <Pressable
       accessibilityLabel={`Use ${label.toLowerCase()} appearance`}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       onPress={() => setPreference(preference)}
+      {...interactionProps}
       style={({ pressed }) => [
         styles.appearanceOption,
         {
           backgroundColor: isSelected
-            ? palette.blue
-            : pressed
+            ? hovered
+              ? palette.blueStrong
+              : palette.blue
+            : pressed || hovered
               ? palette.background
               : palette.card,
-          borderColor: isSelected ? palette.blue : palette.line,
+          borderColor:
+            focused || hovered || isSelected ? palette.blue : palette.line,
+          borderWidth: focused ? 3 : 1,
         },
       ]}
     >
       <Text
         style={[
           styles.appearanceOptionText,
-          { color: isSelected ? "#ffffff" : palette.ink },
+          { color: isSelected ? palette.onBlue : palette.ink },
         ]}
       >
         {label}
@@ -278,7 +327,7 @@ function AppearanceOption({
       <Text
         style={[
           styles.appearanceSelection,
-          { color: isSelected ? "#ffffff" : palette.muted },
+          { color: isSelected ? palette.onBlue : palette.muted },
         ]}
       >
         {isSelected ? `${label} selected` : "Select"}
@@ -297,15 +346,11 @@ function AppearanceScreen({
       style={[styles.safeArea, { backgroundColor: palette.background }]}
     >
       <View style={[styles.settingsHeader, { borderBottomColor: palette.ink }]}>
-        <Pressable
+        <IconButton
           accessibilityLabel="Back to OpenJob"
-          accessibilityRole="button"
-          hitSlop={6}
+          icon="arrow-left"
           onPress={() => navigation.goBack()}
-          style={[styles.iconButton, { borderColor: palette.line }]}
-        >
-          <Feather color={palette.ink} name="arrow-left" size={22} />
-        </Pressable>
+        />
         <Wordmark />
       </View>
       <ScrollView contentContainerStyle={styles.settingsContent}>
@@ -414,7 +459,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   buildBadgeText: {
-    color: "#ffffff",
     fontFamily: "Geist_700Bold",
     fontSize: 11,
     textTransform: "uppercase",

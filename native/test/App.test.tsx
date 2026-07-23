@@ -82,6 +82,37 @@ test("restores the selected appearance and pushed native-stack screen", async ()
   expect(screen.getByText("Dark selected")).toBeOnTheScreen();
 });
 
+test("keeps selected dark-mode labels legible and exposes focus and hover states", async () => {
+  await render(<OpenJobNativeApp runtimeConfig={previewConfig} />);
+
+  const appearanceButton = await screen.findByRole("button", {
+    name: "Open appearance settings",
+  });
+  await fireEvent(appearanceButton, "focus");
+  expect(appearanceButton).toHaveStyle({
+    borderColor: "#1e4ed8",
+    borderWidth: 3,
+  });
+  await fireEvent(appearanceButton, "blur");
+  await fireEvent(appearanceButton, "hoverIn");
+  expect(appearanceButton).toHaveStyle({
+    backgroundColor: "#f8f8f3",
+    borderColor: "#1e4ed8",
+  });
+
+  await fireEvent.press(appearanceButton);
+  const darkOption = await screen.findByRole("button", {
+    name: "Use dark appearance",
+  });
+  await fireEvent.press(darkOption);
+  expect(await screen.findByText("Dark selected")).toHaveStyle({
+    color: "#11141a",
+  });
+
+  await fireEvent(darkOption, "focus");
+  expect(darkOption).toHaveStyle({ borderWidth: 3 });
+});
+
 test("survives lifecycle changes and respects system Reduced Motion", async () => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   jest
