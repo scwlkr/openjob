@@ -1,0 +1,41 @@
+{
+  "cli": {
+    "appVersionSource": "remote",
+    "version": ">= 21.1.0"
+  },
+  "build": {
+    "development": {
+      "channel": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "OPENJOB_NATIVE_ENV": "development"
+      }
+    },
+    "preview": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "channel": "preview",
+      "distribution": "store",
+      "environment": "preview",
+      "env": {
+        "OPENJOB_NATIVE_ENV": "preview"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "channel": "production",
+      "distribution": "store",
+      "environment": "production",
+      "env": {
+        "OPENJOB_NATIVE_ENV": "production"
+      }
+    }
+  }
+}

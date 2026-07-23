@@ -22,6 +22,19 @@
 # misc
 .DS_Store
 *.pem
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+*.key
+*.der
+*.pk8
+*.pkcs8
+GoogleService-Info.plist
+google-services.json
+/native/credentials.json
+/native/credentials/
 
 # debug
 npm-debug.log*

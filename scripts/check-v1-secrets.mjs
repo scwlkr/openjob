@@ -6,16 +6,30 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const secretPatterns = [
+  [
+    "private key",
+    /-----BEGIN (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----\s+(?:[A-Za-z0-9+/=]\s*){40,}-----END (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----/,
+  ],
+  ["Expo access token", /\bexpo_[A-Za-z0-9_-]{30,}\b/],
+  ["Google OAuth client secret", /\bGOCSPX-[A-Za-z0-9_-]{20,}\b/],
   ["Google OAuth access token", /\bya29\.[A-Za-z0-9_-]{30,}\b/],
   ["Google OAuth refresh token", /\b1\/\/[A-Za-z0-9_-]{30,}\b/],
   [
     "JWT or Firebase ID token",
     /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\b/,
   ],
+];
+const forbiddenCredentialArtifacts = [
+  ["EAS credential bundle", /(?:^|\/)credentials\.json$/iu],
+  ["Apple private key", /(?:^|\/)[^/]+\.p8$/iu],
+  ["Apple signing archive", /(?:^|\/)[^/]+\.p12$/iu],
+  ["Apple provisioning profile", /(?:^|\/)[^/]+\.mobileprovision$/iu],
   [
-    "service-account private key",
-    /-----BEGIN PRIVATE KEY-----\s+(?:[A-Za-z0-9+/]{20,}={0,2}\s+){2,}-----END PRIVATE KEY-----/,
+    "private key or signing store",
+    /(?:^|\/)[^/]+\.(?:der|jks|key|keystore|pk8|pkcs8)$/iu,
   ],
+  ["Firebase iOS configuration", /(?:^|\/)GoogleService-Info\.plist$/u],
+  ["Firebase Android configuration", /(?:^|\/)google-services\.json$/u],
 ];
 
 async function walk(directory, files) {
@@ -33,11 +47,15 @@ async function walk(directory, files) {
   }
 }
 
-const { stdout } = await run("git", ["ls-files", "-z"], {
-  cwd: root,
-  encoding: "buffer",
-  maxBuffer: 20 * 1024 * 1024,
-});
+const { stdout } = await run(
+  "git",
+  ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+  {
+    cwd: root,
+    encoding: "buffer",
+    maxBuffer: 20 * 1024 * 1024,
+  },
+);
 const files = new Set(
   stdout
     .toString("utf8")
@@ -50,12 +68,18 @@ await walk(`${root}.wrangler`, files);
 
 const findings = [];
 for (const path of files) {
+  const relativePath = path.slice(root.length);
+  for (const [label, pattern] of forbiddenCredentialArtifacts) {
+    if (pattern.test(relativePath)) {
+      findings.push(`${relativePath}: ${label}`);
+    }
+  }
   const contents = await readFile(path);
   if (contents.includes(0)) continue;
   const text = contents.toString("utf8");
   for (const [label, pattern] of secretPatterns) {
     if (pattern.test(text)) {
-      findings.push(`${path.slice(root.length)}: ${label}`);
+      findings.push(`${relativePath}: ${label}`);
     }
   }
 }
