@@ -140,6 +140,19 @@ export function createFirestoreNotificationSubscriptionStore(
     };
   }
 
+  function userHistoryWrite(userId: string) {
+    return {
+      update: {
+        name: firestore.documentName(`v1UserDirectory/${userId}`),
+        fields: {
+          emptyShellEligible: { booleanValue: false },
+        },
+      },
+      updateMask: { fieldPaths: ["emptyShellEligible"] },
+      currentDocument: { exists: true },
+    };
+  }
+
   return Object.freeze({
     async get(installationId: string) {
       const subscription = await read(installationId);
@@ -235,6 +248,7 @@ export function createFirestoreNotificationSubscriptionStore(
         };
         try {
           await commit([
+            userHistoryWrite(input.userId),
             {
               update: {
                 name: firestore.documentName(pathFor(input.installationId)),

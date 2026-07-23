@@ -87,3 +87,13 @@ export function rateLimitedErrorResponse(requestId: RequestIdFactory) {
     status: 429,
   });
 }
+
+export function signInMethodUnrecognizedResponse(
+  requestId: RequestIdFactory,
+) {
+  return errorResponse(requestId, {
+    code: "sign_in_method_unrecognized",
+    message: "Choose whether to create a new User or link an existing User.",
+    status: 409,
+  });
+}

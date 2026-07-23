@@ -1,3 +1,4 @@
+import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
   defaultRequestId,
   errorResponse,
@@ -6,6 +7,7 @@ import {
   jsonResponse,
   readPagination,
   rateLimitedErrorResponse,
+  signInMethodUnrecognizedResponse,
   type RequestIdFactory,
 } from "./v1-http.ts";
 
@@ -231,14 +233,14 @@ export type GroupStore = {
 
 type UserStore = {
   getById(userId: string): Promise<GroupUser | null>;
-  getOrCreate(firebaseUid: string): Promise<GroupUser>;
+  resolve(identity: FirebaseTokenIdentity): Promise<GroupUser | null>;
 };
 
 type GroupsApiOptions = {
   groups: GroupStore;
   requestId?: () => string;
   users: UserStore;
-  verifyIdToken(request: Request): Promise<{ uid: string } | null>;
+  verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
 };
 
 function groupNameError(requestId: RequestIdFactory) {
@@ -584,7 +586,8 @@ export function createV1GroupsApi({
           });
         }
 
-        const user = await users.getOrCreate(identity.uid);
+        const user = await users.resolve(identity);
+        if (!user) return signInMethodUnrecognizedResponse(requestId);
         const url = new URL(request.url);
 
         if (url.pathname === "/api/v1/groups") {

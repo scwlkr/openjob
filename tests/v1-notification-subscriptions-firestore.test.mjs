@@ -12,6 +12,18 @@ const CAPABILITY = {
 
 async function createStore(now = Date.parse("2026-07-18T12:00:00.000Z")) {
   const firestore = createFakeFirestore();
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  for (const userId of ["user_eli", "user_shane"]) {
+    const name = `${database}/v1UserDirectory/${userId}`;
+    firestore.documents.set(name, {
+      name,
+      fields: {
+        emptyShellEligible: { booleanValue: true },
+        userId: { stringValue: userId },
+      },
+      updateTime: "2026-07-18T11:00:00.000001Z",
+    });
+  }
   const store = createFirestoreNotificationSubscriptionStore(
     {
       projectId: "openjob-dev",
@@ -23,6 +35,39 @@ async function createStore(now = Date.parse("2026-07-18T12:00:00.000Z")) {
   );
   return { firestore, store };
 }
+
+test("registration atomically records durable User history", async () => {
+  const { firestore, store } = await createStore();
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  const userPath = `${database}/v1UserDirectory/user_shane`;
+
+  await store.register({
+    installationId: INSTALLATION_ID,
+    userId: "user_shane",
+    ...CAPABILITY,
+  });
+
+  assert.equal(
+    firestore.documents.get(userPath).fields.emptyShellEligible.booleanValue,
+    false,
+  );
+
+  const { firestore: failingFirestore, store: failingStore } =
+    await createStore();
+  failingFirestore.setMaxCommitWrites(2);
+  await assert.rejects(
+    failingStore.register({
+      installationId: INSTALLATION_ID,
+      userId: "user_shane",
+      ...CAPABILITY,
+    }),
+  );
+  assert.equal(
+    failingFirestore.documents.get(userPath).fields.emptyShellEligible.booleanValue,
+    true,
+  );
+  assert.equal(await failingStore.get(INSTALLATION_ID), null);
+});
 
 test("Firestore retains a browser capability while Notification Subscription delivery is paused", async () => {
   const { store } = await createStore();

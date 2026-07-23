@@ -20,6 +20,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppLifecycle, useReducedMotion } from "./device-state";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
+import type {
+  OpenJobUser,
+  SignInMethod,
+} from "./auth/coordinator";
 import {
   type AppearancePreference,
   saveNavigationState,
@@ -32,10 +36,19 @@ type RootStackParamList = {
 };
 
 type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
+  account: AuthenticatedAccount;
   runtimeConfig: OpenJobRuntimeConfig;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+type AuthenticatedAccount = {
+  methods: SignInMethod[];
+  onManageSignInMethods: () => void;
+  onSignOut: () => void;
+  onSwitchUser: () => void;
+  user: OpenJobUser;
+};
 
 export function confirmsEmbeddedBundle({
   isDevelopment,
@@ -173,12 +186,13 @@ function StatusCard({
   );
 }
 
-function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
+function ShellScreen({ account, navigation, runtimeConfig }: ShellProps) {
   const { width } = useWindowDimensions();
   const { palette } = useOpenJobTheme();
   const lifecycle = useAppLifecycle();
   const reducedMotion = useReducedMotion();
   const wide = width >= 720;
+  const compactHeader = width < 520;
   const embeddedBundle = confirmsEmbeddedBundle({
     isDevelopment: __DEV__,
     updatesEnabled: Updates.isEnabled,
@@ -190,12 +204,40 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
       edges={["top", "right", "bottom", "left"]}
       style={[styles.safeArea, { backgroundColor: palette.background }]}
     >
-      <View style={[styles.topBar, { borderBottomColor: palette.ink }]}>
+      <View
+        style={[
+          styles.topBar,
+          compactHeader && styles.topBarCompact,
+          { borderBottomColor: palette.ink },
+        ]}
+        testID="openjob-top-bar"
+      >
         <Wordmark />
-        <View style={styles.topBarActions}>
+        <View
+          style={[
+            styles.topBarActions,
+            compactHeader && styles.topBarActionsCompact,
+          ]}
+          testID="openjob-top-bar-actions"
+        >
           {runtimeConfig.environmentBadge ? (
             <BuildBadge label={runtimeConfig.environmentBadge} />
           ) : null}
+          <IconButton
+            accessibilityLabel="Manage Sign-in Methods"
+            icon="link"
+            onPress={account.onManageSignInMethods}
+          />
+          <IconButton
+            accessibilityLabel="Switch User"
+            icon="repeat"
+            onPress={account.onSwitchUser}
+          />
+          <IconButton
+            accessibilityLabel="Sign out"
+            icon="log-out"
+            onPress={account.onSignOut}
+          />
           <IconButton
             accessibilityLabel="Open appearance settings"
             icon="sliders"
@@ -212,7 +254,7 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
         <View style={[styles.hero, wide && styles.heroWide]}>
           <View style={styles.heroCopy}>
             <Text style={[styles.kicker, { color: palette.blue }]}>
-              NATIVE FOUNDATION
+              SIGNED IN
             </Text>
             <Text
               accessibilityRole="header"
@@ -221,9 +263,13 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
               One clear list for your team.
             </Text>
             <Text style={[styles.lede, { color: palette.muted }]}>
-              The same production-shaped OpenJob shell now runs natively on
-              iOS and Android. Sign-in and live Task Lists arrive in the next
-              focused slices.
+              {`Signed in as ${
+                account.user.username
+                  ? `@${account.user.username}`
+                  : account.user.userId
+              }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${account.methods
+                .map((method) => method === "apple" ? "Apple" : "Google")
+                .join(" and ")}.`}
             </Text>
           </View>
           <View
@@ -255,7 +301,7 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
               SHARED TASK LIST
             </Text>
             <Text style={[styles.cardTitle, { color: palette.ink }]}>
-              Ready for the first real journey.
+              One User. Every linked Sign-in Method.
             </Text>
           </View>
         </View>
@@ -393,10 +439,12 @@ function AppearanceScreen({
 }
 
 export function OpenJobShell({
+  account,
   initialState,
   reducedMotion,
   runtimeConfig,
 }: {
+  account: AuthenticatedAccount;
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
   reducedMotion: boolean;
   runtimeConfig: OpenJobRuntimeConfig;
@@ -421,7 +469,13 @@ export function OpenJobShell({
     >
       <Stack.Navigator initialRouteName="Shell" screenOptions={screenOptions}>
         <Stack.Screen name="Shell">
-          {(props) => <ShellScreen {...props} runtimeConfig={runtimeConfig} />}
+          {(props) => (
+            <ShellScreen
+              {...props}
+              account={account}
+              runtimeConfig={runtimeConfig}
+            />
+          )}
         </Stack.Screen>
         <Stack.Screen component={AppearanceScreen} name="Appearance" />
       </Stack.Navigator>
@@ -631,6 +685,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 10,
+  },
+  topBarActionsCompact: {
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    width: "100%",
+  },
+  topBarCompact: {
+    alignItems: "flex-start",
+    flexDirection: "column",
+    gap: 12,
+    paddingVertical: 12,
   },
   wordmark: {
     alignItems: "flex-end",

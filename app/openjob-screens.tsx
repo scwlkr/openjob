@@ -7,6 +7,7 @@ import {
   type Group,
   type InvitePreview,
   type OpenJobApi,
+  type SignInMethod,
   type User,
 } from "./openjob-contracts";
 import { GroupGovernance } from "./openjob-governance";
@@ -33,6 +34,10 @@ function initials(name: string) {
 
 function Brand() {
   return <span className={styles.brand}>OPENJOB<span>.</span></span>;
+}
+
+function signInMethodName(method: SignInMethod) {
+  return method === "apple" ? "Apple" : "Google";
 }
 
 export function LoadingScreen() {
@@ -62,8 +67,8 @@ export function SignedOut({
   signingIn,
 }: {
   error: string;
-  onSignIn: () => void;
-  signingIn: boolean;
+  onSignIn: (method: SignInMethod) => void;
+  signingIn: SignInMethod | null;
 }) {
   return (
     <main className={styles.authShell}>
@@ -73,7 +78,7 @@ export function SignedOut({
           <p className={styles.kicker}>Private Groups</p>
           <p>Shared work stays with the people doing it.</p>
         </div>
-        <p className={styles.railFoot}>Google sign-in only</p>
+        <p className={styles.railFoot}>Google + Apple sign-in</p>
       </aside>
       <section className={styles.authContent}>
         <div className={styles.authCopy}>
@@ -83,12 +88,28 @@ export function SignedOut({
             Sign in to join private Groups and keep every Task attached to the right people.
           </p>
           {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
-          <button className={styles.googleButton} type="button" onClick={onSignIn} disabled={signingIn}>
-            <span aria-hidden="true">G</span>
-            {signingIn ? "Opening Google…" : "Continue with Google"}
-          </button>
+          <div className={styles.providerButtons}>
+            <button
+              className={styles.googleButton}
+              type="button"
+              onClick={() => onSignIn("google")}
+              disabled={signingIn !== null}
+            >
+              <span aria-hidden="true">G</span>
+              {signingIn === "google" ? "Opening Google…" : "Continue with Google"}
+            </button>
+            <button
+              className={styles.appleButton}
+              type="button"
+              onClick={() => onSignIn("apple")}
+              disabled={signingIn !== null}
+            >
+              <span aria-hidden="true">A</span>
+              {signingIn === "apple" ? "Opening Apple…" : "Continue with Apple"}
+            </button>
+          </div>
           <p className={styles.authNote}>
-            Your Google email is used for sign-in, never as your Username.
+            Provider email never creates, links, or merges an OpenJob User.
           </p>
         </div>
       </section>
@@ -96,13 +117,321 @@ export function SignedOut({
   );
 }
 
+export function UnrecognizedSignIn({
+  currentMethod,
+  error,
+  linkTarget,
+  linking,
+  proofReady,
+  saving,
+  onAuthenticate,
+  onCancelLink,
+  onCreate,
+  onLinkExisting,
+  onSignOut,
+  onConfirmLink,
+}: {
+  currentMethod: SignInMethod;
+  error: string;
+  linkTarget: User | null;
+  linking: boolean;
+  proofReady: boolean;
+  saving: boolean;
+  onAuthenticate: () => void;
+  onCancelLink: () => void;
+  onCreate: () => void;
+  onLinkExisting: () => void;
+  onSignOut: () => void;
+  onConfirmLink: () => void;
+}) {
+  const existingMethod: SignInMethod =
+    currentMethod === "google" ? "apple" : "google";
+  const existingName = signInMethodName(existingMethod);
+  const currentName = signInMethodName(currentMethod);
+  const target = linkTarget
+    ? linkTarget.username
+      ? `@${linkTarget.username}`
+      : linkTarget.userId
+    : null;
+
+  return (
+    <main className={styles.onboardingShell}>
+      <header className={styles.simpleHeader}>
+        <Brand />
+        <span>Identity check</span>
+      </header>
+      <section className={styles.onboardingCard}>
+        {!linking ? (
+          <>
+            <p className={styles.kicker}>Your choice first</p>
+            <h1>This sign-in is not linked yet</h1>
+            <p className={styles.lede}>
+              No User was created. Create a new OpenJob User, or prove an
+              existing User with the other provider before linking {currentName}.
+            </p>
+            {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+            <div className={styles.authDecisionActions}>
+              <button
+                className={styles.primaryButton}
+                disabled={saving}
+                onClick={onCreate}
+                type="button"
+              >{saving ? "Creating…" : "Create new User"}</button>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onLinkExisting}
+                type="button"
+              >Link existing</button>
+              <button
+                className={styles.textButton}
+                disabled={saving}
+                onClick={onSignOut}
+                type="button"
+              >Use a different sign-in</button>
+            </div>
+          </>
+        ) : proofReady ? (
+          <>
+            <p className={styles.kicker}>Explicit confirmation</p>
+            <h1>Confirm linking</h1>
+            <p className={styles.lede} id="link-confirmation-description">
+              Attach {currentName} to existing User {target} proved with{" "}
+              {existingName}. Its User ID, Username, Groups, and Tasks stay
+              unchanged.
+            </p>
+            {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+            <div className={styles.authDecisionActions}>
+              <button
+                aria-describedby="link-confirmation-description"
+                className={styles.primaryButton}
+                disabled={saving}
+                onClick={onConfirmLink}
+                type="button"
+              >{saving ? "Linking…" : "Confirm link"}</button>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onCancelLink}
+                type="button"
+              >Cancel linking</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className={styles.kicker}>Fresh provider check</p>
+            <h1>Link an existing User</h1>
+            <p className={styles.lede}>
+              Sign in with {existingName} now to prove the existing User.
+              Nothing links until you confirm the next step.
+            </p>
+            {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+            <div className={styles.authDecisionActions}>
+              <button
+                className={styles.primaryButton}
+                disabled={saving}
+                onClick={onAuthenticate}
+                type="button"
+              >{saving ? `Opening ${existingName}…` : `Continue with ${existingName}`}</button>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onCancelLink}
+                type="button"
+              >Back</button>
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  );
+}
+
+export function SignInMethodsDialog({
+  error,
+  linkTarget,
+  linkingMethod,
+  methods,
+  proofReady,
+  saving,
+  onAuthenticate,
+  onClose,
+  onConfirmLink,
+  onRetry,
+  returnFocus,
+}: {
+  error: string;
+  linkTarget: User | null;
+  linkingMethod: SignInMethod | null;
+  methods: SignInMethod[] | null;
+  proofReady: boolean;
+  saving: boolean;
+  onAuthenticate: (method: SignInMethod) => void;
+  onClose: () => void;
+  onConfirmLink: () => void;
+  onRetry: () => void;
+  returnFocus: HTMLElement | null;
+}) {
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLElement>(null);
+  const focusedMode = useRef<"confirm" | "methods" | null>(null);
+  const target = linkTarget
+    ? linkTarget.username
+      ? `@${linkTarget.username}`
+      : linkTarget.userId
+    : null;
+  useEffect(() => {
+    return () => {
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
+  }, [returnFocus]);
+
+  useEffect(() => {
+    if (saving) return;
+    const mode = linkingMethod && proofReady ? "confirm" : "methods";
+    if (focusedMode.current === mode) return;
+    (mode === "confirm" ? confirmButton : closeButton).current?.focus();
+    focusedMode.current = mode;
+  }, [linkingMethod, proofReady, saving]);
+
+  useEffect(() => {
+    const containKeyboardFocus = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        dialog.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (
+        event.shiftKey &&
+        (document.activeElement === first ||
+          !dialog.current?.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last ||
+          !dialog.current?.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", containKeyboardFocus);
+    return () =>
+      document.removeEventListener("keydown", containKeyboardFocus);
+  }, [onClose, saving]);
+
+  return (
+    <div className={styles.dialogBackdrop} role="presentation">
+      <section
+        aria-labelledby="sign-in-methods-title"
+        aria-modal="true"
+        className={styles.dialog}
+        ref={dialog}
+        role="dialog"
+      >
+        {linkingMethod && proofReady ? (
+          <>
+            <p className={styles.kicker}>Explicit confirmation</p>
+            <h2 id="sign-in-methods-title">Confirm linking</h2>
+            <p id="link-confirmation-dialog-description">
+              Link {signInMethodName(linkingMethod)} to{" "}
+              {target ?? "this User"}? The surviving User ID, Username, Groups,
+              and Tasks stay unchanged.
+            </p>
+            {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.primaryButton}
+                aria-describedby="link-confirmation-dialog-description"
+                disabled={saving}
+                onClick={onConfirmLink}
+                ref={confirmButton}
+                type="button"
+              >{saving ? "Linking…" : "Confirm link"}</button>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onClose}
+                ref={closeButton}
+                type="button"
+              >Cancel linking</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className={styles.kicker}>Account security</p>
+            <h2 id="sign-in-methods-title">Sign-in methods</h2>
+            <p>Add only a provider you freshly authenticate and explicitly confirm.</p>
+            {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
+            {methods ? (
+              <div className={styles.signInMethodList}>
+                {(["google", "apple"] as const).map((method) => {
+                  const name = signInMethodName(method);
+                  const linked = methods.includes(method);
+                  return (
+                    <div key={method}>
+                      <span>{name} — {linked ? "Linked" : "Not linked"}</span>
+                      {!linked ? (
+                        <button
+                          disabled={saving}
+                          onClick={() => onAuthenticate(method)}
+                          type="button"
+                        >{saving && linkingMethod === method
+                          ? `Opening ${name}…`
+                          : `Link ${name}`}</button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : error ? (
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onRetry}
+                type="button"
+              >Try again</button>
+            ) : <p aria-busy="true">Loading sign-in methods…</p>}
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={onClose}
+                ref={closeButton}
+                type="button"
+              >Close</button>
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function UsernameOnboarding({
   error,
+  onLinkExisting,
   onClaim,
+  onSignOut,
+  onSwitchUser,
   saving,
 }: {
   error: string;
+  onLinkExisting: (returnFocus: HTMLButtonElement) => void;
   onClaim: (username: string) => void;
+  onSignOut: () => void;
+  onSwitchUser: () => void;
   saving: boolean;
 }) {
   const [username, setUsername] = useState("");
@@ -147,6 +476,30 @@ export function UsernameOnboarding({
             {saving ? "Claiming…" : "Claim Username"}
           </button>
         </form>
+        <div className={styles.authDecisionActions}>
+          <p className={styles.guidance}>
+            Created an empty User by mistake? Link the existing User before
+            claiming a Username.
+          </p>
+          <button
+            className={styles.secondaryButton}
+            disabled={saving}
+            onClick={(event) => onLinkExisting(event.currentTarget)}
+            type="button"
+          >Link an existing User</button>
+          <button
+            className={styles.textButton}
+            disabled={saving}
+            onClick={onSwitchUser}
+            type="button"
+          >Switch User</button>
+          <button
+            className={styles.textButton}
+            disabled={saving}
+            onClick={onSignOut}
+            type="button"
+          >Sign out</button>
+        </div>
       </section>
     </main>
   );
@@ -350,7 +703,9 @@ export type GroupShellProps = {
   onGroupUpdated: (group: Group) => void;
   onRetry: () => void;
   onSelect: (group: Group) => void;
+  onManageSignInMethods: (returnFocus: HTMLButtonElement | null) => void;
   onSignOut: () => void;
+  onSwitchUser: () => void;
   saving: boolean;
   selectedGroup: Group | null;
   selectingGroupId: string | null;
@@ -476,6 +831,20 @@ export function GroupShell(props: GroupShellProps) {
                     type="button"
                     onClick={() => {
                       setOpenMenu(null);
+                      props.onManageSignInMethods(userMenuButton.current);
+                    }}
+                  >Sign-in methods</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
+                      props.onSwitchUser();
+                    }}
+                  >Switch User</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenu(null);
                       props.onSignOut();
                     }}
                   >Sign out</button>
@@ -522,6 +891,7 @@ export function GroupShell(props: GroupShellProps) {
                 key={props.selectedGroup.groupId}
                 onSessionExpired={props.onSessionExpired}
                 session={props.session}
+                userId={props.user.userId}
               />
             ) : (
               <GroupGovernance

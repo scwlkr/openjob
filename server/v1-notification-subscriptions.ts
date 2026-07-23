@@ -1,3 +1,4 @@
+import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import type { OpenJobUser } from "./v1-identity.ts";
 import {
   defaultRequestId,
@@ -6,6 +7,7 @@ import {
   isRateLimitError,
   jsonResponse,
   rateLimitedErrorResponse,
+  signInMethodUnrecognizedResponse,
 } from "./v1-http.ts";
 
 type StoredNotificationSubscription = {
@@ -33,8 +35,10 @@ type NotificationSubscriptionStore = {
 type NotificationSubscriptionsApiOptions = {
   requestId?: () => string;
   subscriptions: NotificationSubscriptionStore;
-  users: { getOrCreate(firebaseUid: string): Promise<OpenJobUser> };
-  verifyIdToken(request: Request): Promise<{ uid: string } | null>;
+  users: {
+    resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null>;
+  };
+  verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
 };
 
 const SUBSCRIPTION_PATH =
@@ -129,7 +133,8 @@ export function createV1NotificationSubscriptionsApi({
             status: 400,
           });
         }
-        const user = await users.getOrCreate(identity.uid);
+        const user = await users.resolve(identity);
+        if (!user) return signInMethodUnrecognizedResponse(requestId);
         if (request.method === "PUT") {
           const registration = readRegistration(await request.json().catch(() => null));
           if (!registration) {

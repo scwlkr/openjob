@@ -21,18 +21,23 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
   try {
     const expected = {
       development: {
+        apiBaseUrl:
+          "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1",
         name: "OpenJob Dev",
         bundleIdentifier: "dev.openjob.app.dev",
         applicationId: "dev.openjob.app.dev",
         badge: "Development",
       },
       preview: {
+        apiBaseUrl:
+          "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1",
         name: "OpenJob Preview",
         bundleIdentifier: "dev.openjob.app.preview",
         applicationId: "dev.openjob.app.preview",
         badge: "Preview",
       },
       production: {
+        apiBaseUrl: "https://openjob.dev/api/v1",
         name: "OpenJob",
         bundleIdentifier: "dev.openjob.app",
         applicationId: "dev.openjob.app",
@@ -51,9 +56,30 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
       assert.equal(config.userInterfaceStyle, "automatic");
       assert.equal(config.newArchEnabled, true);
       assert.equal(config.ios.supportsTablet, true);
+      assert.equal(config.ios.usesAppleSignIn, true);
       assert.equal(config.ios.bundleIdentifier, identity.bundleIdentifier);
       assert.equal(config.android.package, identity.applicationId);
       assert.equal(config.extra.openjob.apiBasePath, "/api/v1");
+      assert.equal(config.extra.openjob.apiBaseUrl, identity.apiBaseUrl);
+      assert.match(config.extra.openjob.firebaseApiKey, /^AIza/u);
+      assert.match(config.extra.openjob.firebaseAuthDomain, /\.firebaseapp\.com$/u);
+      assert.match(
+        config.extra.openjob.googleWebClientId,
+        /\.apps\.googleusercontent\.com$/u,
+      );
+      assert.match(
+        config.extra.openjob.googleIosClientId,
+        /\.apps\.googleusercontent\.com$/u,
+      );
+      assert.match(config.extra.openjob.appleServiceId, /^dev\.openjob\.auth/u);
+      assert.match(
+        config.extra.openjob.appleRedirectUri,
+        /^https:\/\/.*\.firebaseapp\.com\/__\/auth\/handler$/u,
+      );
+      assert.equal(
+        config.extra.openjob.keychainService,
+        `${identity.bundleIdentifier}.auth`,
+      );
       assert.equal(config.extra.openjob.environment, environment);
       if (identity.badge === null) {
         assert.equal(
@@ -72,6 +98,25 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
       assert.equal(Object.hasOwn(config, "runtimeVersion"), false);
       assert.equal(JSON.stringify(config).includes("channel"), false);
       assert.equal(JSON.stringify(config).includes("codeSigning"), false);
+      assert.ok(
+        config.plugins.some(
+          (plugin) =>
+            Array.isArray(plugin) &&
+            plugin[0] === "expo-secure-store" &&
+            plugin[1].configureAndroidBackup === true,
+        ),
+      );
+      assert.ok(
+        config.plugins.some(
+          (plugin) =>
+            Array.isArray(plugin) &&
+            plugin[0] ===
+              "@react-native-google-signin/google-signin" &&
+            plugin[1].iosUrlScheme.startsWith(
+              "com.googleusercontent.apps.",
+            ),
+        ),
+      );
     }
   } finally {
     if (previousEnvironment === undefined) delete process.env.OPENJOB_NATIVE_ENV;

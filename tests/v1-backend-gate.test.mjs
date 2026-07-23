@@ -71,6 +71,11 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       ]),
     ),
   );
+  const linkCredentialToken = await authority.issue({
+    claims: { firebase: { sign_in_provider: "apple.com" } },
+    uid: "firebase_initialAdmin_apple",
+  });
+  tokens.set("linkedApple", linkCredentialToken);
   const userIds = identities.map((_, index) => uuid(index + 1));
   let nextGroupId = 501;
   let nextTaskId = 901;
@@ -103,7 +108,13 @@ test("the complete hosted backend preserves existing Groups during its two-ident
         now: () => Date.parse(controls.clock.now()),
         projectId: "openjob-dev",
       });
-      const identityApi = createV1IdentityApi({ groups, users, verifyIdToken });
+      const identityApi = createV1IdentityApi({
+        groups,
+        now: () => Date.parse(controls.clock.now()),
+        users,
+        verifyCredentialToken: verifyIdToken.verifyToken,
+        verifyIdToken,
+      });
       const groupsApi = createV1GroupsApi({ groups, users, verifyIdToken });
       const tasksApi = createV1TasksApi({ tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
@@ -134,7 +145,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   const assertContract = await createOpenApiResponseValidator();
   const contract = await validateOpenApiContract();
   const coverage = new Map();
-  const secretMaterial = [...tokens.values(), privateKey];
+  const secretMaterial = [...tokens.values(), linkCredentialToken, privateKey];
   const capabilityMaterial = [
     "https://push.example.test/subscriptions/backend-acceptance-capability",
     "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
@@ -178,6 +189,13 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   let result;
   let baselineGroup;
   try {
+    const creationResponse = await request({
+      actor: "initialAdmin",
+      body: { confirmation: "create" },
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    assert.equal(creationResponse.status, 201);
     const usernameResponse = await request({
       actor: "initialAdmin",
       body: { username: "shane" },
@@ -185,6 +203,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       path: "/api/v1/me/username",
     });
     assert.equal(usernameResponse.status, 200);
+    const canonicalUser = (await usernameResponse.json()).data;
     const baselineResponse = await request({
       actor: "initialAdmin",
       body: { name: "Existing production Group" },
@@ -193,6 +212,60 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     });
     assert.equal(baselineResponse.status, 201);
     baselineGroup = (await baselineResponse.json()).data;
+    const baselineTaskResponse = await request({
+      actor: "initialAdmin",
+      body: {
+        assigneeUsername: canonicalUser.username,
+        text: "Preserve canonical work during identity linking",
+      },
+      method: "POST",
+      path: `/api/v1/groups/${baselineGroup.groupId}/tasks`,
+    });
+    assert.equal(baselineTaskResponse.status, 201);
+    const baselineTask = (await baselineTaskResponse.json()).data;
+
+    const linkResponse = await request({
+      actor: "initialAdmin",
+      body: {
+        confirmation: "link",
+        credentialToken: linkCredentialToken,
+        expectedTargetUserId: canonicalUser.userId,
+      },
+      method: "POST",
+      path: "/api/v1/me/sign-in-methods",
+    });
+    assert.equal(linkResponse.status, 200);
+    await validate(
+      linkResponse,
+      "/api/v1/me/sign-in-methods",
+      "post",
+    );
+    const linkedUser = (await linkResponse.json()).data;
+    assert.equal(linkedUser.userId, canonicalUser.userId);
+    assert.equal(linkedUser.username, canonicalUser.username);
+    assert.equal(
+      linkedUser.groups.some(({ groupId }) => groupId === baselineGroup.groupId),
+      true,
+    );
+
+    const restoredThroughApple = await request({
+      actor: "linkedApple",
+      method: "GET",
+      path: "/api/v1/me",
+    });
+    assert.equal(restoredThroughApple.status, 200);
+    assert.deepEqual(
+      (await restoredThroughApple.json()).data,
+      linkedUser,
+    );
+    const taskThroughApple = await request({
+      actor: "linkedApple",
+      method: "GET",
+      path: `/api/v1/groups/${baselineGroup.groupId}/tasks/${baselineTask.taskId}`,
+    });
+    assert.equal(taskThroughApple.status, 200);
+    assert.deepEqual((await taskThroughApple.json()).data, baselineTask);
+
     result = await runV1AcceptanceScenario({
       checkpoint: () => harness.restart(),
       proposedUsernames: { initialAdmin: "shane", memberUser: "eli" },
@@ -242,7 +315,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     Object.assign(console, originalConsole);
   }
 
-  assert.equal(result.operationCount, 28);
+  assert.equal(result.operationCount, 30);
   for (const key of operationKeys(contract)) {
     assert.deepEqual([...coverage.get(key)].sort(), ["error", "success"], key);
   }

@@ -9,6 +9,7 @@ import {
 } from "./openjob-contracts";
 import {
   browserSubscription,
+  clearWorkerPrivateState,
   readLocalState,
   requiresHomeScreenInstallation,
   saveLocalState,
@@ -104,7 +105,7 @@ export function useOpenJobNotifications({
 }: {
   api: OpenJobApi;
   hasUsableGroup: boolean;
-  session: AuthSession | null;
+  session: AuthSession | null | undefined;
   user: User | null;
 }): NotificationController {
   const [state, setState] = useState<NotificationUiState>("loading");
@@ -123,13 +124,13 @@ export function useOpenJobNotifications({
   useEffect(() => {
     let current = true;
     if (!session || !user || user.usernameRequired) {
-      if (!session && typeof window !== "undefined") {
+      if (session === null && typeof window !== "undefined") {
         const local = readLocalState();
-        void enqueueOperation(() => writeWorkerState(
-          local.installationId,
-          local.ownerUserId,
-          false,
-        )).catch(() => undefined);
+        local.ownerUserId = null;
+        saveLocalState(local);
+        void enqueueOperation(() =>
+          clearWorkerPrivateState(local.installationId)
+        ).catch(() => undefined);
       }
       return () => {
         current = false;
@@ -191,14 +192,20 @@ export function useOpenJobNotifications({
           throw candidate;
         });
         if (serverState) {
+          const shouldEnable =
+            local.enabled || serverState.state === "active";
           local.ownerUserId = user.userId;
-          local.enabled = serverState.state === "active";
+          local.enabled = shouldEnable;
           saveLocalState(local);
-          if (local.enabled) {
+          if (shouldEnable) {
             await refreshBrowserSubscription(api, token, local.installationId);
           }
-          await writeWorkerState(local.installationId, user.userId, local.enabled);
-          if (current) setState(local.enabled ? "enabled" : "paused");
+          await writeWorkerState(
+            local.installationId,
+            user.userId,
+            shouldEnable,
+          );
+          if (current) setState(shouldEnable ? "enabled" : "paused");
           return;
         }
       }
@@ -312,16 +319,23 @@ export function useOpenJobNotifications({
   }, [api, enqueueOperation, session, user]);
 
   const prepareSignOut = useCallback(async () => {
-    if (!session || !user) return;
     await enqueueOperation(async () => {
       const local = readLocalState();
-      await writeWorkerState(local.installationId, local.ownerUserId, false);
-      if (local.ownerUserId !== user.userId) return;
-      await api.setNotificationSubscriptionState(
-        await session.getIdToken(),
-        local.installationId,
-        "paused",
-      ).catch(() => undefined);
+      const ownerUserId = local.ownerUserId;
+      await clearWorkerPrivateState(local.installationId);
+      local.ownerUserId = null;
+      saveLocalState(local);
+      if (session && user && ownerUserId === user.userId) {
+        try {
+          await api.setNotificationSubscriptionState(
+            await session.getIdToken(),
+            local.installationId,
+            "paused",
+          );
+        } catch {
+          // Local suppression is authoritative when the session already expired.
+        }
+      }
     });
   }, [api, enqueueOperation, session, user]);
 

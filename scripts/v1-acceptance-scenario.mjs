@@ -58,11 +58,32 @@ export async function runV1AcceptanceScenario({
   }
 
   async function claimIdentity(actor, proposedUsername) {
+    const creation = await request({
+      actor,
+      body: { confirmation: "create" },
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    if (creation.status !== 200 && creation.status !== 201) {
+      throw new Error(
+        `POST /api/v1/me returned ${creation.status}; expected 200 or 201.`,
+      );
+    }
+    await validate(creation, "/api/v1/me", "post");
+    successfulOperations.add("post /api/v1/me");
+
     const current = await expectSuccess({
       actor,
       contractPath: "/api/v1/me",
       method: "GET",
       path: "/api/v1/me",
+      status: 200,
+    });
+    await expectSuccess({
+      actor,
+      contractPath: "/api/v1/me/sign-in-methods",
+      method: "GET",
+      path: "/api/v1/me/sign-in-methods",
       status: 200,
     });
     return expectSuccess({
@@ -508,6 +529,13 @@ export async function runV1AcceptanceScenario({
 
   const unauthenticatedExamples = [
     ["GET", "/api/v1/me", "/api/v1/me", undefined, "invalid"],
+    ["POST", "/api/v1/me", "/api/v1/me", { confirmation: "create" }],
+    ["GET", "/api/v1/me/sign-in-methods", "/api/v1/me/sign-in-methods"],
+    ["POST", "/api/v1/me/sign-in-methods", "/api/v1/me/sign-in-methods", {
+      confirmation: "link",
+      credentialToken: "not-a-real-credential",
+      expectedTargetUserId: initialAdmin.userId,
+    }],
     ["PUT", "/api/v1/me/username", "/api/v1/me/username", { username: initialAdmin.username }],
     ["GET", notificationContractPath, notificationPath],
     ["PUT", notificationContractPath, notificationPath, capability],

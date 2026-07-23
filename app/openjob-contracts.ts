@@ -60,19 +60,37 @@ export type BrowserPushSubscription = {
   keys: { p256dh: string; auth: string };
 };
 
-export type AuthSession = { getIdToken(): Promise<string> };
+export type SignInMethod = "apple" | "google";
+
+export type AuthSession = {
+  signInMethod: SignInMethod;
+  getIdToken(): Promise<string>;
+};
+
+export type AuthCredentialProof = AuthSession & {
+  dispose(): Promise<void>;
+};
 
 export type OpenJobAuth = {
   observe(
     listener: (session: AuthSession | null) => void,
     onError?: (error: unknown) => void,
   ): () => void;
-  signIn(): Promise<void>;
+  signIn(method: SignInMethod): Promise<void>;
+  authenticateForLink(method: SignInMethod): Promise<AuthCredentialProof>;
   signOut(): Promise<void>;
+  switchUser(): Promise<void>;
 };
 
 export type OpenJobApi = {
   getMe(token: string): Promise<User>;
+  createUser(token: string): Promise<User>;
+  listSignInMethods(token: string): Promise<SignInMethod[]>;
+  linkSignInMethod(
+    token: string,
+    credentialToken: string,
+    expectedTargetUserId: string,
+  ): Promise<User>;
   claimUsername(token: string, username: string): Promise<User>;
   listGroups(token: string): Promise<Group[]>;
   getGroup(token: string, groupId: string): Promise<Group>;
