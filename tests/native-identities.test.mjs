@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -18,6 +17,24 @@ test("native environments expose stable OpenJob application identities", async (
   const identities = await readIdentities();
 
   assert.equal(identities.apple.teamId, "QP9SJRTA44");
+  assert.deepEqual(identities.googlePlay, {
+    accountType: "personal",
+    appCreation: {
+      requiredAccountChecks: ["identity", "android-device", "phone"],
+      status: "blocked-account-verification",
+    },
+    developerAccountId: "6994653839033844694",
+    developerName: "WLKR LABS",
+    supportEmail: "dev@wlkrlabs.com",
+    supportEmailVerified: true,
+    registrationFee: {
+      amountUsd: 25,
+      cadence: "one-time",
+      paid: true,
+    },
+    website: "https://wlkrlabs.com",
+  });
+  assert.equal(identities.expo.plan, "Free");
   assert.deepEqual(Object.keys(identities.environments), [
     "development",
     "preview",
@@ -113,7 +130,90 @@ test("provider callbacks and associated Google identifiers are explicit", async 
   );
 });
 
-test("EAS build profiles bind one isolated environment and update channel", async () => {
+test("Apple sign-in and TestFlight identities are separated by trust tier", async () => {
+  const identities = await readIdentities();
+
+  assert.deepEqual(identities.apple.signInKeys, {
+    nonproduction: {
+      createdAt: "2026-07-23",
+      firebase: {
+        bundleIds: ["dev.openjob.app.dev", "dev.openjob.app.preview"],
+        enabled: true,
+        projectId: "openjob-nonprod",
+      },
+      keyId: "F7H56WDP63",
+      owner: "OpenJob",
+      primaryAppId: "QP9SJRTA44.dev.openjob.app.preview",
+      publicKeySpkiSha256:
+        "a59fec3a5f44e0f552c9c1f79562f67587363b99acfe85d2393ffb6bd974e3ac",
+      recovery: {
+        item: "OpenJob Apple Sign In Nonproduction F7H56WDP63",
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
+      rotationReviewBy: "2027-07-23",
+      routineStore: {
+        account: "nonproduction-F7H56WDP63",
+        provider: "macos-keychain",
+        service: "dev.openjob.apple-signin-key",
+      },
+    },
+    production: {
+      createdAt: "2026-07-23",
+      firebase: {
+        bundleIds: ["dev.openjob.app"],
+        enabled: true,
+        projectId: "openjob-dev",
+      },
+      keyId: "N926UH3GCY",
+      owner: "OpenJob",
+      primaryAppId: "QP9SJRTA44.dev.openjob.app",
+      publicKeySpkiSha256:
+        "389d081a02196e4f40996b1d5f7713387d0910a2a98c3bc4a31e3e8a9a3e0e11",
+      recovery: {
+        item: "OpenJob Apple Sign In Production N926UH3GCY",
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
+      rotationReviewBy: "2027-07-23",
+      routineStore: {
+        account: "production-N926UH3GCY",
+        provider: "macos-keychain",
+        service: "dev.openjob.apple-signin-key",
+      },
+    },
+  });
+  assert.deepEqual(identities.apple.signInServices, {
+    nonproduction: {
+      domain: "openjob-nonprod.firebaseapp.com",
+      primaryAppId: "QP9SJRTA44.dev.openjob.app.preview",
+      returnUrl: "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
+      serviceId: "dev.openjob.auth.nonprod",
+    },
+    production: {
+      domain: "openjob-dev.firebaseapp.com",
+      primaryAppId: "QP9SJRTA44.dev.openjob.app",
+      returnUrl: "https://openjob-dev.firebaseapp.com/__/auth/handler",
+      serviceId: "dev.openjob.auth",
+    },
+  });
+  assert.deepEqual(identities.apple.appStoreConnect, {
+    preview: {
+      appId: "6793947679",
+      name: "OpenJob Preview",
+      sku: "openjob-preview",
+      testFlight: true,
+    },
+    production: {
+      appId: "6793948276",
+      name: "OpenJob: Shared Tasks",
+      sku: "openjob",
+      testFlight: true,
+    },
+  });
+});
+
+test("EAS build profiles isolate environments while update channels remain dormant", async () => {
   const [identities, eas] = await Promise.all([
     readIdentities(),
     readFile(easUrl, "utf8").then(JSON.parse),
@@ -131,7 +231,7 @@ test("EAS build profiles bind one isolated environment and update channel", asyn
   };
   for (const name of Object.keys(eas.build)) {
     assert.equal(eas.build[name].environment, name);
-    assert.equal(eas.build[name].channel, name);
+    assert.equal(Object.hasOwn(eas.build[name], "channel"), false);
     assert.deepEqual(identities.environments[name].eas, {
       buildProfile: name,
       channel: name,
@@ -152,6 +252,7 @@ test("Android OAuth and signing identities cannot cross environments", async () 
       configurationId: "AVLdWoyXls",
       googleClientId:
         "550998178053-5681l7oet4q3rq0okoa2caqkv4bh324t.apps.googleusercontent.com",
+      recoveryItem: "OpenJob Android Development Signing Recovery",
       sha1Fingerprint:
         "A9:CF:1E:47:DD:97:32:80:5A:22:36:82:41:08:6F:66:DB:EA:B3:0C",
       sha256Fingerprint:
@@ -161,6 +262,7 @@ test("Android OAuth and signing identities cannot cross environments", async () 
       configurationId: "QHMuu9fTQ4",
       googleClientId:
         "550998178053-n1s9vp0cbmqubh5onint23j8415ivkoa.apps.googleusercontent.com",
+      recoveryItem: "OpenJob Android Preview Signing Recovery",
       sha1Fingerprint:
         "0B:95:B5:5A:5D:6B:BD:66:3A:12:37:B8:4D:0A:94:72:0A:04:7B:6F",
       sha256Fingerprint:
@@ -170,6 +272,7 @@ test("Android OAuth and signing identities cannot cross environments", async () 
       configurationId: "SkaVgGHtTd",
       googleClientId:
         "1015996869029-qr0bkpihst84f8coibaotbtpjngicmjq.apps.googleusercontent.com",
+      recoveryItem: "OpenJob Android Production Signing Recovery",
       sha1Fingerprint:
         "AA:AA:E2:14:C1:28:97:03:AC:29:7A:19:40:E0:53:6A:63:C8:0B:68",
       sha256Fingerprint:
@@ -184,7 +287,12 @@ test("Android OAuth and signing identities cannot cross environments", async () 
       createdAt: "2026-07-22",
       owner: "OpenJob",
       provider: "eas-managed",
-      recovery: "@openjob/openjob credentials",
+      recovery: {
+        eas: "@openjob/openjob credentials",
+        item: expected[name].recoveryItem,
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
       rotationReviewBy: "2027-07-22",
       sha1Fingerprint: expected[name].sha1Fingerprint,
       sha256Fingerprint: expected[name].sha256Fingerprint,
@@ -233,18 +341,8 @@ test("Expo config resolves the public identity for each build environment", asyn
         config.android.googleServicesFile,
         "/eas/google-services.json",
       );
-      assert.deepEqual(config.runtimeVersion, { policy: "appVersion" });
-      const trustTier =
-        identity.tier === "production" ? "production" : "nonproduction";
-      const updateTrust = identities.trust.updateSigning[trustTier];
-      assert.equal(
-        config.updates.codeSigningCertificate,
-        `./trust/${trustTier}-update-certificate.crt`,
-      );
-      assert.deepEqual(config.updates.codeSigningMetadata, {
-        alg: updateTrust.algorithm,
-        keyid: updateTrust.keyId,
-      });
+      assert.equal(Object.hasOwn(config, "runtimeVersion"), false);
+      assert.deepEqual(config.updates, { enabled: false });
     }
   } finally {
     if (previousEnvironment === undefined) delete process.env.OPENJOB_NATIVE_ENV;
@@ -262,43 +360,16 @@ test("Expo config resolves the public identity for each build environment", asyn
   }
 });
 
-test("update trust exports only recoverable public certificate metadata", async () => {
+test("free distribution policy disables OTA delivery", async () => {
   const identities = await readIdentities();
-  const expected = {
-    nonproduction: {
-      account: "nonproduction-2026-07",
-      certificatePath: "native/trust/nonproduction-update-certificate.crt",
-      fingerprintSha256:
-        "18:A7:6D:D4:9D:C6:D1:F2:9C:33:8E:2A:02:93:08:36:9C:84:CB:D8:55:5C:F1:71:51:69:AD:93:9D:62:64:CC",
-      keyId: "openjob-nonproduction-2026-07",
-    },
-    production: {
-      account: "production-2026-07",
-      certificatePath: "native/trust/production-update-certificate.crt",
-      fingerprintSha256:
-        "BA:53:23:5B:A1:BE:61:72:FF:A6:85:BD:5B:84:8A:DB:5F:59:47:42:7E:73:57:C3:73:E0:1D:21:12:BF:C4:E9",
-      keyId: "openjob-production-2026-07",
-    },
-  };
 
-  for (const [tier, trust] of Object.entries(expected)) {
-    const actual = identities.trust.updateSigning[tier];
-    assert.equal(actual.algorithm, "rsa-v1_5-sha256");
-    assert.equal(actual.certificatePath, trust.certificatePath);
-    assert.equal(actual.fingerprintSha256, trust.fingerprintSha256);
-    assert.equal(actual.keyId, trust.keyId);
-    assert.deepEqual(actual.privateKeyStore, {
-      account: trust.account,
-      provider: "macos-keychain",
-      service: "dev.openjob.eas-update-signing",
-    });
-    assert.equal(actual.rotateBy, "2027-06-22");
-
-    const certificate = new X509Certificate(
-      await readFile(new URL(`../${trust.certificatePath}`, import.meta.url)),
-    );
-    assert.equal(certificate.fingerprint256, trust.fingerprintSha256);
-  }
+  assert.deepEqual(identities.delivery, {
+    updates: {
+      enabled: false,
+      releasePath: "store-build",
+    },
+  });
+  assert.equal(Object.hasOwn(identities, "trust"), false);
 });
 
 test("native handoff documents every public identity and recovery boundary", async () => {
@@ -319,17 +390,34 @@ test("native handoff documents every public identity and recovery boundary", asy
       new RegExp(environment.ios.googleReversedClientId, "u"),
     );
   }
-  for (const trust of Object.values(identities.trust.updateSigning)) {
-    assert.match(documentation, new RegExp(trust.keyId, "u"));
-    assert.match(documentation, new RegExp(trust.rotateBy, "u"));
+  for (const service of Object.values(identities.apple.signInServices)) {
+    assert.match(documentation, new RegExp(service.serviceId, "u"));
+    assert.match(documentation, new RegExp(service.returnUrl, "u"));
   }
-
+  for (const key of Object.values(identities.apple.signInKeys)) {
+    assert.match(documentation, new RegExp(key.keyId, "u"));
+    assert.match(documentation, new RegExp(key.publicKeySpkiSha256, "u"));
+    assert.match(documentation, new RegExp(key.recovery.item, "u"));
+    assert.match(documentation, new RegExp(key.rotationReviewBy, "u"));
+  }
+  for (const app of Object.values(identities.apple.appStoreConnect)) {
+    assert.match(documentation, new RegExp(app.appId, "u"));
+    assert.match(documentation, new RegExp(app.name, "u"));
+  }
   assert.match(documentation, /openjob-dev.*production/iu);
   assert.match(documentation, /TestFlight/u);
   assert.match(documentation, /Internal Testing/u);
   assert.match(documentation, /#36/u);
   assert.match(documentation, /#37/u);
-  assert.match(documentation, /Bitwarden/u);
+  assert.match(documentation, /1Password/u);
+  assert.match(documentation, /Expo Free/u);
+  assert.match(documentation, /WLKR LABS/u);
+  assert.match(documentation, /dev@wlkrlabs\.com/u);
+  assert.match(documentation, /6994653839033844694/u);
+  assert.match(documentation, /US\$25/u);
+  assert.match(documentation, /store builds/iu);
+  assert.doesNotMatch(documentation, /Bitwarden/u);
+  assert.doesNotMatch(documentation, /@gmail\.com/iu);
   assert.match(documentation, /recovery/iu);
   assert.doesNotMatch(documentation, /BEGIN (?:EC |RSA )?PRIVATE KEY/u);
 });
