@@ -1,0 +1,3 @@
+# Collect diagnostics without product surveillance
+
+OpenJob collects narrowly scoped technical diagnostics to improve reliability, with a **Share diagnostics** setting enabled by default. Allowed data includes crashes, hangs, failed operation names, timing, app and runtime versions, operating-system version, and coarse device class. Diagnostic payloads are scrubbed before transmission and never contain Task text, Group names, Usernames, email addresses, authentication material, screenshots, or a permanent device identity. OpenJob does not add behavioral product analytics, advertising identifiers, cross-app tracking, or session replay. Collection and every diagnostic processor are disclosed accurately in the privacy policy and store privacy declarations.
