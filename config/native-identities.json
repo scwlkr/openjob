@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "owner": {
+    "organization": "OpenJob",
+    "technicalOwner": "scwlkr"
+  },
+  "apple": {
+    "teamId": "QP9SJRTA44"
+  },
+  "expo": {
+    "account": "openjob",
+    "projectId": "5b1f6f4c-7cf1-4044-b10f-00449688ac1e",
+    "slug": "openjob"
+  },
+  "trust": {
+    "updateSigning": {
+      "nonproduction": {
+        "algorithm": "rsa-v1_5-sha256",
+        "certificatePath": "native/trust/nonproduction-update-certificate.crt",
+        "createdAt": "2026-07-22",
+        "expiresAt": "2027-07-23",
+        "fingerprintSha256": "18:A7:6D:D4:9D:C6:D1:F2:9C:33:8E:2A:02:93:08:36:9C:84:CB:D8:55:5C:F1:71:51:69:AD:93:9D:62:64:CC",
+        "keyId": "openjob-nonproduction-2026-07",
+        "owner": "scwlkr",
+        "privateKeyStore": {
+          "account": "nonproduction-2026-07",
+          "provider": "macos-keychain",
+          "service": "dev.openjob.eas-update-signing"
+        },
+        "rotateBy": "2027-06-22"
+      },
+      "production": {
+        "algorithm": "rsa-v1_5-sha256",
+        "certificatePath": "native/trust/production-update-certificate.crt",
+        "createdAt": "2026-07-22",
+        "expiresAt": "2027-07-23",
+        "fingerprintSha256": "BA:53:23:5B:A1:BE:61:72:FF:A6:85:BD:5B:84:8A:DB:5F:59:47:42:7E:73:57:C3:73:E0:1D:21:12:BF:C4:E9",
+        "keyId": "openjob-production-2026-07",
+        "owner": "scwlkr",
+        "privateKeyStore": {
+          "account": "production-2026-07",
+          "provider": "macos-keychain",
+          "service": "dev.openjob.eas-update-signing"
+        },
+        "rotateBy": "2027-06-22"
+      }
+    }
+  },
+  "environments": {
+    "development": {
+      "tier": "nonproduction",
+      "auth": {
+        "appScheme": "openjob-dev",
+        "firebaseHandlerUrl": "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
+        "nativeCallbackUrl": "openjob-dev://auth/callback"
+      },
+      "eas": {
+        "buildProfile": "development",
+        "channel": "development",
+        "channelId": "019f8d18-f7da-7d12-81e5-fe25f5b6a8fa",
+        "environment": "development"
+      },
+      "firebase": {
+        "authDomain": "openjob-nonprod.firebaseapp.com",
+        "googleWebClientId": "550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com",
+        "projectId": "openjob-nonprod",
+        "webAppId": "1:550998178053:web:477d5bcab4c50b413fdf6c"
+      },
+      "ios": {
+        "bundleId": "dev.openjob.app.dev",
+        "firebaseAppId": "1:550998178053:ios:d1be2d774fc12b1c3fdf6c",
+        "googleClientId": "550998178053-nek4ph7nn98c7f1r4vjo1jnvd11nvm4q.apps.googleusercontent.com",
+        "googleRedirectUri": "com.googleusercontent.apps.550998178053-nek4ph7nn98c7f1r4vjo1jnvd11nvm4q:/oauthredirect",
+        "googleReversedClientId": "com.googleusercontent.apps.550998178053-nek4ph7nn98c7f1r4vjo1jnvd11nvm4q"
+      },
+      "android": {
+        "applicationId": "dev.openjob.app.dev",
+        "firebaseAppId": "1:550998178053:android:ec00651c3a77d69a3fdf6c",
+        "googleClientId": "550998178053-5681l7oet4q3rq0okoa2caqkv4bh324t.apps.googleusercontent.com",
+        "signing": {
+          "configurationId": "AVLdWoyXls",
+          "createdAt": "2026-07-22",
+          "owner": "OpenJob",
+          "provider": "eas-managed",
+          "recovery": "@openjob/openjob credentials",
+          "rotationReviewBy": "2027-07-22",
+          "sha1Fingerprint": "A9:CF:1E:47:DD:97:32:80:5A:22:36:82:41:08:6F:66:DB:EA:B3:0C",
+          "sha256Fingerprint": "89:29:53:1E:B3:53:49:CD:80:E7:C1:8C:5C:CB:C1:DA:6C:91:26:AF:A9:9D:0E:01:6F:71:3F:E2:0A:F3:D1:08"
+        }
+      }
+    },
+    "preview": {
+      "tier": "nonproduction",
+      "auth": {
+        "appScheme": "openjob-preview",
+        "firebaseHandlerUrl": "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
+        "nativeCallbackUrl": "openjob-preview://auth/callback"
+      },
+      "eas": {
+        "buildProfile": "preview",
+        "channel": "preview",
+        "channelId": "019f8d18-fe02-75a8-83a5-19019cc78eef",
+        "environment": "preview"
+      },
+      "firebase": {
+        "authDomain": "openjob-nonprod.firebaseapp.com",
+        "googleWebClientId": "550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com",
+        "projectId": "openjob-nonprod",
+        "webAppId": "1:550998178053:web:477d5bcab4c50b413fdf6c"
+      },
+      "ios": {
+        "bundleId": "dev.openjob.app.preview",
+        "firebaseAppId": "1:550998178053:ios:7b86bcbb90a8ca4f3fdf6c",
+        "googleClientId": "550998178053-5ruvfa2pemb5imm1ke195qrvftrsrm6j.apps.googleusercontent.com",
+        "googleRedirectUri": "com.googleusercontent.apps.550998178053-5ruvfa2pemb5imm1ke195qrvftrsrm6j:/oauthredirect",
+        "googleReversedClientId": "com.googleusercontent.apps.550998178053-5ruvfa2pemb5imm1ke195qrvftrsrm6j"
+      },
+      "android": {
+        "applicationId": "dev.openjob.app.preview",
+        "firebaseAppId": "1:550998178053:android:bb31fea5ca7321b33fdf6c",
+        "googleClientId": "550998178053-n1s9vp0cbmqubh5onint23j8415ivkoa.apps.googleusercontent.com",
+        "signing": {
+          "configurationId": "QHMuu9fTQ4",
+          "createdAt": "2026-07-22",
+          "owner": "OpenJob",
+          "provider": "eas-managed",
+          "recovery": "@openjob/openjob credentials",
+          "rotationReviewBy": "2027-07-22",
+          "sha1Fingerprint": "0B:95:B5:5A:5D:6B:BD:66:3A:12:37:B8:4D:0A:94:72:0A:04:7B:6F",
+          "sha256Fingerprint": "53:EA:CB:C3:A2:CA:24:63:23:9D:34:26:7B:5F:C8:1A:FD:36:80:09:9F:11:45:ED:B9:45:00:12:86:D4:18:43"
+        }
+      }
+    },
+    "production": {
+      "tier": "production",
+      "auth": {
+        "appScheme": "openjob",
+        "firebaseHandlerUrl": "https://openjob-dev.firebaseapp.com/__/auth/handler",
+        "nativeCallbackUrl": "openjob://auth/callback"
+      },
+      "eas": {
+        "buildProfile": "production",
+        "channel": "production",
+        "channelId": "019f8d19-03b3-78b3-8919-62225bfb6cb1",
+        "environment": "production"
+      },
+      "firebase": {
+        "authDomain": "openjob-dev.firebaseapp.com",
+        "googleWebClientId": "1015996869029-8jjj5dttgi3iea9geo9nt9lh7q7e631f.apps.googleusercontent.com",
+        "projectId": "openjob-dev",
+        "webAppId": "1:1015996869029:web:8508dd4c023e2a16eda04c"
+      },
+      "ios": {
+        "bundleId": "dev.openjob.app",
+        "firebaseAppId": "1:1015996869029:ios:b3bd408356291bc4eda04c",
+        "googleClientId": "1015996869029-tlko5334fhqiodcgebd5hncf41jh2f8m.apps.googleusercontent.com",
+        "googleRedirectUri": "com.googleusercontent.apps.1015996869029-tlko5334fhqiodcgebd5hncf41jh2f8m:/oauthredirect",
+        "googleReversedClientId": "com.googleusercontent.apps.1015996869029-tlko5334fhqiodcgebd5hncf41jh2f8m"
+      },
+      "android": {
+        "applicationId": "dev.openjob.app",
+        "firebaseAppId": "1:1015996869029:android:586c54c5e3bab4afeda04c",
+        "googleClientId": "1015996869029-qr0bkpihst84f8coibaotbtpjngicmjq.apps.googleusercontent.com",
+        "signing": {
+          "configurationId": "SkaVgGHtTd",
+          "createdAt": "2026-07-22",
+          "owner": "OpenJob",
+          "provider": "eas-managed",
+          "recovery": "@openjob/openjob credentials",
+          "rotationReviewBy": "2027-07-22",
+          "sha1Fingerprint": "AA:AA:E2:14:C1:28:97:03:AC:29:7A:19:40:E0:53:6A:63:C8:0B:68",
+          "sha256Fingerprint": "08:57:9F:0C:20:A3:53:DC:D3:C3:88:22:47:41:1E:5F:21:46:7C:24:F2:8B:7D:8C:7B:BC:EA:D8:70:D1:8D:F4"
+        }
+      }
+    }
+  }
+}
