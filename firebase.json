@@ -9,7 +9,7 @@
     "providers": {
       "googleSignIn": {
         "oAuthBrandDisplayName": "OpenJob",
-        "supportEmail": "openjob-support@googlegroups.com"
+        "supportEmail": "dev@wlkrlabs.com"
       }
     }
   }

@@ -8,10 +8,24 @@ const documentationUrl = new URL(
   import.meta.url,
 );
 const easUrl = new URL("../native/eas.json", import.meta.url);
+const firebaseUrl = new URL("../firebase.json", import.meta.url);
 
 async function readIdentities() {
   return JSON.parse(await readFile(identitiesUrl, "utf8"));
 }
+
+test("public Google support metadata never exposes the owner login", async () => {
+  const [identities, firebase] = await Promise.all([
+    readIdentities(),
+    readFile(firebaseUrl, "utf8").then(JSON.parse),
+  ]);
+
+  assert.equal(
+    firebase.auth.providers.googleSignIn.supportEmail,
+    identities.googlePlay.supportEmail,
+  );
+  assert.doesNotMatch(JSON.stringify(firebase), /@gmail\.com/iu);
+});
 
 test("native environments expose stable OpenJob application identities", async () => {
   const identities = await readIdentities();
@@ -213,6 +227,151 @@ test("Apple sign-in and TestFlight identities are separated by trust tier", asyn
   });
 });
 
+test("Apple distribution signing is isolated and recoverable by environment", async () => {
+  const identities = await readIdentities();
+
+  assert.deepEqual(identities.apple.distributionSigning, {
+    development: {
+      bundleId: "dev.openjob.app.dev",
+      certificate: {
+        expiresAt: "2027-07-23T13:35:07Z",
+        fingerprintSha256:
+          "7F:48:FC:58:EA:2B:32:35:4C:7A:15:15:08:8B:22:2A:94:5A:C6:BA:BD:9F:C2:FF:34:BC:A5:A9:60:F9:CC:F3",
+        id: "4HJ8JRDS64",
+        publicKeySpkiSha256:
+          "ddfad8cb61d19cc427fe9a8fd896b27b5f04f4e75b6da6ed1b2618914086cfde",
+        serial: "3A53CCED556CE1E14CF644D330B507D5",
+      },
+      createdAt: "2026-07-23",
+      distribution: "internal",
+      eas: {
+        credentialsSource: "remote",
+        syncedAt: "2026-07-23",
+      },
+      owner: "OpenJob",
+      profile: {
+        expiresAt: "2027-07-23T13:35:07Z",
+        id: "H7H546ZJ9S",
+        name: "OpenJob Development Ad Hoc",
+        type: "ad-hoc",
+        uuid: "d5ff403d-fe4c-4b50-a926-2a936cde3c21",
+      },
+      provider: "apple-developer",
+      recovery: {
+        item: "OpenJob iOS Development Signing Recovery",
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
+      rotationReviewBy: "2027-06-23",
+      routineStore: {
+        identitySha1: "8D899FBFFFDFF917F68AD417E3BF5696E3A605D3",
+        provider: "macos-keychain",
+      },
+    },
+    preview: {
+      bundleId: "dev.openjob.app.preview",
+      certificate: {
+        expiresAt: "2027-07-23T13:35:07Z",
+        fingerprintSha256:
+          "7F:48:FC:58:EA:2B:32:35:4C:7A:15:15:08:8B:22:2A:94:5A:C6:BA:BD:9F:C2:FF:34:BC:A5:A9:60:F9:CC:F3",
+        id: "4HJ8JRDS64",
+        publicKeySpkiSha256:
+          "ddfad8cb61d19cc427fe9a8fd896b27b5f04f4e75b6da6ed1b2618914086cfde",
+        serial: "3A53CCED556CE1E14CF644D330B507D5",
+      },
+      createdAt: "2026-07-23",
+      distribution: "store",
+      eas: {
+        credentialsSource: "remote",
+        syncedAt: "2026-07-23",
+      },
+      owner: "OpenJob",
+      profile: {
+        expiresAt: "2027-07-23T13:35:07Z",
+        id: "22NL2LQWXC",
+        name: "OpenJob Preview App Store",
+        type: "app-store",
+        uuid: "f4101821-a937-44db-ade4-1c2ddc898e1e",
+      },
+      provider: "apple-developer",
+      recovery: {
+        item: "OpenJob iOS Preview Signing Recovery",
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
+      rotationReviewBy: "2027-06-23",
+      routineStore: {
+        identitySha1: "8D899FBFFFDFF917F68AD417E3BF5696E3A605D3",
+        provider: "macos-keychain",
+      },
+    },
+    production: {
+      bundleId: "dev.openjob.app",
+      certificate: {
+        expiresAt: "2027-07-23T15:28:11Z",
+        fingerprintSha256:
+          "EE:E5:BE:22:0B:03:61:05:3E:F6:7D:BF:56:CC:89:97:EC:8B:7B:A6:6A:5C:E7:78:A7:2A:EC:42:69:08:35:94",
+        id: "STULDNXC38",
+        publicKeySpkiSha256:
+          "744a1c7c45b71b31545cc336bae7dc9940369ed3b543280393cbb61d68a4f5b4",
+        serial: "3562897CEE5AFFB8C36A325FF383F468",
+      },
+      createdAt: "2026-07-23",
+      distribution: "store",
+      eas: {
+        credentialsSource: "remote",
+        syncedAt: "2026-07-23",
+      },
+      owner: "OpenJob",
+      profile: {
+        expiresAt: "2027-07-23T15:28:11Z",
+        id: "839CADMWQ4",
+        name: "OpenJob Production App Store",
+        type: "app-store",
+        uuid: "87b91d6e-cfc7-4dea-a808-bfc7a67abc4e",
+      },
+      provider: "apple-developer",
+      recovery: {
+        item: "OpenJob iOS Production Signing Recovery",
+        provider: "1password",
+        restoreVerifiedAt: "2026-07-23",
+      },
+      rotationReviewBy: "2027-06-23",
+      routineStore: {
+        identitySha1: "873B2AC0E2169DBF83C288027C3BECAC9372405F",
+        provider: "macos-keychain",
+      },
+    },
+  });
+
+  assert.equal(
+    new Set(
+      Object.values(identities.apple.distributionSigning).map(
+        (signing) => signing.certificate.fingerprintSha256,
+      ),
+    ).size,
+    2,
+  );
+  assert.equal(
+    new Set(
+      Object.values(identities.apple.distributionSigning).map(
+        (signing) => signing.profile.uuid,
+      ),
+    ).size,
+    3,
+  );
+  assert.equal(
+    identities.apple.distributionSigning.development.certificate
+      .fingerprintSha256,
+    identities.apple.distributionSigning.preview.certificate.fingerprintSha256,
+  );
+  assert.notEqual(
+    identities.apple.distributionSigning.preview.certificate.fingerprintSha256,
+    identities.apple.distributionSigning.production.certificate
+      .fingerprintSha256,
+  );
+});
+
 test("EAS build profiles isolate environments while update channels remain dormant", async () => {
   const [identities, eas] = await Promise.all([
     readIdentities(),
@@ -231,6 +390,7 @@ test("EAS build profiles isolate environments while update channels remain dorma
   };
   for (const name of Object.keys(eas.build)) {
     assert.equal(eas.build[name].environment, name);
+    assert.equal(eas.build[name].ios.credentialsSource, "remote");
     assert.equal(Object.hasOwn(eas.build[name], "channel"), false);
     assert.deepEqual(identities.environments[name].eas, {
       buildProfile: name,
@@ -399,6 +559,18 @@ test("native handoff documents every public identity and recovery boundary", asy
     assert.match(documentation, new RegExp(key.publicKeySpkiSha256, "u"));
     assert.match(documentation, new RegExp(key.recovery.item, "u"));
     assert.match(documentation, new RegExp(key.rotationReviewBy, "u"));
+  }
+  for (const signing of Object.values(identities.apple.distributionSigning)) {
+    assert.match(documentation, new RegExp(signing.bundleId, "u"));
+    assert.match(documentation, new RegExp(signing.certificate.id, "u"));
+    assert.match(
+      documentation,
+      new RegExp(signing.certificate.fingerprintSha256, "u"),
+    );
+    assert.match(documentation, new RegExp(signing.profile.id, "u"));
+    assert.match(documentation, new RegExp(signing.profile.uuid, "u"));
+    assert.match(documentation, new RegExp(signing.recovery.item, "u"));
+    assert.match(documentation, new RegExp(signing.rotationReviewBy, "u"));
   }
   for (const app of Object.values(identities.apple.appStoreConnect)) {
     assert.match(documentation, new RegExp(app.appId, "u"));
