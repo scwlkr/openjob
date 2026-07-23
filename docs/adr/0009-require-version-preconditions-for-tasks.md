@@ -1,0 +1,3 @@
+# Require Task version preconditions across clients
+
+Every Task representation exposes an opaque version that OpenJob's web, CLI, and native mobile clients return when editing, completing, reopening, or deleting that Task. The service rejects a mutation when the supplied version is stale instead of silently overwriting a newer change; the client preserves the User's current input, presents the latest visible Task, and requires an explicit new decision before replacing a still-editable value. Applying this optimistic-concurrency contract to every first-party client adds conflict handling and occasional extra reads but keeps Task integrity independent of which OpenJob client a Member uses.
