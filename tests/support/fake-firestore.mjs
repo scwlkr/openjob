@@ -16,8 +16,8 @@ export async function createPrivateKey() {
   return `-----BEGIN PRIVATE KEY-----\n${base64.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n`;
 }
 
-export function createFakeFirestore() {
-  const database = "projects/openjob-dev/databases/(default)";
+export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
+  const database = `projects/${projectId}/databases/(default)`;
   const documents = new Map();
   let revision = 0;
   let throttleNextRequest = false;
