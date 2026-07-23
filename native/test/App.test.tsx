@@ -12,6 +12,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import { OpenJobNativeApp } from "../App";
+import { confirmsEmbeddedBundle } from "../src/OpenJobShell";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
 
 const previewConfig: OpenJobRuntimeConfig = {
@@ -30,6 +31,35 @@ const productionConfig: OpenJobRuntimeConfig = {
 beforeEach(async () => {
   jest.restoreAllMocks();
   await AsyncStorage.clear();
+});
+
+test("confirms an OTA-disabled Release bundle when Expo's asset hint is false", () => {
+  expect(
+    confirmsEmbeddedBundle({
+      isDevelopment: false,
+      updatesEnabled: false,
+      usingEmbeddedAssets: false,
+    }),
+  ).toBe(true);
+});
+
+test("does not confirm Metro or OTA-enabled launches as embedded", () => {
+  expect(
+    confirmsEmbeddedBundle({
+      isDevelopment: true,
+      updatesEnabled: false,
+      usingEmbeddedAssets: false,
+    }),
+  ).toBe(false);
+  for (const usingEmbeddedAssets of [false, true]) {
+    expect(
+      confirmsEmbeddedBundle({
+        isDevelopment: false,
+        updatesEnabled: true,
+        usingEmbeddedAssets,
+      }),
+    ).toBe(false);
+  }
 });
 
 test("bootstraps the branded preview shell from its embedded bundle", async () => {

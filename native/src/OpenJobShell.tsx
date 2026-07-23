@@ -37,6 +37,20 @@ type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+export function confirmsEmbeddedBundle({
+  isDevelopment,
+  updatesEnabled,
+  usingEmbeddedAssets,
+}: {
+  isDevelopment: boolean;
+  updatesEnabled: boolean;
+  usingEmbeddedAssets: boolean;
+}) {
+  return (
+    !updatesEnabled && (!isDevelopment || usingEmbeddedAssets)
+  );
+}
+
 function useControlInteraction() {
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -165,8 +179,11 @@ function ShellScreen({ navigation, runtimeConfig }: ShellProps) {
   const lifecycle = useAppLifecycle();
   const reducedMotion = useReducedMotion();
   const wide = width >= 720;
-  const embeddedBundle =
-    !Updates.isEnabled && Updates.isUsingEmbeddedAssets;
+  const embeddedBundle = confirmsEmbeddedBundle({
+    isDevelopment: __DEV__,
+    updatesEnabled: Updates.isEnabled,
+    usingEmbeddedAssets: Updates.isUsingEmbeddedAssets,
+  });
 
   return (
     <SafeAreaView
