@@ -5,7 +5,6 @@
   },
   "build": {
     "development": {
-      "channel": "development",
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
@@ -18,7 +17,6 @@
         "buildType": "app-bundle"
       },
       "autoIncrement": true,
-      "channel": "preview",
       "distribution": "store",
       "environment": "preview",
       "env": {
@@ -30,7 +28,6 @@
         "buildType": "app-bundle"
       },
       "autoIncrement": true,
-      "channel": "production",
       "distribution": "store",
       "environment": "production",
       "env": {

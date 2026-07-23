@@ -20,11 +20,12 @@ authenticate as another environment.
 
 The EAS project is `@openjob/openjob`, project ID
 `5b1f6f4c-7cf1-4044-b10f-00449688ac1e`. Its `development`, `preview`, and
-`production` build profiles each select the same-named EAS environment and
-update channel. Development builds use internal distribution. Preview and
-production use store distribution.
-All profiles use the recommended `appVersion` runtime policy so an update can
-target only a compatible store version.
+`production` build profiles each select the same-named EAS environment.
+Development builds use internal distribution. Preview and production use store
+distribution. OpenJob remains on Expo Free. OTA delivery is disabled in every
+native environment, and preview/production releases use new store builds. The existing
+same-named channels are dormant reservations and are not attached to builds;
+they do not authorize unsigned publishing.
 
 Firebase contains separate web, iOS, and Android app registrations for these
 identifiers. Google web, iOS, and Android OAuth client IDs are exported in
@@ -40,6 +41,12 @@ EAS-managed signing certificate in Firebase:
 The matching SHA-256 fingerprints are recorded in the manifest. Review each
 Android credential for rotation by `2027-07-22`; preserve app-signing
 continuity and rotate an upload key through the store's supported process.
+Each EAS keystore and its password metadata has an independent, restore-verified
+1Password document: `OpenJob Android Development Signing Recovery`,
+`OpenJob Android Preview Signing Recovery`, or
+`OpenJob Android Production Signing Recovery`. The restored keystore
+fingerprints matched the manifest on `2026-07-23`; local recovery archives were
+then deleted.
 Firebase configuration files are EAS file secrets named
 `GOOGLE_SERVICE_INFO_PLIST` and `GOOGLE_SERVICES_JSON` in each environment;
 they are never repository files.
@@ -53,15 +60,46 @@ Provider routing is also environment-specific:
 | production | `openjob://auth/callback` | `https://openjob-dev.firebaseapp.com/__/auth/handler` | `com.googleusercontent.apps.1015996869029-tlko5334fhqiodcgebd5hncf41jh2f8m:/oauthredirect` |
 
 The Google redirect schemes are derived from the registered iOS OAuth clients
-and are exported separately in the manifest. Apple Services IDs, associated
-App IDs, and return URLs will join this table only after they exist on Apple
-team `QP9SJRTA44`.
+and are exported separately in the manifest.
 
-Apple App Store Connect and Google Play store records are not configured yet.
-The preview App Store record must expose TestFlight for
-`dev.openjob.app.preview`; the preview Play record must expose Internal Testing
-for `dev.openjob.app.preview`. Their identifiers belong in
-`config/native-identities.json` after account access is complete.
+Apple team `QP9SJRTA44` has Sign in with Apple enabled on all three native App
+IDs. Web authentication uses distinct Services IDs and Firebase callbacks:
+
+| Tier | Services ID | Primary App ID | Domain | Return URL |
+| --- | --- | --- | --- | --- |
+| non-production | `dev.openjob.auth.nonprod` | `QP9SJRTA44.dev.openjob.app.preview` | `openjob-nonprod.firebaseapp.com` | `https://openjob-nonprod.firebaseapp.com/__/auth/handler` |
+| production | `dev.openjob.auth` | `QP9SJRTA44.dev.openjob.app` | `openjob-dev.firebaseapp.com` | `https://openjob-dev.firebaseapp.com/__/auth/handler` |
+
+Firebase Authentication has both Apple providers enabled with explicit bundle
+allowlists. Non-production uses Apple key `F7H56WDP63` for
+`dev.openjob.app.dev` and `dev.openjob.app.preview`; production uses the
+independent key `N926UH3GCY` for `dev.openjob.app`. Review both keys for
+rotation by `2027-07-23`. Their routine copies are macOS Keychain items under
+service `dev.openjob.apple-signin-key`; independent 1Password documents
+`OpenJob Apple Sign In Nonproduction F7H56WDP63` and
+`OpenJob Apple Sign In Production N926UH3GCY` were restore-verified on
+`2026-07-23`. The restored private keys derive the SHA-256 SPKI fingerprints
+`a59fec3a5f44e0f552c9c1f79562f67587363b99acfe85d2393ffb6bd974e3ac`
+and
+`389d081a02196e4f40996b1d5f7713387d0910a2a98c3bc4a31e3e8a9a3e0e11`,
+respectively; those non-secret values are the recovery comparison authority.
+
+App Store Connect has both store records and exposes TestFlight:
+
+| Environment | Listing name | App Store Connect ID | SKU | Bundle ID |
+| --- | --- | --- | --- | --- |
+| preview | `OpenJob Preview` | `6793947679` | `openjob-preview` | `dev.openjob.app.preview` |
+| production | `OpenJob: Shared Tasks` | `6793948276` | `openjob` | `dev.openjob.app` |
+
+Google Play developer account `6994653839033844694` is a Personal account
+owned by the OpenJob owner. Its public developer name is `WLKR LABS`, its
+verified public support email is `dev@wlkrlabs.com`, and its website is
+`https://wlkrlabs.com`. The support address is not the private Google account
+used to sign in. The approved one-time US$25 Play registration fee is paid; no
+other Play, Expo, Apple, or recurring expense is authorized. Google currently
+blocks app creation until its required identity, Android-device, and phone
+checks finish. After those checks, create preview and production records and
+expose Internal Testing for `dev.openjob.app.preview`.
 
 ## Ownership and least privilege
 
@@ -71,31 +109,24 @@ robot with Developer access; its token is stored in macOS Keychain under
 service `dev.openjob.eas.robot-token`, account `openjob-release`. Rotate that
 token by `2026-10-22`, or immediately after suspected disclosure.
 
-The Apple developer team is `QP9SJRTA44`. App identifiers, Sign in with Apple
+The active Apple developer team is `QP9SJRTA44`; the work used the existing
+membership at zero new cost. App identifiers, Sign in with Apple
 identifiers and keys, App Store records, and signing credentials must remain
 owned by that team. Google Firebase and Play resources must remain in
 OpenJob-controlled projects/accounts. Do not name personal account addresses
 in repository configuration or issue evidence.
 
-Update verification uses two independent RSA trust roots:
-
-| Tier | Public key ID | Public certificate | Rotate by |
-| --- | --- | --- | --- |
-| non-production | `openjob-nonproduction-2026-07` | `native/trust/nonproduction-update-certificate.crt` | `2027-06-22` |
-| production | `openjob-production-2026-07` | `native/trust/production-update-certificate.crt` | `2027-06-22` |
-
-Only the public certificates are committed. Their private keys are macOS
-Keychain items under service `dev.openjob.eas-update-signing`, accounts
-`nonproduction-2026-07` and `production-2026-07`. The required independent
-encrypted backup is not yet in Bitwarden because the owner vault is locked;
-update-key recovery is incomplete until both restored keys match the committed
-certificates. Signed EAS Update publishing also requires an Expo Production or
-Enterprise plan; the OpenJob organization is currently on Free.
+Expo Free does not provide signed EAS Update delivery. OpenJob does not accept
+unsigned production updates, so `native/app.config.mjs` sets
+`updates.enabled` to `false` and no update-signing keys are provisioned. This
+follows ADR 0012's store-build fallback and avoids a recurring Expo
+subscription. Enabling OTA later requires a separate owner-approved issue,
+signed-delivery entitlement, new trust material, and a new store build.
 
 ## Secret and recovery boundary
 
 Approved stores are the provider account itself, the EAS environment secret
-store, the OpenJob owner's macOS Keychain, and the owner-controlled Bitwarden
+store, the OpenJob owner's macOS Keychain, and the owner-controlled 1Password
 vault. Private keys, tokens, configuration files, keystores, provisioning
 profiles, recovery codes, and passwords must never enter Git, GitHub, issue
 comments, terminal diagnostics, screenshots, or build logs.
@@ -106,19 +137,19 @@ Owner recovery procedure:
    identifiers against `config/native-identities.json`.
 2. For EAS automation, rotate or recreate `openjob-release`, then replace its
    Keychain item without printing the token. Verify access with `eas whoami`.
-3. For update signing, restore the named encrypted Bitwarden backup directly
-   into a mode-`0600` temporary file. Derive its public key locally and compare
-   it with the committed certificate and SHA-256 fingerprint before
-   publishing. Delete the temporary file after the operation. The Keychain
-   copy is the routine source; the vault copy is the device-loss recovery.
-4. For Firebase native configuration, download a fresh provider file and
+3. For Firebase native configuration, download a fresh provider file and
    replace the matching EAS file secret. Never copy it into the repository.
-5. For Apple or Android signing, recover through the Apple Developer/App Store
-   Connect or the `@openjob/openjob` EAS credential surface. Download only into
-   the ignored `native/credentials/` recovery area, validate fingerprints with
-   `keytool`, move the backup to an approved owner-accessible secret store, and
-   delete the scratch copy. Rotate the credential if provider recovery cannot
-   prove continuity, then update public fingerprints and dates here.
+4. For Apple Sign in, restore the tier's named 1Password document to a
+   mode-`0600` temporary file. Derive its public key and compare it with the
+   matching `publicKeySpkiSha256` value in the manifest before use. Delete the
+   temporary file.
+5. For Android signing, recover through the `@openjob/openjob` EAS credential
+   surface or the environment's named 1Password document. Restore
+   `credentials.json` and the keystore only into a mode-`0700` temporary
+   directory with mode-`0600` files, validate the SHA-256 fingerprint with
+   `keytool`, then delete the directory. Rotate only through the
+   store-supported upload-key process if neither recovery source proves
+   continuity.
 6. Run `npm run secret:check` before staging or sharing diagnostics.
 
 ## Handoff to #36 and #37
@@ -126,8 +157,8 @@ Owner recovery procedure:
 #36 consumes `native/app.config.mjs`, `native/eas.json`, and the EAS
 environment file secrets when it creates the Expo client. It must not invent
 new bundle IDs, application IDs, channels, projects, or provider credentials.
-Signed Update publishing must select the certificate and Keychain account for
-the target trust tier.
+It must preserve `updates.enabled: false`; JavaScript, asset, and native changes
+ship through store builds, not `eas update`.
 
 #37 consumes the environment-specific Firebase app registrations and exported
 OAuth client IDs. Non-production clients may use only `openjob-nonprod`;
@@ -137,19 +168,12 @@ scheme exported by `native/app.config.mjs`.
 
 ## Human-only account gates
 
-The agent can resume all remaining console work immediately after these owner
-actions:
+Google Play is the remaining account gate. The owner must use Play Console's
+three visible checks: upload the requested official identity document, sign in
+to the Play Console mobile app on a physical Android device, and verify the
+contact phone number after Google approves the identity. App creation stays
+locked until Google clears those checks.
 
-1. Apple: sign in once to Apple Developer and App Store Connect in the prepared
-   browser, complete 2FA, and accept an agreement only if Apple presents one.
-2. Google Play: choose the correct permanent developer account type and
-   complete its identity, contact, and registration-payment flow.
-3. Expo: upgrade the OpenJob organization to Production or Enterprise so EAS
-   signed Update is available.
-4. Bitwarden: open the installed desktop app and unlock the owner vault once.
-   The agent will create the two encrypted update-key backup items and verify a
-   restore without displaying their contents.
-
-Issue #34 remains open until those gates are complete and the agent has created
-and verified the Apple, TestFlight, Play Internal, provider, and signing
-surfaces.
+Issue #34 remains open until Play permits creation of the preview/production
+records and Internal Testing is confirmed. No further purchase is required or
+authorized.

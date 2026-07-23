@@ -15,9 +15,6 @@ export default function createAppConfig({ config = {} } = {}) {
   if (!identity) {
     throw new Error(`Unsupported OpenJob native environment: ${environment}`);
   }
-  const trustTier =
-    identity.tier === "production" ? "production" : "nonproduction";
-  const updateTrust = identities.trust.updateSigning[trustTier];
 
   return {
     ...config,
@@ -35,17 +32,8 @@ export default function createAppConfig({ config = {} } = {}) {
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
       package: identity.android.applicationId,
     },
-    runtimeVersion: {
-      policy: "appVersion",
-    },
     updates: {
-      ...config.updates,
-      codeSigningCertificate: `./trust/${trustTier}-update-certificate.crt`,
-      codeSigningMetadata: {
-        alg: updateTrust.algorithm,
-        keyid: updateTrust.keyId,
-      },
-      url: `https://u.expo.dev/${identities.expo.projectId}`,
+      enabled: identities.delivery.updates.enabled,
     },
     extra: {
       ...config.extra,
