@@ -1,0 +1,3 @@
+# Request native notifications in context
+
+The native mobile client never requests notification permission on first launch and does not use provisional or surprise delivery. After the User's first meaningful Task interaction, OpenJob may show one subtle in-app invitation explaining the value of Task notifications. The operating-system permission prompt appears only after the User explicitly chooses **Enable notifications**; dismissing the invitation or denying permission does not block the app or cause repeated prompts. A permanent Notifications control remains available in Settings. This preserves the existing User-approved Notification Subscription model while adapting its invitation timing to native platform expectations.
