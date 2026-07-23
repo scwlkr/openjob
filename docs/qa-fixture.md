@@ -54,12 +54,13 @@ Then run the exact target-confirmed command:
 ```sh
 npm run qa:fixture:reset -- \
   --environment preview \
-  --confirm openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1
+  --confirm openjob-two-user-qa-v1:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa
 ```
 
-The command performs a read-only preflight, plans literal document writes, and
-uses one preconditioned atomic commit. A clean second run returns
-`"changed":false` and performs no commit. It never creates User or provider
+The command performs every preflight read and its literal write plan in one
+Firestore transaction. A clean second run returns `"changed":false` and commits
+the read-only transaction with zero document writes, preventing a concurrent
+mutation from being mistaken for a no-op. It never creates User or provider
 identity records, deletes collections, repairs non-QA access, or accepts User
 IDs on the command line.
 
@@ -67,6 +68,10 @@ After reset, use the same preview `/api/v1` origin in native, PWA, API harness,
 and CLI (`OPENJOB_API_URL`). Verify both `/me` responses, both Group lists, the
 seven-Task matrix, and one state change observed in each direction. The preview
 API origin itself is owned by #36/#37 and must not be guessed.
+
+The fixture anchors date-only due dates to `America/Chicago`. Keep acceptance
+devices on that calendar time zone when proving the today/overdue matrix near a
+date boundary.
 
 ## Recovery
 
