@@ -40,12 +40,22 @@ function updateWrite(store, path, fields, existing) {
   };
 }
 
-function dateWithOffset(now, offsetDays) {
+function dateWithOffset(anchor, timeZone, offsetDays) {
   if (offsetDays === null) return null;
-  const date = new Date(now);
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone,
+      year: "numeric",
+    })
+      .formatToParts(new Date(anchor))
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value }) => [type, Number(value)]),
+  );
+  return new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day + offsetDays),
+  ).toISOString().slice(0, 10);
 }
 
 function fixtureEnvironment(environment) {
@@ -79,8 +89,8 @@ function fixtureMarkerFields(fixture, environment) {
 }
 
 function desiredTaskFields({
+  anchor,
   fixture,
-  now,
   qaOneUserId,
   qaTwoUserId,
   task,
@@ -90,7 +100,11 @@ function desiredTaskFields({
     : task.assignee === "qaTwo"
       ? { ...manifest.users.qaTwo, userId: qaTwoUserId }
       : null;
-  const dueDate = dateWithOffset(now(), task.dueOffsetDays);
+  const dueDate = dateWithOffset(
+    anchor,
+    manifest.calendarTimeZone,
+    task.dueOffsetDays,
+  );
   return {
     taskId: { stringValue: task.taskId },
     groupId: { stringValue: fixture.groupId },
@@ -122,21 +136,34 @@ export function createQaFixtureStore(config, fetchImplementation = fetch) {
   return Object.freeze({
     projectId: config.projectId,
     documentName: firestore.documentName,
-    async readDocument(path) {
+    async beginTransaction() {
+      const response = await firestore.request(":beginTransaction", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (typeof result.transaction !== "string" || !result.transaction) {
+        throw new Error("Firestore did not return a QA reset transaction.");
+      }
+      return result.transaction;
+    },
+    async readDocument(path, transaction) {
+      const parameters = new URLSearchParams({ transaction });
       const response = await firestore.request(
-        path,
+        `${path}?${parameters}`,
         {},
         { allowNotFound: true },
       );
       return response.status === 404 ? null : response.json();
     },
-    async listDocuments(path) {
+    async listDocuments(path, transaction) {
       const documents = [];
       let pageToken = null;
       do {
         const parameters = new URLSearchParams({
           pageSize: "500",
           orderBy: "__name__",
+          transaction,
         });
         if (pageToken !== null) parameters.set("pageToken", pageToken);
         const response = await firestore.request(`${path}?${parameters}`);
@@ -146,10 +173,16 @@ export function createQaFixtureStore(config, fetchImplementation = fetch) {
       } while (pageToken !== null);
       return documents;
     },
-    async commit(writes) {
+    async commit(writes, transaction) {
       await firestore.request(":commit", {
         method: "POST",
-        body: JSON.stringify({ writes }),
+        body: JSON.stringify({ transaction, writes }),
+      });
+    },
+    async rollback(transaction) {
+      await firestore.request(":rollback", {
+        method: "POST",
+        body: JSON.stringify({ transaction }),
       });
     },
   });
@@ -175,6 +208,10 @@ export async function resetQaFixture({
   if (qaOneUserId === qaTwoUserId) {
     throw new Error("QA fixture Users must have distinct stable User IDs.");
   }
+  const resetAnchor = now();
+  if (!Number.isFinite(resetAnchor)) {
+    throw new Error("QA fixture reset time must be a finite timestamp.");
+  }
 
   const users = [
     {
@@ -188,290 +225,350 @@ export async function resetQaFixture({
       ...manifest.users.qaTwo,
     },
   ];
-  for (const user of users) {
-    const [directory, claim] = await Promise.all([
-      store.readDocument(`v1UserDirectory/${user.userId}`),
-      store.readDocument(`v1Usernames/${user.username}`),
+  const transaction = await store.beginTransaction();
+  let transactionCommitted = false;
+  try {
+    for (const user of users) {
+      const [directory, claim] = await Promise.all([
+        store.readDocument(`v1UserDirectory/${user.userId}`, transaction),
+        store.readDocument(`v1Usernames/${user.username}`, transaction),
+      ]);
+      assertExactField(
+        directory,
+        "userId",
+        user.userId,
+        `@${user.username} does not resolve to the expected stable User ID.`,
+      );
+      assertExactField(
+        directory,
+        "username",
+        user.username,
+        `@${user.username} is not the expected immutable Username.`,
+      );
+      assertExactField(
+        claim,
+        "userId",
+        user.userId,
+        `@${user.username} has an inconsistent Username claim.`,
+      );
+    }
+
+    const fixturePath = `v1QaFixtures/${manifest.fixtureId}`;
+    const groupPath = `v1Groups/${fixture.groupId}`;
+    const reservationPath = `v1GroupIds/${fixture.groupId}`;
+    const [
+      fixtureDocument,
+      group,
+      reservation,
+      topLevelGroups,
+      members,
+      evidence,
+      tasks,
+      bans,
+      currentInvite,
+      inviteRoutes,
+      qaOneAccess,
+      qaTwoAccess,
+      notificationSubscriptions,
+      qaOneInstallations,
+      qaTwoInstallations,
+    ] = await Promise.all([
+      store.readDocument(fixturePath, transaction),
+      store.readDocument(groupPath, transaction),
+      store.readDocument(reservationPath, transaction),
+      store.listDocuments("v1Groups", transaction),
+      store.listDocuments(`${groupPath}/members`, transaction),
+      store.listDocuments(`${groupPath}/membershipEvidence`, transaction),
+      store.listDocuments(`${groupPath}/tasks`, transaction),
+      store.listDocuments(`${groupPath}/bans`, transaction),
+      store.readDocument(`${groupPath}/invite/current`, transaction),
+      store.listDocuments("v1InviteRoutes", transaction),
+      store.listDocuments(`v1GroupAccess/${qaOneUserId}/groups`, transaction),
+      store.listDocuments(`v1GroupAccess/${qaTwoUserId}/groups`, transaction),
+      store.listDocuments("v1NotificationSubscriptions", transaction),
+      store.listDocuments(
+        `v1NotificationSubscriptionUsers/${qaOneUserId}/installations`,
+        transaction,
+      ),
+      store.listDocuments(
+        `v1NotificationSubscriptionUsers/${qaTwoUserId}/installations`,
+        transaction,
+      ),
     ]);
-    assertExactField(
-      directory,
-      "userId",
-      user.userId,
-      `@${user.username} does not resolve to the expected stable User ID.`,
-    );
-    assertExactField(
-      directory,
-      "username",
-      user.username,
-      `@${user.username} is not the expected immutable Username.`,
-    );
-    assertExactField(
-      claim,
-      "userId",
-      user.userId,
-      `@${user.username} has an inconsistent Username claim.`,
-    );
-  }
 
-  const fixturePath = `v1QaFixtures/${manifest.fixtureId}`;
-  const groupPath = `v1Groups/${fixture.groupId}`;
-  const reservationPath = `v1GroupIds/${fixture.groupId}`;
-  const [
-    fixtureDocument,
-    group,
-    reservation,
-    members,
-    evidence,
-    tasks,
-    bans,
-    qaOneAccess,
-    qaTwoAccess,
-    notificationSubscriptions,
-    qaOneInstallations,
-    qaTwoInstallations,
-  ] = await Promise.all([
-    store.readDocument(fixturePath),
-    store.readDocument(groupPath),
-    store.readDocument(reservationPath),
-    store.listDocuments(`${groupPath}/members`),
-    store.listDocuments(`${groupPath}/membershipEvidence`),
-    store.listDocuments(`${groupPath}/tasks`),
-    store.listDocuments(`${groupPath}/bans`),
-    store.listDocuments(`v1GroupAccess/${qaOneUserId}/groups`),
-    store.listDocuments(`v1GroupAccess/${qaTwoUserId}/groups`),
-    store.listDocuments("v1NotificationSubscriptions"),
-    store.listDocuments(
-      `v1NotificationSubscriptionUsers/${qaOneUserId}/installations`,
-    ),
-    store.listDocuments(
-      `v1NotificationSubscriptionUsers/${qaTwoUserId}/installations`,
-    ),
-  ]);
-
-  const marker = fixtureMarkerFields(fixture, environment);
-  for (const [document, label] of [
-    [fixtureDocument, "fixture registry"],
-    [group, "Group"],
-    [reservation, "Group ID reservation"],
-  ]) {
-    if (!document) continue;
-    for (const [field, expected] of Object.entries(marker)) {
-      const kind = "stringValue" in expected ? "stringValue" : "integerValue";
-      if (document.fields?.[field]?.[kind] !== expected[kind]) {
-        throw new Error(`QA fixture ${label} identity does not match.`);
+    const marker = fixtureMarkerFields(fixture, environment);
+    for (const [document, label] of [
+      [fixtureDocument, "fixture registry"],
+      [group, "Group"],
+      [reservation, "Group ID reservation"],
+    ]) {
+      if (!document) continue;
+      for (const [field, expected] of Object.entries(marker)) {
+        const kind = "stringValue" in expected ? "stringValue" : "integerValue";
+        if (document.fields?.[field]?.[kind] !== expected[kind]) {
+          throw new Error(`QA fixture ${label} identity does not match.`);
+        }
       }
     }
-  }
-  if (!group && reservation && !fixtureDocument) {
-    throw new Error("QA fixture Group ID is reserved by an unknown identity.");
-  }
-
-  const expectedUserIds = new Set(users.map(({ userId }) => userId));
-  for (const [documents, label] of [
-    [members, "membership"],
-    [evidence, "membership evidence"],
-  ]) {
-    for (const document of documents) {
+    const expectedUserIds = new Set(users.map(({ userId }) => userId));
+    for (const [documents, label] of [
+      [members, "membership"],
+      [evidence, "membership evidence"],
+    ]) {
+      for (const document of documents) {
+        const expectedUserId = documentId(document);
+        if (!expectedUserIds.has(expectedUserId)) {
+          throw new Error("QA fixture Group contains an unexpected User.");
+        }
+        if (document.fields?.userId?.stringValue !== expectedUserId) {
+          throw new Error(
+            `QA fixture ${label} belongs to an unexpected User.`,
+          );
+        }
+        const fixtureId = document.fields?.fixtureId?.stringValue;
+        if (fixtureId && fixtureId !== manifest.fixtureId) {
+          throw new Error(
+            `QA fixture ${label} fixture identity does not match.`,
+          );
+        }
+      }
+    }
+    for (const document of bans) {
       const expectedUserId = documentId(document);
       if (!expectedUserIds.has(expectedUserId)) {
         throw new Error("QA fixture Group contains an unexpected User.");
       }
       if (document.fields?.userId?.stringValue !== expectedUserId) {
-        throw new Error(
-          `QA fixture ${label} belongs to an unexpected User.`,
-        );
+        throw new Error("QA fixture Ban belongs to an unexpected User.");
       }
     }
-  }
-  for (const document of bans) {
-    const expectedUserId = documentId(document);
-    if (!expectedUserIds.has(expectedUserId)) {
-      throw new Error("QA fixture Group contains an unexpected User.");
+    const inviteDocumentsToDelete = new Map();
+    if (currentInvite) {
+      assertExactField(
+      currentInvite,
+      "groupId",
+      fixture.groupId,
+      "QA fixture Invite Link identity does not match.",
+    );
+    const routeId = currentInvite.fields?.routeId?.stringValue;
+    if (!routeId) {
+      throw new Error("QA fixture Invite Link is malformed.");
     }
-    if (document.fields?.userId?.stringValue !== expectedUserId) {
-      throw new Error("QA fixture Ban belongs to an unexpected User.");
+      inviteDocumentsToDelete.set(currentInvite.name, currentInvite);
     }
-  }
-  for (const accessDocuments of [qaOneAccess, qaTwoAccess]) {
-    for (const document of accessDocuments) {
-      if (documentId(document) !== fixture.groupId) {
-        throw new Error("A QA fixture User belongs to a non-QA Group.");
-      }
-      if (document.fields?.groupId?.stringValue !== fixture.groupId) {
-        throw new Error(
-          "A QA fixture access record points to an unexpected Group.",
-        );
+    for (const route of inviteRoutes) {
+      if (route.fields?.groupId?.stringValue === fixture.groupId) {
+        inviteDocumentsToDelete.set(route.name, route);
       }
     }
-  }
+    for (const accessDocuments of [qaOneAccess, qaTwoAccess]) {
+      for (const document of accessDocuments) {
+        if (documentId(document) !== fixture.groupId) {
+          throw new Error("A QA fixture User belongs to a non-QA Group.");
+        }
+        if (document.fields?.groupId?.stringValue !== fixture.groupId) {
+          throw new Error(
+            "A QA fixture access record points to an unexpected Group.",
+          );
+        }
+        const fixtureId = document.fields?.fixtureId?.stringValue;
+        if (fixtureId && fixtureId !== manifest.fixtureId) {
+          throw new Error(
+            "A QA fixture access record fixture identity does not match.",
+          );
+        }
+      }
+    }
+    const foreignGroupIds = topLevelGroups
+      .map(documentId)
+      .filter((groupId) => groupId !== fixture.groupId);
+    const foreignMemberships = await Promise.all(
+      foreignGroupIds.flatMap((groupId) =>
+        users.map(({ userId }) =>
+          store.readDocument(
+            `v1Groups/${groupId}/members/${userId}`,
+            transaction,
+          ),
+        ),
+      ),
+    );
+    if (foreignMemberships.some(Boolean)) {
+      throw new Error("A QA fixture User belongs to a non-QA Group.");
+    }
 
-  const subscriptionsByInstallationId = new Map(
-    notificationSubscriptions.map((document) => [documentId(document), document]),
-  );
-  const notificationDocumentsToDelete = new Map();
-  for (const document of notificationSubscriptions) {
-    const userId = document.fields?.userId?.stringValue;
-    if (!expectedUserIds.has(userId)) continue;
-    if (document.fields?.installationId?.stringValue !== documentId(document)) {
-      throw new Error("A QA fixture notification installation is malformed.");
-    }
-    notificationDocumentsToDelete.set(document.name, document);
-  }
-  for (const [userId, installations] of [
-    [qaOneUserId, qaOneInstallations],
-    [qaTwoUserId, qaTwoInstallations],
-  ]) {
-    for (const document of installations) {
-      const installationId = documentId(document);
-      if (
-        document.fields?.installationId?.stringValue !== installationId ||
-        document.fields?.userId?.stringValue !== userId
-      ) {
-        throw new Error("A QA fixture notification index is malformed.");
-      }
-      const subscription = subscriptionsByInstallationId.get(installationId);
-      if (
-        subscription &&
-        subscription.fields?.userId?.stringValue !== userId
-      ) {
-        throw new Error(
-          "A QA fixture notification index points to another User.",
-        );
+    const subscriptionsByInstallationId = new Map(
+      notificationSubscriptions.map((document) => [documentId(document), document]),
+    );
+    const notificationDocumentsToDelete = new Map();
+    for (const document of notificationSubscriptions) {
+      const userId = document.fields?.userId?.stringValue;
+      if (!expectedUserIds.has(userId)) continue;
+      if (document.fields?.installationId?.stringValue !== documentId(document)) {
+        throw new Error("A QA fixture notification installation is malformed.");
       }
       notificationDocumentsToDelete.set(document.name, document);
-      if (subscription) {
-        notificationDocumentsToDelete.set(subscription.name, subscription);
+    }
+    for (const [userId, installations] of [
+      [qaOneUserId, qaOneInstallations],
+      [qaTwoUserId, qaTwoInstallations],
+    ]) {
+      for (const document of installations) {
+        const installationId = documentId(document);
+        if (
+          document.fields?.installationId?.stringValue !== installationId ||
+          document.fields?.userId?.stringValue !== userId
+        ) {
+          throw new Error("A QA fixture notification index is malformed.");
+        }
+        const subscription = subscriptionsByInstallationId.get(installationId);
+        notificationDocumentsToDelete.set(document.name, document);
+        if (
+          subscription &&
+          expectedUserIds.has(subscription.fields?.userId?.stringValue)
+        ) {
+          notificationDocumentsToDelete.set(subscription.name, subscription);
+        }
       }
     }
-  }
 
-  const existingByPath = new Map(
-    [
-      fixtureDocument,
-      group,
-      reservation,
-      ...members,
-      ...evidence,
-      ...tasks,
-      ...qaOneAccess,
-      ...qaTwoAccess,
-    ]
-      .filter(Boolean)
-      .map((document) => [
-        document.name.slice(document.name.indexOf("/documents/") + 11),
-        document,
-      ]),
-  );
-  const desired = new Map();
-  desired.set(fixturePath, marker);
-  desired.set(reservationPath, marker);
+    const existingByPath = new Map(
+      [
+        fixtureDocument,
+        group,
+        reservation,
+        ...members,
+        ...evidence,
+        ...tasks,
+        ...qaOneAccess,
+        ...qaTwoAccess,
+      ]
+        .filter(Boolean)
+        .map((document) => [
+          document.name.slice(document.name.indexOf("/documents/") + 11),
+          document,
+        ]),
+    );
+    const desired = new Map();
+    desired.set(fixturePath, marker);
+    desired.set(reservationPath, marker);
 
-  const currentRevision = Number(group?.fields?.stateRevision?.integerValue ?? 0);
-  if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
-    throw new Error("QA fixture Group has an invalid state revision.");
-  }
-  desired.set(groupPath, {
-    groupId: { stringValue: fixture.groupId },
-    name: { stringValue: fixture.groupName },
-    createdAt: { timestampValue: FIXED_CREATED_AT },
-    stateRevision: { integerValue: String(currentRevision) },
-    ...marker,
-  });
-  for (const user of users) {
-    desired.set(`${groupPath}/members/${user.userId}`, {
-      userId: { stringValue: user.userId },
-      username: { stringValue: user.username },
-      membershipId: { stringValue: user.membershipId },
-      role: { stringValue: user.role },
-      joinedAt: { timestampValue: FIXED_CREATED_AT },
-      fixtureId: { stringValue: manifest.fixtureId },
-    });
-    desired.set(`${groupPath}/membershipEvidence/${user.userId}`, {
-      userId: { stringValue: user.userId },
-      username: { stringValue: user.username },
-      fixtureId: { stringValue: manifest.fixtureId },
-    });
-    desired.set(`v1GroupAccess/${user.userId}/groups/${fixture.groupId}`, {
+    const currentRevision = Number(group?.fields?.stateRevision?.integerValue ?? 0);
+    if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
+      throw new Error("QA fixture Group has an invalid state revision.");
+    }
+    desired.set(groupPath, {
       groupId: { stringValue: fixture.groupId },
-      fixtureId: { stringValue: manifest.fixtureId },
+      name: { stringValue: fixture.groupName },
+      createdAt: { timestampValue: FIXED_CREATED_AT },
+      stateRevision: { integerValue: String(currentRevision) },
+      ...marker,
     });
-  }
-  for (const task of manifest.tasks) {
-    desired.set(
-      `${groupPath}/tasks/${task.taskId}`,
-      desiredTaskFields({
-        fixture,
-        now,
-        qaOneUserId,
-        qaTwoUserId,
-        task,
-      }),
-    );
-  }
+    for (const user of users) {
+      desired.set(`${groupPath}/members/${user.userId}`, {
+        userId: { stringValue: user.userId },
+        username: { stringValue: user.username },
+        membershipId: { stringValue: user.membershipId },
+        role: { stringValue: user.role },
+        joinedAt: { timestampValue: FIXED_CREATED_AT },
+        fixtureId: { stringValue: manifest.fixtureId },
+      });
+      desired.set(`${groupPath}/membershipEvidence/${user.userId}`, {
+        userId: { stringValue: user.userId },
+        username: { stringValue: user.username },
+        fixtureId: { stringValue: manifest.fixtureId },
+      });
+      desired.set(`v1GroupAccess/${user.userId}/groups/${fixture.groupId}`, {
+        groupId: { stringValue: fixture.groupId },
+        fixtureId: { stringValue: manifest.fixtureId },
+      });
+    }
+    for (const task of manifest.tasks) {
+      desired.set(
+        `${groupPath}/tasks/${task.taskId}`,
+        desiredTaskFields({
+          anchor: resetAnchor,
+          fixture,
+          qaOneUserId,
+          qaTwoUserId,
+          task,
+        }),
+      );
+    }
 
-  const extraTaskDocuments = tasks.filter(
-    (document) =>
-      !desired.has(
-        document.name.slice(document.name.indexOf("/documents/") + 11),
-      ),
-  );
-  const hasChanges =
-    extraTaskDocuments.length > 0 ||
-    bans.length > 0 ||
-    notificationDocumentsToDelete.size > 0 ||
-    [...desired].some(
-      ([path, fields]) => !fieldsEqual(existingByPath.get(path)?.fields, fields),
+    const extraTaskDocuments = tasks.filter(
+      (document) =>
+        !desired.has(
+          document.name.slice(document.name.indexOf("/documents/") + 11),
+        ),
     );
-  if (!hasChanges) {
+    const hasChanges =
+      extraTaskDocuments.length > 0 ||
+      bans.length > 0 ||
+      inviteDocumentsToDelete.size > 0 ||
+      notificationDocumentsToDelete.size > 0 ||
+      [...desired].some(
+        ([path, fields]) => !fieldsEqual(existingByPath.get(path)?.fields, fields),
+      );
+    if (!hasChanges) {
+      await store.commit([], transaction);
+      transactionCommitted = true;
+      return {
+        changed: false,
+        environment,
+        fixtureId: manifest.fixtureId,
+        groupId: fixture.groupId,
+        taskCount: manifest.tasks.length,
+        writes: 0,
+      };
+    }
+    if (group) {
+      desired.get(groupPath).stateRevision = {
+        integerValue: String(currentRevision + 1),
+      };
+    }
+
+    const writes = [...desired].flatMap(([path, fields]) => {
+      const existing = existingByPath.get(path);
+      return fieldsEqual(existing?.fields, fields)
+        ? []
+        : [updateWrite(store, path, fields, existing)];
+    });
+    for (const document of [
+      ...extraTaskDocuments,
+      ...bans,
+      ...inviteDocumentsToDelete.values(),
+      ...notificationDocumentsToDelete.values(),
+    ]) {
+      writes.push({
+        delete: document.name,
+        currentDocument: { updateTime: document.updateTime },
+      });
+    }
+    if (writes.length > MAX_FIXTURE_WRITES) {
+      throw new Error("QA fixture write plan exceeds the narrow safety limit.");
+    }
+    await store.commit(writes, transaction);
+    transactionCommitted = true;
     return {
-      changed: false,
+      changed: true,
       environment,
       fixtureId: manifest.fixtureId,
       groupId: fixture.groupId,
       taskCount: manifest.tasks.length,
-      writes: 0,
+      writes: writes.length,
     };
+  } catch (error) {
+    if (!transactionCommitted) {
+      await store.rollback(transaction).catch(() => {});
+    }
+    throw error;
   }
-  if (group) {
-    desired.get(groupPath).stateRevision = {
-      integerValue: String(currentRevision + 1),
-    };
-  }
-
-  const writes = [...desired].flatMap(([path, fields]) => {
-    const existing = existingByPath.get(path);
-    return fieldsEqual(existing?.fields, fields)
-      ? []
-      : [updateWrite(store, path, fields, existing)];
-  });
-  for (const document of [
-    ...extraTaskDocuments,
-    ...bans,
-    ...notificationDocumentsToDelete.values(),
-  ]) {
-    writes.push({
-      delete: document.name,
-      currentDocument: { updateTime: document.updateTime },
-    });
-  }
-  if (writes.length > MAX_FIXTURE_WRITES) {
-    throw new Error("QA fixture write plan exceeds the narrow safety limit.");
-  }
-  await store.commit(writes);
-  return {
-    changed: true,
-    environment,
-    fixtureId: manifest.fixtureId,
-    groupId: fixture.groupId,
-    taskCount: manifest.tasks.length,
-    writes: writes.length,
-  };
 }
 
 const CLI_USAGE = `Usage:
   npm run qa:fixture:reset -- \\
     --environment preview \\
-    --confirm openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1
+    --confirm openjob-two-user-qa-v1:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa
 
 Required environment bindings:
   FIREBASE_PROJECT_ID

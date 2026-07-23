@@ -27,6 +27,9 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
   let preconditionFailureCount = 0;
   let maxCommitWrites = Number.POSITIVE_INFINITY;
   let pausedDocumentRead = null;
+  let transactionSequence = 0;
+  let mutateBeforeTransactionCommit = null;
+  const transactions = new Map();
 
   function resolveCommitWaiters() {
     if (!commitBarrier) return;
@@ -61,13 +64,74 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
     return null;
   }
 
+  function cloneDocuments(source) {
+    return new Map(
+      [...source].map(([name, document]) => [
+        name,
+        structuredClone(document),
+      ]),
+    );
+  }
+
+  function directCollectionDocuments(source, path) {
+    const prefix = `${database}/documents/${path}/`;
+    return [...source.values()]
+      .filter(
+        ({ name }) =>
+          name.startsWith(prefix) && !name.slice(prefix.length).includes("/"),
+      )
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  function fingerprint(value) {
+    return JSON.stringify(value ?? null);
+  }
+
+  function transactionHasChanged(transaction) {
+    for (const name of transaction.documentReads) {
+      if (
+        fingerprint(documents.get(name)) !==
+        fingerprint(transaction.snapshot.get(name))
+      ) {
+        return true;
+      }
+    }
+    for (const path of transaction.collectionReads) {
+      if (
+        fingerprint(directCollectionDocuments(documents, path)) !==
+        fingerprint(directCollectionDocuments(transaction.snapshot, path))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function applyCommit(body) {
     commitAttemptCount += 1;
-    if (body.writes.length > maxCommitWrites) {
+    const writes = body.writes ?? [];
+    const transaction = body.transaction
+      ? transactions.get(body.transaction)
+      : null;
+    if (body.transaction && !transaction) {
+      return error(400, "INVALID_ARGUMENT", "Unknown transaction.");
+    }
+    if (transaction) {
+      if (mutateBeforeTransactionCommit) {
+        const mutate = mutateBeforeTransactionCommit;
+        mutateBeforeTransactionCommit = null;
+        mutate();
+      }
+      transactions.delete(body.transaction);
+      if (transactionHasChanged(transaction)) {
+        return error(409, "ABORTED", "Transaction was aborted.");
+      }
+    }
+    if (writes.length > maxCommitWrites) {
       return error(400, "INVALID_ARGUMENT", "Commit request is too large.");
     }
     const snapshot = new Map(documents);
-    for (const write of body.writes) {
+    for (const write of writes) {
       const name = write.update?.name ?? write.delete ?? write.verify;
       const failure = preconditionError(write, snapshot.get(name));
       if (failure) {
@@ -76,7 +140,7 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       }
     }
 
-    for (const write of body.writes) {
+    for (const write of writes) {
       if (write.delete) {
         documents.delete(write.delete);
         snapshot.delete(write.delete);
@@ -105,14 +169,8 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
     return Response.json({ commitTime: "2026-07-15T12:00:00.999999Z" });
   }
 
-  function listDocuments(path, url) {
-    const prefix = `${database}/documents/${path}/`;
-    const matching = [...documents.values()]
-      .filter(
-        ({ name }) =>
-          name.startsWith(prefix) && !name.slice(prefix.length).includes("/"),
-      )
-      .sort((left, right) => left.name.localeCompare(right.name));
+  function listDocuments(path, url, source = documents) {
+    const matching = directCollectionDocuments(source, path);
     const pageSize = Number(url.searchParams.get("pageSize"));
     const token = url.searchParams.get("pageToken");
     let start = 0;
@@ -136,6 +194,17 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
     },
     preconditionFailures() {
       return preconditionFailureCount;
+    },
+    mutateBeforeNextTransactionCommit(mutate) {
+      if (
+        typeof mutate !== "function" ||
+        mutateBeforeTransactionCommit
+      ) {
+        throw new TypeError(
+          "A transaction mutation hook requires one unused callback.",
+        );
+      }
+      mutateBeforeTransactionCommit = mutate;
     },
     pauseNextDocumentRead(path) {
       if (typeof path !== "string" || path.length === 0 || pausedDocumentRead) {
@@ -205,6 +274,23 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
         throttleNextRequest = false;
         return error(429, "RESOURCE_EXHAUSTED", "Firestore rate limited.");
       }
+      if (url.pathname.endsWith("/documents:beginTransaction")) {
+        transactionSequence += 1;
+        const transaction = Buffer.from(
+          `fake-transaction-${transactionSequence}`,
+        ).toString("base64");
+        transactions.set(transaction, {
+          collectionReads: new Set(),
+          documentReads: new Set(),
+          snapshot: cloneDocuments(documents),
+        });
+        return Response.json({ transaction });
+      }
+      if (url.pathname.endsWith("/documents:rollback")) {
+        const body = JSON.parse(init.body);
+        transactions.delete(body.transaction);
+        return Response.json({});
+      }
       if (url.pathname.endsWith("/documents:commit")) {
         const body = JSON.parse(init.body);
         if (commitBarrier) {
@@ -227,6 +313,13 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       const path = decodeURIComponent(
         url.pathname.slice(url.pathname.indexOf(marker) + marker.length),
       );
+      const transactionToken = url.searchParams.get("transaction");
+      const transaction = transactionToken
+        ? transactions.get(transactionToken)
+        : null;
+      if (transactionToken && !transaction) {
+        return error(400, "INVALID_ARGUMENT", "Unknown transaction.");
+      }
       if (pausedDocumentRead?.path === path) {
         const paused = pausedDocumentRead;
         pausedDocumentRead = null;
@@ -241,10 +334,13 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
         return error(400, "INVALID_ARGUMENT", "Document ID is too long.");
       }
       if (url.searchParams.has("pageSize")) {
-        return listDocuments(path, url);
+        transaction?.collectionReads.add(path);
+        return listDocuments(path, url, transaction?.snapshot);
       }
 
-      const document = documents.get(`${database}/documents/${path}`);
+      const name = `${database}/documents/${path}`;
+      transaction?.documentReads.add(name);
+      const document = (transaction?.snapshot ?? documents).get(name);
       return document
         ? Response.json(document)
         : Response.json(

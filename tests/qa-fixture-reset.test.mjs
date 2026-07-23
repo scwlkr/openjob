@@ -12,10 +12,14 @@ import {
 } from "./support/fake-firestore.mjs";
 
 const NOW = "2026-07-23T12:00:00.000Z";
+const FIXTURE_ID = "openjob-two-user-qa-v1";
+const GROUP_ID = "grp_9f5d28b6c10e4a7db3f924681c7e50aa";
+const CONFIRMATION = `${FIXTURE_ID}:openjob-nonprod:${GROUP_ID}`;
 const QA_ONE_USER_ID = "user_qa_one_stable";
 const QA_TWO_USER_ID = "user_qa_two_stable";
 const DATABASE =
   "projects/openjob-nonprod/databases/(default)/documents";
+const GROUP_PATH = `${DATABASE}/v1Groups/${GROUP_ID}`;
 
 function document(path, fields) {
   return {
@@ -63,41 +67,43 @@ async function createFixtureHarness() {
   };
 }
 
-test("a clean QA fixture reset creates the canonical state and is idempotent", async () => {
-  const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
+function resetInput(store, overrides = {}) {
+  return {
+    confirmation: CONFIRMATION,
     environment: "preview",
     now: () => Date.parse(NOW),
     qaOneUserId: QA_ONE_USER_ID,
     qaTwoUserId: QA_TWO_USER_ID,
     store,
+    ...overrides,
   };
+}
+
+test("a clean QA fixture reset creates the canonical state and is idempotent", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
 
   const first = await resetQaFixture(input);
   assert.deepEqual(first, {
     changed: true,
     environment: "preview",
-    fixtureId: "openjob-two-user-qa-v1",
-    groupId: "grp_qa_two_user_preview_v1",
+    fixtureId: FIXTURE_ID,
+    groupId: GROUP_ID,
     taskCount: 7,
     writes: 16,
   });
 
-  const group = firestore.documents.get(
-    `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1`,
-  );
+  const group = firestore.documents.get(GROUP_PATH);
   assert.equal(group.fields.name.stringValue, "OpenJob QA Preview (Disposable)");
   assert.equal(
     group.fields.fixtureId.stringValue,
-    "openjob-two-user-qa-v1",
+    FIXTURE_ID,
   );
   assert.equal(group.fields.stateRevision.integerValue, "0");
 
   const members = [...firestore.documents.values()]
     .filter(({ name }) =>
-      name.includes("/v1Groups/grp_qa_two_user_preview_v1/members/"),
+      name.includes(`/v1Groups/${GROUP_ID}/members/`),
     )
     .map(({ fields }) => [
       fields.username.stringValue,
@@ -110,7 +116,7 @@ test("a clean QA fixture reset creates the canonical state and is idempotent", a
   ]);
 
   const tasks = [...firestore.documents.values()].filter(({ name }) =>
-    name.includes("/v1Groups/grp_qa_two_user_preview_v1/tasks/"),
+    name.includes(`/v1Groups/${GROUP_ID}/tasks/`),
   );
   assert.equal(tasks.length, 7);
   assert.deepEqual(
@@ -145,28 +151,20 @@ test("a clean QA fixture reset creates the canonical state and is idempotent", a
   assert.deepEqual(second, {
     changed: false,
     environment: "preview",
-    fixtureId: "openjob-two-user-qa-v1",
-    groupId: "grp_qa_two_user_preview_v1",
+    fixtureId: FIXTURE_ID,
+    groupId: GROUP_ID,
     taskCount: 7,
     writes: 0,
   });
-  assert.equal(firestore.commitAttempts(), commitsAfterFirstReset);
+  assert.equal(firestore.commitAttempts(), commitsAfterFirstReset + 1);
 });
 
 test("a dirty QA fixture reset restores roles, Tasks, and notification state narrowly", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
   await resetQaFixture(input);
 
-  const groupPath = `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1`;
+  const groupPath = GROUP_PATH;
   const group = structuredClone(firestore.documents.get(groupPath));
   group.fields.name = { stringValue: "Dirty QA Group" };
   group.updateTime = "2026-07-23T02:00:00.000001Z";
@@ -199,7 +197,7 @@ test("a dirty QA fixture reset restores roles, Tasks, and notification state nar
   firestore.documents.set(
     banPath,
     document(
-      `v1Groups/grp_qa_two_user_preview_v1/bans/${QA_TWO_USER_ID}`,
+      `v1Groups/${GROUP_ID}/bans/${QA_TWO_USER_ID}`,
       {
         userId: { stringValue: QA_TWO_USER_ID },
         username: { stringValue: "qa-two" },
@@ -278,24 +276,153 @@ test("a dirty QA fixture reset restores roles, Tasks, and notification state nar
   assert.equal(firestore.documents.has(qaSubscriptionPath), false);
   assert.equal(firestore.documents.has(qaIndexPath), false);
   assert.equal(firestore.documents.has(foreignSubscriptionPath), true);
+  assert.deepEqual(await resetQaFixture(input), {
+    changed: false,
+    environment: "preview",
+    fixtureId: FIXTURE_ID,
+    groupId: GROUP_ID,
+    taskCount: 7,
+    writes: 0,
+  });
+});
+
+test("a QA fixture reset invalidates only the fixture Invite Link graph", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  const routeId = "1234567890abcdef1234567890abcdef";
+  const invitePath = `${GROUP_PATH}/invite/current`;
+  const routePath = `${DATABASE}/v1InviteRoutes/${routeId}`;
+  const staleRoutePath =
+    `${DATABASE}/v1InviteRoutes/abcdef1234567890abcdef1234567890`;
+  const foreignRoutePath =
+    `${DATABASE}/v1InviteRoutes/fedcba0987654321fedcba0987654321`;
+  firestore.documents.set(
+    invitePath,
+    document(`v1Groups/${GROUP_ID}/invite/current`, {
+      baseIssuedAt: { timestampValue: NOW },
+      groupId: { stringValue: GROUP_ID },
+      joinWindow: { integerValue: "0" },
+      routeId: { stringValue: routeId },
+      secret: { stringValue: "never-log-this-secret" },
+      successfulJoins: { integerValue: "1" },
+    }),
+  );
+  for (const [path, routeGroupId] of [
+    [routePath, GROUP_ID],
+    [staleRoutePath, GROUP_ID],
+    [foreignRoutePath, "grp_foreign"],
+  ]) {
+    firestore.documents.set(
+      path,
+      document(
+        path.slice(`${DATABASE}/`.length),
+        { groupId: { stringValue: routeGroupId } },
+      ),
+    );
+  }
+
+  const result = await resetQaFixture(input);
+
+  assert.equal(result.changed, true);
+  assert.equal(firestore.documents.has(invitePath), false);
+  assert.equal(firestore.documents.has(routePath), false);
+  assert.equal(firestore.documents.has(staleRoutePath), false);
+  assert.equal(firestore.documents.has(foreignRoutePath), true);
+});
+
+test("a QA fixture reset preserves a colliding foreign Invite Link route", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  const routeId = "99999999999999999999999999999999";
+  const invitePath = `${GROUP_PATH}/invite/current`;
+  const foreignRoutePath = `${DATABASE}/v1InviteRoutes/${routeId}`;
+  firestore.documents.set(
+    invitePath,
+    document(`v1Groups/${GROUP_ID}/invite/current`, {
+      baseIssuedAt: { timestampValue: NOW },
+      groupId: { stringValue: GROUP_ID },
+      joinWindow: { integerValue: "0" },
+      routeId: { stringValue: routeId },
+      secret: { stringValue: "never-log-this-secret" },
+      successfulJoins: { integerValue: "0" },
+    }),
+  );
+  firestore.documents.set(
+    foreignRoutePath,
+    document(`v1InviteRoutes/${routeId}`, {
+      groupId: { stringValue: "grp_foreign" },
+    }),
+  );
+
+  const result = await resetQaFixture(input);
+
+  assert.equal(result.changed, true);
+  assert.equal(firestore.documents.has(invitePath), false);
+  assert.equal(firestore.documents.has(foreignRoutePath), true);
+});
+
+test("a QA fixture reset repairs one-sided notification indexes narrowly", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  const switchedInstallationId = "installation_switched_owner";
+  const switchedSubscriptionPath =
+    `${DATABASE}/v1NotificationSubscriptions/${switchedInstallationId}`;
+  const switchedIndexPath =
+    `${DATABASE}/v1NotificationSubscriptionUsers/${QA_ONE_USER_ID}` +
+    `/installations/${switchedInstallationId}`;
+  const foreignInstallationId = "installation_now_foreign";
+  const foreignSubscriptionPath =
+    `${DATABASE}/v1NotificationSubscriptions/${foreignInstallationId}`;
+  const staleQaIndexPath =
+    `${DATABASE}/v1NotificationSubscriptionUsers/${QA_ONE_USER_ID}` +
+    `/installations/${foreignInstallationId}`;
+  for (const [path, installationId, userId] of [
+    [switchedSubscriptionPath, switchedInstallationId, QA_TWO_USER_ID],
+    [foreignSubscriptionPath, foreignInstallationId, "user_foreign"],
+  ]) {
+    firestore.documents.set(
+      path,
+      document(path.slice(`${DATABASE}/`.length), {
+        installationId: { stringValue: installationId },
+        userId: { stringValue: userId },
+      }),
+    );
+  }
+  for (const [path, installationId] of [
+    [switchedIndexPath, switchedInstallationId],
+    [staleQaIndexPath, foreignInstallationId],
+  ]) {
+    firestore.documents.set(
+      path,
+      document(path.slice(`${DATABASE}/`.length), {
+        installationId: { stringValue: installationId },
+        userId: { stringValue: QA_ONE_USER_ID },
+      }),
+    );
+  }
+
+  const result = await resetQaFixture(input);
+
+  assert.equal(result.changed, true);
+  assert.equal(firestore.documents.has(switchedSubscriptionPath), false);
+  assert.equal(firestore.documents.has(switchedIndexPath), false);
+  assert.equal(firestore.documents.has(staleQaIndexPath), false);
+  assert.equal(firestore.documents.has(foreignSubscriptionPath), true);
 });
 
 test("a QA fixture reset fails closed when an expected membership belongs to another User", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
   await resetQaFixture(input);
 
   const memberPath =
-    `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1/members/` +
-    QA_ONE_USER_ID;
+    `${GROUP_PATH}/members/${QA_ONE_USER_ID}`;
   const member = structuredClone(firestore.documents.get(memberPath));
   member.fields.userId = { stringValue: "user_foreign" };
   member.updateTime = "2026-07-23T03:00:00.000001Z";
@@ -313,26 +440,41 @@ test("a QA fixture reset fails closed when an expected membership belongs to ano
   );
 });
 
-test("a partially missing QA fixture is restored without broad collection writes", async () => {
+test("a QA fixture reset fails closed on a foreign child fixture marker", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
   await resetQaFixture(input);
 
-  const groupPath = `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1`;
+  const memberPath = `${GROUP_PATH}/members/${QA_ONE_USER_ID}`;
+  const member = structuredClone(firestore.documents.get(memberPath));
+  member.fields.fixtureId = { stringValue: "foreign-fixture" };
+  member.updateTime = "2026-07-23T03:30:00.000001Z";
+  firestore.documents.set(memberPath, member);
+  const commitsBeforeBlockedReset = firestore.commitAttempts();
+
+  await assert.rejects(
+    resetQaFixture(input),
+    /membership fixture identity does not match/,
+  );
+  assert.equal(firestore.commitAttempts(), commitsBeforeBlockedReset);
+  assert.equal(
+    firestore.documents.get(memberPath).fields.fixtureId.stringValue,
+    "foreign-fixture",
+  );
+});
+
+test("a partially missing QA fixture is restored without broad collection writes", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  const groupPath = GROUP_PATH;
   const missingPaths = [
     groupPath,
     `${groupPath}/members/${QA_TWO_USER_ID}`,
     `${groupPath}/membershipEvidence/${QA_ONE_USER_ID}`,
     `${DATABASE}/v1GroupAccess/${QA_TWO_USER_ID}` +
-      "/groups/grp_qa_two_user_preview_v1",
+      `/groups/${GROUP_ID}`,
     `${groupPath}/tasks/task_qa_two_open_normal_today`,
   ];
   for (const path of missingPaths) firestore.documents.delete(path);
@@ -360,24 +502,48 @@ test("a partially missing QA fixture is restored without broad collection writes
     firestore.documents.get(unrelatedPath).fields.name.stringValue,
     "Unrelated Group",
   );
+  assert.deepEqual(await resetQaFixture(input), {
+    changed: false,
+    environment: "preview",
+    fixtureId: FIXTURE_ID,
+    groupId: GROUP_ID,
+    taskCount: 7,
+    writes: 0,
+  });
+});
+
+test("an exact reservation-only QA fixture state is recoverable", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const reservationPath = `${DATABASE}/v1GroupIds/${GROUP_ID}`;
+  firestore.documents.set(
+    reservationPath,
+    document(`v1GroupIds/${GROUP_ID}`, {
+      environment: { stringValue: "preview" },
+      firebaseProjectId: { stringValue: "openjob-nonprod" },
+      fixtureId: { stringValue: FIXTURE_ID },
+      groupId: { stringValue: GROUP_ID },
+      schemaVersion: { integerValue: "1" },
+    }),
+  );
+
+  const result = await resetQaFixture(resetInput(store));
+
+  assert.equal(result.changed, true);
+  assert.equal(firestore.documents.has(GROUP_PATH), true);
+  assert.equal(
+    firestore.documents.has(`${DATABASE}/v1QaFixtures/${FIXTURE_ID}`),
+    true,
+  );
 });
 
 test("a QA fixture reset fails closed when an access record points to another Group", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
   await resetQaFixture(input);
 
   const accessPath =
     `${DATABASE}/v1GroupAccess/${QA_TWO_USER_ID}` +
-    "/groups/grp_qa_two_user_preview_v1";
+    `/groups/${GROUP_ID}`;
   const access = structuredClone(firestore.documents.get(accessPath));
   access.fields.groupId = { stringValue: "grp_unexpected" };
   access.updateTime = "2026-07-23T04:00:00.000001Z";
@@ -389,6 +555,44 @@ test("a QA fixture reset fails closed when an access record points to another Gr
     /access record points to an unexpected Group/,
   );
   assert.equal(firestore.commitAttempts(), commitsBeforeBlockedReset);
+});
+
+test("a QA fixture reset detects foreign membership without an access index", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  const foreignGroupId = "grp_11111111111111111111111111111111";
+  const foreignGroupPath = `${DATABASE}/v1Groups/${foreignGroupId}`;
+  const foreignMemberPath =
+    `${foreignGroupPath}/members/${QA_ONE_USER_ID}`;
+  firestore.documents.set(
+    foreignGroupPath,
+    document(`v1Groups/${foreignGroupId}`, {
+      createdAt: { timestampValue: NOW },
+      groupId: { stringValue: foreignGroupId },
+      name: { stringValue: "Foreign Group" },
+      stateRevision: { integerValue: "0" },
+    }),
+  );
+  firestore.documents.set(
+    foreignMemberPath,
+    document(`v1Groups/${foreignGroupId}/members/${QA_ONE_USER_ID}`, {
+      joinedAt: { timestampValue: NOW },
+      membershipId: { stringValue: "foreign_membership" },
+      role: { stringValue: "member" },
+      userId: { stringValue: QA_ONE_USER_ID },
+      username: { stringValue: "qa-one" },
+    }),
+  );
+  const commitsBeforeBlockedReset = firestore.commitAttempts();
+
+  await assert.rejects(
+    resetQaFixture(input),
+    /belongs to a non-QA Group/,
+  );
+  assert.equal(firestore.commitAttempts(), commitsBeforeBlockedReset);
+  assert.equal(firestore.documents.has(foreignMemberPath), true);
 });
 
 test("the operator command accepts secrets only through named environment bindings", async () => {
@@ -412,8 +616,7 @@ test("the operator command accepts secrets only through named environment bindin
         "--environment",
         "preview",
         "--confirm",
-        "openjob-two-user-qa-v1:openjob-nonprod:" +
-          "grp_qa_two_user_preview_v1",
+        CONFIRMATION,
       ],
       env: {},
       stdout: { write() {} },
@@ -429,6 +632,47 @@ test("the repository exposes one canonical QA fixture reset command", async () =
   assert.equal(
     packageJson.scripts["qa:fixture:reset"],
     "node scripts/reset-qa-fixture.mjs",
+  );
+});
+
+test("the QA fixture keeps Group identity opaque and Unassigned Tasks open", async () => {
+  const fixture = JSON.parse(
+    await readFile(new URL("../config/qa-fixture.json", import.meta.url), "utf8"),
+  );
+  assert.match(
+    fixture.environments.preview.groupId,
+    /^grp_[a-f0-9]{32}$/,
+  );
+  for (const task of fixture.tasks) {
+    if (task.assignee === "unassigned") {
+      assert.equal(task.state, "open", task.taskId);
+    }
+  }
+});
+
+test("the QA fixture captures one Chicago calendar date for every Task", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  let nowCalls = 0;
+  const input = resetInput(store, {
+    now() {
+      nowCalls += 1;
+      return Date.parse(
+        nowCalls === 1
+          ? "2026-07-24T00:30:00.000Z"
+          : "2026-07-25T00:30:00.000Z",
+      );
+    },
+  });
+
+  await resetQaFixture(input);
+
+  assert.equal(nowCalls, 1);
+  const tasks = [...firestore.documents.values()].filter(({ name }) =>
+    name.startsWith(`${GROUP_PATH}/tasks/`),
+  );
+  assert.deepEqual(
+    new Set(tasks.map(({ fields }) => fields.dueDate?.stringValue ?? null)),
+    new Set([null, "2026-07-16", "2026-07-23", "2026-07-30"]),
   );
 });
 
@@ -449,23 +693,87 @@ test("the QA fixture runbook covers access, reset, recovery, rotation, and safe 
   assert.match(runbook, /npm run qa:fixture:reset/);
   assert.match(runbook, /#34.*#36.*#37/s);
   assert.match(runbook, /1Password/);
+  assert.match(runbook, /America\/Chicago/);
+  assert.match(runbook, /transaction/i);
   assert.match(runbook, /must remain open/i);
+});
+
+test("a concurrent fixture Task aborts a no-op reset", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+  const extraTaskPath = `${GROUP_PATH}/tasks/task_qa_concurrent`;
+  const template = firestore.documents.get(
+    `${GROUP_PATH}/tasks/task_qa_one_open_high_overdue`,
+  );
+  const commitsBeforeRace = firestore.commitAttempts();
+  firestore.mutateBeforeNextTransactionCommit(() => {
+    const task = structuredClone(template);
+    task.name = extraTaskPath;
+    task.fields.taskId = { stringValue: "task_qa_concurrent" };
+    task.updateTime = "2026-07-23T04:30:00.000001Z";
+    firestore.documents.set(extraTaskPath, task);
+  });
+
+  await assert.rejects(
+    resetQaFixture(input),
+    (error) => error?.code === "ABORTED",
+  );
+  assert.equal(firestore.commitAttempts(), commitsBeforeRace + 1);
+  assert.equal(firestore.documents.has(extraTaskPath), true);
+});
+
+test("a concurrent foreign membership aborts a dirty reset", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+  const group = structuredClone(firestore.documents.get(GROUP_PATH));
+  group.fields.name = { stringValue: "Dirty before race" };
+  group.updateTime = "2026-07-23T04:45:00.000001Z";
+  firestore.documents.set(GROUP_PATH, group);
+  const foreignGroupId = "grp_22222222222222222222222222222222";
+  const foreignGroupPath = `${DATABASE}/v1Groups/${foreignGroupId}`;
+  const foreignMemberPath =
+    `${foreignGroupPath}/members/${QA_ONE_USER_ID}`;
+  firestore.mutateBeforeNextTransactionCommit(() => {
+    firestore.documents.set(
+      foreignGroupPath,
+      document(`v1Groups/${foreignGroupId}`, {
+        createdAt: { timestampValue: NOW },
+        groupId: { stringValue: foreignGroupId },
+        name: { stringValue: "Concurrent foreign Group" },
+        stateRevision: { integerValue: "0" },
+      }),
+    );
+    firestore.documents.set(
+      foreignMemberPath,
+      document(`v1Groups/${foreignGroupId}/members/${QA_ONE_USER_ID}`, {
+        joinedAt: { timestampValue: NOW },
+        membershipId: { stringValue: "concurrent_foreign_membership" },
+        role: { stringValue: "member" },
+        userId: { stringValue: QA_ONE_USER_ID },
+        username: { stringValue: "qa-one" },
+      }),
+    );
+  });
+
+  await assert.rejects(
+    resetQaFixture(input),
+    (error) => error?.code === "ABORTED",
+  );
+  assert.equal(
+    firestore.documents.get(GROUP_PATH).fields.name.stringValue,
+    "Dirty before race",
+  );
+  assert.equal(firestore.documents.has(foreignMemberPath), true);
 });
 
 test("the QA fixture reset refuses an unexpectedly broad write plan", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
   await resetQaFixture(input);
 
-  const groupPath = `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1`;
+  const groupPath = GROUP_PATH;
   const template = firestore.documents.get(
     `${groupPath}/tasks/task_qa_one_open_high_overdue`,
   );
@@ -489,15 +797,7 @@ test("the QA fixture reset refuses an unexpectedly broad write plan", async () =
 
 test("wrong environment, target, or fixture identity fails closed", async () => {
   const { firestore, store } = await createFixtureHarness();
-  const input = {
-    confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
-    environment: "preview",
-    now: () => Date.parse(NOW),
-    qaOneUserId: QA_ONE_USER_ID,
-    qaTwoUserId: QA_TWO_USER_ID,
-    store,
-  };
+  const input = resetInput(store);
 
   await assert.rejects(
     resetQaFixture({ ...input, environment: "production" }),
@@ -514,10 +814,17 @@ test("wrong environment, target, or fixture identity fails closed", async () => 
     }),
     /Firebase project does not match/,
   );
+  await assert.rejects(
+    resetQaFixture({
+      ...input,
+      qaOneUserId: "user_wrong",
+    }),
+    /does not resolve to the expected stable User ID/,
+  );
   assert.equal(firestore.commitAttempts(), 0);
 
   await resetQaFixture(input);
-  const groupPath = `${DATABASE}/v1Groups/grp_qa_two_user_preview_v1`;
+  const groupPath = GROUP_PATH;
   const group = structuredClone(firestore.documents.get(groupPath));
   group.fields.fixtureId = { stringValue: "another-fixture" };
   group.updateTime = "2026-07-23T06:00:00.000001Z";

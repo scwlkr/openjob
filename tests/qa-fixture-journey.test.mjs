@@ -22,7 +22,7 @@ const NOW = "2026-07-23T12:00:00.000Z";
 const PROJECT_ID = "openjob-nonprod";
 const DATABASE =
   `projects/${PROJECT_ID}/databases/(default)/documents`;
-const GROUP_ID = "grp_qa_two_user_preview_v1";
+const GROUP_ID = "grp_9f5d28b6c10e4a7db3f924681c7e50aa";
 const QA_USERS = {
   qaOne: {
     firebaseUid: "firebase_qa_one",
@@ -94,7 +94,7 @@ test("ordinary QA Users share the reset fixture and observe API changes in both 
   await seedQaIdentities(firestore);
   await resetQaFixture({
     confirmation:
-      "openjob-two-user-qa-v1:openjob-nonprod:grp_qa_two_user_preview_v1",
+      `openjob-two-user-qa-v1:openjob-nonprod:${GROUP_ID}`,
     environment: "preview",
     now: () => Date.parse(NOW),
     qaOneUserId: QA_USERS.qaOne.userId,
