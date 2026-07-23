@@ -104,7 +104,7 @@ test("secret scan inspects ignored native projects and artifact directories", as
       join(root, ".gitignore"),
       ["/native/android/", "/native/ios/", "/native/.artifacts/"].join("\n"),
     );
-    for (const artifact of [...artifacts, "native/android/app/debug.keystore"]) {
+    for (const artifact of artifacts) {
       await mkdir(join(root, artifact, ".."), { recursive: true });
       await writeFile(join(root, artifact), Buffer.from([0, 1, 2, 3]));
     }
@@ -122,7 +122,67 @@ test("secret scan inspects ignored native projects and artifact directories", as
     for (const artifact of artifacts) {
       assert.match(result.stderr, new RegExp(artifact.replaceAll(".", "\\.")));
     }
-    assert.doesNotMatch(result.stderr, /debug\.keystore/u);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("secret scan rejects a modified generated Android debug keystore", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openjob-secret-scan-"));
+  const debugKeystore = "native/android/app/debug.keystore";
+
+  try {
+    await mkdir(join(root, "scripts"), { recursive: true });
+    await mkdir(join(root, debugKeystore, ".."), { recursive: true });
+    await writeFile(
+      join(root, "scripts", "check-v1-secrets.mjs"),
+      await readFile(scannerUrl),
+    );
+    await writeFile(join(root, ".gitignore"), "/native/android/\n");
+    await writeFile(join(root, debugKeystore), Buffer.from([0, 1, 2, 3]));
+
+    git(root, ["init", "-b", "main"]);
+    git(root, ["add", ".gitignore", "scripts/check-v1-secrets.mjs"]);
+
+    const result = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "check-v1-secrets.mjs")],
+      { cwd: root, encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stderr, /native\/android\/app\/debug\.keystore/u);
+    assert.match(result.stderr, /private key or signing store/u);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("secret scan inspects text files larger than 5 MiB", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openjob-secret-scan-"));
+  const expoToken = ["expo", "_", "a".repeat(40)].join("");
+
+  try {
+    await mkdir(join(root, "scripts"), { recursive: true });
+    await writeFile(
+      join(root, "scripts", "check-v1-secrets.mjs"),
+      await readFile(scannerUrl),
+    );
+    git(root, ["init", "-b", "main"]);
+    git(root, ["add", "scripts/check-v1-secrets.mjs"]);
+    await writeFile(
+      join(root, "large-runtime.log"),
+      `${"x".repeat(5 * 1024 * 1024)}\n${expoToken}\n`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "check-v1-secrets.mjs")],
+      { cwd: root, encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stderr, /large-runtime\.log: Expo access token/u);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
