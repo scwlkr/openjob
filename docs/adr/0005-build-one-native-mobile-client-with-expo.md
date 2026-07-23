@@ -1,0 +1,3 @@
+# Build one native mobile client with Expo
+
+OpenJob will add a native mobile client alongside its existing browser and CLI clients, extending the shared-API principle from ADR 0001 without replacing the PWA. The mobile client will use React Native and Expo to render native iOS and Android interfaces from one codebase while continuing to use the hosted `/api/v1` service and the same domain behavior. This rejects both shipping the PWA inside a native wrapper and maintaining separate SwiftUI and Jetpack Compose applications, trading some platform-specific control for one sustainable cross-platform mobile product.
