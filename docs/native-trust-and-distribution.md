@@ -84,6 +84,28 @@ and
 `389d081a02196e4f40996b1d5f7713387d0910a2a98c3bc4a31e3e8a9a3e0e11`,
 respectively; those non-secret values are the recovery comparison authority.
 
+Apple signing covers every build environment. Development and preview
+intentionally share the non-production Apple Distribution identity but use
+separate provisioning profiles bound to separate App IDs. Production uses an
+independent distribution identity:
+
+| Environment | Distribution | Certificate ID | Certificate SHA-256 | Profile ID / UUID | Bundle ID | Expires |
+| --- | --- | --- | --- | --- | --- | --- |
+| development | Ad Hoc internal | `4HJ8JRDS64` | `7F:48:FC:58:EA:2B:32:35:4C:7A:15:15:08:8B:22:2A:94:5A:C6:BA:BD:9F:C2:FF:34:BC:A5:A9:60:F9:CC:F3` | `H7H546ZJ9S` / `d5ff403d-fe4c-4b50-a926-2a936cde3c21` | `dev.openjob.app.dev` | `2027-07-23T13:35:07Z` |
+| preview | App Store | `4HJ8JRDS64` | `7F:48:FC:58:EA:2B:32:35:4C:7A:15:15:08:8B:22:2A:94:5A:C6:BA:BD:9F:C2:FF:34:BC:A5:A9:60:F9:CC:F3` | `22NL2LQWXC` / `f4101821-a937-44db-ade4-1c2ddc898e1e` | `dev.openjob.app.preview` | `2027-07-23T13:35:07Z` |
+| production | App Store | `STULDNXC38` | `EE:E5:BE:22:0B:03:61:05:3E:F6:7D:BF:56:CC:89:97:EC:8B:7B:A6:6A:5C:E7:78:A7:2A:EC:42:69:08:35:94` | `839CADMWQ4` / `87b91d6e-cfc7-4dea-a808-bfc7a67abc4e` | `dev.openjob.app` | `2027-07-23T15:28:11Z` |
+
+Review both certificate identities for rotation by `2027-06-23`. All three
+profiles and their matching certificates are attached to the same-named EAS
+build profile with `credentialsSource: remote`. Independent 1Password
+documents `OpenJob iOS Development Signing Recovery`,
+`OpenJob iOS Preview Signing Recovery`, and
+`OpenJob iOS Production Signing Recovery` were restored on `2026-07-23`.
+Each restored archive matched its uploaded bytes; its P12 private key and
+certificate derived the manifest's SHA-256 SPKI fingerprint; and its DER
+certificate, provisioning-profile certificate, UUID, Team ID, and bundle ID
+all matched the Apple provider records.
+
 App Store Connect has both store records and exposes TestFlight:
 
 | Environment | Listing name | App Store Connect ID | SKU | Bundle ID |
@@ -99,7 +121,8 @@ used to sign in. The approved one-time US$25 Play registration fee is paid; no
 other Play, Expo, Apple, or recurring expense is authorized. Google currently
 blocks app creation until its required identity, Android-device, and phone
 checks finish. After those checks, create preview and production records and
-expose Internal Testing for `dev.openjob.app.preview`.
+expose Internal Testing for `dev.openjob.app.preview` and
+`dev.openjob.app`.
 
 ## Ownership and least privilege
 
@@ -143,14 +166,23 @@ Owner recovery procedure:
    mode-`0600` temporary file. Derive its public key and compare it with the
    matching `publicKeySpkiSha256` value in the manifest before use. Delete the
    temporary file.
-5. For Android signing, recover through the `@openjob/openjob` EAS credential
+5. For Apple distribution signing, download the environment's remote build
+   credentials from EAS or restore its named 1Password document. Apple
+   Developer can re-download public certificate/profile material or issue
+   replacements, but it cannot recover the original private key. Extract only
+   into a mode-`0700` temporary directory with mode-`0600` files. Verify that
+   the P12 private key and certificate derive the manifest's
+   `publicKeySpkiSha256`, then verify the certificate fingerprint and the
+   profile's embedded certificate, UUID, Team ID, and bundle ID before use.
+   Delete the temporary directory.
+6. For Android signing, recover through the `@openjob/openjob` EAS credential
    surface or the environment's named 1Password document. Restore
    `credentials.json` and the keystore only into a mode-`0700` temporary
    directory with mode-`0600` files, validate the SHA-256 fingerprint with
    `keytool`, then delete the directory. Rotate only through the
    store-supported upload-key process if neither recovery source proves
    continuity.
-6. Run `npm run secret:check` before staging or sharing diagnostics.
+7. Run `npm run secret:check` before staging or sharing diagnostics.
 
 ## Handoff to #36 and #37
 

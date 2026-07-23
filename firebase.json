@@ -9,7 +9,7 @@
     "providers": {
       "googleSignIn": {
         "oAuthBrandDisplayName": "OpenJob",
-        "supportEmail": "shane.caleb.walker@gmail.com"
+        "supportEmail": "dev@wlkrlabs.com"
       }
     }
   }

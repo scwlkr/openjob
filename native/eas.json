@@ -10,6 +10,9 @@
       "environment": "development",
       "env": {
         "OPENJOB_NATIVE_ENV": "development"
+      },
+      "ios": {
+        "credentialsSource": "remote"
       }
     },
     "preview": {
@@ -21,6 +24,9 @@
       "environment": "preview",
       "env": {
         "OPENJOB_NATIVE_ENV": "preview"
+      },
+      "ios": {
+        "credentialsSource": "remote"
       }
     },
     "production": {
@@ -32,6 +38,9 @@
       "environment": "production",
       "env": {
         "OPENJOB_NATIVE_ENV": "production"
+      },
+      "ios": {
+        "credentialsSource": "remote"
       }
     }
   }
