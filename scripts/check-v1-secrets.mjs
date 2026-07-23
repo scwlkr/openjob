@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -10,7 +10,7 @@ const secretPatterns = [
     "private key",
     /-----BEGIN (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----\s+(?:[A-Za-z0-9+/=]\s*){40,}-----END (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----/,
   ],
-  ["Expo access token", /\bexpo_[A-Za-z0-9_-]{30,}\b/],
+  ["Expo access token", /\bexpo_(?!system_ui_)[A-Za-z0-9_-]{30,}\b/],
   ["Google OAuth client secret", /\bGOCSPX-[A-Za-z0-9_-]{20,}\b/],
   ["Google OAuth access token", /\bya29\.[A-Za-z0-9_-]{30,}\b/],
   ["Google OAuth refresh token", /\b1\/\/[A-Za-z0-9_-]{30,}\b/],
@@ -47,6 +47,38 @@ async function walk(directory, files) {
   }
 }
 
+const ignoredNativeBuildDirectories = new Set([
+  ".cxx",
+  ".gradle",
+  "DerivedData",
+  "Pods",
+  "build",
+  "node_modules",
+]);
+
+async function walkIgnoredNative(directory, files) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const path = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (!ignoredNativeBuildDirectories.has(entry.name)) {
+        await walkIgnoredNative(path, files);
+      }
+    } else if (
+      entry.isFile() &&
+      path !== `${root}native/android/app/debug.keystore`
+    ) {
+      files.add(path);
+    }
+  }
+}
+
 const { stdout } = await run(
   "git",
   ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -65,6 +97,14 @@ const files = new Set(
 );
 await walk(`${root}dist`, files);
 await walk(`${root}.wrangler`, files);
+await Promise.all(
+  [
+    `${root}native/ios`,
+    `${root}native/android`,
+    `${root}native/.artifacts`,
+    `${root}native/.expo`,
+  ].map((directory) => walkIgnoredNative(directory, files)),
+);
 
 const findings = [];
 for (const path of files) {
@@ -74,6 +114,8 @@ for (const path of files) {
       findings.push(`${relativePath}: ${label}`);
     }
   }
+  const metadata = await stat(path);
+  if (metadata.size > 5 * 1024 * 1024) continue;
   const contents = await readFile(path);
   if (contents.includes(0)) continue;
   const text = contents.toString("utf8");

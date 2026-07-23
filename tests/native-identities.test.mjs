@@ -502,7 +502,11 @@ test("Expo config resolves the public identity for each build environment", asyn
         "/eas/google-services.json",
       );
       assert.equal(Object.hasOwn(config, "runtimeVersion"), false);
-      assert.deepEqual(config.updates, { enabled: false });
+      assert.deepEqual(config.updates, {
+        checkAutomatically: "NEVER",
+        enabled: false,
+        useEmbeddedUpdate: true,
+      });
     }
   } finally {
     if (previousEnvironment === undefined) delete process.env.OPENJOB_NATIVE_ENV;

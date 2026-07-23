@@ -22,6 +22,7 @@ async function createReleaseFixture() {
   const commandLog = `${root}-commands.log`;
   await Promise.all([
     mkdir(join(root, "cli"), { recursive: true }),
+    mkdir(join(root, "native"), { recursive: true }),
     mkdir(join(root, "openapi"), { recursive: true }),
     mkdir(fakeBin, { recursive: true }),
   ]);
@@ -34,6 +35,21 @@ async function createReleaseFixture() {
       packages: { "": { name: "openjob", version: "0.1.1" } },
     }),
     writeJson(join(root, "cli", "package.json"), { name: "openjob", version: "0.1.1" }),
+    writeJson(join(root, "native", "package.json"), {
+      name: "@openjob/native",
+      version: "0.1.1",
+    }),
+    writeJson(join(root, "native", "package-lock.json"), {
+      name: "@openjob/native",
+      version: "0.1.1",
+      lockfileVersion: 3,
+      packages: {
+        "": {
+          name: "@openjob/native",
+          version: "0.1.1",
+        },
+      },
+    }),
     writeFile(join(root, "openapi", "openapi.yaml"), "openapi: 3.1.0\ninfo:\n  title: OpenJob\n  version: 0.1.1\n"),
     writeFile(join(root, "README.md"), "Install OpenJob v0.1.1 from releases/download/v0.1.1/openjob-0.1.1.tgz\n"),
     writeFile(join(root, "cli", "README.md"), "Install OpenJob v0.1.1 from releases/download/v0.1.1/openjob-0.1.1.tgz\n"),
@@ -129,11 +145,26 @@ test("release prepare synchronizes a minor version, promotes notes, verifies, an
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  const [rootPackage, lockfile, cliPackage, openapi, readme, cliReadme, changelog, commands] =
+  const [
+    rootPackage,
+    lockfile,
+    cliPackage,
+    nativePackage,
+    nativeLockfile,
+    openapi,
+    readme,
+    cliReadme,
+    changelog,
+    commands,
+  ] =
     await Promise.all([
       readFile(join(fixture.root, "package.json"), "utf8").then(JSON.parse),
       readFile(join(fixture.root, "package-lock.json"), "utf8").then(JSON.parse),
       readFile(join(fixture.root, "cli", "package.json"), "utf8").then(JSON.parse),
+      readFile(join(fixture.root, "native", "package.json"), "utf8").then(JSON.parse),
+      readFile(join(fixture.root, "native", "package-lock.json"), "utf8").then(
+        JSON.parse,
+      ),
       readFile(join(fixture.root, "openapi", "openapi.yaml"), "utf8"),
       readFile(join(fixture.root, "README.md"), "utf8"),
       readFile(join(fixture.root, "cli", "README.md"), "utf8"),
@@ -145,6 +176,9 @@ test("release prepare synchronizes a minor version, promotes notes, verifies, an
   assert.equal(lockfile.version, "0.2.0");
   assert.equal(lockfile.packages[""].version, "0.2.0");
   assert.equal(cliPackage.version, "0.2.0");
+  assert.equal(nativePackage.version, "0.2.0");
+  assert.equal(nativeLockfile.version, "0.2.0");
+  assert.equal(nativeLockfile.packages[""].version, "0.2.0");
   assert.match(openapi, /version: 0\.2\.0/);
   assert.match(readme, /v0\.2\.0.*releases\/download\/v0\.2\.0\/openjob-0\.2\.0\.tgz/);
   assert.match(cliReadme, /v0\.2\.0.*releases\/download\/v0\.2\.0\/openjob-0\.2\.0\.tgz/);

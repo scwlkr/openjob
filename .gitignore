@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/native/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -13,11 +14,16 @@
 # testing
 /coverage
 /output/
+/native/coverage/
+/native/.artifacts/
 
 # next.js
 /.next/
 /.vinext/
 /out/
+/native/.expo/
+/native/ios/
+/native/android/
 
 # misc
 .DS_Store

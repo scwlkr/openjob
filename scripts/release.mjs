@@ -133,11 +133,23 @@ async function prepare(requested) {
   if (!requested) throw new Error("Usage: npm run release:prepare -- <patch|minor|major|version>");
   assertReleaseBranch();
 
-  const [rootPackage, lockfile, cliPackage, openapi, readme, cliReadme, changelog] =
+  const [
+    rootPackage,
+    lockfile,
+    cliPackage,
+    nativePackage,
+    nativeLockfile,
+    openapi,
+    readme,
+    cliReadme,
+    changelog,
+  ] =
     await Promise.all([
       readJson("package.json"),
       readJson("package-lock.json"),
       readJson("cli/package.json"),
+      readJson("native/package.json"),
+      readJson("native/package-lock.json"),
       readFile(resolve(root, "openapi/openapi.yaml"), "utf8"),
       readFile(resolve(root, "README.md"), "utf8"),
       readFile(resolve(root, "cli/README.md"), "utf8"),
@@ -151,6 +163,9 @@ async function prepare(requested) {
   lockfile.version = targetVersion;
   lockfile.packages[""].version = targetVersion;
   cliPackage.version = targetVersion;
+  nativePackage.version = targetVersion;
+  nativeLockfile.version = targetVersion;
+  nativeLockfile.packages[""].version = targetVersion;
   const nextOpenapi = openapi.replace(
     new RegExp(`(\\n\\s*version:\\s*)${currentVersion.replaceAll(".", "\\.")}(\\s*\\n)`, "u"),
     `$1${targetVersion}$2`,
@@ -162,6 +177,8 @@ async function prepare(requested) {
     writeJson("package.json", rootPackage),
     writeJson("package-lock.json", lockfile),
     writeJson("cli/package.json", cliPackage),
+    writeJson("native/package.json", nativePackage),
+    writeJson("native/package-lock.json", nativeLockfile),
     writeFile(resolve(root, "openapi/openapi.yaml"), nextOpenapi),
     writeFile(resolve(root, "README.md"), replaceVersion(readme)),
     writeFile(resolve(root, "cli/README.md"), replaceVersion(cliReadme)),
@@ -183,16 +200,25 @@ function escapedVersion(version) {
 }
 
 async function synchronizedRelease() {
-  const [rootPackage, cliPackage, openapi, changelog] = await Promise.all([
-    readJson("package.json"),
-    readJson("cli/package.json"),
-    readFile(resolve(root, "openapi/openapi.yaml"), "utf8"),
-    readFile(resolve(root, "CHANGELOG.md"), "utf8"),
-  ]);
+  const [rootPackage, cliPackage, nativePackage, openapi, changelog] =
+    await Promise.all([
+      readJson("package.json"),
+      readJson("cli/package.json"),
+      readJson("native/package.json"),
+      readFile(resolve(root, "openapi/openapi.yaml"), "utf8"),
+      readFile(resolve(root, "CHANGELOG.md"), "utf8"),
+    ]);
   const version = rootPackage.version;
   const parsed = parseSemVer(version);
   if (!parsed) throw new Error(`Current version ${version} is not valid SemVer.`);
-  if (cliPackage.version !== version || !new RegExp(`\\n\\s*version:\\s*${escapedVersion(version)}\\s*\\n`, "u").test(openapi)) {
+  if (
+    cliPackage.version !== version ||
+    nativePackage.version !== version ||
+    !new RegExp(
+      `\\n\\s*version:\\s*${escapedVersion(version)}\\s*\\n`,
+      "u",
+    ).test(openapi)
+  ) {
     throw new Error("Release versions are not synchronized.");
   }
   const release = changelog.match(
