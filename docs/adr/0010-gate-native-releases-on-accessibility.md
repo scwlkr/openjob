@@ -1,0 +1,3 @@
+# Gate native releases on accessibility
+
+Accessibility is a release criterion for every native mobile slice rather than a remediation phase before public launch. Each slice must work end to end with VoiceOver and TalkBack, system text scaling, deliberate labels and focus order, sufficient contrast and touch targets, and the system Reduced Motion preference. Color, sound, and gestures supplement visible, labeled controls but are never the only way to understand state or perform an action. These requirements apply from the first private iOS and Android builds and are verified on physical devices before the slice is complete.
