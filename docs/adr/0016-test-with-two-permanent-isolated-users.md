@@ -1,0 +1,5 @@
+# Test with two permanent isolated Users
+
+OpenJob maintains two permanent ordinary Test Users, `@qa-one` and `@qa-two`, for repeatable real-world testing. They authenticate through the same supported Google and Apple paths, call the same APIs, and receive no privileged test bypass. Their memberships are limited to clearly identified, disposable QA Groups, and a deterministic reset restores known Tasks, roles, installation subscriptions, and notification state. Credentials and provider recovery material live in an approved secret store outside the repository and diagnostic systems, accessible to approved testing automation.
+
+The two Users exercise cross-User behavior across iOS, Android, the PWA, and the CLI, including assignment, completion, Push Notifications, refresh, offline reference, concurrent conflicts, and Group governance. Destructive or high-volume automation runs against the staging deployment; each release candidate also receives a controlled smoke test through its actual release environment. The accounts are never repurposed for real work, and a release is blocked if both cannot complete the required test journey.
