@@ -1,0 +1,3 @@
+# Refresh mobile with conditional Group versions
+
+The native mobile client keeps the visible Task List current by treating the existing atomically advanced Group state revision as an opaque HTTP validator. It performs conditional checks only while the selected Group is visible, checks immediately after foreground return, pull-to-refresh, Push Notification, and local mutation, and adaptively backs off while the revision remains unchanged; the service returns `304 Not Modified` without listing Tasks until the revision changes. This favors lightweight near-live freshness over permanent WebSocket infrastructure or direct mobile access to Firestore.
