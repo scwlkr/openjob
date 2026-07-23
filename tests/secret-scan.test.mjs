@@ -86,6 +86,48 @@ test("native credential artifacts are ignored before they can be staged", () => 
   }
 });
 
+test("secret scan inspects ignored native projects and artifact directories", async () => {
+  const root = await mkdtemp(join(tmpdir(), "openjob-secret-scan-"));
+  const artifacts = [
+    "native/android/app/upload.keystore",
+    "native/ios/OpenJob.mobileprovision",
+    "native/.artifacts/credentials.json",
+  ];
+
+  try {
+    await mkdir(join(root, "scripts"), { recursive: true });
+    await writeFile(
+      join(root, "scripts", "check-v1-secrets.mjs"),
+      await readFile(scannerUrl),
+    );
+    await writeFile(
+      join(root, ".gitignore"),
+      ["/native/android/", "/native/ios/", "/native/.artifacts/"].join("\n"),
+    );
+    for (const artifact of [...artifacts, "native/android/app/debug.keystore"]) {
+      await mkdir(join(root, artifact, ".."), { recursive: true });
+      await writeFile(join(root, artifact), Buffer.from([0, 1, 2, 3]));
+    }
+
+    git(root, ["init", "-b", "main"]);
+    git(root, ["add", ".gitignore", "scripts/check-v1-secrets.mjs"]);
+
+    const result = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "check-v1-secrets.mjs")],
+      { cwd: root, encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    for (const artifact of artifacts) {
+      assert.match(result.stderr, new RegExp(artifact.replaceAll(".", "\\.")));
+    }
+    assert.doesNotMatch(result.stderr, /debug\.keystore/u);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("secret scan rejects untracked provider secrets before staging", async () => {
   const root = await mkdtemp(join(tmpdir(), "openjob-secret-scan-"));
   const privateKeyHeader = ["-----BEGIN RSA", "PRIVATE KEY-----"].join(" ");

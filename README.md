@@ -14,6 +14,9 @@ npm run dev
 
 Open <http://localhost:3000>. Use `npm test` before committing larger changes.
 
+The coequal Expo iOS/Android shell and its simulator, build, OTA-disabled, and
+embedded-bundle commands are documented in [`native/README.md`](native/README.md).
+
 ## Installable CLI
 
 The real `openjob` executable lives under `cli/`; the no-network command in

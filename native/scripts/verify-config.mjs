@@ -1,0 +1,176 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const nativeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(nativeRoot, "..");
+const expo = join(nativeRoot, "node_modules", ".bin", "expo");
+const environments = ["development", "preview", "production"];
+const identities = JSON.parse(
+  await readFile(
+    join(repositoryRoot, "config", "native-identities.json"),
+    "utf8",
+  ),
+);
+
+function runExpo(args, { cwd = nativeRoot, environment = "production" } = {}) {
+  const result = spawnSync(expo, args, {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      CI: "1",
+      OPENJOB_NATIVE_ENV: environment,
+    },
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `expo ${args.join(" ")} failed:\n${result.stderr || result.stdout}`,
+    );
+  }
+  return result.stdout;
+}
+
+function assertPublicConfig(config, environment) {
+  assert.equal(config.extra.openjob.environment, environment);
+  assert.equal(config.extra.openjob.apiBasePath, "/api/v1");
+  assert.equal(config.orientation, "default");
+  assert.equal(config.userInterfaceStyle, "automatic");
+  assert.equal(config.ios.supportsTablet, true);
+  assert.deepEqual(config.updates, {
+    checkAutomatically: "NEVER",
+    enabled: false,
+    useEmbeddedUpdate: true,
+  });
+
+  const serialized = JSON.stringify(config);
+  assert.doesNotMatch(serialized, /codeSigning|requestHeaders|runtimeVersion/iu);
+  assert.doesNotMatch(serialized, /https:\/\/u\.expo\.dev/iu);
+  assert.equal(Object.hasOwn(config.updates, "url"), false);
+  assert.equal(Object.hasOwn(config, "runtimeVersion"), false);
+}
+
+async function copyProject(targetRoot) {
+  const targetNative = join(targetRoot, "native");
+  await Promise.all([
+    mkdir(join(targetRoot, "config"), { recursive: true }),
+    mkdir(join(targetRoot, "public"), { recursive: true }),
+    mkdir(targetNative, { recursive: true }),
+  ]);
+  await Promise.all([
+    cp(join(repositoryRoot, "package.json"), join(targetRoot, "package.json")),
+    cp(
+      join(repositoryRoot, "config", "native-identities.json"),
+      join(targetRoot, "config", "native-identities.json"),
+    ),
+    cp(
+      join(repositoryRoot, "public", "icon-512.png"),
+      join(targetRoot, "public", "icon-512.png"),
+    ),
+    cp(
+      join(repositoryRoot, "public", "icon-maskable-512.png"),
+      join(targetRoot, "public", "icon-maskable-512.png"),
+    ),
+    cp(join(nativeRoot, "app.config.mjs"), join(targetNative, "app.config.mjs")),
+    cp(join(nativeRoot, "package.json"), join(targetNative, "package.json")),
+  ]);
+  await symlink(join(nativeRoot, "node_modules"), join(targetNative, "node_modules"));
+  return targetNative;
+}
+
+async function readTextTree(directory) {
+  const parts = [];
+  async function visit(path) {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) await visit(child);
+      else if (
+        entry.isFile() &&
+        /\.(?:gradle|json|pbxproj|plist|properties|strings|xml)$/iu.test(entry.name)
+      ) {
+        parts.push(await readFile(child, "utf8"));
+      }
+    }
+  }
+  await visit(directory);
+  return parts.join("\n");
+}
+
+for (const environment of environments) {
+  const publicConfig = JSON.parse(
+    runExpo(["config", "--type", "public", "--json"], { environment }),
+  );
+  assertPublicConfig(publicConfig, environment);
+}
+
+for (const environment of environments) {
+  const generatedRoot = await mkdtemp(
+    join(tmpdir(), `openjob-native-config-${environment}-`),
+  );
+  try {
+    const generatedNative = await copyProject(generatedRoot);
+    runExpo(["prebuild", "--clean", "--no-install", "--platform", "all"], {
+      cwd: generatedNative,
+      environment,
+    });
+    const [ios, android] = await Promise.all([
+      readTextTree(join(generatedNative, "ios")),
+      readTextTree(join(generatedNative, "android")),
+    ]);
+
+    assert.ok(
+      ios.includes(identities.environments[environment].ios.bundleId),
+      `${environment} iOS identity was not generated`,
+    );
+    assert.ok(
+      android.includes(
+        identities.environments[environment].android.applicationId,
+      ),
+      `${environment} Android identity was not generated`,
+    );
+    assert.match(ios, /EXUpdatesEnabled[\s\S]{0,120}<false\s*\/>/u);
+    assert.match(
+      ios,
+      /EXUpdatesCheckOnLaunch[\s\S]{0,120}<string>NEVER<\/string>/u,
+    );
+    assert.doesNotMatch(
+      ios,
+      /EXUpdatesUseEmbeddedUpdate[\s\S]{0,120}<false\s*\/>/u,
+    );
+    assert.match(android, /expo\.modules\.updates\.ENABLED[\s\S]{0,160}false/u);
+    assert.match(
+      android,
+      /expo\.modules\.updates\.EXPO_UPDATES_CHECK_ON_LAUNCH[\s\S]{0,160}NEVER/u,
+    );
+    assert.doesNotMatch(
+      android,
+      /expo\.modules\.updates\.USE_EMBEDDED_UPDATE[\s\S]{0,160}false/u,
+    );
+
+    const generated = `${ios}\n${android}`;
+    assert.doesNotMatch(
+      generated,
+      /EXUpdatesURL|UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY|CODE_SIGNING|https:\/\/u\.expo\.dev/iu,
+    );
+    assert.doesNotMatch(generated, /EXUpdatesRuntimeVersion/iu);
+  } finally {
+    await rm(generatedRoot, { force: true, recursive: true });
+  }
+}
+
+process.stdout.write(
+  "Native config verification passed: 3 isolated generated iOS/Android environments; OTA disabled with embedded bundles required.\n",
+);
