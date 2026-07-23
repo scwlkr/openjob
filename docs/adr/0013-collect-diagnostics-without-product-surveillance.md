@@ -1,3 +1,5 @@
 # Collect diagnostics without product surveillance
 
 OpenJob collects narrowly scoped technical diagnostics to improve reliability, with a **Share diagnostics** setting enabled by default. Allowed data includes crashes, hangs, failed operation names, timing, app and runtime versions, operating-system version, and coarse device class. Diagnostic payloads are scrubbed before transmission and never contain Task text, Group names, Usernames, email addresses, authentication material, screenshots, or a permanent device identity. OpenJob does not add behavioral product analytics, advertising identifiers, cross-app tracking, or session replay. Collection and every diagnostic processor are disclosed accurately in the privacy policy and store privacy declarations.
+
+Sentry is the only app-level diagnostic processor. Its Session Replay, user identity, content-bearing automatic breadcrumbs, and broad automatic tracing are disabled; OpenJob sends only allowlisted error context and safe measurements. Apple and Google Play native quality reports remain independent safety signals, but OpenJob does not also embed Crashlytics, PostHog, or another overlapping diagnostic SDK.
