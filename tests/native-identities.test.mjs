@@ -15,15 +15,37 @@ async function readIdentities() {
 }
 
 test("public Google support metadata never exposes the owner login", async () => {
-  const [identities, firebase] = await Promise.all([
+  const [identities, firebase, documentation] = await Promise.all([
     readIdentities(),
     readFile(firebaseUrl, "utf8").then(JSON.parse),
+    readFile(documentationUrl, "utf8"),
   ]);
+  const supportGroup = "openjob-support@googlegroups.com";
 
-  assert.equal(
-    firebase.auth.providers.googleSignIn.supportEmail,
+  assert.deepEqual(identities.googleAuth, {
+    appName: "OpenJob",
+    developerContactEmail: supportGroup,
+    projects: {
+      "openjob-dev": {
+        verifiedAt: "2026-07-24",
+      },
+      "openjob-nonprod": {
+        verifiedAt: "2026-07-24",
+      },
+    },
+    supportEmail: supportGroup,
+  });
+  assert.deepEqual(firebase.auth.providers.googleSignIn, {
+    oAuthBrandDisplayName: identities.googleAuth.appName,
+    supportEmail: identities.googleAuth.supportEmail,
+  });
+  assert.notEqual(
+    identities.googleAuth.supportEmail,
     identities.googlePlay.supportEmail,
   );
+  assert.match(documentation, /openjob-support@googlegroups\.com/u);
+  assert.match(documentation, /history privacy scrub/iu);
+  assert.doesNotMatch(documentation, /OAuth support address.*eligible/isu);
   assert.doesNotMatch(JSON.stringify(firebase), /@gmail\.com/iu);
 });
 

@@ -122,6 +122,15 @@ App Store Connect has both store records and exposes TestFlight:
 | preview | `OpenJob Preview` | `6793947679` | `openjob-preview` | `dev.openjob.app.preview` |
 | production | `OpenJob: Shared Tasks` | `6793948276` | `openjob` | `dev.openjob.app` |
 
+Google Auth branding was verified on `2026-07-24` for both
+`openjob-nonprod` and `openjob-dev`. Both projects use the app name `OpenJob`
+and the public group `openjob-support@googlegroups.com` for the user support
+email and developer contact. This Google Auth contact is distinct from the
+Google Play listing support address. The group is owner-controlled and
+invite-only, while public discovery and posting are enabled so users can reach
+support; conversations and the member list remain restricted to members. It has
+the read-only Browser role on both projects.
+
 Google Play developer account `6994653839033844694` is a Personal account
 owned by the OpenJob owner. Its public developer name is `WLKR LABS`, its
 verified public support email is `dev@wlkrlabs.com`, and its website is
@@ -216,7 +225,7 @@ scheme exported by `native/app.config.mjs`.
 Google Play's account checks are complete. The preview and production records
 exist, and both Internal Testing pages expose `Create new release`.
 
-Issue #34 remains open until the configured public Google OAuth support address
-is eligible as a Google Account or Group and the owner explicitly approves the
-coordinated `main` history privacy scrub required to remove the historical
-private account-owner login. No further purchase is required or authorized.
+The Google OAuth support gate is complete. Issue #34 remains open until the
+owner explicitly approves the coordinated all-ref history privacy scrub required
+to remove the historical private account-owner login from both published
+branches and the release tags. No further purchase is required or authorized.

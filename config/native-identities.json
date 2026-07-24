@@ -195,6 +195,19 @@
       }
     }
   },
+  "googleAuth": {
+    "appName": "OpenJob",
+    "developerContactEmail": "openjob-support@googlegroups.com",
+    "projects": {
+      "openjob-dev": {
+        "verifiedAt": "2026-07-24"
+      },
+      "openjob-nonprod": {
+        "verifiedAt": "2026-07-24"
+      }
+    },
+    "supportEmail": "openjob-support@googlegroups.com"
+  },
   "googlePlay": {
     "accountType": "personal",
     "appCreation": {
