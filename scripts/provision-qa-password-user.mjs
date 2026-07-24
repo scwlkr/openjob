@@ -216,17 +216,19 @@ async function adminLookup({
 }
 
 function exactAccount(record, email, firebaseUid) {
-  const hasProviderIdentity =
+  const hasUnexpectedProviderIdentity =
     record?.providerUserInfo !== undefined &&
     (
       !Array.isArray(record.providerUserInfo) ||
-      record.providerUserInfo.length > 0
+      record.providerUserInfo.some(
+        (provider) => provider?.providerId !== "password",
+      )
     );
   return Boolean(
     record &&
       record.disabled !== true &&
       record.emailVerified !== true &&
-      !hasProviderIdentity &&
+      !hasUnexpectedProviderIdentity &&
       record.localId === firebaseUid &&
       typeof record.email === "string" &&
       record.email.toLowerCase() === email,
