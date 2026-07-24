@@ -38,19 +38,9 @@ key stays in the document. A short-lived parent process captures
 `op document get` in memory, maps only `client_email` and `private_key` into
 the reset child's environment, and discards them when the child exits. If a
 tool requires a file, create one mode `0600` and remove it in a `finally`
-cleanup. Never use shell command substitution for the document. Provision QA
-Two only with the target-fixed operator command. On the first run, omit the
-optional User-ID assertion:
-
-```sh
-OPENJOB_QA_TWO_EMAIL='op://Personal/OpenJob QA Two Preview Password/username' \
-OPENJOB_QA_TWO_PASSWORD='op://Personal/OpenJob QA Two Preview Password/password' \
-OPENJOB_QA_TWO_FIREBASE_UID='op://Personal/OpenJob QA Two Preview Password/Firebase UID' \
-  op run -- npm run qa:user:provision
-```
-
-Store the returned `openJobUserId` in the item's `OpenJob User ID` field.
-Subsequent runs must bind that value too:
+cleanup. Never use shell command substitution for the document. The permanent
+OpenJob User ID must already exist in the QA Two vault item before the
+target-fixed provisioner runs:
 
 ```sh
 OPENJOB_QA_TWO_EMAIL='op://Personal/OpenJob QA Two Preview Password/username' \
@@ -60,11 +50,14 @@ OPENJOB_QA_TWO_USER_ID='op://Personal/OpenJob QA Two Preview Password/OpenJob Us
   op run -- npm run qa:user:provision
 ```
 
-The provisioner never calls public signup. It target-confirms the nonproduction
-project and isolated tenant, performs an admin-only exact UID/email lookup or
-creation, signs in with the tenant password, and then uses only ordinary
-`/api/v1/me` creation and Username routes. Any account, tenant, provider,
-Username, or stable-ID mismatch stops without rewriting identity ownership.
+The provisioner never calls public signup or `POST /api/v1/me`. It
+target-confirms the nonproduction project and isolated tenant, performs an
+admin-only exact UID/email lookup or creation, signs in with the tenant
+password, and then uses ordinary `/api/v1/me` verification and Username
+routes. Its output contains only safe status fields, never the stable User ID.
+Any account, tenant, provider, Username, or stable-ID mismatch stops without
+rewriting identity ownership. A missing OpenJob User requires a reviewed
+fixture migration; the product and provisioner cannot self-register QA Two.
 
 For device and PWA acceptance:
 

@@ -33,12 +33,10 @@ Required 1Password-backed environment bindings:
   OPENJOB_QA_TWO_EMAIL
   OPENJOB_QA_TWO_PASSWORD
   OPENJOB_QA_TWO_FIREBASE_UID
-
-Optional stable identity assertion:
   OPENJOB_QA_TWO_USER_ID
 
 The target is fixed to the canonical OpenJob Preview tenant. No credential
-values are printed.
+or stable identity values are printed.
 `;
 
 function safeError(message) {
@@ -123,11 +121,8 @@ function assertFirebaseUid(firebaseUid) {
 
 function assertExpectedOpenJobUserId(userId) {
   if (
-    userId !== undefined &&
-    (
-      typeof userId !== "string" ||
-      !/^user_[A-Za-z0-9_-]+$/u.test(userId)
-    )
+    typeof userId !== "string" ||
+    !/^user_[A-Za-z0-9_-]+$/u.test(userId)
   ) {
     throw safeError(
       "OPENJOB_QA_TWO_USER_ID must be an explicit stable OpenJob User ID.",
@@ -377,10 +372,7 @@ function readOpenJobUser(payload) {
 }
 
 function assertExpectedIdentity(user, expectedOpenJobUserId) {
-  if (
-    expectedOpenJobUserId !== undefined &&
-    user.userId !== expectedOpenJobUserId
-  ) {
+  if (user.userId !== expectedOpenJobUserId) {
     throw safeError("The OpenJob User identity does not match the expected User.");
   }
 }
@@ -399,7 +391,6 @@ async function onboardOpenJobUser({
     target,
   });
   let user;
-  let userCreated = false;
 
   if (initial.ok) {
     user = readOpenJobUser(initial.payload);
@@ -408,24 +399,9 @@ async function onboardOpenJobUser({
     if (errorCode !== "sign_in_method_unrecognized") {
       throw safeError("OpenJob Preview rejected the QA identity.");
     }
-    if (expectedOpenJobUserId !== undefined) {
-      throw safeError(
-        "The expected OpenJob User is not recognized by the QA identity.",
-      );
-    }
-    const created = await openJobRequest({
-      body: { confirmation: "create" },
-      fetchImplementation,
-      idToken,
-      method: "POST",
-      path: "/me",
-      target,
-    });
-    if (!created.ok) {
-      throw safeError("OpenJob Preview User creation failed.");
-    }
-    user = readOpenJobUser(created.payload);
-    userCreated = true;
+    throw safeError(
+      "The expected OpenJob User is not recognized by the QA identity.",
+    );
   }
 
   assertExpectedIdentity(user, expectedOpenJobUserId);
@@ -477,8 +453,6 @@ async function onboardOpenJobUser({
   assertExpectedIdentity(verifiedUser, expectedOpenJobUserId);
 
   return {
-    userCreated,
-    userId: verifiedUser.userId,
     usernameClaimed,
   };
 }
@@ -576,11 +550,9 @@ export async function provisionQaPasswordUser({
   return {
     changed:
       firebaseAccount.created ||
-      openJob.userCreated ||
       openJob.usernameClaimed,
     firebaseAccount: firebaseAccount.created ? "created" : "existing",
-    openJobUser: openJob.userCreated ? "created" : "existing",
-    openJobUserId: openJob.userId,
+    openJobUser: "existing",
     username: openJob.usernameClaimed ? "claimed" : "verified",
     verified: true,
   };
@@ -603,7 +575,10 @@ export async function runQaPasswordUserProvisionCli({
 
   const result = await provisionQaPasswordUser({
     email: requiredBinding(env, "OPENJOB_QA_TWO_EMAIL"),
-    expectedOpenJobUserId: env.OPENJOB_QA_TWO_USER_ID || undefined,
+    expectedOpenJobUserId: requiredBinding(
+      env,
+      "OPENJOB_QA_TWO_USER_ID",
+    ),
     fetchImplementation,
     firebaseUid: requiredBinding(env, "OPENJOB_QA_TWO_FIREBASE_UID"),
     getAccessToken,

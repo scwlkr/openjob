@@ -233,26 +233,29 @@ export function UnrecognizedSignIn({
                 </>
               ) : (
                 <>
-                  No User was created. Create a new OpenJob User for this
-                  Preview QA credential.
+                  No User was created. This Preview QA credential is not
+                  provisioned. Use the maintained QA Two credential or ask the
+                  fixture operator to restore its binding.
                 </>
               )}
             </p>
             {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
             <div className={styles.authDecisionActions}>
-              <button
-                className={styles.primaryButton}
-                disabled={saving}
-                onClick={onCreate}
-                type="button"
-              >{saving ? "Creating…" : "Create new User"}</button>
               {existingMethod ? (
-                <button
-                  className={styles.secondaryButton}
-                  disabled={saving}
-                  onClick={onLinkExisting}
-                  type="button"
-                >Link existing</button>
+                <>
+                  <button
+                    className={styles.primaryButton}
+                    disabled={saving}
+                    onClick={onCreate}
+                    type="button"
+                  >{saving ? "Creating…" : "Create new User"}</button>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={saving}
+                    onClick={onLinkExisting}
+                    type="button"
+                  >Link existing</button>
+                </>
               ) : null}
               <button
                 className={styles.textButton}

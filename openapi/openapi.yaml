@@ -54,6 +54,9 @@ paths:
         Creates a User only after the client explicitly confirms creation.
         Repeating the request for an already recognized Sign-in Method returns
         the same canonical User without changing Username or Group history.
+        The allowlisted Preview QA password credential cannot create a User and
+        remains sign_in_method_unrecognized until its permanent operator-owned
+        binding is restored.
       operationId: createCurrentUser
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
@@ -68,6 +71,8 @@ paths:
           $ref: "#/components/responses/ValidationErrorResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedResponse"
+        "409":
+          $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":

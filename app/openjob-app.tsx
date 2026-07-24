@@ -597,7 +597,11 @@ export function OpenJobApp({
 
   async function createUser() {
     const epoch = renderedAuthEpoch;
-    if (!session || !isCurrentAuthEpoch(epoch)) return;
+    if (
+      !session ||
+      unrecognizedMethod === "qa-password" ||
+      !isCurrentAuthEpoch(epoch)
+    ) return;
     setSaving(true);
     setError("");
     try {

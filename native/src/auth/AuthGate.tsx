@@ -464,29 +464,34 @@ export function NativeAuthGate({
 
   if (state.kind === "unrecognized") {
     const name = methodName(state.provider);
+    const qaPassword = state.provider === "qa-password";
     return (
       <AuthScaffold
         message={
           message ??
-          "Choose deliberately. OpenJob will not merge Users from an email address."
+          (qaPassword
+            ? "This Preview QA credential is not provisioned. Use the maintained QA Two credential or ask the fixture operator to restore its binding."
+            : "Choose deliberately. OpenJob will not merge Users from an email address.")
         }
         title={`This ${name} sign-in is not linked yet`}
       >
-        <ActionButton
-          disabled={busy}
-          label="Create a new OpenJob User"
-          onPress={() => void perform(() => auth.createUser())}
-        />
-        {state.provider !== "qa-password" ? (
-          <ActionButton
-            disabled={busy}
-            label="Link to an existing User"
-            onPress={() => {
-              setLinkFromManager(false);
-              void perform(() => auth.authenticateExistingUser());
-            }}
-            secondary
-          />
+        {!qaPassword ? (
+          <>
+            <ActionButton
+              disabled={busy}
+              label="Create a new OpenJob User"
+              onPress={() => void perform(() => auth.createUser())}
+            />
+            <ActionButton
+              disabled={busy}
+              label="Link to an existing User"
+              onPress={() => {
+                setLinkFromManager(false);
+                void perform(() => auth.authenticateExistingUser());
+              }}
+              secondary
+            />
+          </>
         ) : null}
         <ActionButton
           disabled={busy}

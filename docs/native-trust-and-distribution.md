@@ -91,7 +91,9 @@ improved email privacy and an enforced password policy are enabled, and the
 Preview Worker additionally requires the exact tenant and vault-backed Firebase
 UID. Default nonproduction and Production password sign-in remain disabled.
 This tenant is fixture infrastructure, not a third product Sign-in Method and
-not evidence for #37's Google or Apple criteria.
+not evidence for #37's Google or Apple criteria. The allowlisted credential
+cannot self-register or link an OpenJob User; a missing permanent binding
+fails closed for operator recovery.
 
 Apple signing covers every build environment. Development and preview
 intentionally share the non-production Apple Distribution identity but use

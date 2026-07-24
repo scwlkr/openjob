@@ -1184,7 +1184,7 @@ test("offers the Preview QA tenant password path without retaining credentials",
   expect(browserStorage).not.toContain("fixture-input");
 });
 
-test("keeps an unknown Preview QA credential create-only", async ({ page }) => {
+test("keeps an unknown Preview QA credential from self-registering or linking", async ({ page }) => {
   const state = await installApi(page, { credentialRecognized: false });
   await page.goto("/");
 
@@ -1196,19 +1196,16 @@ test("keeps an unknown Preview QA credential create-only", async ({ page }) => {
   await expect(page.getByRole("heading", {
     name: "This sign-in is not linked yet",
   })).toBeVisible();
-  await expect(page.getByText(/Preview QA credential/u)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create new User" })).toBeVisible();
+  await expect(page.getByText(/Preview QA credential is not provisioned/u)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new User" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Link existing" })).toHaveCount(0);
   expect(state.identityRequests).toEqual([]);
 
-  await page.getByRole("button", { name: "Create new User" }).click();
-  await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+  await page.getByRole("button", { name: "Use a different sign-in" }).click();
   await expect(
-    page.getByRole("button", { name: "Link an existing User" }),
-  ).toHaveCount(0);
-  expect(state.identityRequests).toEqual([
-    { path: "/api/v1/me", body: { confirmation: "create" } },
-  ]);
+    page.getByRole("form", { name: "Preview QA sign-in" }),
+  ).toBeVisible();
+  expect(state.identityRequests).toEqual([]);
 });
 
 test("reports an invalid Preview QA credential without leaking it", async ({ page }) => {

@@ -442,7 +442,7 @@ test.each([
   expect(screen.queryByLabelText("Preview QA email")).not.toBeOnTheScreen();
 });
 
-test("requires explicit creation and never offers linking for unknown Preview QA credentials", async () => {
+test("blocks self-registration and linking for unknown Preview QA credentials", async () => {
   const auth = controller({
     signInWithQaPassword: jest.fn(async () => ({
       kind: "unrecognized" as const,
@@ -471,13 +471,23 @@ test("requires explicit creation and never offers linking for unknown Preview QA
   expect(
     screen.queryByRole("button", { name: "Link to an existing User" }),
   ).not.toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Create a new OpenJob User" }),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.getByText(/Preview QA credential is not provisioned/u),
+  ).toBeOnTheScreen();
   expect(auth.createUser).not.toHaveBeenCalled();
 
   await fireEvent.press(
-    screen.getByRole("button", { name: "Create a new OpenJob User" }),
+    screen.getByRole("button", { name: "Cancel" }),
   );
-  expect(await screen.findByText("Signed in as walker")).toBeOnTheScreen();
-  expect(auth.createUser).toHaveBeenCalledTimes(1);
+  expect(
+    await screen.findByRole("button", {
+      name: "Sign in as Preview QA User",
+    }),
+  ).toBeOnTheScreen();
+  expect(auth.cancelPending).toHaveBeenCalledTimes(1);
 });
 
 test("restores an interrupted unknown credential without another provider prompt", async () => {

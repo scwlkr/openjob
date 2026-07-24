@@ -27,7 +27,7 @@ function json(payload, init = {}) {
 function input(overrides = {}) {
   return {
     email: EMAIL,
-    expectedOpenJobUserId: undefined,
+    expectedOpenJobUserId: OPENJOB_USER_ID,
     fetchImplementation: async () => {
       throw new Error("Unexpected request.");
     },
@@ -161,9 +161,8 @@ test("verified or provider-linked tenant accounts are rejected without a write",
   }
 });
 
-test("a missing account is admin-created, signed in, and onboarded through ordinary APIs", async () => {
+test("a missing tenant account is admin-created only for its prebound OpenJob User", async () => {
   const requests = [];
-  let getMeCalls = 0;
   const fetchImplementation = async (url, init = {}) => {
     const value = String(url);
     const body = requestBody(init);
@@ -190,38 +189,6 @@ test("a missing account is admin-created, signed in, and onboarded through ordin
       });
     }
     if (value === `${API_BASE_URL}/me` && init.method === "GET") {
-      getMeCalls += 1;
-      return getMeCalls === 1
-        ? json(
-            {
-              error: {
-                code: "sign_in_method_unrecognized",
-                message: "Unknown.",
-                requestId: "request-safe",
-              },
-            },
-            { status: 409 },
-          )
-        : json({
-            data: {
-              groups: [],
-              userId: OPENJOB_USER_ID,
-              username: "qa-two",
-              usernameRequired: false,
-            },
-          });
-    }
-    if (value === `${API_BASE_URL}/me` && init.method === "POST") {
-      return json({
-        data: {
-          groups: [],
-          userId: OPENJOB_USER_ID,
-          username: null,
-          usernameRequired: true,
-        },
-      });
-    }
-    if (value === `${API_BASE_URL}/me/username` && init.method === "PUT") {
       return json({
         data: {
           groups: [],
@@ -241,9 +208,8 @@ test("a missing account is admin-created, signed in, and onboarded through ordin
   assert.deepEqual(result, {
     changed: true,
     firebaseAccount: "created",
-    openJobUser: "created",
-    openJobUserId: OPENJOB_USER_ID,
-    username: "claimed",
+    openJobUser: "existing",
+    username: "verified",
     verified: true,
   });
   const adminCreate = requests.find(({ url }) =>
@@ -277,16 +243,12 @@ test("a missing account is admin-created, signed in, and onboarded through ordin
     requests.some(({ url }) => url.includes("accounts:signUp")),
     false,
   );
-  assert.deepEqual(
-    requests.find(
+  assert.equal(
+    requests.some(
       ({ init, url }) =>
-        url === `${API_BASE_URL}/me` && init.method === "POST",
-    ).body,
-    { confirmation: "create" },
-  );
-  assert.deepEqual(
-    requests.find(({ url }) => url === `${API_BASE_URL}/me/username`).body,
-    { username: "qa-two" },
+        url.startsWith(API_BASE_URL) && init.method !== "GET",
+    ),
+    false,
   );
 });
 
@@ -344,7 +306,6 @@ test("an exact existing account and OpenJob User provision idempotently", async 
     changed: false,
     firebaseAccount: "existing",
     openJobUser: "existing",
-    openJobUserId: OPENJOB_USER_ID,
     username: "verified",
     verified: true,
   });
@@ -357,6 +318,69 @@ test("an exact existing account and OpenJob User provision idempotently", async 
     ),
     false,
   );
+});
+
+test("successful CLI output omits stable identity values", async () => {
+  const output = [];
+  const fetchImplementation = async (url) => {
+    const value = String(url);
+    if (value.endsWith("/accounts:lookup")) {
+      return json({
+        users: [{
+          disabled: false,
+          email: EMAIL,
+          localId: FIREBASE_UID,
+          providerUserInfo: [{
+            federatedId: EMAIL,
+            providerId: "password",
+          }],
+        }],
+      });
+    }
+    if (value.includes("/v1/accounts:signInWithPassword?key=")) {
+      return json({
+        idToken: "qa-id-token",
+        localId: FIREBASE_UID,
+      });
+    }
+    if (value === `${API_BASE_URL}/me`) {
+      return json({
+        data: {
+          groups: [],
+          userId: OPENJOB_USER_ID,
+          username: "qa-two",
+          usernameRequired: false,
+        },
+      });
+    }
+    throw new Error("Unexpected request.");
+  };
+
+  assert.equal(
+    await runQaPasswordUserProvisionCli({
+      env: {
+        OPENJOB_QA_TWO_EMAIL: EMAIL,
+        OPENJOB_QA_TWO_FIREBASE_UID: FIREBASE_UID,
+        OPENJOB_QA_TWO_PASSWORD: PASSWORD,
+        OPENJOB_QA_TWO_USER_ID: OPENJOB_USER_ID,
+      },
+      fetchImplementation,
+      getAccessToken: async () => "owner-access-token",
+      stdout: { write(chunk) { output.push(chunk); } },
+    }),
+    0,
+  );
+
+  assert.deepEqual(JSON.parse(output.join("")), {
+    changed: false,
+    firebaseAccount: "existing",
+    openJobUser: "existing",
+    username: "verified",
+    verified: true,
+  });
+  for (const privateValue of [EMAIL, FIREBASE_UID, OPENJOB_USER_ID, PASSWORD]) {
+    assert.equal(output.join("").includes(privateValue), false);
+  }
 });
 
 test("known OpenJob identity drift blocks creation before an ordinary API write", async () => {
@@ -429,6 +453,7 @@ test("CLI output and failures redact credentials, OAuth material, and UserRecord
         OPENJOB_QA_TWO_EMAIL: EMAIL,
         OPENJOB_QA_TWO_FIREBASE_UID: FIREBASE_UID,
         OPENJOB_QA_TWO_PASSWORD: PASSWORD,
+        OPENJOB_QA_TWO_USER_ID: OPENJOB_USER_ID,
       },
       fetchImplementation: async () =>
         json(
@@ -496,7 +521,7 @@ test("gcloud never inherits 1Password-injected QA bindings", async () => {
   });
 });
 
-test("the CLI requires randomized invalid-domain credentials and a strong password", async () => {
+test("the CLI requires every stable binding and strong invalid-domain credentials", async () => {
   for (const [name, value, message] of [
     [
       "OPENJOB_QA_TWO_EMAIL",
@@ -504,6 +529,7 @@ test("the CLI requires randomized invalid-domain credentials and a strong passwo
       /randomized lowercase \.invalid/u,
     ],
     ["OPENJOB_QA_TWO_PASSWORD", "password123", /high-entropy/u],
+    ["OPENJOB_QA_TWO_USER_ID", "", /binding is unavailable/u],
   ]) {
     await assert.rejects(
       runQaPasswordUserProvisionCli({
@@ -511,6 +537,7 @@ test("the CLI requires randomized invalid-domain credentials and a strong passwo
           OPENJOB_QA_TWO_EMAIL: EMAIL,
           OPENJOB_QA_TWO_FIREBASE_UID: FIREBASE_UID,
           OPENJOB_QA_TWO_PASSWORD: PASSWORD,
+          OPENJOB_QA_TWO_USER_ID: OPENJOB_USER_ID,
           [name]: value,
         },
         getAccessToken: async () => {

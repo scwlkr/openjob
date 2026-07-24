@@ -223,6 +223,54 @@ test("Firebase verification accepts only the exact allowlisted Preview QA passwo
   );
 });
 
+test("the Preview QA password credential cannot self-register an OpenJob User", async () => {
+  let createCalls = 0;
+  const api = createV1IdentityApi({
+    groups: emptyGroupStore,
+    users: {
+      async claimUsername() {
+        throw new Error("Unexpected Username claim.");
+      },
+      async create() {
+        createCalls += 1;
+        return {
+          kind: "created",
+          user: { userId: "user_qa_two", username: null },
+        };
+      },
+      async link() {
+        throw new Error("Unexpected Sign-in Method link.");
+      },
+      async listSignInMethods() {
+        return [];
+      },
+      async resolve() {
+        return null;
+      },
+    },
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.parse(NOW) - 60_000,
+      provider: "qa-password",
+      uid: "firebase_qa_two",
+    }),
+  });
+
+  const response = await api.fetch(
+    new Request("https://openjob.test/api/v1/me", {
+      body: JSON.stringify({ confirmation: "create" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }),
+  );
+
+  assert.equal(response.status, 409);
+  assert.equal(
+    (await response.json()).error.code,
+    "sign_in_method_unrecognized",
+  );
+  assert.equal(createCalls, 0);
+});
+
 test("GET /me resolves only an explicitly created OpenJob User", async (t) => {
   const { authority, harness } = await createIdentityHarness();
   t.after(() => harness.close());

@@ -279,6 +279,9 @@ export function createV1IdentityApi({
         }
 
         if (request.method === "POST" && url.pathname === "/api/v1/me") {
+          if (identity.provider === "qa-password") {
+            return signInMethodUnrecognizedResponse(requestId);
+          }
           if (!(await confirmsUserCreation(request))) {
             return errorResponse(requestId, {
               code: "invalid_request",

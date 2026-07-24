@@ -313,7 +313,6 @@ test("contract schemas enforce normalized domain rules and status-specific error
   );
   const expectedConflictCodes = new Map(
     operations(contract)
-      .filter(({ operation }) => operation.operationId !== "createCurrentUser")
       .map(({ operation }) => [
         operation.operationId,
         ["sign_in_method_unrecognized"],

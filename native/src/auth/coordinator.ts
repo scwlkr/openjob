@@ -304,6 +304,11 @@ export class NativeAuthCoordinator {
     const epoch = this.operationEpoch;
     try {
       const candidate = await this.currentCandidateSession(epoch);
+      if (candidate.provider === "qa-password") {
+        throw new Error(
+          "Preview QA password sign-in cannot create a User.",
+        );
+      }
       const user = await this.dependencies.createUser(candidate.idToken);
       this.assertCurrentOperation(epoch);
       return this.finishSignedIn(candidate, user, epoch);

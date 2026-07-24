@@ -25,6 +25,9 @@ export interface paths {
          * @description Creates a User only after the client explicitly confirms creation.
          *     Repeating the request for an already recognized Sign-in Method returns
          *     the same canonical User without changing Username or Group history.
+         *     The allowlisted Preview QA password credential cannot create a User and
+         *     remains sign_in_method_unrecognized until its permanent operator-owned
+         *     binding is restored.
          */
         post: operations["createCurrentUser"];
         delete?: never;
@@ -2094,6 +2097,7 @@ export interface operations {
             201: components["responses"]["CurrentUserResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

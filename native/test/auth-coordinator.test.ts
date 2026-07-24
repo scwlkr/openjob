@@ -339,7 +339,7 @@ test("signs in the Preview QA User without invoking a linkable provider", async 
   expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
 });
 
-test("allows explicit creation but never linking for an unknown Preview QA credential", async () => {
+test("blocks creation and linking for an unknown Preview QA credential", async () => {
   const dependencies = createDependencies({
     getMe: jest.fn(async () => {
       throw new OpenJobApiError(409, "sign_in_method_unrecognized");
@@ -362,14 +362,10 @@ test("allows explicit creation but never linking for an unknown Preview QA crede
   );
   expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
 
-  await expect(coordinator.createUser()).resolves.toEqual({
-    kind: "signed-in",
-    methods: [],
-    user,
-  });
-  expect(dependencies.createUser).toHaveBeenCalledWith(
-    "qa-password-id-token",
+  await expect(coordinator.createUser()).rejects.toThrow(
+    "cannot create a User",
   );
+  expect(dependencies.createUser).not.toHaveBeenCalled();
 });
 
 test("refreshes an unknown credential before a delayed explicit User creation", async () => {
