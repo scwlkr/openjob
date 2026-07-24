@@ -36,12 +36,8 @@ async function notificationLaunchGroup() {
   const candidate = values.length === 1 ? values[0] : null;
   const pendingGroupId = await consumePendingNotificationGroup();
   url.searchParams.delete(NOTIFICATION_GROUP_PARAMETER);
-  window.history.replaceState(
-    {},
-    "",
-    `${url.pathname}${url.search}${url.hash}`,
-  );
   return {
+    cleanUrl: `${url.pathname}${url.search}${url.hash}`,
     present: values.length > 0,
     groupId:
       candidate && /^grp_[A-Za-z0-9_-]+$/.test(candidate)
@@ -168,9 +164,28 @@ export function OpenJobApp({
   const prepareNotificationSignOut = useRef(notifications.prepareSignOut);
   const authCleanupInProgress = useRef(false);
   const authFlowEpoch = useRef(0);
+  const linkFlowEpoch = useRef(0);
   const linkProofRef = useRef<AuthCredentialProof | null>(null);
+  const renderedAuthEpoch = authFlowEpoch.current;
   const [methodsReturnFocus, setMethodsReturnFocus] =
     useState<HTMLElement | null>(null);
+  const beginAuthBoundary = useCallback(() => {
+    const epoch = ++authFlowEpoch.current;
+    linkFlowEpoch.current += 1;
+    return epoch;
+  }, []);
+  const isCurrentAuthEpoch = useCallback(
+    (epoch: number) =>
+      epoch === authFlowEpoch.current && !authCleanupInProgress.current,
+    [],
+  );
+  const isCurrentLinkEpoch = useCallback(
+    (authEpoch: number, linkEpoch: number) =>
+      authEpoch === authFlowEpoch.current &&
+      linkEpoch === linkFlowEpoch.current &&
+      !authCleanupInProgress.current,
+    [],
+  );
   useEffect(() => {
     prepareNotificationSignOut.current = notifications.prepareSignOut;
   }, [notifications.prepareSignOut]);
@@ -202,25 +217,35 @@ export function OpenJobApp({
   }, []);
 
   const finishExpiredSessionCleanup = useCallback(async () => {
+    const cleanupEpoch = beginAuthBoundary();
     authCleanupInProgress.current = true;
+    setSaving(false);
+    setSelectingGroupId(null);
     try {
       await purgeBrowserSession(true);
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       await auth.signOut();
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       setCleanupRequired(false);
       setSession(null);
       setUser(null);
       setGroups([]);
       setGroupsReady(false);
       setSelectedGroup(null);
+      setNotice("");
+      setLoading(false);
       return true;
     } catch {
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       setCleanupRequired(true);
       setError("OpenJob could not safely sign out. Try again.");
       return false;
     } finally {
-      authCleanupInProgress.current = false;
+      if (cleanupEpoch === authFlowEpoch.current) {
+        authCleanupInProgress.current = false;
+      }
     }
-  }, [auth, purgeBrowserSession]);
+  }, [auth, beginAuthBoundary, purgeBrowserSession]);
 
   const recoverExpiredSession = useCallback(async (candidate: unknown) => {
     const expiredApiSession =
@@ -228,7 +253,7 @@ export function OpenJobApp({
     if (!expiredApiSession && !isTerminalFirebaseCredentialError(candidate)) {
       return false;
     }
-    authFlowEpoch.current += 1;
+    if (authCleanupInProgress.current) return true;
     setError("Your session expired. Sign in again.");
     setCleanupRequired(true);
     setLinkTarget(null);
@@ -239,12 +264,20 @@ export function OpenJobApp({
     return true;
   }, [finishExpiredSessionCleanup]);
 
-  const loadGroups = useCallback(async (activeSession: AuthSession) => {
+  const loadGroups = useCallback(async (
+    activeSession: AuthSession,
+    epoch: number,
+  ) => {
+    if (!isCurrentAuthEpoch(epoch)) return;
     const token = await activeSession.getIdToken();
+    if (!isCurrentAuthEpoch(epoch)) return;
     const accessibleGroups = await api.listGroups(token);
+    if (!isCurrentAuthEpoch(epoch)) return;
     setSelectedGroup(null);
 
     const notificationLaunch = await notificationLaunchGroup();
+    if (!isCurrentAuthEpoch(epoch)) return;
+    window.history.replaceState({}, "", notificationLaunch.cleanUrl);
     const notifiedGroup = accessibleGroups.find(
       (group) => group.groupId === notificationLaunch.groupId,
     );
@@ -270,12 +303,14 @@ export function OpenJobApp({
     if (candidate) {
       try {
         const verified = await api.getGroup(token, candidate.groupId);
+        if (!isCurrentAuthEpoch(epoch)) return;
         setGroups(accessibleGroups);
         setSelectedGroup(verified);
         setGroupsReady(true);
         window.localStorage.setItem(SELECTED_GROUP_KEY, verified.groupId);
         return;
       } catch (selectionError) {
+        if (!isCurrentAuthEpoch(epoch)) return;
         if (!(selectionError instanceof ApiError) || selectionError.status !== 404) {
           throw selectionError;
         }
@@ -288,9 +323,13 @@ export function OpenJobApp({
     }
     setGroups(accessibleGroups);
     setGroupsReady(true);
-  }, [api]);
+  }, [api, isCurrentAuthEpoch]);
 
-  const bootstrap = useCallback(async (activeSession: AuthSession) => {
+  const bootstrap = useCallback(async (
+    activeSession: AuthSession,
+    epoch: number,
+  ) => {
+    if (!isCurrentAuthEpoch(epoch)) return;
     setLoading(true);
     setGroupsReady(false);
     setError("");
@@ -299,10 +338,15 @@ export function OpenJobApp({
     setUnrecognizedMethod(null);
     try {
       const token = await activeSession.getIdToken();
+      if (!isCurrentAuthEpoch(epoch)) return;
       const currentUser = await api.getMe(token);
+      if (!isCurrentAuthEpoch(epoch)) return;
       setUser(currentUser);
-      if (!currentUser.usernameRequired) await loadGroups(activeSession);
+      if (!currentUser.usernameRequired) {
+        await loadGroups(activeSession, epoch);
+      }
     } catch (loadError) {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (
         loadError instanceof ApiError &&
         loadError.status === 409 &&
@@ -313,18 +357,21 @@ export function OpenJobApp({
         setError(readableError(loadError));
       }
     } finally {
-      setLoading(false);
+      if (isCurrentAuthEpoch(epoch)) setLoading(false);
     }
-  }, [api, loadGroups, recoverExpiredSession]);
+  }, [api, isCurrentAuthEpoch, loadGroups, recoverExpiredSession]);
 
   useEffect(
     () =>
       auth.observe(
         (nextSession) => {
           if (authCleanupInProgress.current) return;
-          const transitionEpoch = ++authFlowEpoch.current;
+          const transitionEpoch = beginAuthBoundary();
           setAuthObserverFailed(false);
           setAuthRestoreRetryRequired(false);
+          setSaving(false);
+          setSigningIn(null);
+          setSelectingGroupId(null);
           setLinkProof(null);
           setLinkTarget(null);
           setLinkingMethod(null);
@@ -353,14 +400,18 @@ export function OpenJobApp({
                 setError("OpenJob could not safely sign out. Try again.");
               })
               .finally(() => {
-                authCleanupInProgress.current = false;
+                if (transitionEpoch === authFlowEpoch.current) {
+                  authCleanupInProgress.current = false;
+                }
               });
           } else {
+            setCleanupRequired(false);
             setSession(nextSession);
-            void bootstrap(nextSession);
+            void bootstrap(nextSession, transitionEpoch);
           }
         },
         (observationError) => {
+          if (authCleanupInProgress.current) return;
           if (isTerminalFirebaseCredentialError(observationError)) {
             void recoverExpiredSession(observationError);
             return;
@@ -369,17 +420,21 @@ export function OpenJobApp({
             firebaseErrorCode(observationError) ===
             "auth/network-request-failed"
           ) {
+            beginAuthBoundary();
             setAuthRestoreRetryRequired(true);
             setSession(undefined);
+            setSaving(false);
+            setSelectingGroupId(null);
             setError(
               "OpenJob could not restore your sign-in. Check your connection and try again.",
             );
             setLoading(false);
             return;
           }
-          if (authCleanupInProgress.current) return;
-          const transitionEpoch = ++authFlowEpoch.current;
+          const transitionEpoch = beginAuthBoundary();
           authCleanupInProgress.current = true;
+          setSaving(false);
+          setSelectingGroupId(null);
           setAuthObserverFailed(true);
           setCleanupRequired(true);
           setError("Sign-in could not start. Try again.");
@@ -401,13 +456,16 @@ export function OpenJobApp({
               setError("OpenJob could not safely sign out. Try again.");
             })
             .finally(() => {
-              authCleanupInProgress.current = false;
+              if (transitionEpoch === authFlowEpoch.current) {
+                authCleanupInProgress.current = false;
+              }
             });
         },
       ),
     [
       auth,
       authObservation,
+      beginAuthBoundary,
       bootstrap,
       purgeBrowserSession,
       recoverExpiredSession,
@@ -415,38 +473,47 @@ export function OpenJobApp({
   );
 
   async function signIn(method: SignInMethod) {
+    const epoch = renderedAuthEpoch;
+    if (!isCurrentAuthEpoch(epoch)) return;
     setSigningIn(method);
     setError("");
     try {
       await auth.signIn(method);
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (authObserverFailed) {
+        beginAuthBoundary();
         setSession(undefined);
         setLoading(true);
         setAuthObserverFailed(false);
         setAuthObservation((current) => current + 1);
       }
     } catch (signInError) {
-      setError(providerError(signInError, method));
+      if (isCurrentAuthEpoch(epoch)) {
+        setError(providerError(signInError, method));
+      }
     } finally {
       setSigningIn(null);
     }
   }
 
-  async function leaveSession(
-    switchingUser: boolean,
-    completedMessage = "",
-  ) {
-    authFlowEpoch.current += 1;
+  async function leaveSession(switchingUser: boolean) {
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return false;
+    const cleanupEpoch = beginAuthBoundary();
     authCleanupInProgress.current = true;
+    setSaving(false);
+    setSelectingGroupId(null);
     setError("");
     try {
       await linkProofRef.current?.dispose();
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       setLinkProof(null);
       setLinkTarget(null);
       setLinkingMethod(null);
       setMethodsDialogOpen(false);
       await purgeBrowserSession();
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       await (switchingUser ? auth.switchUser() : auth.signOut());
+      if (cleanupEpoch !== authFlowEpoch.current) return false;
       setSession(null);
       setUser(null);
       setGroups([]);
@@ -454,13 +521,16 @@ export function OpenJobApp({
       setSelectedGroup(null);
       setNotice("");
       setLoading(false);
-      if (completedMessage) setError(completedMessage);
       return true;
     } catch {
-      setError("OpenJob could not safely sign out. Try again.");
+      if (cleanupEpoch === authFlowEpoch.current) {
+        setError("OpenJob could not safely sign out. Try again.");
+      }
       return false;
     } finally {
-      authCleanupInProgress.current = false;
+      if (cleanupEpoch === authFlowEpoch.current) {
+        authCleanupInProgress.current = false;
+      }
     }
   }
 
@@ -473,31 +543,43 @@ export function OpenJobApp({
   }
 
   async function createUser() {
-    if (!session) return;
+    const epoch = renderedAuthEpoch;
+    if (!session || !isCurrentAuthEpoch(epoch)) return;
     setSaving(true);
     setError("");
     try {
-      const created = await api.createUser(await session.getIdToken());
+      const token = await session.getIdToken();
+      if (!isCurrentAuthEpoch(epoch)) return;
+      const created = await api.createUser(token);
+      if (!isCurrentAuthEpoch(epoch)) return;
       setUser(created);
       setUnrecognizedMethod(null);
-      if (!created.usernameRequired) await loadGroups(session);
+      if (!created.usernameRequired) await loadGroups(session, epoch);
     } catch (createError) {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (!(await recoverExpiredSession(createError))) {
         setError(readableError(createError));
       }
     } finally {
-      setSaving(false);
+      if (isCurrentAuthEpoch(epoch)) setSaving(false);
     }
   }
 
   function beginUnknownLink() {
-    if (!unrecognizedMethod) return;
+    if (
+      !unrecognizedMethod ||
+      !isCurrentAuthEpoch(renderedAuthEpoch)
+    ) {
+      return;
+    }
     setLinkError("");
     setLinkingMethod(unrecognizedMethod === "google" ? "apple" : "google");
   }
 
   async function authenticateForLink(method: SignInMethod) {
-    const flowEpoch = ++authFlowEpoch.current;
+    const authEpoch = renderedAuthEpoch;
+    if (!isCurrentAuthEpoch(authEpoch)) return;
+    const linkEpoch = ++linkFlowEpoch.current;
     let proof: AuthCredentialProof | null = null;
     setSaving(true);
     setLinkError("");
@@ -506,12 +588,26 @@ export function OpenJobApp({
     setLinkTarget(null);
     try {
       proof = await auth.authenticateForLink(method);
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+        await proof.dispose();
+        return;
+      }
       let target: User | null = null;
       if (unrecognizedMethod !== null) {
-        target = await api.getMe(await proof.getIdToken());
+        const token = await proof.getIdToken();
+        if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+          await proof.dispose();
+          return;
+        }
+        target = await api.getMe(token);
       } else if (user?.usernameRequired) {
         try {
-          target = await api.getMe(await proof.getIdToken());
+          const token = await proof.getIdToken();
+          if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+            await proof.dispose();
+            return;
+          }
+          target = await api.getMe(token);
         } catch (targetError) {
           if (
             targetError instanceof ApiError &&
@@ -525,7 +621,7 @@ export function OpenJobApp({
       } else if (user) {
         target = user;
       }
-      if (flowEpoch !== authFlowEpoch.current) {
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) {
         await proof.dispose();
         return;
       }
@@ -535,45 +631,61 @@ export function OpenJobApp({
       try {
         await proof?.dispose();
       } catch {
-        setLinkError(
-          "OpenJob could not safely discard that provider sign-in. Try again.",
-        );
+        if (isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+          setLinkError(
+            "OpenJob could not safely discard that provider sign-in. Try again.",
+          );
+        }
         return;
       }
-      if (flowEpoch !== authFlowEpoch.current) return;
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
       setLinkError(
         authenticationError instanceof ApiError
           ? linkingError(authenticationError)
           : providerError(authenticationError, method),
       );
     } finally {
-      setSaving(false);
+      if (isCurrentLinkEpoch(authEpoch, linkEpoch)) setSaving(false);
     }
   }
 
   async function cancelLink() {
-    authFlowEpoch.current += 1;
+    const authEpoch = renderedAuthEpoch;
+    if (!isCurrentAuthEpoch(authEpoch)) return false;
+    const linkEpoch = ++linkFlowEpoch.current;
     setSaving(true);
     try {
       await linkProofRef.current?.dispose();
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return false;
       setLinkProof(null);
       setLinkTarget(null);
       setLinkingMethod(null);
       setLinkError("");
       return true;
     } catch {
-      setLinkError(
-        "OpenJob could not safely discard that provider sign-in. Try again.",
-      );
+      if (isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+        setLinkError(
+          "OpenJob could not safely discard that provider sign-in. Try again.",
+        );
+      }
       return false;
     } finally {
-      setSaving(false);
+      if (isCurrentLinkEpoch(authEpoch, linkEpoch)) setSaving(false);
     }
   }
 
   async function confirmLink() {
+    const authEpoch = renderedAuthEpoch;
+    const linkEpoch = linkFlowEpoch.current;
     const proof = linkProofRef.current;
-    if (!session || !proof || !linkingMethod) return;
+    if (
+      !session ||
+      !proof ||
+      !linkingMethod ||
+      !isCurrentLinkEpoch(authEpoch, linkEpoch)
+    ) {
+      return;
+    }
     const expectedTargetUserId = linkTarget?.userId ?? user?.userId;
     if (!expectedTargetUserId) return;
     const linkingUnknownCredential = unrecognizedMethod !== null;
@@ -584,22 +696,65 @@ export function OpenJobApp({
     setSaving(true);
     setLinkError("");
     try {
-      const token = await session.getIdToken();
-      const credentialToken = await proof.getIdToken();
+      let token: string;
+      try {
+        token = await session.getIdToken();
+      } catch (primaryError) {
+        if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
+        if (!(await recoverExpiredSession(primaryError))) {
+          setLinkError(linkingError(primaryError));
+        }
+        return;
+      }
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
+
+      let credentialToken: string;
+      try {
+        credentialToken = await proof.getIdToken();
+      } catch (proofError) {
+        if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
+        if (isTerminalFirebaseCredentialError(proofError)) {
+          try {
+            await proof.dispose();
+          } catch {
+            if (isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+              setLinkError(
+                "OpenJob could not safely discard that provider sign-in. Try again.",
+              );
+            }
+            return;
+          }
+          if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
+          setLinkProof(null);
+          setLinkTarget(null);
+          setLinkError(
+            "That provider confirmation expired. Authenticate again.",
+          );
+        } else {
+          setLinkError(providerError(proofError, proof.signInMethod));
+        }
+        return;
+      }
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
       try {
         await proof.dispose();
       } catch {
-        setLinkError(
-          "OpenJob could not safely discard that provider sign-in. Try again.",
-        );
+        if (isCurrentLinkEpoch(authEpoch, linkEpoch)) {
+          setLinkError(
+            "OpenJob could not safely discard that provider sign-in. Try again.",
+          );
+        }
         return;
       }
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
       setLinkProof(null);
+      setLinkTarget(null);
       const linked = await api.linkSignInMethod(
         token,
         credentialToken,
         expectedTargetUserId,
       );
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
       setUser(linked);
       setUnrecognizedMethod(null);
       setLinkProof(null);
@@ -609,8 +764,9 @@ export function OpenJobApp({
       setSignInMethods(null);
       if (!linked.usernameRequired && !groupsReady) {
         try {
-          await loadGroups(session);
+          await loadGroups(session, authEpoch);
         } catch (loadError) {
+          if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
           if (!(await recoverExpiredSession(loadError))) {
             setError(readableError(loadError));
           }
@@ -620,30 +776,30 @@ export function OpenJobApp({
         setNotice(`${name} is now linked.`);
       }
     } catch (confirmationError) {
+      if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
       if (
         confirmationError instanceof ApiError &&
         confirmationError.code === "fresh_authentication_required"
       ) {
-        if (linkingUnknownCredential && unrecognizedMethod) {
-          const name =
-            unrecognizedMethod === "apple" ? "Apple" : "Google";
-          await leaveSession(
-            true,
-            `The initial ${name} sign-in expired. Sign in again to restart linking.`,
-          );
-        } else {
-          setLinkError(linkingError(confirmationError));
-        }
+        setLinkTarget(null);
+        setLinkError(linkingError(confirmationError));
+      } else if (
+        confirmationError instanceof ApiError &&
+        confirmationError.code === "link_target_changed"
+      ) {
+        setLinkTarget(null);
+        setLinkError(linkingError(confirmationError));
       } else if (!(await recoverExpiredSession(confirmationError))) {
         setLinkError(linkingError(confirmationError));
       }
     } finally {
-      setSaving(false);
+      if (isCurrentLinkEpoch(authEpoch, linkEpoch)) setSaving(false);
     }
   }
 
   async function openSignInMethods(returnFocus?: HTMLElement | null) {
-    if (!session) return;
+    const epoch = renderedAuthEpoch;
+    if (!session || !isCurrentAuthEpoch(epoch)) return;
     if (returnFocus) setMethodsReturnFocus(returnFocus);
     setMethodsDialogOpen(true);
     setSignInMethods(null);
@@ -653,7 +809,10 @@ export function OpenJobApp({
     setLinkError("");
     setSaving(true);
     try {
-      const methods = await api.listSignInMethods(await session.getIdToken());
+      const token = await session.getIdToken();
+      if (!isCurrentAuthEpoch(epoch)) return;
+      const methods = await api.listSignInMethods(token);
+      if (!isCurrentAuthEpoch(epoch)) return;
       setSignInMethods(
         methods.filter(
           (method): method is SignInMethod =>
@@ -661,44 +820,62 @@ export function OpenJobApp({
         ),
       );
     } catch (methodsError) {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (await recoverExpiredSession(methodsError)) return;
       setLinkError(readableError(methodsError));
     } finally {
-      setSaving(false);
+      if (isCurrentAuthEpoch(epoch)) setSaving(false);
     }
   }
 
   async function closeSignInMethods() {
     if (!(await cancelLink())) return;
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return;
     setMethodsDialogOpen(false);
     setSignInMethods(null);
   }
 
-  async function runSavingAction(
-    action: (token: string, activeSession: AuthSession) => Promise<void>,
+  async function runSavingAction<Result>(
+    action: (token: string) => Promise<Result>,
+    commit: (
+      result: Result,
+      activeSession: AuthSession,
+      epoch: number,
+    ) => Promise<void> | void,
     errorMessage: (error: unknown) => string,
   ) {
-    if (!session) return;
+    const epoch = renderedAuthEpoch;
+    if (!session || !isCurrentAuthEpoch(epoch)) return;
     setSaving(true);
     setError("");
     try {
-      await action(await session.getIdToken(), session);
+      const token = await session.getIdToken();
+      if (!isCurrentAuthEpoch(epoch)) return;
+      const result = await action(token);
+      if (!isCurrentAuthEpoch(epoch)) return;
+      await commit(result, session, epoch);
     } catch (actionError) {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (!(await recoverExpiredSession(actionError))) setError(errorMessage(actionError));
     } finally {
-      setSaving(false);
+      if (isCurrentAuthEpoch(epoch)) setSaving(false);
     }
   }
 
   function claimUsername(username: string) {
-    void runSavingAction(async (token, activeSession) => {
-      const claimed = await api.claimUsername(token, username);
-      setUser(claimed);
-      if (!inviteToken) await loadGroups(activeSession);
-    }, usernameError);
+    void runSavingAction(
+      (token) => api.claimUsername(token, username),
+      async (claimed, activeSession, epoch) => {
+        if (!isCurrentAuthEpoch(epoch)) return;
+        setUser(claimed);
+        if (!inviteToken) await loadGroups(activeSession, epoch);
+      },
+      usernameError,
+    );
   }
 
   function completeInvite(group: Group) {
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return;
     setGroups((current) => [
       ...current.filter((candidate) => candidate.groupId !== group.groupId),
       group,
@@ -712,30 +889,36 @@ export function OpenJobApp({
   }
 
   function cancelInvite() {
-    if (!session) return;
+    const epoch = renderedAuthEpoch;
+    if (!session || !isCurrentAuthEpoch(epoch)) return;
     setInviteToken(null);
     window.history.replaceState({}, "", "/");
-    void loadGroups(session).catch(async (loadError) => {
+    void loadGroups(session, epoch).catch(async (loadError) => {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
     });
   }
 
   function createGroup(name: string) {
-    void runSavingAction(async (token) => {
-      const created = await api.createGroup(token, name);
-      setGroups((current) => [...current, created]);
-      setSelectedGroup(created);
-      setGroupsReady(true);
-      setNotice("");
-      window.localStorage.setItem(SELECTED_GROUP_KEY, created.groupId);
-    }, (createError) =>
-      createError instanceof ApiError && createError.fields?.name
-        ? createError.fields.name
-        : readableError(createError),
+    void runSavingAction(
+      (token) => api.createGroup(token, name),
+      (created, _activeSession, epoch) => {
+        if (!isCurrentAuthEpoch(epoch)) return;
+        setGroups((current) => [...current, created]);
+        setSelectedGroup(created);
+        setGroupsReady(true);
+        setNotice("");
+        window.localStorage.setItem(SELECTED_GROUP_KEY, created.groupId);
+      },
+      (createError) =>
+        createError instanceof ApiError && createError.fields?.name
+          ? createError.fields.name
+          : readableError(createError),
     );
   }
 
   function updateGroup(group: Group) {
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return;
     setGroups((current) => current.map((candidate) =>
       candidate.groupId === group.groupId ? group : candidate
     ));
@@ -743,6 +926,7 @@ export function OpenJobApp({
   }
 
   function removeGroup(group: Group, message: string) {
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return;
     setGroups((current) => current.filter((candidate) => candidate.groupId !== group.groupId));
     setSelectedGroup((current) => current?.groupId === group.groupId ? null : current);
     setNotice(message);
@@ -752,12 +936,16 @@ export function OpenJobApp({
   }
 
   const selectGroup = useCallback(async (groupId: string) => {
-    if (!session) return;
+    const epoch = renderedAuthEpoch;
+    if (!session || !isCurrentAuthEpoch(epoch)) return;
     setSelectingGroupId(groupId);
     setError("");
     setNotice("");
     try {
-      const verified = await api.getGroup(await session.getIdToken(), groupId);
+      const token = await session.getIdToken();
+      if (!isCurrentAuthEpoch(epoch)) return;
+      const verified = await api.getGroup(token, groupId);
+      if (!isCurrentAuthEpoch(epoch)) return;
       setGroups((current) => {
         const existing = current.findIndex((group) => group.groupId === groupId);
         if (existing < 0) return [...current, verified];
@@ -766,6 +954,7 @@ export function OpenJobApp({
       setSelectedGroup(verified);
       window.localStorage.setItem(SELECTED_GROUP_KEY, verified.groupId);
     } catch (selectError) {
+      if (!isCurrentAuthEpoch(epoch)) return;
       if (selectError instanceof ApiError && selectError.status === 404) {
         setGroups((current) => current.filter((item) => item.groupId !== groupId));
         setSelectedGroup((current) =>
@@ -779,9 +968,15 @@ export function OpenJobApp({
         setError(readableError(selectError));
       }
     } finally {
-      setSelectingGroupId(null);
+      if (isCurrentAuthEpoch(epoch)) setSelectingGroupId(null);
     }
-  }, [api, recoverExpiredSession, session]);
+  }, [
+    api,
+    isCurrentAuthEpoch,
+    recoverExpiredSession,
+    renderedAuthEpoch,
+    session,
+  ]);
 
   useEffect(() => {
     if (!session || !navigator.serviceWorker?.addEventListener) return;
@@ -840,6 +1035,11 @@ export function OpenJobApp({
     };
   }, [groupsReady, selectGroup, session, user]);
 
+  async function handleRenderedSessionExpired(candidate: unknown) {
+    if (!isCurrentAuthEpoch(renderedAuthEpoch)) return true;
+    return recoverExpiredSession(candidate);
+  }
+
   if (cleanupRequired) {
     return (
       <LoadError
@@ -853,6 +1053,7 @@ export function OpenJobApp({
       <LoadError
         error={error}
         onRetry={() => {
+          beginAuthBoundary();
           setAuthRestoreRetryRequired(false);
           setError("");
           setLoading(true);
@@ -894,7 +1095,12 @@ export function OpenJobApp({
 
   const groupLoadFailed = Boolean(user && !user.usernameRequired && !groupsReady && error);
   if ((!user && error) || groupLoadFailed) {
-    return <LoadError error={error} onRetry={() => void bootstrap(session)} />;
+    return (
+      <LoadError
+        error={error}
+        onRetry={() => void bootstrap(session, renderedAuthEpoch)}
+      />
+    );
   }
   if (!user) return <LoadingScreen />;
   const methodsDialog = methodsDialogOpen ? (
@@ -936,7 +1142,7 @@ export function OpenJobApp({
         inviteToken={inviteToken}
         onCancel={cancelInvite}
         onJoined={completeInvite}
-        onSessionExpired={recoverExpiredSession}
+        onSessionExpired={handleRenderedSessionExpired}
         session={session}
       />
     );
@@ -950,14 +1156,14 @@ export function OpenJobApp({
         groups={groups}
         notice={notice}
         notifications={notifications}
-        onSessionExpired={recoverExpiredSession}
+        onSessionExpired={handleRenderedSessionExpired}
         onCreate={createGroup}
         onGroupRemoved={removeGroup}
         onGroupUpdated={updateGroup}
         onManageSignInMethods={(returnFocus) =>
           void openSignInMethods(returnFocus)
         }
-        onRetry={() => void bootstrap(session)}
+        onRetry={() => void bootstrap(session, renderedAuthEpoch)}
         onSelect={(group) => void selectGroup(group.groupId)}
         onSignOut={() => void signOut()}
         onSwitchUser={() => void switchUser()}
