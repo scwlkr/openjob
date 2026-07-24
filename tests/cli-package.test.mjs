@@ -33,8 +33,8 @@ test("the repository documents one clean-Mac CLI install command", () => {
   assert.match(readme, /Requires macOS and Node\.js 22\.13 or newer\./);
   assert.equal(readme.split(installCommand).length - 1, 1);
   assert.equal(cliReadme.split(installCommand).length - 1, 1);
-  assert.match(cliReadme, /--profile preview-qa-one/);
-  assert.match(qaFixture, /op run -- openjob --profile preview-qa-one/);
+  assert.match(cliReadme, /--profile preview-owner/);
+  assert.match(qaFixture, /op run -- openjob --profile preview-owner/);
   assert.doesNotMatch(
     qaFixture,
     /CLI \(`OPENJOB_API_URL`\)/,

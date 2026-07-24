@@ -120,7 +120,7 @@ Resources:
 
 Global options:
   --group <group-id>          Override the client-local current Group
-  --profile <name>            Select production or preview-qa-one
+  --profile <name>            Select production or preview-owner
   --format <table|json|jsonl> Output encoding; default: table
   --out <path|->              Write results to a new file or stdout (-)
   --force                     Allow --out to replace an existing file

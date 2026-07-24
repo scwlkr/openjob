@@ -2,13 +2,13 @@ import { createHash } from "node:crypto";
 import { CliError } from "./errors.mjs";
 import {
   GOOGLE_DESKTOP_CLIENT_ID,
-  GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+  GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
 } from "./oauth-config.mjs";
 
 export const DEFAULT_CLI_PROFILE_NAME = "production";
 export const CLI_PROFILE_NAMES = Object.freeze([
   DEFAULT_CLI_PROFILE_NAME,
-  "preview-qa-one",
+  "preview-owner",
 ]);
 
 const TEST_PROFILE_BINDINGS = Object.freeze([
@@ -37,18 +37,18 @@ const PRODUCTION_PROFILE = Object.freeze({
   tier: "production",
 });
 
-const PREVIEW_QA_PROFILE = Object.freeze({
+const PREVIEW_OWNER_PROFILE = Object.freeze({
   apiOrigin: "https://openjob-preview.walkerworlddiscord.workers.dev",
-  configNamespace: "openjob-preview-qa-one",
-  credentialAccount: "firebase-refresh-token:preview-qa-one",
-  expectedUsername: "qa-one",
+  configNamespace: "openjob-preview-owner",
+  credentialAccount: "firebase-refresh-token:preview-owner",
+  expectedUsername: "scwlkr",
   firebaseApiKey: "AIzaSyDcONX1KOS-mIg5koGzh5saWHZCf5-HISo",
   firebaseProjectId: "openjob-nonprod",
   firebaseSignInUrl:
     "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp",
   firebaseTokenUrl: "https://securetoken.googleapis.com/v1/token",
-  googleDesktopClientId: GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
-  name: "preview-qa-one",
+  googleDesktopClientId: GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
+  name: "preview-owner",
   oauthAuthorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
   oauthExchangeUrl:
     "https://openjob-preview.walkerworlddiscord.workers.dev/api/cli-auth/exchange",
@@ -65,7 +65,7 @@ function requestedTestOverride(environment) {
     (name) =>
       name === "OPENJOB_API_URL" ||
       name === "OPENJOB_CONFIG" ||
-      name === "OPENJOB_PREVIEW_QA_GOOGLE_OAUTH_CLIENT_ID" ||
+      name === "OPENJOB_PREVIEW_OWNER_GOOGLE_OAUTH_CLIENT_ID" ||
       name.startsWith("OPENJOB_TEST_"),
   );
 }
@@ -154,14 +154,14 @@ function testProfile(environment) {
   });
 }
 
-function previewQaProfile(environment) {
-  const expectedUserId = environment.OPENJOB_PREVIEW_QA_EXPECTED_USER_ID;
+function previewOwnerProfile(environment) {
+  const expectedUserId = environment.OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID;
   if (
     typeof expectedUserId !== "string" ||
     !/^user_[a-f0-9]{32}$/u.test(expectedUserId)
   ) {
     throw invalidProfile(
-      "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID must contain the 1Password-bound Preview QA User ID.",
+      "OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID must contain the 1Password-bound Preview owner User ID.",
     );
   }
   const identityDigest = createHash("sha256")
@@ -169,8 +169,9 @@ function previewQaProfile(environment) {
     .digest("hex")
     .slice(0, 16);
   return Object.freeze({
-    ...PREVIEW_QA_PROFILE,
-    credentialAccount: `${PREVIEW_QA_PROFILE.credentialAccount}:${identityDigest}`,
+    ...PREVIEW_OWNER_PROFILE,
+    credentialAccount:
+      `${PREVIEW_OWNER_PROFILE.credentialAccount}:${identityDigest}`,
     expectedUserId,
   });
 }
@@ -185,11 +186,11 @@ export function resolveCliProfile(
     );
   }
   if (
-    name !== "preview-qa-one" &&
-    Object.hasOwn(environment, "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID")
+    name !== "preview-owner" &&
+    Object.hasOwn(environment, "OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID")
   ) {
     throw invalidProfile(
-      "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID requires --profile preview-qa-one.",
+      "OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID requires --profile preview-owner.",
     );
   }
 
@@ -203,5 +204,5 @@ export function resolveCliProfile(
 
   return name === DEFAULT_CLI_PROFILE_NAME
     ? PRODUCTION_PROFILE
-    : previewQaProfile(environment);
+    : previewOwnerProfile(environment);
 }

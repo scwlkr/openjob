@@ -1,29 +1,29 @@
 {
-  "schemaVersion": 1,
-  "fixtureId": "openjob-two-user-qa-v1",
+  "schemaVersion": 2,
+  "fixtureId": "openjob-owner-qa-two-v2",
   "calendarTimeZone": "America/Chicago",
   "environments": {
     "preview": {
       "firebaseProjectId": "openjob-nonprod",
       "groupId": "grp_9f5d28b6c10e4a7db3f924681c7e50aa",
-      "groupName": "OpenJob QA Preview (Disposable)",
-      "confirmation": "openjob-two-user-qa-v1:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa"
+      "groupName": "OpenJob Owner + QA Two Preview (Disposable)",
+      "confirmation": "openjob-owner-qa-two-v2:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa"
     }
   },
   "users": {
-    "qaOne": {
-      "username": "qa-one",
+    "owner": {
+      "username": "scwlkr",
       "role": "admin",
-      "membershipId": "qa_one_preview_v1",
+      "membershipId": "owner_preview_v2",
       "authentication": {
-        "kind": "real-provider",
+        "kind": "existing-owner-provider",
         "provider": "google"
       }
     },
     "qaTwo": {
       "username": "qa-two",
       "role": "member",
-      "membershipId": "qa_two_preview_v1",
+      "membershipId": "qa_two_preview_v2",
       "authentication": {
         "kind": "internal-qa-password",
         "tenantId": "OpenJob-QA-Two-mvz9m"
@@ -32,9 +32,9 @@
   },
   "tasks": [
     {
-      "taskId": "task_qa_one_open_high_overdue",
-      "text": "QA one overdue High Task",
-      "assignee": "qaOne",
+      "taskId": "task_owner_open_high_overdue",
+      "text": "Owner overdue High Task",
+      "assignee": "owner",
       "priority": "high",
       "dueOffsetDays": -7,
       "state": "open"
@@ -56,9 +56,9 @@
       "state": "open"
     },
     {
-      "taskId": "task_qa_one_open_normal_none",
-      "text": "QA one Normal Task without due date",
-      "assignee": "qaOne",
+      "taskId": "task_owner_open_normal_none",
+      "text": "Owner Normal Task without due date",
+      "assignee": "owner",
       "priority": "normal",
       "dueOffsetDays": null,
       "state": "open"
@@ -72,9 +72,9 @@
       "state": "done"
     },
     {
-      "taskId": "task_qa_one_done_low_today",
-      "text": "QA one completed Low Task",
-      "assignee": "qaOne",
+      "taskId": "task_owner_done_low_today",
+      "text": "Owner completed Low Task",
+      "assignee": "owner",
       "priority": "low",
       "dueOffsetDays": 0,
       "state": "done"

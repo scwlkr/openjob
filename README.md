@@ -34,10 +34,12 @@ lifecycle, Member governance, bans, and Invite Links against
 credential in the macOS credential store; local config stores only the current
 Group ID. It has no local Task database or offline mode.
 
-Maintainers can use the separately bound `preview-qa-one` profile for the
-ordinary two-User QA fixture. It has isolated API, Firebase, OAuth, Keychain,
-and config boundaries and requires the recorded stable User ID from 1Password;
-see [`cli/README.md`](cli/README.md). Runtime endpoint overrides are test-only.
+Maintainers can use the separately bound `preview-owner` profile as the
+Google-backed `@scwlkr` owner in the ordinary two-User QA fixture. It has
+isolated API, Firebase, OAuth, Keychain, and config boundaries and requires the
+recorded stable Preview User ID from the `OpenJob Preview Owner Binding`
+1Password item; see [`cli/README.md`](cli/README.md). Runtime endpoint
+overrides are test-only.
 
 For repository development, run `npm install`, `npm link`, and
 `openjob --help`. Maintainers can run the packaged CLI's hosted Task workflow with:

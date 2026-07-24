@@ -25,11 +25,11 @@ const DATABASE =
 const GROUP_ID = "grp_9f5d28b6c10e4a7db3f924681c7e50aa";
 const QA_PASSWORD_TENANT_ID = "OpenJob-QA-Two-mvz9m";
 const QA_USERS = {
-  qaOne: {
-    firebaseUid: "firebase_qa_one",
+  owner: {
+    firebaseUid: "firebase_owner",
     provider: "google",
-    userId: "user_qa_one_stable",
-    username: "qa-one",
+    userId: "user_owner_stable",
+    username: "scwlkr",
   },
   qaTwo: {
     firebaseUid: "firebase_qa_two",
@@ -94,7 +94,7 @@ async function seedQaIdentities(firestore) {
   }
 }
 
-test("ordinary QA Users share the reset fixture and observe API changes in both directions", async (t) => {
+test("the owner and QA Two share the reset fixture through ordinary APIs", async (t) => {
   const authority = await createTestFirebaseAuthority({
     now: NOW,
     projectId: PROJECT_ID,
@@ -109,10 +109,10 @@ test("ordinary QA Users share the reset fixture and observe API changes in both 
   await seedQaIdentities(firestore);
   await resetQaFixture({
     confirmation:
-      `openjob-two-user-qa-v1:openjob-nonprod:${GROUP_ID}`,
+      `openjob-owner-qa-two-v2:openjob-nonprod:${GROUP_ID}`,
     environment: "preview",
     now: () => Date.parse(NOW),
-    qaOneUserId: QA_USERS.qaOne.userId,
+    ownerUserId: QA_USERS.owner.userId,
     qaTwoUserId: QA_USERS.qaTwo.userId,
     store: createQaFixtureStore(config, firestore.fetch),
   });
@@ -233,14 +233,14 @@ test("ordinary QA Users share the reset fixture and observe API changes in both 
 
   const changes = [
     {
-      actor: "qaOne",
+      actor: "owner",
       observer: "qaTwo",
       taskId: "task_qa_two_open_normal_today",
     },
     {
       actor: "qaTwo",
-      observer: "qaOne",
-      taskId: "task_qa_one_open_high_overdue",
+      observer: "owner",
+      taskId: "task_owner_open_high_overdue",
     },
   ];
   for (const change of changes) {

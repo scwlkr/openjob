@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   GOOGLE_DESKTOP_CLIENT_ID,
-  GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+  GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
 } from "../cli/lib/oauth-config.mjs";
 
 const cliPath =
@@ -212,7 +212,7 @@ test("CLI profile selection is closed before credentials or network are used", (
     error: {
       code: "config_invalid",
       message:
-        "Unknown OpenJob CLI profile. Use production or preview-qa-one.",
+        "Unknown OpenJob CLI profile. Use production or preview-owner.",
     },
   });
 
@@ -221,7 +221,7 @@ test("CLI profile selection is closed before credentials or network are used", (
     {
       env: {
         NODE_ENV: "production",
-        OPENJOB_PREVIEW_QA_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+        OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
       },
     },
   );
@@ -231,7 +231,7 @@ test("CLI profile selection is closed before credentials or network are used", (
     error: {
       code: "config_invalid",
       message:
-        "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID requires --profile preview-qa-one.",
+        "OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID requires --profile preview-owner.",
     },
   });
 });
@@ -339,8 +339,8 @@ test("production smoke isolation uses XDG_CONFIG_HOME without test-only override
     if (
       name === "OPENJOB_API_URL" ||
       name === "OPENJOB_CONFIG" ||
-      name === "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID" ||
-      name === "OPENJOB_PREVIEW_QA_GOOGLE_OAUTH_CLIENT_ID" ||
+      name === "OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID" ||
+      name === "OPENJOB_PREVIEW_OWNER_GOOGLE_OAUTH_CLIENT_ID" ||
       name.startsWith("OPENJOB_TEST_")
     ) {
       delete environment[name];
@@ -530,7 +530,7 @@ test("identity-bound commands reuse one cached /me preflight", async () => {
   const currentUser = {
     data: {
       userId: expectedUserId,
-      username: "qa-one",
+      username: "scwlkr",
       usernameRequired: false,
       groups: [],
     },
@@ -575,7 +575,7 @@ test("identity-bound commands reuse one cached /me preflight", async () => {
     OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
     OPENJOB_TEST_AUTH_URL: service.baseUrl,
     OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
-    OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+    OPENJOB_TEST_EXPECTED_USERNAME: "scwlkr",
     OPENJOB_TEST_EXPECTED_USER_ID: expectedUserId,
     OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
     OPENJOB_TEST_GOOGLE_CLIENT_ID: "desktop-client.apps.googleusercontent.com",
@@ -589,7 +589,7 @@ test("identity-bound commands reuse one cached /me preflight", async () => {
           data: {
             signedIn: true,
             userId: expectedUserId,
-            username: "qa-one",
+            username: "scwlkr",
             usernameRequired: false,
           },
         },
@@ -678,7 +678,7 @@ test("identity mismatch removes only the selected credential before mutation", a
           OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
           OPENJOB_TEST_AUTH_URL: service.baseUrl,
           OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
-          OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+          OPENJOB_TEST_EXPECTED_USERNAME: "scwlkr",
           OPENJOB_TEST_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
           OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
           OPENJOB_TEST_GOOGLE_CLIENT_ID:
@@ -899,7 +899,7 @@ test("auth login preserves the prior profile credential when identity binding fa
           OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
           OPENJOB_TEST_AUTH_URL: service.baseUrl,
           OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
-          OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+          OPENJOB_TEST_EXPECTED_USERNAME: "scwlkr",
           OPENJOB_TEST_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
           OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
           OPENJOB_TEST_GOOGLE_CLIENT_ID:
@@ -980,19 +980,19 @@ test("production auth login uses the configured Google Desktop client and PKCE",
   assert.equal(result.status, 130, result.stderr);
 });
 
-test("Preview QA auth login uses only its separately bound Desktop client", async () => {
+test("Preview owner auth login uses only its separately bound Desktop client", async () => {
   const running = startCli(
     [
       "auth",
       "login",
       "--profile",
-      "preview-qa-one",
+      "preview-owner",
       "--no-open",
     ],
     {
       env: {
         NODE_ENV: "production",
-        OPENJOB_PREVIEW_QA_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+        OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
       },
     },
   );
@@ -1001,16 +1001,16 @@ test("Preview QA auth login uses only its separately bound Desktop client", asyn
   try {
     const authorizationUrl = await waitForLoginUrl(
       running,
-      "Preview QA login URL was not emitted",
+      "Preview owner login URL was not emitted",
     );
 
     assert.equal(authorizationUrl.origin, "https://accounts.google.com");
     assert.equal(
       authorizationUrl.searchParams.get("client_id"),
-      GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+      GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
     );
     assert.notEqual(
-      GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+      GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
       GOOGLE_DESKTOP_CLIENT_ID,
     );
     assert.equal(

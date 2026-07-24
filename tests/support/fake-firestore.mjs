@@ -73,13 +73,20 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
     );
   }
 
-  function directCollectionDocuments(source, path) {
+  function directCollectionDocuments(source, path, showMissing = false) {
     const prefix = `${database}/documents/${path}/`;
-    return [...source.values()]
-      .filter(
-        ({ name }) =>
-          name.startsWith(prefix) && !name.slice(prefix.length).includes("/"),
-      )
+    const matching = new Map();
+    for (const document of source.values()) {
+      if (!document.name.startsWith(prefix)) continue;
+      const [documentId, ...descendantPath] =
+        document.name.slice(prefix.length).split("/");
+      const name = `${prefix}${documentId}`;
+      if (descendantPath.length === 0) matching.set(name, document);
+      else if (showMissing && !matching.has(name)) {
+        matching.set(name, source.get(name) ?? { name });
+      }
+    }
+    return [...matching.values()]
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
@@ -96,10 +103,12 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
         return true;
       }
     }
-    for (const path of transaction.collectionReads) {
+    for (const [path, showMissing] of transaction.collectionReads) {
       if (
-        fingerprint(directCollectionDocuments(documents, path)) !==
-        fingerprint(directCollectionDocuments(transaction.snapshot, path))
+        fingerprint(directCollectionDocuments(documents, path, showMissing)) !==
+        fingerprint(
+          directCollectionDocuments(transaction.snapshot, path, showMissing),
+        )
       ) {
         return true;
       }
@@ -170,7 +179,8 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
   }
 
   function listDocuments(path, url, source = documents) {
-    const matching = directCollectionDocuments(source, path);
+    const showMissing = url.searchParams.get("showMissing") === "true";
+    const matching = directCollectionDocuments(source, path, showMissing);
     const pageSize = Number(url.searchParams.get("pageSize"));
     const token = url.searchParams.get("pageToken");
     let start = 0;
@@ -280,7 +290,7 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
           `fake-transaction-${transactionSequence}`,
         ).toString("base64");
         transactions.set(transaction, {
-          collectionReads: new Set(),
+          collectionReads: new Map(),
           documentReads: new Set(),
           snapshot: cloneDocuments(documents),
         });
@@ -334,7 +344,13 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
         return error(400, "INVALID_ARGUMENT", "Document ID is too long.");
       }
       if (url.searchParams.has("pageSize")) {
-        transaction?.collectionReads.add(path);
+        const showMissing = url.searchParams.get("showMissing") === "true";
+        if (transaction) {
+          transaction.collectionReads.set(
+            path,
+            transaction.collectionReads.get(path) === true || showMissing,
+          );
+        }
         return listDocuments(path, url, transaction?.snapshot);
       }
 

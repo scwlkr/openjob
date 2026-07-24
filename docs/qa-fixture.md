@@ -1,19 +1,24 @@
-# Two-User QA fixture
+# Owner + QA Two fixture
 
-Issue #35 owns the permanent ordinary Test Users `@qa-one` and `@qa-two`.
-`config/qa-fixture.json` is the non-secret preview fixture contract. The reset
-uses Firestore operator credentials but adds no privileged product endpoint or
-special authorization behavior. `@qa-one` uses real Google sign-in. `@qa-two`
-uses one internal password principal in an isolated Preview Identity Platform
-tenant; it is not a product Sign-in Method or Google/Apple acceptance evidence.
+Issue #35 owns one stable two-User Preview fixture. Its Owner role maps to the
+existing Google-backed `@scwlkr` User; there is no dedicated Google test
+account or `@qa-one` User. Permanent `@qa-two` uses one internal
+password principal in an isolated Preview Identity Platform tenant.
+`config/qa-fixture.json` is the non-secret fixture contract. The reset uses
+Firestore operator credentials but adds no privileged product endpoint or
+special authorization behavior. QA Two's password is not a product Sign-in
+Method or Google/Apple acceptance evidence.
 
 The reset currently targets only preview (`openjob-nonprod`) because
-destructive automation remains non-production-only. It restores the disposable
-Group `OpenJob QA Preview (Disposable)`, makes `@qa-one` Admin and `@qa-two`
-Member, writes the exact seven-Task matrix, and removes only those Users'
-Notification Subscriptions. It aborts before writing if either User has access
-to another Group or if a User, Group, fixture, or installation identity does
-not match.
+destructive automation remains non-production-only. Fixture
+`openjob-owner-qa-two-v2` restores the disposable Group
+`OpenJob Owner + QA Two Preview (Disposable)`, makes `@scwlkr` Admin and
+`@qa-two` Member, writes the exact seven-Task matrix, and clears only QA Two's
+fixture Notification Subscriptions. It preserves every `@scwlkr` non-QA Group
+and every `@scwlkr` notification registration. QA Two remains isolated: any
+unexpected non-QA membership or identity mismatch aborts the reset before
+writing. A User, Group, fixture, or installation identity mismatch also fails
+closed.
 
 ## Access
 
@@ -23,9 +28,12 @@ and the exact QA Two UID allowlist in approved service secret stores. Never put
 those values in Git, shell history, command arguments, screenshots, issue
 comments, or diagnostics.
 
-The two canonical vault items are `OpenJob QA One Google` and
-`OpenJob QA Two Preview Password`. Provision QA Two only with the target-fixed
-operator command. On the first run, omit the optional User-ID assertion:
+The two canonical vault items are `OpenJob Preview Owner Binding` and
+`OpenJob QA Two Preview Password`. The owner binding contains the
+nonproduction stable OpenJob User ID plus a reference to the existing Google
+account; it never duplicates the Google password. Provision QA Two only with
+the target-fixed operator command. On the first run, omit the optional User-ID
+assertion:
 
 ```sh
 OPENJOB_QA_TWO_EMAIL='op://Personal/OpenJob QA Two Preview Password/username' \
@@ -53,46 +61,51 @@ Username, or stable-ID mismatch stops without rewriting identity ownership.
 
 For device and PWA acceptance:
 
-1. Sign `@qa-one` in through Google.
+1. Sign the existing `@scwlkr` User in through Google when real Google proof is
+   required.
 2. Enter QA Two's vault-backed email and password in the visible
    **Preview QA sign-in** form. Development and Production clients do not
    contain this form.
 3. Confirm `/api/v1/me` returns the separately recorded stable User ID and
    immutable Username on each platform.
-4. Confirm both Users list only the disposable QA Group.
+4. Confirm QA Two lists only the disposable QA Group. `@scwlkr` may retain
+   ordinary non-QA memberships; fixture operations must remain scoped to the
+   disposable QA Group.
 5. Never link QA Two's internal password identity. The API and clients reject
    that transition.
 
-The maintainer CLI permits only `production` and `preview-qa-one`. Preview uses
-a dedicated public Google Desktop OAuth client, a Preview Worker-held client
-secret, and separate macOS Keychain and config namespaces. It never accepts a
-runtime API or provider endpoint override. Add an `OpenJob User ID` field to the
-`OpenJob QA One Google` 1Password item after ordinary User creation, then invoke
-the CLI without exposing that value:
+The maintainer CLI permits only `production` and `preview-owner`. Preview uses
+a Preview-specific public Google Desktop OAuth application client, a Preview
+Worker-held client secret, and separate macOS Keychain and config namespaces.
+It never accepts a runtime API or provider endpoint override. Record the
+existing nonproduction User ID and account reference in
+`OpenJob Preview Owner Binding`, then invoke the CLI without exposing that
+value:
 
 ```sh
-OPENJOB_PREVIEW_QA_EXPECTED_USER_ID='op://Personal/OpenJob QA One Google/OpenJob User ID' \
-  op run -- openjob --profile preview-qa-one auth login
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+  op run -- openjob --profile preview-owner auth login
 ```
 
 Use that unresolved `op://` wrapper for every later Preview CLI invocation too;
 do not export the resolved User ID into a long-lived shell:
 
 ```sh
-OPENJOB_PREVIEW_QA_EXPECTED_USER_ID='op://Personal/OpenJob QA One Google/OpenJob User ID' \
-  op run -- openjob --profile preview-qa-one group list
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+  op run -- openjob --profile preview-owner group list
 ```
 
 The CLI writes the candidate refresh credential only after `/api/v1/me`
-matches `@qa-one` and that 1Password-bound User ID exactly. A mismatch leaves
+matches `@scwlkr` and that 1Password-bound User ID exactly. A mismatch leaves
 the existing Preview credential unchanged. The profile's Keychain account
 contains only a short SHA-256-derived suffix, never the raw User ID.
 
 Issue #34 establishes native trust, #36 supplies the native clients, and #37
 owns product authentication acceptance. The internal QA password path removes
-the need for a second consumer-provider account from this two-User fixture, but
-#37 must remain open until real returning Google and Apple credentials plus its
-physical-device and accessibility criteria are proven.
+the need for any dedicated Google test account or a second consumer-provider
+account from this two-User fixture, but #37 must remain open until real
+returning Google and Apple credentials plus its physical-device and
+accessibility criteria are proven.
 
 ## Reset
 
@@ -102,7 +115,7 @@ their values:
 - `FIREBASE_PROJECT_ID=openjob-nonprod`
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
-- `OPENJOB_QA_ONE_USER_ID`
+- `OPENJOB_QA_OWNER_USER_ID`
 - `OPENJOB_QA_TWO_USER_ID`
 
 Then run the exact target-confirmed command:
@@ -110,18 +123,19 @@ Then run the exact target-confirmed command:
 ```sh
 npm run qa:fixture:reset -- \
   --environment preview \
-  --confirm openjob-two-user-qa-v1:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa
+  --confirm openjob-owner-qa-two-v2:openjob-nonprod:grp_9f5d28b6c10e4a7db3f924681c7e50aa
 ```
 
 The command performs every preflight read and its literal write plan in one
 Firestore transaction. A clean second run returns `"changed":false` and commits
 the read-only transaction with zero document writes, preventing a concurrent
 mutation from being mistaken for a no-op. It never creates User or provider
-identity records, deletes collections, repairs non-QA access, or accepts User
-IDs on the command line.
+identity records, deletes collections, changes `@scwlkr` non-QA Groups or
+notification registrations, repairs QA Two's non-QA access, or accepts User IDs
+on the command line.
 
 After reset, use the same preview `/api/v1` origin in native, PWA, API harness,
-and the allowlisted `preview-qa-one` CLI profile:
+and the allowlisted `preview-owner` CLI profile:
 
 ```text
 https://openjob-preview.walkerworlddiscord.workers.dev/api/v1
@@ -138,29 +152,34 @@ date boundary.
 
 If reset blocks, preserve the state and resolve the named mismatch:
 
-- QA One provider access: recover the Google identity through its 1Password item
-  and provider recovery flow, then verify `/me` still returns the recorded User
-  ID.
+- Owner provider access: use `OpenJob Preview Owner Binding` to locate the
+  existing Google account's provider-owned recovery path, then verify `/me`
+  still returns the recorded `@scwlkr` User ID. Do not copy the Google password
+  into the binding item.
 - QA Two password access: generate a new high-entropy password in 1Password,
   update the exact tenant User through the Identity Platform admin surface,
   revoke its refresh tokens, clear saved Preview sessions, and rerun the
   provisioner with the recorded stable User ID.
 - Wrong User or Username: stop and repair the explicit linking path owned by
   #37. Do not edit Firestore identity records or substitute another User ID.
-- Non-QA Group access or an unexpected Group Member: inspect and remove it
-  through ordinary `/api/v1` governance after confirming intent; rerun reset.
+- QA Two non-QA Group access or an unexpected disposable-Group Member: inspect
+  and remove it through ordinary `/api/v1` governance after confirming intent;
+  rerun reset. Existing `@scwlkr` non-QA memberships are expected and must not
+  be removed.
 - Fixture or Group reservation mismatch: do not overwrite it. Reconcile the
   recorded fixture identity and repository manifest first.
-- Missing fixture documents or one-sided Notification Subscription state:
-  rerun the reset; those narrow partial states are recoverable.
+- Missing fixture documents or unexpected QA Two Notification Subscription
+  state: rerun the reset; those narrow partial states are recoverable.
 
 ## Rotation
 
-Rotate QA One provider credentials and QA Two's tenant password in their
-respective systems and 1Password without changing either Firebase UID or
-OpenJob User. Revoke QA Two refresh tokens, clear saved Preview sessions, and
-prove the old refresh credential fails before signing in again. Re-run Preview
-web, iOS, and Android sign-ins and compare `/me` to the recorded stable IDs.
+Rotate the owner's Google credentials only through the provider-owned account
+and keep only its account reference and nonproduction OpenJob User ID in
+`OpenJob Preview Owner Binding`. Rotate QA Two's tenant password in Identity
+Platform and 1Password without changing its Firebase UID or OpenJob User.
+Revoke QA Two refresh tokens, clear saved Preview sessions, and prove the old
+refresh credential fails before signing in again. Re-run Preview web, iOS, and
+Android sign-ins and compare `/me` to the recorded stable IDs.
 
 Rotate the Firebase operator key in its provider and approved secret store,
 revoke the previous key, run `npm run secret:check`, then perform one

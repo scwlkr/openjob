@@ -55,8 +55,8 @@ async function smoke({ firebaseIdToken, useKeychain: useStoredCredential }) {
   delete childEnvironment.OPENJOB_CLI_SMOKE_USE_KEYCHAIN;
   delete childEnvironment.OPENJOB_API_URL;
   delete childEnvironment.OPENJOB_CONFIG;
-  delete childEnvironment.OPENJOB_PREVIEW_QA_EXPECTED_USER_ID;
-  delete childEnvironment.OPENJOB_PREVIEW_QA_GOOGLE_OAUTH_CLIENT_ID;
+  delete childEnvironment.OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID;
+  delete childEnvironment.OPENJOB_PREVIEW_OWNER_GOOGLE_OAUTH_CLIENT_ID;
   for (const name of Object.keys(childEnvironment)) {
     if (name.startsWith("OPENJOB_TEST_")) delete childEnvironment[name];
   }

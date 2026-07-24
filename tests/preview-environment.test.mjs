@@ -5,7 +5,7 @@ import {
   qaPasswordTenantIdFor,
   webFirebaseConfigFor,
 } from "../config/web-firebase-config.mjs";
-import { GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
+import { GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -24,7 +24,7 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     routes: [],
     vars: {
       FIREBASE_PROJECT_ID: "openjob-nonprod",
-      GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+      GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
       OPENJOB_QA_PASSWORD_TENANT_ID: "OpenJob-QA-Two-mvz9m",
       OPENJOB_RUNTIME_TIER: "preview",
     },

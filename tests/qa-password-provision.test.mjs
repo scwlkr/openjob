@@ -47,10 +47,11 @@ test("the canonical fixture records provider kinds without account identifiers",
     await readFile(new URL("../config/qa-fixture.json", import.meta.url), "utf8"),
   );
 
-  assert.deepEqual(fixture.users.qaOne.authentication, {
-    kind: "real-provider",
+  assert.deepEqual(fixture.users.owner.authentication, {
+    kind: "existing-owner-provider",
     provider: "google",
   });
+  assert.equal(fixture.users.owner.username, "scwlkr");
   assert.deepEqual(fixture.users.qaTwo.authentication, {
     kind: "internal-qa-password",
     tenantId: TENANT_ID,

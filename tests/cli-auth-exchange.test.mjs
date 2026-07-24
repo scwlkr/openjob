@@ -7,7 +7,7 @@ import {
 } from "../server/cli-auth-exchange.ts";
 import {
   GOOGLE_DESKTOP_CLIENT_ID,
-  GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+  GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
 } from "../cli/lib/oauth-config.mjs";
 
 const redirectUri = "http://127.0.0.1:43123/callback";
@@ -33,9 +33,9 @@ test("Wrangler binds distinct public OAuth clients without storing their secrets
     productionClientId,
     GOOGLE_DESKTOP_CLIENT_ID,
   );
-  assert.equal(previewClientId, GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID);
+  assert.equal(previewClientId, GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID);
   assert.notEqual(
-    GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+    GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
     GOOGLE_DESKTOP_CLIENT_ID,
   );
   assert.match(
