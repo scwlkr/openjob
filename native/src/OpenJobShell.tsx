@@ -36,13 +36,13 @@ type RootStackParamList = {
 };
 
 type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
-  account: AuthenticatedAccount;
+  signedInUser: SignedInUser;
   runtimeConfig: OpenJobRuntimeConfig;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-type AuthenticatedAccount = {
+type SignedInUser = {
   methods: SignInMethod[];
   onManageSignInMethods: () => void;
   onSignOut: () => void;
@@ -186,7 +186,7 @@ function StatusCard({
   );
 }
 
-function ShellScreen({ account, navigation, runtimeConfig }: ShellProps) {
+function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
   const { width } = useWindowDimensions();
   const { palette } = useOpenJobTheme();
   const lifecycle = useAppLifecycle();
@@ -226,17 +226,17 @@ function ShellScreen({ account, navigation, runtimeConfig }: ShellProps) {
           <IconButton
             accessibilityLabel="Manage Sign-in Methods"
             icon="link"
-            onPress={account.onManageSignInMethods}
+            onPress={signedInUser.onManageSignInMethods}
           />
           <IconButton
             accessibilityLabel="Switch User"
             icon="repeat"
-            onPress={account.onSwitchUser}
+            onPress={signedInUser.onSwitchUser}
           />
           <IconButton
             accessibilityLabel="Sign out"
             icon="log-out"
-            onPress={account.onSignOut}
+            onPress={signedInUser.onSignOut}
           />
           <IconButton
             accessibilityLabel="Open appearance settings"
@@ -264,10 +264,10 @@ function ShellScreen({ account, navigation, runtimeConfig }: ShellProps) {
             </Text>
             <Text style={[styles.lede, { color: palette.muted }]}>
               {`Signed in as ${
-                account.user.username
-                  ? `@${account.user.username}`
-                  : account.user.userId
-              }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${account.methods
+                signedInUser.user.username
+                  ? `@${signedInUser.user.username}`
+                  : signedInUser.user.userId
+              }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${signedInUser.methods
                 .map((method) => method === "apple" ? "Apple" : "Google")
                 .join(" and ")}.`}
             </Text>
@@ -439,15 +439,15 @@ function AppearanceScreen({
 }
 
 export function OpenJobShell({
-  account,
   initialState,
   reducedMotion,
   runtimeConfig,
+  signedInUser,
 }: {
-  account: AuthenticatedAccount;
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
   reducedMotion: boolean;
   runtimeConfig: OpenJobRuntimeConfig;
+  signedInUser: SignedInUser;
 }) {
   const { navigationTheme, palette } = useOpenJobTheme();
   const screenOptions = useMemo(
@@ -472,8 +472,8 @@ export function OpenJobShell({
           {(props) => (
             <ShellScreen
               {...props}
-              account={account}
               runtimeConfig={runtimeConfig}
+              signedInUser={signedInUser}
             />
           )}
         </Stack.Screen>

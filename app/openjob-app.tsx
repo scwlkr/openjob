@@ -353,7 +353,10 @@ export function OpenJobApp({
         loadError.code === "sign_in_method_unrecognized"
       ) {
         setUnrecognizedMethod(activeSession.signInMethod);
-      } else if (!(await recoverExpiredSession(loadError))) {
+      } else if (
+        !(await recoverExpiredSession(loadError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
         setError(readableError(loadError));
       }
     } finally {
@@ -383,7 +386,10 @@ export function OpenJobApp({
             authCleanupInProgress.current = true;
             setCleanupRequired(true);
             void purgeBrowserSession()
-              .then(() => auth.signOut())
+              .then(() => {
+                if (transitionEpoch !== authFlowEpoch.current) return;
+                return auth.signOut();
+              })
               .then(() => {
                 if (transitionEpoch !== authFlowEpoch.current) return;
                 setCleanupRequired(false);
@@ -439,7 +445,10 @@ export function OpenJobApp({
           setCleanupRequired(true);
           setError("Sign-in could not start. Try again.");
           void purgeBrowserSession()
-            .then(() => auth.signOut())
+            .then(() => {
+              if (transitionEpoch !== authFlowEpoch.current) return;
+              return auth.signOut();
+            })
             .then(() => {
               if (transitionEpoch !== authFlowEpoch.current) return;
               setCleanupRequired(false);
@@ -557,7 +566,10 @@ export function OpenJobApp({
       if (!created.usernameRequired) await loadGroups(session, epoch);
     } catch (createError) {
       if (!isCurrentAuthEpoch(epoch)) return;
-      if (!(await recoverExpiredSession(createError))) {
+      if (
+        !(await recoverExpiredSession(createError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
         setError(readableError(createError));
       }
     } finally {
@@ -701,7 +713,10 @@ export function OpenJobApp({
         token = await session.getIdToken();
       } catch (primaryError) {
         if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
-        if (!(await recoverExpiredSession(primaryError))) {
+        if (
+          !(await recoverExpiredSession(primaryError)) &&
+          isCurrentLinkEpoch(authEpoch, linkEpoch)
+        ) {
           setLinkError(linkingError(primaryError));
         }
         return;
@@ -767,7 +782,10 @@ export function OpenJobApp({
           await loadGroups(session, authEpoch);
         } catch (loadError) {
           if (!isCurrentLinkEpoch(authEpoch, linkEpoch)) return;
-          if (!(await recoverExpiredSession(loadError))) {
+          if (
+            !(await recoverExpiredSession(loadError)) &&
+            isCurrentLinkEpoch(authEpoch, linkEpoch)
+          ) {
             setError(readableError(loadError));
           }
         }
@@ -789,7 +807,10 @@ export function OpenJobApp({
       ) {
         setLinkTarget(null);
         setLinkError(linkingError(confirmationError));
-      } else if (!(await recoverExpiredSession(confirmationError))) {
+      } else if (
+        !(await recoverExpiredSession(confirmationError)) &&
+        isCurrentLinkEpoch(authEpoch, linkEpoch)
+      ) {
         setLinkError(linkingError(confirmationError));
       }
     } finally {
@@ -821,8 +842,12 @@ export function OpenJobApp({
       );
     } catch (methodsError) {
       if (!isCurrentAuthEpoch(epoch)) return;
-      if (await recoverExpiredSession(methodsError)) return;
-      setLinkError(readableError(methodsError));
+      if (
+        !(await recoverExpiredSession(methodsError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
+        setLinkError(readableError(methodsError));
+      }
     } finally {
       if (isCurrentAuthEpoch(epoch)) setSaving(false);
     }
@@ -856,7 +881,12 @@ export function OpenJobApp({
       await commit(result, session, epoch);
     } catch (actionError) {
       if (!isCurrentAuthEpoch(epoch)) return;
-      if (!(await recoverExpiredSession(actionError))) setError(errorMessage(actionError));
+      if (
+        !(await recoverExpiredSession(actionError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
+        setError(errorMessage(actionError));
+      }
     } finally {
       if (isCurrentAuthEpoch(epoch)) setSaving(false);
     }
@@ -895,7 +925,12 @@ export function OpenJobApp({
     window.history.replaceState({}, "", "/");
     void loadGroups(session, epoch).catch(async (loadError) => {
       if (!isCurrentAuthEpoch(epoch)) return;
-      if (!(await recoverExpiredSession(loadError))) setError(readableError(loadError));
+      if (
+        !(await recoverExpiredSession(loadError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
+        setError(readableError(loadError));
+      }
     });
   }
 
@@ -964,7 +999,10 @@ export function OpenJobApp({
           window.localStorage.removeItem(SELECTED_GROUP_KEY);
         }
         setNotice("That Group is no longer accessible.");
-      } else if (!(await recoverExpiredSession(selectError))) {
+      } else if (
+        !(await recoverExpiredSession(selectError)) &&
+        isCurrentAuthEpoch(epoch)
+      ) {
         setError(readableError(selectError));
       }
     } finally {

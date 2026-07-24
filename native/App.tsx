@@ -90,7 +90,7 @@ function ThemedSurface({
           result,
         }) => (
           <OpenJobShell
-            account={{
+            signedInUser={{
               methods: result.methods,
               onManageSignInMethods,
               onSignOut,

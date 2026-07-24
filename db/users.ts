@@ -22,15 +22,7 @@ type StoredLegacyUser = OpenJobUser & {
   updateTime: string;
 };
 
-type StoredSignInMethod = {
-  methodId: string;
-  path: string;
-  provider: SignInProvider;
-  updateTime: string;
-  userId: string;
-};
-
-type StoredProviderSlot = {
+type StoredSignInMethodOwnership = {
   methodId: string;
   path: string;
   provider: SignInProvider;
@@ -97,28 +89,18 @@ function parseLegacyUser(
   return { path, updateTime: document.updateTime, userId, username };
 }
 
-function parseSignInMethod(
+function parseSignInMethodOwnership(
   document: FirestoreDocument,
   path: string,
-): StoredSignInMethod {
+  record: "index" | "method",
+): StoredSignInMethodOwnership {
   const methodId = document.fields?.methodId?.stringValue;
   const provider = parseProvider(document.fields?.provider?.stringValue);
   const userId = document.fields?.userId?.stringValue;
   if (!methodId || !provider || !userId || !document.updateTime) {
-    throw new Error("Firestore returned an invalid Sign-in Method record.");
-  }
-  return { methodId, path, provider, updateTime: document.updateTime, userId };
-}
-
-function parseProviderSlot(
-  document: FirestoreDocument,
-  path: string,
-): StoredProviderSlot {
-  const methodId = document.fields?.methodId?.stringValue;
-  const provider = parseProvider(document.fields?.provider?.stringValue);
-  const userId = document.fields?.userId?.stringValue;
-  if (!methodId || !provider || !userId || !document.updateTime) {
-    throw new Error("Firestore returned an invalid Sign-in Method index record.");
+    throw new Error(
+      `Firestore returned an invalid Sign-in Method ${record} record.`,
+    );
   }
   return { methodId, path, provider, updateTime: document.updateTime, userId };
 }
@@ -211,13 +193,17 @@ export function createFirestoreUserStore(
 
   async function readSignInMethod(path: string) {
     const document = await readDocument(path);
-    return document ? parseSignInMethod(document, path) : null;
+    return document
+      ? parseSignInMethodOwnership(document, path, "method")
+      : null;
   }
 
   async function readProviderSlot(userId: string, provider: SignInProvider) {
     const path = providerSlotPath(userId, provider);
     const document = await readDocument(path);
-    return document ? parseProviderSlot(document, path) : null;
+    return document
+      ? parseSignInMethodOwnership(document, path, "index")
+      : null;
   }
 
   async function readProviderSlots(userId: string) {
@@ -231,7 +217,7 @@ export function createFirestoreUserStore(
         markerIndex === -1
           ? document.name
           : document.name.slice(markerIndex + marker.length);
-      return parseProviderSlot(document, path);
+      return parseSignInMethodOwnership(document, path, "index");
     });
   }
 
@@ -248,26 +234,7 @@ export function createFirestoreUserStore(
     };
   }
 
-  function signInMethodFields({
-    linkedAt,
-    methodId,
-    provider,
-    userId,
-  }: {
-    linkedAt: string;
-    methodId: string;
-    provider: SignInProvider;
-    userId: string;
-  }) {
-    return {
-      methodId: { stringValue: methodId },
-      provider: { stringValue: provider },
-      userId: { stringValue: userId },
-      linkedAt: { timestampValue: linkedAt },
-    };
-  }
-
-  function providerSlotFields({
+  function signInMethodOwnershipFields({
     linkedAt,
     methodId,
     provider,
@@ -349,7 +316,7 @@ export function createFirestoreUserStore(
           {
             update: {
               name: firestore.documentName(newPath),
-              fields: signInMethodFields({
+              fields: signInMethodOwnershipFields({
                 linkedAt,
                 methodId,
                 provider: identity.provider,
@@ -364,7 +331,7 @@ export function createFirestoreUserStore(
                 {
                   update: {
                     name: firestore.documentName(slotPath),
-                    fields: providerSlotFields({
+                    fields: signInMethodOwnershipFields({
                       linkedAt,
                       methodId,
                       provider: identity.provider,
@@ -442,7 +409,7 @@ export function createFirestoreUserStore(
             {
               update: {
                 name: firestore.documentName(signInPath),
-                fields: signInMethodFields({
+                fields: signInMethodOwnershipFields({
                   linkedAt: createdAt,
                   methodId,
                   provider: identity.provider,
@@ -454,7 +421,7 @@ export function createFirestoreUserStore(
             {
               update: {
                 name: firestore.documentName(slotPath),
-                fields: providerSlotFields({
+                fields: signInMethodOwnershipFields({
                   linkedAt: createdAt,
                   methodId,
                   provider: identity.provider,
@@ -624,7 +591,7 @@ export function createFirestoreUserStore(
               {
                 update: {
                   name: firestore.documentName(unknownPath),
-                  fields: signInMethodFields({
+                  fields: signInMethodOwnershipFields({
                     linkedAt,
                     methodId: unknownMethodId,
                     provider: unknownIdentity.provider,
@@ -641,7 +608,7 @@ export function createFirestoreUserStore(
                       unknownIdentity.provider,
                     ),
                   ),
-                  fields: providerSlotFields({
+                  fields: signInMethodOwnershipFields({
                     linkedAt,
                     methodId: unknownMethodId,
                     provider: unknownIdentity.provider,
@@ -785,7 +752,7 @@ export function createFirestoreUserStore(
                     source.method.provider,
                   ),
                 ),
-                fields: providerSlotFields({
+                fields: signInMethodOwnershipFields({
                   linkedAt,
                   methodId: source.method.methodId,
                   provider: source.method.provider,
