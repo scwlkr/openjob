@@ -84,6 +84,15 @@ and
 `389d081a02196e4f40996b1d5f7713387d0910a2a98c3bc4a31e3e8a9a3e0e11`,
 respectively; those non-secret values are the recovery comparison authority.
 
+The nonproduction Identity Platform project also contains the isolated tenant
+`OpenJob-QA-Two-mvz9m` for the internal `@qa-two` fixture credential. Only that
+tenant enables password sign-in; public signup and deletion are disabled,
+improved email privacy and an enforced password policy are enabled, and the
+Preview Worker additionally requires the exact tenant and vault-backed Firebase
+UID. Default nonproduction and Production password sign-in remain disabled.
+This tenant is fixture infrastructure, not a third product Sign-in Method and
+not evidence for #37's Google or Apple criteria.
+
 Apple signing covers every build environment. Development and preview
 intentionally share the non-production Apple Distribution identity but use
 separate provisioning profiles bound to separate App IDs. Production uses an

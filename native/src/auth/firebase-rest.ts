@@ -15,6 +15,7 @@ type FirebaseAuthClientConfig = {
   authDomain: string;
   fetchImplementation?: FetchImplementation;
   now?: () => number;
+  qaPasswordTenantId: string | null;
 };
 
 type FirebaseExchangeResponse = {
@@ -82,6 +83,7 @@ export function createFirebaseAuthClient({
   authDomain,
   fetchImplementation = fetch,
   now = Date.now,
+  qaPasswordTenantId,
 }: FirebaseAuthClientConfig) {
   return {
     async exchange(
@@ -116,6 +118,40 @@ export function createFirebaseAuthClient({
         expiresAt: now() + seconds(body.expiresIn) * 1_000,
         idToken: requiredString(body.idToken),
         provider: credential.provider,
+        refreshToken: requiredString(body.refreshToken),
+      };
+    },
+
+    async signInWithPassword(
+      email: string,
+      password: string,
+    ): Promise<FirebaseSession> {
+      if (!qaPasswordTenantId) {
+        throw new ProviderSignInError("unavailable");
+      }
+      const response = await request(
+        fetchImplementation,
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
+        {
+          body: JSON.stringify({
+            email,
+            password,
+            returnSecureToken: true,
+            tenantId: qaPasswordTenantId,
+          }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+      );
+      if (!response.ok) {
+        await firebaseError(response);
+        throw new ProviderSignInError("unavailable");
+      }
+      const body = (await response.json()) as FirebaseExchangeResponse;
+      return {
+        expiresAt: now() + seconds(body.expiresIn) * 1_000,
+        idToken: requiredString(body.idToken),
+        provider: "qa-password",
         refreshToken: requiredString(body.refreshToken),
       };
     },

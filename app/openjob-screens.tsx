@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  type AuthenticationMethod,
   type AuthSession,
   type Group,
   type InvitePreview,
@@ -36,7 +37,8 @@ function Brand() {
   return <span className={styles.brand}>OPENJOB<span>.</span></span>;
 }
 
-function signInMethodName(method: SignInMethod) {
+function signInMethodName(method: AuthenticationMethod) {
+  if (method === "qa-password") return "Preview QA sign-in";
   return method === "apple" ? "Apple" : "Google";
 }
 
@@ -63,13 +65,25 @@ export function LoadError({ error, onRetry }: { error: string; onRetry: () => vo
 
 export function SignedOut({
   error,
+  onQaPasswordSignIn,
   onSignIn,
+  qaPasswordEnabled,
   signingIn,
 }: {
   error: string;
+  onQaPasswordSignIn: (email: string, password: string) => void;
   onSignIn: (method: SignInMethod) => void;
-  signingIn: SignInMethod | null;
+  qaPasswordEnabled: boolean;
+  signingIn: AuthenticationMethod | null;
 }) {
+  const [qaEmail, setQaEmail] = useState("");
+  const [qaPassword, setQaPassword] = useState("");
+
+  function submitQaPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onQaPasswordSignIn(qaEmail, qaPassword);
+  }
+
   return (
     <main className={styles.authShell}>
       <aside className={styles.authRail} aria-label="OpenJob introduction">
@@ -108,6 +122,45 @@ export function SignedOut({
               {signingIn === "apple" ? "Opening Apple…" : "Continue with Apple"}
             </button>
           </div>
+          {qaPasswordEnabled ? (
+            <form
+              aria-label="Preview QA sign-in"
+              className={styles.qaPasswordForm}
+              onSubmit={submitQaPassword}
+            >
+              <p className={styles.kicker}>Preview testing only</p>
+              <label htmlFor="qa-email">QA email</label>
+              <input
+                autoComplete="email"
+                disabled={signingIn !== null}
+                id="qa-email"
+                inputMode="email"
+                onChange={(event) => setQaEmail(event.target.value)}
+                required
+                type="email"
+                value={qaEmail}
+              />
+              <label htmlFor="qa-password">QA password</label>
+              <input
+                autoComplete="current-password"
+                disabled={signingIn !== null}
+                id="qa-password"
+                onChange={(event) => setQaPassword(event.target.value)}
+                required
+                type="password"
+                value={qaPassword}
+              />
+              <button
+                className={styles.secondaryButton}
+                disabled={signingIn !== null}
+                type="submit"
+              >
+                {signingIn === "qa-password"
+                  ? "Signing in…"
+                  : "Sign in as QA Two"}
+              </button>
+            </form>
+          ) : null}
           <p className={styles.authNote}>
             Provider email never creates, links, or merges an OpenJob User.
           </p>
@@ -131,7 +184,7 @@ export function UnrecognizedSignIn({
   onSignOut,
   onConfirmLink,
 }: {
-  currentMethod: SignInMethod;
+  currentMethod: AuthenticationMethod;
   error: string;
   linkTarget: User | null;
   linking: boolean;
@@ -144,9 +197,15 @@ export function UnrecognizedSignIn({
   onSignOut: () => void;
   onConfirmLink: () => void;
 }) {
-  const existingMethod: SignInMethod =
-    currentMethod === "google" ? "apple" : "google";
-  const existingName = signInMethodName(existingMethod);
+  const existingMethod: SignInMethod | null =
+    currentMethod === "qa-password"
+      ? null
+      : currentMethod === "google"
+        ? "apple"
+        : "google";
+  const existingName = existingMethod
+    ? signInMethodName(existingMethod)
+    : null;
   const currentName = signInMethodName(currentMethod);
   const target = linkTarget
     ? linkTarget.username
@@ -166,8 +225,18 @@ export function UnrecognizedSignIn({
             <p className={styles.kicker}>Your choice first</p>
             <h1>This sign-in is not linked yet</h1>
             <p className={styles.lede}>
-              No User was created. Create a new OpenJob User, or prove an
-              existing User with the other provider before linking {currentName}.
+              {existingMethod ? (
+                <>
+                  No User was created. Create a new OpenJob User, or prove an
+                  existing User with the other provider before linking{" "}
+                  {currentName}.
+                </>
+              ) : (
+                <>
+                  No User was created. Create a new OpenJob User for this
+                  Preview QA credential.
+                </>
+              )}
             </p>
             {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}
             <div className={styles.authDecisionActions}>
@@ -177,12 +246,14 @@ export function UnrecognizedSignIn({
                 onClick={onCreate}
                 type="button"
               >{saving ? "Creating…" : "Create new User"}</button>
-              <button
-                className={styles.secondaryButton}
-                disabled={saving}
-                onClick={onLinkExisting}
-                type="button"
-              >Link existing</button>
+              {existingMethod ? (
+                <button
+                  className={styles.secondaryButton}
+                  disabled={saving}
+                  onClick={onLinkExisting}
+                  type="button"
+                >Link existing</button>
+              ) : null}
               <button
                 className={styles.textButton}
                 disabled={saving}
@@ -428,7 +499,7 @@ export function UsernameOnboarding({
   saving,
 }: {
   error: string;
-  onLinkExisting: (returnFocus: HTMLButtonElement) => void;
+  onLinkExisting?: (returnFocus: HTMLButtonElement) => void;
   onClaim: (username: string) => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
@@ -477,16 +548,20 @@ export function UsernameOnboarding({
           </button>
         </form>
         <div className={styles.authDecisionActions}>
-          <p className={styles.guidance}>
-            Created an empty User by mistake? Link the existing User before
-            claiming a Username.
-          </p>
-          <button
-            className={styles.secondaryButton}
-            disabled={saving}
-            onClick={(event) => onLinkExisting(event.currentTarget)}
-            type="button"
-          >Link an existing User</button>
+          {onLinkExisting ? (
+            <>
+              <p className={styles.guidance}>
+                Created an empty User by mistake? Link the existing User before
+                claiming a Username.
+              </p>
+              <button
+                className={styles.secondaryButton}
+                disabled={saving}
+                onClick={(event) => onLinkExisting(event.currentTarget)}
+                type="button"
+              >Link an existing User</button>
+            </>
+          ) : null}
           <button
             className={styles.textButton}
             disabled={saving}
@@ -703,7 +778,7 @@ export type GroupShellProps = {
   onGroupUpdated: (group: Group) => void;
   onRetry: () => void;
   onSelect: (group: Group) => void;
-  onManageSignInMethods: (returnFocus: HTMLButtonElement | null) => void;
+  onManageSignInMethods?: (returnFocus: HTMLButtonElement | null) => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   saving: boolean;
@@ -827,13 +902,15 @@ export function GroupShell(props: GroupShellProps) {
                       setNotificationsOpen(true);
                     }}
                   >Notifications — {notificationStateLabel(props.notifications.state)}</button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpenMenu(null);
-                      props.onManageSignInMethods(userMenuButton.current);
-                    }}
-                  >Sign-in methods</button>
+                  {props.onManageSignInMethods ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenu(null);
+                        props.onManageSignInMethods?.(userMenuButton.current);
+                      }}
+                    >Sign-in methods</button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

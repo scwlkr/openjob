@@ -165,7 +165,7 @@ test("Sign-in Method listing and linking expose only safe providers and require 
       return linkResult;
     },
     async listSignInMethods() {
-      return ["google"];
+      return ["google", "qa-password"];
     },
     async resolve() {
       return currentUser;
@@ -175,6 +175,11 @@ test("Sign-in Method listing and linking expose only safe providers and require 
     authenticatedAt: now - 60_000,
     provider: "apple",
     uid: "firebase_apple_candidate",
+  };
+  let currentIdentity = {
+    authenticatedAt: now - 3_600_000,
+    provider: "google",
+    uid: "firebase_google_current",
   };
   const api = createV1IdentityApi({
     groups: {
@@ -187,11 +192,7 @@ test("Sign-in Method listing and linking expose only safe providers and require 
     users,
     verifyCredentialToken: async (token) =>
       token === "fresh-private-token" ? candidate : null,
-    verifyIdToken: async () => ({
-      authenticatedAt: now - 3_600_000,
-      provider: "google",
-      uid: "firebase_google_current",
-    }),
+    verifyIdToken: async () => currentIdentity,
   });
 
   const listed = await api.fetch(
@@ -233,6 +234,39 @@ test("Sign-in Method listing and linking expose only safe providers and require 
   }
   assert.equal(linkCalls.length, 0);
 
+  currentIdentity = {
+    authenticatedAt: now - 60_000,
+    provider: "qa-password",
+    uid: "firebase_qa_password_current",
+  };
+  candidate = {
+    authenticatedAt: now - 60_000,
+    provider: "apple",
+    uid: "firebase_apple_candidate",
+  };
+  const internalCurrent = await api.fetch(
+    new Request("https://openjob.test/api/v1/me/sign-in-methods", {
+      body: JSON.stringify({
+        confirmation: "link",
+        credentialToken: "fresh-private-token",
+        expectedTargetUserId: currentUser.userId,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }),
+  );
+  assert.equal(internalCurrent.status, 409);
+  assert.equal(
+    (await internalCurrent.json()).error.code,
+    "sign_in_method_conflict",
+  );
+  assert.equal(linkCalls.length, 0);
+  currentIdentity = {
+    authenticatedAt: now - 3_600_000,
+    provider: "google",
+    uid: "firebase_google_current",
+  };
+
   candidate = { ...candidate, authenticatedAt: now - 5 * 60_000 - 1 };
   const stale = await api.fetch(
     new Request("https://openjob.test/api/v1/me/sign-in-methods", {
@@ -269,6 +303,29 @@ test("Sign-in Method listing and linking expose only safe providers and require 
   );
   assert.equal(sameProvider.status, 409);
   assert.equal((await sameProvider.json()).error.code, "sign_in_method_conflict");
+
+  candidate = {
+    authenticatedAt: now - 60_000,
+    provider: "qa-password",
+    uid: "firebase_qa_password_candidate",
+  };
+  const internalCandidate = await api.fetch(
+    new Request("https://openjob.test/api/v1/me/sign-in-methods", {
+      body: JSON.stringify({
+        confirmation: "link",
+        credentialToken: "fresh-private-token",
+        expectedTargetUserId: currentUser.userId,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }),
+  );
+  assert.equal(internalCandidate.status, 409);
+  assert.equal(
+    (await internalCandidate.json()).error.code,
+    "sign_in_method_conflict",
+  );
+  assert.equal(linkCalls.length, 0);
 
   candidate = {
     authenticatedAt: now - 60_000,

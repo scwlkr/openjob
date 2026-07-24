@@ -1,4 +1,7 @@
-import type { FirebaseTokenIdentity } from "./firebase-id-token";
+import type {
+  FirebaseTokenIdentity,
+  LinkableSignInProvider,
+} from "./firebase-id-token";
 import type { GroupStore, OpenJobGroup } from "./v1-groups";
 import {
   defaultRequestId,
@@ -62,6 +65,12 @@ type IdentityApiOptions = {
 
 const SIGN_IN_METHODS_PATH = "/api/v1/me/sign-in-methods";
 const FRESH_AUTHENTICATION_WINDOW_MS = 5 * 60_000;
+
+function isLinkableProvider(
+  provider: FirebaseTokenIdentity["provider"],
+): provider is LinkableSignInProvider {
+  return provider === "apple" || provider === "google";
+}
 
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])$/;
 const RESERVED_USERNAMES = new Set([
@@ -211,7 +220,9 @@ export function createV1IdentityApi({
             const user = await users.resolve(identity);
             if (!user) return signInMethodUnrecognizedResponse(requestId);
             return jsonResponse({
-              data: await users.listSignInMethods(user.userId),
+              data: (await users.listSignInMethods(user.userId)).filter(
+                isLinkableProvider,
+              ),
             });
           }
 
@@ -240,7 +251,11 @@ export function createV1IdentityApi({
             ) {
               return freshAuthenticationRequired(requestId);
             }
-            if (candidate.provider === identity.provider) {
+            if (
+              !isLinkableProvider(identity.provider) ||
+              !isLinkableProvider(candidate.provider) ||
+              candidate.provider === identity.provider
+            ) {
               return signInMethodConflict(requestId);
             }
             const result = await users.link(

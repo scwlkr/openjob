@@ -14,9 +14,12 @@ export type OpenJobRuntimeConfig = {
   googleIosClientId: string;
   googleWebClientId: string;
   keychainService: string;
+  qaPasswordTenantId: string | null;
   releaseVersion: string;
   sessionStorageKey: string;
 };
+
+const TENANT_ID_PATTERN = /^[A-Za-z][A-Za-z0-9-]{3,63}$/u;
 
 function isEnvironment(value: unknown): value is OpenJobEnvironment {
   return (
@@ -41,6 +44,13 @@ export function readRuntimeConfig(): OpenJobRuntimeConfig {
     typeof openjob.googleIosClientId !== "string" ||
     typeof openjob.googleWebClientId !== "string" ||
     typeof openjob.keychainService !== "string" ||
+    !(
+      (openjob.environment === "preview" &&
+        typeof openjob.qaPasswordTenantId === "string" &&
+        TENANT_ID_PATTERN.test(openjob.qaPasswordTenantId)) ||
+      (openjob.environment !== "preview" &&
+        openjob.qaPasswordTenantId === null)
+    ) ||
     typeof openjob.sessionStorageKey !== "string" ||
     typeof openjob.releaseVersion !== "string"
   ) {
@@ -72,6 +82,7 @@ export function readRuntimeConfig(): OpenJobRuntimeConfig {
     googleIosClientId: openjob.googleIosClientId,
     googleWebClientId: openjob.googleWebClientId,
     keychainService: openjob.keychainService,
+    qaPasswordTenantId: openjob.qaPasswordTenantId,
     releaseVersion: openjob.releaseVersion,
     sessionStorageKey: openjob.sessionStorageKey,
   };

@@ -26,6 +26,7 @@ jest.mock("expo-secure-store", () => {
 });
 
 const store = createSecureSessionStore({
+  allowQaPassword: true,
   keychainService: "dev.openjob.app.preview.auth",
   storageKey: "openjob.native.auth.preview.v1",
 });
@@ -56,6 +57,47 @@ test("stores only a versioned provider refresh credential with device-only acces
   );
   expect(JSON.stringify((SecureStore.setItemAsync as jest.Mock).mock.calls)).not.toContain(
     "idToken",
+  );
+});
+
+test("stores and restores the Preview-only QA refresh credential", async () => {
+  const session = {
+    provider: "qa-password" as const,
+    refreshToken: "qa-refresh-only",
+    version: 1 as const,
+  };
+  await store.save(session);
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+    JSON.stringify(session),
+  );
+
+  await expect(store.load()).resolves.toEqual(session);
+});
+
+test("rejects Preview QA credentials when password auth is not configured", async () => {
+  const disabledStore = createSecureSessionStore({
+    allowQaPassword: false,
+    keychainService: "dev.openjob.app.auth",
+    storageKey: "openjob.native.auth.production.v1",
+  });
+  const session = {
+    provider: "qa-password" as const,
+    refreshToken: "qa-refresh-only",
+    version: 1 as const,
+  };
+
+  await expect(disabledStore.save(session)).rejects.toMatchObject({
+    code: "unavailable",
+  });
+  expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+    JSON.stringify(session),
+  );
+  await expect(disabledStore.load()).resolves.toBeNull();
+  expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+    "openjob.native.auth.production.v1",
+    { keychainService: "dev.openjob.app.auth" },
   );
 });
 

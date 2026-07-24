@@ -62,21 +62,27 @@ export type BrowserPushSubscription = {
 
 export type SignInMethod = "apple" | "google";
 
+export type AuthenticationMethod = SignInMethod | "qa-password";
+
 export type AuthSession = {
-  signInMethod: SignInMethod;
+  signInMethod: AuthenticationMethod;
   getIdToken(): Promise<string>;
 };
 
-export type AuthCredentialProof = AuthSession & {
+export type AuthCredentialProof = {
+  signInMethod: SignInMethod;
+  getIdToken(): Promise<string>;
   dispose(): Promise<void>;
 };
 
 export type OpenJobAuth = {
+  readonly qaPasswordEnabled: boolean;
   observe(
     listener: (session: AuthSession | null) => void,
     onError?: (error: unknown) => void,
   ): () => void;
   signIn(method: SignInMethod): Promise<void>;
+  signInWithQaPassword(email: string, password: string): Promise<void>;
   authenticateForLink(method: SignInMethod): Promise<AuthCredentialProof>;
   signOut(): Promise<void>;
   switchUser(): Promise<void>;

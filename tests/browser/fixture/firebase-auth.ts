@@ -8,35 +8,46 @@ let signOutFailed = false;
 let initializationFailed = false;
 let releaseSecondaryPopup: (() => void) | null = null;
 
-type SignInMethod = "apple" | "google";
+type AuthenticationMethod = "apple" | "google" | "qa-password";
 type TestApp = { name: string };
 type TestAuth = {
   name: string;
   currentUser: TestUser | null;
+  tenantId: string | null;
 };
 type TestProvider = {
   customParameters?: Record<string, string>;
   providerId: "apple.com" | "google.com";
 };
 type TestUser = {
+  tenantId: string | null;
   providerData: Array<{ providerId: TestProvider["providerId"] }>;
   getIdToken(): Promise<string>;
-  getIdTokenResult(): Promise<{ signInProvider: TestProvider["providerId"] }>;
+  getIdTokenResult(): Promise<{
+    signInProvider: TestProvider["providerId"] | "password";
+  }>;
 };
 
-function methodFor(provider: TestProvider): SignInMethod {
+function methodFor(provider: TestProvider): AuthenticationMethod {
   return provider.providerId === "apple.com" ? "apple" : "google";
 }
 
-function userFor(method: SignInMethod, fresh: boolean): TestUser {
+function userFor(method: AuthenticationMethod, fresh: boolean): TestUser {
   const multiProvider =
     new URLSearchParams(window.location.search).get("scenario") ===
     "multi-provider";
-  const providerId = method === "apple" ? "apple.com" : "google.com";
+  const providerId = method === "qa-password"
+    ? "password"
+    : method === "apple"
+      ? "apple.com"
+      : "google.com";
   return {
+    tenantId: method === "qa-password" ? "OpenJob-QA-Two-mvz9m" : null,
     providerData: multiProvider
       ? [{ providerId: "apple.com" }, { providerId: "google.com" }]
-      : [{ providerId }],
+      : providerId === "password"
+        ? []
+        : [{ providerId }],
     async getIdToken() {
       const tokenError = window.sessionStorage.getItem(
         fresh
@@ -72,7 +83,7 @@ function authFor(app?: TestApp) {
   const name = app?.name ?? "[DEFAULT]";
   const existing = auths.get(name);
   if (existing) return existing;
-  const auth = { name, currentUser: null };
+  const auth = { name, currentUser: null, tenantId: null };
   auths.set(name, auth);
   return auth;
 }
@@ -81,7 +92,14 @@ function currentUser(auth: TestAuth) {
   if (auth.name !== PRIMARY_AUTH_NAME) return auth.currentUser;
   const stored = window.localStorage.getItem(SESSION_KEY);
   if (!stored) return null;
-  return userFor(stored === "apple" ? "apple" : "google", false);
+  return userFor(
+    stored === "apple"
+      ? "apple"
+      : stored === "qa-password"
+        ? "qa-password"
+        : "google",
+    false,
+  );
 }
 
 function emit(auth: TestAuth) {
@@ -208,6 +226,29 @@ export async function signInWithPopup(
   return { user };
 }
 
+export async function signInWithEmailAndPassword(
+  auth: TestAuth,
+  email: string,
+  password: string,
+) {
+  const scenario = new URLSearchParams(window.location.search).get("scenario");
+  if (scenario === "qa-password-error" || !email || !password) {
+    throw Object.assign(new Error("Test QA credential failure."), {
+      code: "auth/invalid-credential",
+    });
+  }
+  if (scenario === "qa-password-loading") {
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+  }
+  if (auth.tenantId !== "OpenJob-QA-Two-mvz9m") {
+    throw new Error("The Preview QA tenant was not selected.");
+  }
+  const user = userFor("qa-password", false);
+  window.localStorage.setItem(SESSION_KEY, "qa-password");
+  emit(auth);
+  return { user };
+}
+
 export async function signOut(auth: TestAuth) {
   if (
     auth.name !== PRIMARY_AUTH_NAME &&
@@ -240,6 +281,7 @@ export async function signOut(auth: TestAuth) {
 (window as typeof window & {
   __openjobFirebaseTest: {
     emitPrimarySignedOut(): void;
+    primaryTenantId(): string | null;
     releaseSecondaryPopup(): void;
     secondarySignedIn(): boolean;
   };
@@ -247,6 +289,9 @@ export async function signOut(auth: TestAuth) {
   emitPrimarySignedOut() {
     window.localStorage.removeItem(SESSION_KEY);
     emit(authFor({ name: PRIMARY_AUTH_NAME }));
+  },
+  primaryTenantId() {
+    return authFor({ name: PRIMARY_AUTH_NAME }).tenantId;
   },
   releaseSecondaryPopup() {
     releaseSecondaryPopup?.();

@@ -14,12 +14,20 @@
     "qaOne": {
       "username": "qa-one",
       "role": "admin",
-      "membershipId": "qa_one_preview_v1"
+      "membershipId": "qa_one_preview_v1",
+      "authentication": {
+        "kind": "real-provider",
+        "provider": "google"
+      }
     },
     "qaTwo": {
       "username": "qa-two",
       "role": "member",
-      "membershipId": "qa_two_preview_v1"
+      "membershipId": "qa_two_preview_v1",
+      "authentication": {
+        "kind": "internal-qa-password",
+        "tenantId": "OpenJob-QA-Two-mvz9m"
+      }
     }
   },
   "tasks": [

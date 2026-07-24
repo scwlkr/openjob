@@ -1,4 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 import { Pressable, Text, View } from "react-native";
 import { NativeAuthGate } from "../src/auth/AuthGate";
 import { OpenJobApiError } from "../src/auth/coordinator";
@@ -24,6 +29,7 @@ const runtimeConfig: OpenJobRuntimeConfig = {
   googleIosClientId: "ios.apps.googleusercontent.com",
   googleWebClientId: "web.apps.googleusercontent.com",
   keychainService: "dev.openjob.app.preview.auth",
+  qaPasswordTenantId: "OpenJob-QA-Two-mvz9m",
   releaseVersion: "0.3.3",
   sessionStorageKey: "openjob.native.auth.preview.v1",
 };
@@ -48,6 +54,7 @@ function controller(
   createUser: jest.Mock;
   restore: jest.Mock;
   signIn: jest.Mock;
+  signInWithQaPassword: jest.Mock;
   signOut: jest.Mock;
   subscribeToCredentialRevocation: jest.Mock;
   switchUser: jest.Mock;
@@ -60,6 +67,7 @@ function controller(
     createUser: jest.fn(async () => signedIn),
     restore: jest.fn(async () => ({ kind: "signed-out" })),
     signIn: jest.fn(async () => signedIn),
+    signInWithQaPassword: jest.fn(async () => signedIn),
     signOut: jest.fn(async () => ({ kind: "signed-out" })),
     subscribeToCredentialRevocation: jest.fn(() => () => undefined),
     switchUser: jest.fn(async () => ({ kind: "signed-out" })),
@@ -73,7 +81,7 @@ function SignedInSurface({
   onSwitchUser,
   result,
 }: {
-  onManageSignInMethods: () => void;
+  onManageSignInMethods?: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   result: SignedInResult;
@@ -83,11 +91,13 @@ function SignedInSurface({
       <Text>
         {`Signed in as ${result.user.username ?? result.user.userId}`}
       </Text>
-      <Pressable
-        accessibilityLabel="Manage Sign-in Methods"
-        accessibilityRole="button"
-        onPress={onManageSignInMethods}
-      />
+      {onManageSignInMethods ? (
+        <Pressable
+          accessibilityLabel="Manage Sign-in Methods"
+          accessibilityRole="button"
+          onPress={onManageSignInMethods}
+        />
+      ) : null}
       <Pressable
         accessibilityLabel="Sign out"
         accessibilityRole="button"
@@ -105,13 +115,14 @@ function SignedInSurface({
 async function renderGate(
   auth: NativeAuthController,
   preference: "dark" | "light" = "light",
+  config: OpenJobRuntimeConfig = runtimeConfig,
 ) {
   return render(
     <OpenJobThemeProvider preference={preference} setPreference={jest.fn()}>
       <NativeAuthGate
         controller={auth}
         renderSignedIn={(props) => <SignedInSurface {...props} />}
-        runtimeConfig={runtimeConfig}
+        runtimeConfig={config}
       />
     </OpenJobThemeProvider>,
   );
@@ -149,6 +160,117 @@ test("requires an explicit create choice for an unknown credential", async () =>
       name: "This Google sign-in is not linked yet",
     }),
   ).toBeOnTheScreen();
+  expect(auth.createUser).not.toHaveBeenCalled();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Create a new OpenJob User" }),
+  );
+  expect(await screen.findByText("Signed in as walker")).toBeOnTheScreen();
+  expect(auth.createUser).toHaveBeenCalledTimes(1);
+});
+
+test("offers accessible password sign-in only in Preview without embedding credentials", async () => {
+  const auth = controller({
+    signInWithQaPassword: jest.fn(async () => ({
+      kind: "signed-in" as const,
+      methods: [],
+      user,
+    })),
+  });
+  await renderGate(auth);
+
+  const email = await screen.findByLabelText("Preview QA email");
+  const password = screen.getByLabelText("Preview QA password");
+  const submit = screen.getByRole("button", {
+    name: "Sign in as Preview QA User",
+  });
+  expect(password).toHaveProp("secureTextEntry", true);
+  expect(submit).toHaveProp("accessibilityState", { disabled: true });
+
+  await fireEvent.changeText(email, "qa@example.invalid");
+  await fireEvent.changeText(password, "fixture-password");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", {
+        name: "Sign in as Preview QA User",
+      }),
+    ).toHaveProp("accessibilityState", { disabled: false }),
+  );
+  await fireEvent.press(
+    screen.getByRole("button", {
+      name: "Sign in as Preview QA User",
+    }),
+  );
+
+  expect(auth.signInWithQaPassword).toHaveBeenCalledWith(
+    "qa@example.invalid",
+    "fixture-password",
+  );
+  expect(await screen.findByText("Signed in as walker")).toBeOnTheScreen();
+  expect(screen.queryByDisplayValue("fixture-password")).not.toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Manage Sign-in Methods" }),
+  ).not.toBeOnTheScreen();
+});
+
+test.each([
+  {
+    environment: "development" as const,
+    environmentBadge: "Development" as const,
+  },
+  {
+    environment: "production" as const,
+    environmentBadge: null,
+  },
+])("omits Preview QA password sign-in in $environment", async ({
+  environment,
+  environmentBadge,
+}) => {
+  const config: OpenJobRuntimeConfig = {
+    ...runtimeConfig,
+    environment,
+    environmentBadge,
+    qaPasswordTenantId: null,
+  };
+
+  await renderGate(controller(), "light", config);
+
+  expect(
+    await screen.findByRole("button", { name: "Continue with Google" }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText("Preview QA sign-in")).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText("Preview QA email")).not.toBeOnTheScreen();
+});
+
+test("requires explicit creation and never offers linking for unknown Preview QA credentials", async () => {
+  const auth = controller({
+    signInWithQaPassword: jest.fn(async () => ({
+      kind: "unrecognized" as const,
+      provider: "qa-password" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  await fireEvent.changeText(
+    await screen.findByLabelText("Preview QA email"),
+    "qa@example.invalid",
+  );
+  await fireEvent.changeText(
+    screen.getByLabelText("Preview QA password"),
+    "fixture-password",
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Sign in as Preview QA User" }),
+  );
+
+  expect(
+    await screen.findByRole("header", {
+      name: "This Preview QA sign-in is not linked yet",
+    }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Link to an existing User" }),
+  ).not.toBeOnTheScreen();
   expect(auth.createUser).not.toHaveBeenCalled();
 
   await fireEvent.press(

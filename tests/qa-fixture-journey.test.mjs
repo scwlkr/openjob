@@ -23,14 +23,17 @@ const PROJECT_ID = "openjob-nonprod";
 const DATABASE =
   `projects/${PROJECT_ID}/databases/(default)/documents`;
 const GROUP_ID = "grp_9f5d28b6c10e4a7db3f924681c7e50aa";
+const QA_PASSWORD_TENANT_ID = "OpenJob-QA-Two-mvz9m";
 const QA_USERS = {
   qaOne: {
     firebaseUid: "firebase_qa_one",
+    provider: "google",
     userId: "user_qa_one_stable",
     username: "qa-one",
   },
   qaTwo: {
     firebaseUid: "firebase_qa_two",
+    provider: "qa-password",
     userId: "user_qa_two_stable",
     username: "qa-two",
   },
@@ -44,23 +47,35 @@ function document(path, fields) {
   };
 }
 
-async function firebaseIdentityKey(firebaseUid) {
+async function sha256Key(value) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(firebaseUid),
+    new TextEncoder().encode(value),
   );
   return Buffer.from(digest).toString("base64url");
 }
 
 async function seedQaIdentities(firestore) {
   for (const user of Object.values(QA_USERS)) {
+    const methodId = await sha256Key(
+      `${user.provider}\0${user.firebaseUid}`,
+    );
+    const ownership = {
+      linkedAt: { timestampValue: "2026-07-23T00:00:00.000Z" },
+      methodId: { stringValue: methodId },
+      provider: { stringValue: user.provider },
+      userId: { stringValue: user.userId },
+    };
     firestore.documents.set(
-      `${DATABASE}/v1Users/${await firebaseIdentityKey(user.firebaseUid)}`,
-      document(`v1Users/${await firebaseIdentityKey(user.firebaseUid)}`, {
-        userId: { stringValue: user.userId },
-        username: { stringValue: user.username },
-        createdAt: { timestampValue: "2026-07-23T00:00:00.000Z" },
-      }),
+      `${DATABASE}/v1SignInMethods/${methodId}`,
+      document(`v1SignInMethods/${methodId}`, ownership),
+    );
+    firestore.documents.set(
+      `${DATABASE}/v1UserSignInMethods/${user.userId}/providers/${user.provider}`,
+      document(
+        `v1UserSignInMethods/${user.userId}/providers/${user.provider}`,
+        ownership,
+      ),
     );
     firestore.documents.set(
       `${DATABASE}/v1UserDirectory/${user.userId}`,
@@ -132,6 +147,10 @@ test("ordinary QA Users share the reset fixture and observe API changes in both 
         fetchImplementation: authority.fetch,
         now: () => Date.parse(controls.clock.now()),
         projectId: PROJECT_ID,
+        qaPassword: {
+          tenantId: QA_PASSWORD_TENANT_ID,
+          uid: QA_USERS.qaTwo.firebaseUid,
+        },
       });
       const identityApi = createV1IdentityApi({ groups, users, verifyIdToken });
       const groupsApi = createV1GroupsApi({ groups, users, verifyIdToken });
@@ -156,7 +175,17 @@ test("ordinary QA Users share the reset fixture and observe API changes in both 
         key,
         {
           authorization:
-            `Bearer ${await authority.issue({ uid: user.firebaseUid })}`,
+            `Bearer ${await authority.issue({
+              uid: user.firebaseUid,
+              claims: {
+                firebase: user.provider === "qa-password"
+                  ? {
+                    sign_in_provider: "password",
+                    tenant: QA_PASSWORD_TENANT_ID,
+                  }
+                  : { sign_in_provider: "google.com" },
+              },
+            })}`,
         },
       ]),
     ),
