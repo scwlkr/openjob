@@ -220,12 +220,17 @@ production clients may use only `openjob-dev`. Apple provider setup must follow
 the same boundary. Redirect handlers must use the environment-specific app
 scheme exported by `native/app.config.mjs`.
 
-## Remaining account gates
+## Remaining privacy gate
 
 Google Play's account checks are complete. The preview and production records
 exist, and both Internal Testing pages expose `Create new release`.
 
-The Google OAuth support gate is complete. Issue #34 remains open until the
-owner explicitly approves the coordinated all-ref history privacy scrub required
-to remove the historical private account-owner login from both published
-branches and the release tags. No further purchase is required or authorized.
+The Google OAuth support gate is complete. The owner-approved history privacy
+scrub completed across all refs on `2026-07-24`, rewriting both published
+branches and all nine release tags. A fresh remote mirror confirmed that the
+affected commits are unreachable from every advertised ref.
+
+GitHub Support ticket `#4599940` remains open for GitHub to purge its server-side
+dangling objects and cached commit views. Issue #34 remains open until both old
+web and API views return HTTP 404. No owner action, purchase, or subscription is
+currently required.

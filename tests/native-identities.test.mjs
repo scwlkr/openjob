@@ -44,7 +44,13 @@ test("public Google support metadata never exposes the owner login", async () =>
     identities.googlePlay.supportEmail,
   );
   assert.match(documentation, /openjob-support@googlegroups\.com/u);
-  assert.match(documentation, /history privacy scrub/iu);
+  assert.match(documentation, /history\s+privacy\s+scrub/iu);
+  assert.match(documentation, /GitHub Support ticket `#4599940`/u);
+  assert.match(
+    documentation,
+    /old\s+web\s+and\s+API\s+views\s+return\s+HTTP\s+404/iu,
+  );
+  assert.doesNotMatch(documentation, /owner explicitly approves/iu);
   assert.doesNotMatch(documentation, /OAuth support address.*eligible/isu);
   assert.doesNotMatch(JSON.stringify(firebase), /@gmail\.com/iu);
 });
