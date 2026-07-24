@@ -302,6 +302,12 @@ test("an exact existing account and OpenJob User provision idempotently", async 
             disabled: false,
             email: EMAIL,
             localId: FIREBASE_UID,
+            providerUserInfo: [
+              {
+                federatedId: EMAIL,
+                providerId: "password",
+              },
+            ],
           },
         ],
       });
