@@ -26,7 +26,8 @@ export function createSecureSessionStore({
   storageKey,
 }: SecureSessionStoreConfig) {
   const sharedOptions = { keychainService };
-  const cleanupStorageKey = `${storageKey}:cleanup-pending`;
+  const cleanupStorageKey = `${storageKey}.cleanup-pending`;
+  const legacyCleanupStorageKey = `${storageKey}:cleanup-pending`;
   const protectedOptions = {
     ...sharedOptions,
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -59,6 +60,7 @@ export function createSecureSessionStore({
     async loadCleanupPending() {
       const results = await Promise.allSettled([
         AsyncStorage.getItem(cleanupStorageKey),
+        AsyncStorage.getItem(legacyCleanupStorageKey),
         SecureStore.getItemAsync(cleanupStorageKey, sharedOptions),
       ]);
       if (
@@ -92,6 +94,7 @@ export function createSecureSessionStore({
     async clearCleanupPending() {
       const results = await Promise.allSettled([
         AsyncStorage.removeItem(cleanupStorageKey),
+        AsyncStorage.removeItem(legacyCleanupStorageKey),
         SecureStore.deleteItemAsync(cleanupStorageKey, sharedOptions),
       ]);
       if (results.some((result) => result.status === "rejected")) {

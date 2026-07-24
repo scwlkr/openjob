@@ -51,6 +51,7 @@ export default function createAppConfig({ config = {} } = {}) {
           iosUrlScheme: identity.ios.googleReversedClientId,
         },
       ],
+      "./plugins/with-ios-scene-lifecycle.cjs",
       "./plugins/with-google-signin-modular-headers.cjs",
       [
         "expo-splash-screen",
