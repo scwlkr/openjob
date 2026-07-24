@@ -203,7 +203,24 @@
         "android-device",
         "phone"
       ],
-      "status": "blocked-account-verification"
+      "status": "ready",
+      "verifiedAt": "2026-07-24"
+    },
+    "apps": {
+      "preview": {
+        "appId": "4974862256769283996",
+        "applicationId": "dev.openjob.app.preview",
+        "internalTesting": true,
+        "name": "OpenJob Preview",
+        "status": "draft"
+      },
+      "production": {
+        "appId": "4975911521427041995",
+        "applicationId": "dev.openjob.app",
+        "internalTesting": true,
+        "name": "OpenJob",
+        "status": "draft"
+      }
     },
     "developerAccountId": "6994653839033844694",
     "developerName": "WLKR LABS",

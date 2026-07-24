@@ -35,7 +35,24 @@ test("native environments expose stable OpenJob application identities", async (
     accountType: "personal",
     appCreation: {
       requiredAccountChecks: ["identity", "android-device", "phone"],
-      status: "blocked-account-verification",
+      status: "ready",
+      verifiedAt: "2026-07-24",
+    },
+    apps: {
+      preview: {
+        appId: "4974862256769283996",
+        applicationId: "dev.openjob.app.preview",
+        internalTesting: true,
+        name: "OpenJob Preview",
+        status: "draft",
+      },
+      production: {
+        appId: "4975911521427041995",
+        applicationId: "dev.openjob.app",
+        internalTesting: true,
+        name: "OpenJob",
+        status: "draft",
+      },
     },
     developerAccountId: "6994653839033844694",
     developerName: "WLKR LABS",
@@ -599,6 +616,11 @@ test("native handoff documents every public identity and recovery boundary", asy
   for (const app of Object.values(identities.apple.appStoreConnect)) {
     assert.match(documentation, new RegExp(app.appId, "u"));
     assert.match(documentation, new RegExp(app.name, "u"));
+  }
+  for (const app of Object.values(identities.googlePlay.apps)) {
+    assert.match(documentation, new RegExp(app.appId, "u"));
+    assert.match(documentation, new RegExp(app.applicationId, "u"));
+    assert.equal(app.internalTesting, true);
   }
   assert.match(documentation, /openjob-dev.*production/iu);
   assert.match(documentation, /TestFlight/u);

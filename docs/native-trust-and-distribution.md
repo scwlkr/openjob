@@ -128,10 +128,14 @@ verified public support email is `dev@wlkrlabs.com`, and its website is
 `https://wlkrlabs.com`. The support address is not the private Google account
 used to sign in. The approved one-time US$25 Play registration fee is paid; no
 other Play, Expo, Apple, or recurring expense is authorized. Google currently
-blocks app creation until its required identity, Android-device, and phone
-checks finish. After those checks, create preview and production records and
-expose Internal Testing for `dev.openjob.app.preview` and
-`dev.openjob.app`.
+reports the identity, Android-device, and phone checks complete. Both store
+records exist and expose an Internal Testing track that can accept a future
+release without additional project creation:
+
+| Environment | Listing name | Play app ID | Application ID | Status | Internal Testing |
+| --- | --- | --- | --- | --- | --- |
+| preview | `OpenJob Preview` | `4974862256769283996` | `dev.openjob.app.preview` | draft | ready |
+| production | `OpenJob` | `4975911521427041995` | `dev.openjob.app` | draft | ready |
 
 ## Ownership and least privilege
 
@@ -207,14 +211,12 @@ production clients may use only `openjob-dev`. Apple provider setup must follow
 the same boundary. Redirect handlers must use the environment-specific app
 scheme exported by `native/app.config.mjs`.
 
-## Human-only account gates
+## Remaining account gates
 
-Google Play is the remaining account gate. The owner must use Play Console's
-three visible checks: upload the requested official identity document, sign in
-to the Play Console mobile app on a physical Android device, and verify the
-contact phone number after Google approves the identity. App creation stays
-locked until Google clears those checks.
+Google Play's account checks are complete. The preview and production records
+exist, and both Internal Testing pages expose `Create new release`.
 
-Issue #34 remains open until Play permits creation of the preview/production
-records and Internal Testing is confirmed. No further purchase is required or
-authorized.
+Issue #34 remains open until the configured public Google OAuth support address
+is eligible as a Google Account or Group and the owner explicitly approves the
+coordinated `main` history privacy scrub required to remove the historical
+private account-owner login. No further purchase is required or authorized.
