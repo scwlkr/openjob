@@ -72,16 +72,24 @@ export type ProviderNativeModules = {
 };
 
 function defaultNativeModules(): ProviderNativeModules {
+  const platform = Platform.OS === "ios" ? "ios" : "android";
+
   return {
     appleAndroid: {
       configure: (options) =>
         appleAuthAndroid.configure(
           options as Parameters<typeof appleAuthAndroid.configure>[0],
         ),
-      errorCancelled: appleAuthAndroid.Error.SIGNIN_CANCELLED,
-      isSupported: appleAuthAndroid.isSupported,
-      responseTypeAll: appleAuthAndroid.ResponseType.ALL,
-      scopeAll: appleAuthAndroid.Scope.ALL,
+      errorCancelled:
+        platform === "android"
+          ? appleAuthAndroid.Error.SIGNIN_CANCELLED
+          : "",
+      isSupported:
+        platform === "android" && appleAuthAndroid.isSupported,
+      responseTypeAll:
+        platform === "android" ? appleAuthAndroid.ResponseType.ALL : "",
+      scopeAll:
+        platform === "android" ? appleAuthAndroid.Scope.ALL : "",
       signIn: async () => {
         const response = await appleAuthAndroid.signIn();
         return { idToken: response.id_token };
@@ -114,7 +122,7 @@ function defaultNativeModules(): ProviderNativeModules {
         await GoogleSignin.signOut();
       },
     },
-    platform: Platform.OS === "ios" ? "ios" : "android",
+    platform,
     randomUuid: () => Crypto.randomUUID(),
   };
 }

@@ -84,6 +84,10 @@ function nativeModules(
   };
 }
 
+test("constructs the iOS gateway without an Android Apple native module", () => {
+  expect(() => createProviderGateway(config)).not.toThrow();
+});
+
 test("hands Google system UI output to Firebase without profile or email data", async () => {
   const native = nativeModules();
   const gateway = createProviderGateway(config, native);
