@@ -192,6 +192,43 @@ test("keeps the immutable error when the current User still needs a Username", a
   expect(dependencies.getMe).toHaveBeenCalledTimes(2);
 });
 
+test("purges a revoked session during immutable Username reconciliation", async () => {
+  const emptyShell = {
+    userId: "usr_one",
+    username: null,
+    usernameRequired: true,
+  };
+  const dependencies = createDependencies({
+    claimUsername: jest.fn(async () => {
+      throw new OpenJobApiError(
+        409,
+        "username_immutable",
+        "Username cannot be changed.",
+      );
+    }),
+    getMe: jest
+      .fn()
+      .mockResolvedValueOnce(emptyShell)
+      .mockRejectedValueOnce(
+        new OpenJobApiError(
+          401,
+          "authentication_required",
+          "Authentication is required.",
+        ),
+      ),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+  await expect(coordinator.claimUsername("walker")).resolves.toEqual({
+    kind: "signed-out",
+    reason: "revoked",
+  });
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+});
+
 test("restores and persists only the refresh credential for a returning provider", async () => {
   const dependencies = createDependencies();
   const coordinator = new NativeAuthCoordinator(dependencies);

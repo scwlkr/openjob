@@ -176,6 +176,30 @@ test("blocks the signed-in shell until an accessible immutable Username claim su
   );
   expect(screen.queryByText(/Signed in as/u)).not.toBeOnTheScreen();
 
+  announce.mockClear();
+  await fireEvent.changeText(
+    screen.getByLabelText("Username"),
+    "w",
+  );
+  expect(
+    screen.queryByText("That Username is unavailable. Try another."),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.queryByText(
+      "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
+    ),
+  ).not.toBeOnTheScreen();
+  expect(announce).not.toHaveBeenCalled();
+
+  await fireEvent.changeText(
+    screen.getByLabelText("Username"),
+    "wa",
+  );
+  expect(
+    screen.queryByText("That Username is unavailable. Try another."),
+  ).not.toBeOnTheScreen();
+  expect(announce).not.toHaveBeenCalled();
+
   await fireEvent.changeText(
     screen.getByLabelText("Username"),
     "walker-two",

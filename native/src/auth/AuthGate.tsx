@@ -225,10 +225,12 @@ function UsernameClaimForm({
   busy,
   error,
   onClaim,
+  onDraftChange,
 }: {
   busy: boolean;
   error: string | null;
   onClaim: (username: string) => void;
+  onDraftChange: () => void;
 }) {
   const [username, setUsername] = useState("");
   const [validation, setValidation] = useState<string | null>(null);
@@ -273,11 +275,8 @@ function UsernameClaimForm({
           editable={!busy}
           onChangeText={(value) => {
             setUsername(value);
-            setValidation(
-              value.length > 0 && !USERNAME_PATTERN.test(value)
-                ? USERNAME_VALIDATION
-                : null,
-            );
+            setValidation(null);
+            onDraftChange();
           }}
           onSubmitEditing={claimCurrentUsername}
           placeholder="username"
@@ -555,6 +554,7 @@ export function NativeAuthGate({
           onClaim={(username) =>
             void perform(() => auth.claimUsername(username))
           }
+          onDraftChange={() => setMessage(null)}
         />
         {methodToLink ? (
           <ActionButton

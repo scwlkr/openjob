@@ -347,7 +347,15 @@ export class NativeAuthCoordinator {
         }
         try {
           user = await this.dependencies.getMe(session.idToken);
-        } catch {
+        } catch (reconciliationError) {
+          if (
+            (reconciliationError instanceof ProviderSignInError &&
+              reconciliationError.code === "revoked") ||
+            (reconciliationError instanceof OpenJobApiError &&
+              reconciliationError.status === 401)
+          ) {
+            throw reconciliationError;
+          }
           throw claimError;
         }
         this.assertCurrentOperation(epoch);
