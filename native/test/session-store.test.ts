@@ -2,13 +2,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { createSecureSessionStore } from "../src/auth/session-store";
 
-jest.mock("expo-secure-store", () => ({
-  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 2,
-  deleteItemAsync: jest.fn(async () => undefined),
-  getItemAsync: jest.fn(async () => null),
-  setItemAsync: jest.fn(async () => undefined),
-}));
+jest.mock("expo-secure-store", () => {
+  function ensureValidKey(key: string) {
+    if (!/^[\w.-]+$/u.test(key)) {
+      throw new Error("Invalid SecureStore key");
+    }
+  }
+
+  return {
+    AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 2,
+    deleteItemAsync: jest.fn(async (key: string) => {
+      ensureValidKey(key);
+    }),
+    getItemAsync: jest.fn(async (key: string) => {
+      ensureValidKey(key);
+      return null;
+    }),
+    setItemAsync: jest.fn(async (key: string) => {
+      ensureValidKey(key);
+    }),
+  };
+});
 
 const store = createSecureSessionStore({
   keychainService: "dev.openjob.app.preview.auth",
@@ -77,7 +92,7 @@ test("persists and clears a device-only cleanup marker across relaunch", async (
   await store.markCleanupPending();
 
   expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-    "openjob.native.auth.preview.v1:cleanup-pending",
+    "openjob.native.auth.preview.v1.cleanup-pending",
     "1",
     {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -85,7 +100,7 @@ test("persists and clears a device-only cleanup marker across relaunch", async (
     },
   );
   expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-    "openjob.native.auth.preview.v1:cleanup-pending",
+    "openjob.native.auth.preview.v1.cleanup-pending",
     "1",
   );
   (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce("1");
@@ -93,14 +108,35 @@ test("persists and clears a device-only cleanup marker across relaunch", async (
 
   await store.clearCleanupPending();
   expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
-    "openjob.native.auth.preview.v1:cleanup-pending",
+    "openjob.native.auth.preview.v1.cleanup-pending",
     {
       keychainService: "dev.openjob.app.preview.auth",
     },
   );
   expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+    "openjob.native.auth.preview.v1.cleanup-pending",
+  );
+  expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
     "openjob.native.auth.preview.v1:cleanup-pending",
   );
+});
+
+test("detects and clears the legacy AsyncStorage-only cleanup marker", async () => {
+  const legacyKey = "openjob.native.auth.preview.v1:cleanup-pending";
+  await AsyncStorage.setItem(legacyKey, "1");
+
+  await expect(store.loadCleanupPending()).resolves.toBe(true);
+  await store.clearCleanupPending();
+
+  await expect(AsyncStorage.getItem(legacyKey)).resolves.toBeNull();
+  for (const operation of [
+    SecureStore.getItemAsync,
+    SecureStore.deleteItemAsync,
+  ]) {
+    for (const [key] of (operation as jest.Mock).mock.calls) {
+      expect(key).toMatch(/^[\w.-]+$/u);
+    }
+  }
 });
 
 test("uses the non-secret marker fallback when protected marker storage fails", async () => {

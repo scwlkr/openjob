@@ -102,7 +102,7 @@ async function readTextTree(directory) {
       if (entry.isDirectory()) await visit(child);
       else if (
         entry.isFile() &&
-        /\.(?:entitlements|gradle|json|pbxproj|plist|properties|strings|xml)$/iu.test(
+        /\.(?:entitlements|gradle|json|pbxproj|plist|properties|strings|swift|xml)$/iu.test(
           entry.name,
         )
       ) {
@@ -156,6 +156,61 @@ for (const environment of environments) {
     assert.match(
       ios,
       /com\.apple\.developer\.applesignin[\s\S]{0,180}(?:Default|<string>Default<\/string>)/u,
+    );
+    assert.match(
+      ios,
+      /UIApplicationSceneManifest[\s\S]{0,800}UISceneDelegateClassName[\s\S]{0,160}\$\(PRODUCT_MODULE_NAME\)\.SceneDelegate/u,
+      `${environment} iOS scene lifecycle manifest was not generated`,
+    );
+    assert.match(
+      ios,
+      /UIApplicationSupportsMultipleScenes[\s\S]{0,120}<false\s*\/>/u,
+      `${environment} iOS scene lifecycle unexpectedly enabled multiple scenes`,
+    );
+    assert.match(
+      ios,
+      /class SceneDelegate: UIResponder, UIWindowSceneDelegate/u,
+      `${environment} iOS scene delegate was not generated`,
+    );
+    assert.equal(
+      ios.match(/SceneDelegate\.swift in Sources/gu)?.length,
+      2,
+      `${environment} iOS scene delegate was not linked exactly once in the app target`,
+    );
+    assert.match(
+      ios,
+      /UIWindow\(windowScene: windowScene\)/u,
+      `${environment} iOS scene window was not associated with its UIWindowScene`,
+    );
+    assert.match(
+      ios,
+      /appDelegate\.window = window/u,
+      `${environment} iOS scene window was not mirrored to the app delegate`,
+    );
+    assert.match(
+      ios,
+      /factory\.startReactNative\([\s\S]{0,260}launchOptions: Self\.launchOptions\(/u,
+      `${environment} iOS scene did not start React Native with reconstructed launch options`,
+    );
+    assert.match(
+      ios,
+      /UIApplicationLaunchOptionsURLKey[\s\S]{0,500}UIApplicationLaunchOptionsUserActivityKey/u,
+      `${environment} iOS scene did not preserve cold-start links`,
+    );
+    assert.match(
+      ios,
+      /ExpoAppDelegateSubscriberManager\.application\([\s\S]{0,120}UIApplication\.shared,[\s\S]{0,80}open: context\.url,[\s\S]{0,80}options: options\)/u,
+      `${environment} iOS scene did not forward authentication callback URLs to native handlers`,
+    );
+    assert.match(
+      ios,
+      /RCTLinkingManager\.application\([\s\S]{0,120}UIApplication\.shared,[\s\S]{0,80}open: context\.url,[\s\S]{0,80}options: options\)/u,
+      `${environment} iOS scene did not forward authentication callback URLs to React Native`,
+    );
+    assert.doesNotMatch(
+      ios,
+      /UIWindow\(frame: UIScreen\.main\.bounds\)/u,
+      `${environment} iOS app delegate still owns a legacy application window`,
     );
     assert.equal(
       podfile.match(/pod 'GoogleUtilities', :modular_headers => true/gu)
