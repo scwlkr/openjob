@@ -117,3 +117,24 @@ test("uses one service token for Firestore task reads and writes", async () => {
   assert.equal(await store.setTaskCompleted("missing", true), null);
   assert.equal(calls.filter(({ url }) => url.hostname === "oauth2.googleapis.com").length, 1);
 });
+
+test("accepts a service-account key with escaped newlines", async () => {
+  const fetchMock = async (input) => {
+    const url = new URL(input);
+    if (url.hostname === "oauth2.googleapis.com") {
+      return Response.json({ access_token: "test-token", expires_in: 3600 });
+    }
+    return Response.json({ documents: [] });
+  };
+  const privateKey = (await createPrivateKey()).replaceAll("\n", "\\n");
+  const store = createFirestoreStore(
+    {
+      projectId: "openjob-dev",
+      clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",
+      privateKey,
+    },
+    fetchMock,
+  );
+
+  assert.deepEqual(await store.listTasks(), []);
+});
