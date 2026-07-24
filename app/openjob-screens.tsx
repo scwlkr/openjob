@@ -370,7 +370,7 @@ export function SignInMethodsDialog({
           </>
         ) : (
           <>
-            <p className={styles.kicker}>Account security</p>
+            <p className={styles.kicker}>Sign-in security</p>
             <h2 id="sign-in-methods-title">Sign-in methods</h2>
             <p>Add only a provider you freshly authenticate and explicitly confirm.</p>
             {error ? <p className={styles.fieldError} role="alert">{error}</p> : null}

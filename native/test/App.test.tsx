@@ -144,7 +144,7 @@ test("production omits the non-production build badge", async () => {
   expect(screen.queryByText(/build$/iu)).not.toBeOnTheScreen();
 });
 
-test("wraps every account action inside a narrow phone header", async () => {
+test("wraps every User action inside a narrow phone header", async () => {
   const original = Dimensions.get("window");
   await act(() => {
     Dimensions.set({

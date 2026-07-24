@@ -143,8 +143,10 @@ export class NativeAuthCoordinator {
   private linkMode: "existing-current" | "unknown-current" | null = null;
   private expectedTargetUserId: string | null = null;
   private operationEpoch = 0;
-  private providerSessionTail: Promise<void> = Promise.resolve();
-  private storedSessionTail: Promise<void> = Promise.resolve();
+  private operationTails = {
+    provider: Promise.resolve(),
+    stored: Promise.resolve(),
+  };
 
   constructor(private readonly dependencies: NativeAuthDependencies) {}
 
@@ -213,7 +215,7 @@ export class NativeAuthCoordinator {
     this.existingSession = null;
     try {
       const credential =
-        await this.withProviderSessionLock(() =>
+        await this.withOperationLock("provider", () =>
           this.dependencies.signInWithProvider(provider),
         );
       providerAuthenticated = true;
@@ -279,7 +281,7 @@ export class NativeAuthCoordinator {
     const candidate = this.requireCandidate();
     const existingProvider = otherProvider(candidate.provider);
     const credential =
-      await this.withProviderSessionLock(() =>
+      await this.withOperationLock("provider", () =>
         this.dependencies.signInWithProvider(existingProvider),
       );
     this.assertCurrentOperation(epoch);
@@ -292,7 +294,7 @@ export class NativeAuthCoordinator {
       this.assertCurrentOperation(epoch);
       user = await this.dependencies.getMe(existing.idToken);
     } catch (error) {
-      await this.withProviderSessionLock(() =>
+      await this.withOperationLock("provider", () =>
         this.dependencies.clearProviderSession(),
       );
       throw error;
@@ -330,7 +332,7 @@ export class NativeAuthCoordinator {
       }
       throw error;
     }
-    const credential = await this.withProviderSessionLock(() =>
+    const credential = await this.withOperationLock("provider", () =>
       this.dependencies.signInWithProvider(provider),
     );
     this.assertCurrentOperation(epoch);
@@ -347,7 +349,7 @@ export class NativeAuthCoordinator {
       }
     } catch (error) {
       if (!isUnrecognized(error)) {
-        await this.withProviderSessionLock(() =>
+        await this.withOperationLock("provider", () =>
           this.dependencies.clearProviderSession(),
         );
         throw error;
@@ -453,7 +455,7 @@ export class NativeAuthCoordinator {
         : { kind: "cleanup-retry" };
     }
     const epoch = this.operationEpoch;
-    await this.withProviderSessionLock(() =>
+    await this.withOperationLock("provider", () =>
       this.dependencies.clearProviderSession(),
     );
     this.assertCurrentOperation(epoch);
@@ -576,7 +578,7 @@ export class NativeAuthCoordinator {
   }
 
   private async persistSession(session: FirebaseSession, epoch: number) {
-    await this.withStoredSessionLock(async () => {
+    await this.withOperationLock("stored", async () => {
       this.assertCurrentOperation(epoch);
       await this.dependencies.saveStoredSession({
         provider: session.provider,
@@ -588,28 +590,13 @@ export class NativeAuthCoordinator {
     return this.accessSession(session);
   }
 
-  private async withStoredSessionLock<T>(
+  private async withOperationLock<T>(
+    queue: keyof typeof this.operationTails,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const previous = this.storedSessionTail;
+    const previous = this.operationTails[queue];
     let release: () => void = () => undefined;
-    this.storedSessionTail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
-  }
-
-  private async withProviderSessionLock<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.providerSessionTail;
-    let release: () => void = () => undefined;
-    this.providerSessionTail = new Promise<void>((resolve) => {
+    this.operationTails[queue] = new Promise<void>((resolve) => {
       release = resolve;
     });
     await previous;
@@ -637,7 +624,7 @@ export class NativeAuthCoordinator {
     epoch: number,
     existingCurrent: boolean,
   ) {
-    await this.withProviderSessionLock(() =>
+    await this.withOperationLock("provider", () =>
       this.dependencies.clearProviderSession(),
     );
     this.assertCurrentOperation(epoch);
@@ -657,11 +644,11 @@ export class NativeAuthCoordinator {
       // The actual cleanup still runs even if neither marker store is writable.
     }
     const results = await Promise.allSettled([
-      this.withProviderSessionLock(() =>
+      this.withOperationLock("provider", () =>
         this.dependencies.clearProviderSession(),
       ),
       this.dependencies.purgeLocalDomainCache(),
-      this.withStoredSessionLock(() =>
+      this.withOperationLock("stored", () =>
         this.dependencies.clearStoredSession(),
       ),
     ]);
