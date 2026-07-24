@@ -75,6 +75,7 @@ export default function createAppConfig({ config = {} } = {}) {
       },
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
       supportsTablet: true,
+      usesAppleSignIn: true,
     },
     android: {
       ...config.android,
