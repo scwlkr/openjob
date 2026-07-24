@@ -279,9 +279,6 @@ export function createV1IdentityApi({
         }
 
         if (request.method === "POST" && url.pathname === "/api/v1/me") {
-          if (identity.provider === "qa-password") {
-            return signInMethodUnrecognizedResponse(requestId);
-          }
           if (!(await confirmsUserCreation(request))) {
             return errorResponse(requestId, {
               code: "invalid_request",
@@ -291,6 +288,11 @@ export function createV1IdentityApi({
               },
               status: 400,
             });
+          }
+          if (identity.provider === "qa-password") {
+            const user = await users.resolve(identity);
+            if (!user) return signInMethodUnrecognizedResponse(requestId);
+            return jsonResponse({ data: await currentUser(user, groups) });
           }
           const result = await users.create(identity);
           return jsonResponse(
