@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { webFirebaseConfigFor } from "../config/web-firebase-config.mjs";
+import { GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
 
 const root = new URL("../", import.meta.url);
 
@@ -19,6 +20,7 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     routes: [],
     vars: {
       FIREBASE_PROJECT_ID: "openjob-nonprod",
+      GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
     },
     workers_dev: true,
   });

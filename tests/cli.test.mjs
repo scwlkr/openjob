@@ -15,7 +15,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { GOOGLE_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
+import {
+  GOOGLE_DESKTOP_CLIENT_ID,
+  GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+} from "../cli/lib/oauth-config.mjs";
 
 const cliPath =
   process.env.OPENJOB_CLI_TEST_BIN ||
@@ -28,7 +31,7 @@ const cliVersion = JSON.parse(
 function runCli(args, options = {}) {
   return spawnSync(cliPath, args, {
     encoding: "utf8",
-    env: { ...process.env, ...options.env },
+    env: cliEnvironment(options.env),
     input: options.input,
   });
 }
@@ -41,7 +44,7 @@ function runCliAsync(args, options = {}) {
 
 function startCli(args, options = {}) {
   const child = spawn(cliPath, args, {
-    env: { ...process.env, ...options.env },
+    env: cliEnvironment(options.env),
     stdio: ["pipe", "pipe", "pipe"],
   });
   const result = new Promise((resolve, reject) => {
@@ -55,6 +58,18 @@ function startCli(args, options = {}) {
     child.on("close", (status, signal) => resolve({ status, signal, stdout, stderr }));
   });
   return { child, result };
+}
+
+function cliEnvironment(overrides = {}) {
+  const environment = { ...process.env, ...overrides };
+  if (environment.NODE_ENV === "test") {
+    environment.OPENJOB_API_URL ||= "http://127.0.0.1:1/api/v1";
+    environment.OPENJOB_TEST_AUTH_URL ||= "http://127.0.0.1:1";
+    environment.OPENJOB_TEST_FIREBASE_API_KEY ||= "test-api-key";
+    environment.OPENJOB_TEST_GOOGLE_CLIENT_ID ||=
+      "test-client.apps.googleusercontent.com";
+  }
+  return environment;
 }
 
 function waitForLoginUrl(running, message = "login URL was not emitted") {
@@ -85,7 +100,7 @@ function runCliInPty(args, { env, input, prompt }) {
     : `script -q -e -c ${shellQuote(quotedCommand)} /dev/null`;
   const feeder = `(sleep 0.1; printf %s ${shellQuote(input)}; sleep 1) | ${scriptCommand}`;
   const child = spawn("sh", ["-c", feeder], {
-    env: { ...process.env, ...env },
+    env: cliEnvironment(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   return new Promise((resolve, reject) => {
@@ -185,6 +200,42 @@ test("production CLI exposes the executable contract separately from the simulat
   }
 });
 
+test("CLI profile selection is closed before credentials or network are used", () => {
+  const result = runCli(
+    ["auth", "status", "--profile", "preview-qa-two", "--format", "json"],
+    { env: { NODE_ENV: "production" } },
+  );
+
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, "");
+  assert.deepEqual(JSON.parse(result.stderr), {
+    error: {
+      code: "config_invalid",
+      message:
+        "Unknown OpenJob CLI profile. Use production or preview-qa-one.",
+    },
+  });
+
+  const previewIntentWithoutProfile = runCli(
+    ["auth", "status", "--format", "json"],
+    {
+      env: {
+        NODE_ENV: "production",
+        OPENJOB_PREVIEW_QA_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+      },
+    },
+  );
+  assert.equal(previewIntentWithoutProfile.status, 2);
+  assert.equal(previewIntentWithoutProfile.stdout, "");
+  assert.deepEqual(JSON.parse(previewIntentWithoutProfile.stderr), {
+    error: {
+      code: "config_invalid",
+      message:
+        "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID requires --profile preview-qa-one.",
+    },
+  });
+});
+
 test("package installation exposes the executable on PATH", () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-install-"));
   try {
@@ -219,7 +270,11 @@ test("group current resolves explicit flag, environment, then local config", () 
 
   try {
     const config = runCli(["group", "current", "--format", "json"], {
-      env: { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "" },
+      env: {
+        NODE_ENV: "test",
+        OPENJOB_CONFIG: configPath,
+        OPENJOB_GROUP_ID: "",
+      },
     });
     assert.equal(config.status, 0, config.stderr);
     assert.deepEqual(JSON.parse(config.stdout), {
@@ -228,7 +283,11 @@ test("group current resolves explicit flag, environment, then local config", () 
     assert.equal(config.stderr, "");
 
     const environment = runCli(["group", "current", "--format", "json"], {
-      env: { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "grp_environment" },
+      env: {
+        NODE_ENV: "test",
+        OPENJOB_CONFIG: configPath,
+        OPENJOB_GROUP_ID: "grp_environment",
+      },
     });
     assert.equal(environment.status, 0, environment.stderr);
     assert.deepEqual(JSON.parse(environment.stdout), {
@@ -237,7 +296,13 @@ test("group current resolves explicit flag, environment, then local config", () 
 
     const explicit = runCli(
       ["group", "current", "--group", "grp_explicit", "--format", "json"],
-      { env: { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "grp_environment" } },
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_CONFIG: configPath,
+          OPENJOB_GROUP_ID: "grp_environment",
+        },
+      },
     );
     assert.equal(explicit.status, 0, explicit.stderr);
     assert.deepEqual(JSON.parse(explicit.stdout), {
@@ -246,11 +311,57 @@ test("group current resolves explicit flag, environment, then local config", () 
 
     const invalidOption = runCli(
       ["group", "current", "--user-id", "user_ignored", "--format", "json"],
-      { env: { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "" } },
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_CONFIG: configPath,
+          OPENJOB_GROUP_ID: "",
+        },
+      },
     );
     assert.equal(invalidOption.status, 2);
     assert.equal(invalidOption.stdout, "");
     assert.equal(JSON.parse(invalidOption.stderr).error.code, "usage_error");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("production smoke isolation uses XDG_CONFIG_HOME without test-only overrides", () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-production-config-"));
+  const environment = {
+    ...process.env,
+    NODE_ENV: "production",
+    XDG_CONFIG_HOME: directory,
+    OPENJOB_GROUP_ID: "",
+  };
+  for (const name of Object.keys(environment)) {
+    if (
+      name === "OPENJOB_API_URL" ||
+      name === "OPENJOB_CONFIG" ||
+      name === "OPENJOB_PREVIEW_QA_EXPECTED_USER_ID" ||
+      name === "OPENJOB_PREVIEW_QA_GOOGLE_OAUTH_CLIENT_ID" ||
+      name.startsWith("OPENJOB_TEST_")
+    ) {
+      delete environment[name];
+    }
+  }
+
+  try {
+    const result = spawnSync(
+      cliPath,
+      ["group", "current", "--format", "json"],
+      { encoding: "utf8", env: environment },
+    );
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.deepEqual(JSON.parse(result.stderr), {
+      error: {
+        code: "group_required",
+        message:
+          "Select a Group with --group, OPENJOB_GROUP_ID, or openjob group use.",
+      },
+    });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -409,6 +520,198 @@ test("auth status refreshes in memory and never prints credentials", async () =>
   }
 });
 
+test("identity-bound commands reuse one cached /me preflight", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-bound-identity-"));
+  const credentialPath = join(directory, "credential");
+  const refreshToken = "firebase-refresh-keychain-only-secret";
+  const idToken = "firebase-id-token-process-only-secret";
+  const expectedUserId = `user_${"a".repeat(32)}`;
+  const calls = [];
+  const currentUser = {
+    data: {
+      userId: expectedUserId,
+      username: "qa-one",
+      usernameRequired: false,
+      groups: [],
+    },
+  };
+  const createdGroup = {
+    data: {
+      groupId: "grp_created",
+      name: "Created once",
+      role: "admin",
+      createdAt: "2026-07-24T12:00:00Z",
+    },
+  };
+  writeFileSync(credentialPath, refreshToken, { mode: 0o600 });
+
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    calls.push({ body, method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: idToken,
+        refresh_token: refreshToken,
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/me") {
+      assert.equal(request.headers.authorization, `Bearer ${idToken}`);
+      response.end(JSON.stringify(currentUser));
+      return;
+    }
+    if (request.url === "/api/v1/groups" && request.method === "POST") {
+      assert.equal(request.headers.authorization, `Bearer ${idToken}`);
+      assert.deepEqual(JSON.parse(body), { name: "Created once" });
+      response.end(JSON.stringify(createdGroup));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "not_found" } }));
+  });
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+    OPENJOB_TEST_AUTH_URL: service.baseUrl,
+    OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+    OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+    OPENJOB_TEST_EXPECTED_USER_ID: expectedUserId,
+    OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+    OPENJOB_TEST_GOOGLE_CLIENT_ID: "desktop-client.apps.googleusercontent.com",
+  };
+
+  try {
+    for (const [arguments_, expected] of [
+      [
+        ["auth", "status", "--format", "json"],
+        {
+          data: {
+            signedIn: true,
+            userId: expectedUserId,
+            username: "qa-one",
+            usernameRequired: false,
+          },
+        },
+      ],
+      [["user", "show", "--format", "json"], currentUser],
+    ]) {
+      calls.length = 0;
+      const result = await runCliAsync(arguments_, { env: environment });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), expected);
+      assert.equal(result.stderr, "");
+      assert.deepEqual(
+        calls.map(({ method, url }) => ({ method, url })),
+        [
+          { method: "POST", url: "/firebase/token?key=test-api-key" },
+          { method: "GET", url: "/api/v1/me" },
+        ],
+      );
+    }
+
+    calls.length = 0;
+    const create = await runCliAsync(
+      ["group", "create", "--name", "Created once", "--format", "json"],
+      { env: environment },
+    );
+    assert.equal(create.status, 0, create.stderr);
+    assert.deepEqual(JSON.parse(create.stdout), createdGroup);
+    assert.equal(create.stderr, "");
+    assert.deepEqual(
+      calls.map(({ method, url }) => ({ method, url })),
+      [
+        { method: "POST", url: "/firebase/token?key=test-api-key" },
+        { method: "GET", url: "/api/v1/me" },
+        { method: "POST", url: "/api/v1/groups" },
+      ],
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("identity mismatch removes only the selected credential before mutation", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-bound-mismatch-"));
+  const credentialPath = join(directory, "credential");
+  const refreshToken = "firebase-refresh-keychain-only-secret";
+  const idToken = "firebase-id-token-process-only-secret";
+  const calls = [];
+  writeFileSync(credentialPath, refreshToken, { mode: 0o600 });
+
+  const service = await listen(async (request, response) => {
+    const body = await requestBody(request);
+    calls.push({ body, method: request.method, url: request.url });
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/firebase/token?key=test-api-key") {
+      response.end(JSON.stringify({
+        id_token: idToken,
+        refresh_token: refreshToken,
+      }));
+      return;
+    }
+    if (request.url === "/api/v1/me") {
+      assert.equal(request.headers.authorization, `Bearer ${idToken}`);
+      response.end(JSON.stringify({
+        data: {
+          userId: `user_${"b".repeat(32)}`,
+          username: "someone-else",
+          usernameRequired: false,
+          groups: [],
+        },
+      }));
+      return;
+    }
+    response.statusCode = 500;
+    response.end(JSON.stringify({
+      error: { code: "unexpected_request", message: "Mutation was sent." },
+    }));
+  });
+
+  try {
+    const result = await runCliAsync(
+      ["group", "create", "--name", "Must not be created", "--format", "json"],
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+          OPENJOB_TEST_AUTH_URL: service.baseUrl,
+          OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+          OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+          OPENJOB_TEST_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+          OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+          OPENJOB_TEST_GOOGLE_CLIENT_ID:
+            "desktop-client.apps.googleusercontent.com",
+        },
+      },
+    );
+    assert.equal(result.status, 3, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.deepEqual(JSON.parse(result.stderr), {
+      error: {
+        code: "profile_identity_mismatch",
+        message: "Signed-in User does not match the selected CLI profile.",
+      },
+    });
+    assert.equal(existsSync(credentialPath), false);
+    assert.deepEqual(
+      calls.map(({ method, url }) => ({ method, url })),
+      [
+        { method: "POST", url: "/firebase/token?key=test-api-key" },
+        { method: "GET", url: "/api/v1/me" },
+      ],
+    );
+    assert.doesNotMatch(
+      result.stdout + result.stderr,
+      /process-only-secret|keychain-only-secret|someone-else|user_[ab]{32}/,
+    );
+  } finally {
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Firebase refresh", async () => {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-login-"));
   const credentialPath = join(directory, "credential");
@@ -539,6 +842,106 @@ test("auth login uses Desktop OAuth, PKCE, random loopback, and stores only Fire
   }
 });
 
+test("auth login preserves the prior profile credential when identity binding fails", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "openjob-cli-login-identity-"));
+  const credentialPath = join(directory, "credential");
+  const priorRefresh = "prior-refresh-keychain-only-secret";
+  const candidateRefresh = "candidate-refresh-keychain-only-secret";
+  let authorizationUrl;
+  let running;
+  writeFileSync(credentialPath, priorRefresh, { mode: 0o600 });
+
+  const service = await listen(async (request, response) => {
+    await requestBody(request);
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/api/cli-auth/exchange") {
+      response.end(
+        JSON.stringify({ data: { idToken: "google-id-token-process-only-secret" } }),
+      );
+      return;
+    }
+    if (request.url === "/firebase/accounts:signInWithIdp?key=test-api-key") {
+      response.end(
+        JSON.stringify({
+          idToken: "candidate-id-token-process-only-secret",
+          refreshToken: candidateRefresh,
+        }),
+      );
+      return;
+    }
+    if (request.url === "/api/v1/me") {
+      assert.equal(
+        request.headers.authorization,
+        "Bearer candidate-id-token-process-only-secret",
+      );
+      response.end(
+        JSON.stringify({
+          data: {
+            userId: `user_${"b".repeat(32)}`,
+            username: "someone-else",
+            usernameRequired: false,
+            groups: [],
+          },
+        }),
+      );
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ error: { code: "not_found" } }));
+  });
+
+  try {
+    running = startCli(
+      ["auth", "login", "--no-open", "--format", "json"],
+      {
+        env: {
+          NODE_ENV: "test",
+          OPENJOB_API_URL: `${service.baseUrl}/api/v1`,
+          OPENJOB_TEST_AUTH_URL: service.baseUrl,
+          OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
+          OPENJOB_TEST_EXPECTED_USERNAME: "qa-one",
+          OPENJOB_TEST_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+          OPENJOB_TEST_FIREBASE_API_KEY: "test-api-key",
+          OPENJOB_TEST_GOOGLE_CLIENT_ID:
+            "desktop-client.apps.googleusercontent.com",
+        },
+      },
+    );
+    running.child.stdin.end();
+    authorizationUrl = await waitForLoginUrl(running);
+
+    const callback = new URL(
+      authorizationUrl.searchParams.get("redirect_uri"),
+    );
+    callback.searchParams.set("code", "one-time-google-code");
+    callback.searchParams.set(
+      "state",
+      authorizationUrl.searchParams.get("state"),
+    );
+    const callbackResponse = await fetch(callback, { redirect: "manual" });
+    assert.equal(callbackResponse.status, 303);
+
+    const result = await running.result;
+    assert.equal(result.status, 3, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.deepEqual(JSON.parse(result.stderr.trim().split("\n").at(-1)), {
+      error: {
+        code: "profile_identity_mismatch",
+        message: "Signed-in User does not match the selected CLI profile.",
+      },
+    });
+    assert.equal(readFileSync(credentialPath, "utf8"), priorRefresh);
+    assert.doesNotMatch(
+      result.stdout + result.stderr,
+      /candidate-refresh|candidate-id-token|someone-else|user_[ab]{32}/,
+    );
+  } finally {
+    if (running?.child.exitCode === null) running.child.kill("SIGINT");
+    await service.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("production auth login uses the configured Google Desktop client and PKCE", async () => {
   const running = startCli(["auth", "login", "--no-open"], {
     env: { NODE_ENV: "production" },
@@ -557,6 +960,7 @@ test("production auth login uses the configured Google Desktop client and PKCE",
       authorizationUrl.searchParams.get("client_id"),
       GOOGLE_DESKTOP_CLIENT_ID,
     );
+    assert.equal(authorizationUrl.searchParams.get("prompt"), null);
     assert.match(GOOGLE_DESKTOP_CLIENT_ID, /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
     assert.equal(authorizationUrl.searchParams.get("code_challenge_method"), "S256");
     assert.equal(authorizationUrl.searchParams.get("response_mode"), null);
@@ -568,6 +972,55 @@ test("production auth login uses the configured Google Desktop client and PKCE",
     const redirectUri = new URL(authorizationUrl.searchParams.get("redirect_uri"));
     assert.equal(redirectUri.hostname, "127.0.0.1");
     assert.notEqual(redirectUri.port, "0");
+  } finally {
+    running.child.kill("SIGINT");
+  }
+
+  const result = await running.result;
+  assert.equal(result.status, 130, result.stderr);
+});
+
+test("Preview QA auth login uses only its separately bound Desktop client", async () => {
+  const running = startCli(
+    [
+      "auth",
+      "login",
+      "--profile",
+      "preview-qa-one",
+      "--no-open",
+    ],
+    {
+      env: {
+        NODE_ENV: "production",
+        OPENJOB_PREVIEW_QA_EXPECTED_USER_ID: `user_${"a".repeat(32)}`,
+      },
+    },
+  );
+  running.child.stdin.end();
+
+  try {
+    const authorizationUrl = await waitForLoginUrl(
+      running,
+      "Preview QA login URL was not emitted",
+    );
+
+    assert.equal(authorizationUrl.origin, "https://accounts.google.com");
+    assert.equal(
+      authorizationUrl.searchParams.get("client_id"),
+      GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+    );
+    assert.notEqual(
+      GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+      GOOGLE_DESKTOP_CLIENT_ID,
+    );
+    assert.equal(
+      authorizationUrl.searchParams.get("code_challenge_method"),
+      "S256",
+    );
+    assert.equal(
+      authorizationUrl.searchParams.get("prompt"),
+      "select_account",
+    );
   } finally {
     running.child.kill("SIGINT");
   }
@@ -1701,7 +2154,11 @@ test("success output is atomic and never mixes files with stdout", () => {
   const configPath = join(directory, "config.json");
   const outputPath = join(directory, "result.json");
   writeFileSync(configPath, JSON.stringify({ currentGroupId: "grp_output" }));
-  const environment = { OPENJOB_CONFIG: configPath, OPENJOB_GROUP_ID: "" };
+  const environment = {
+    NODE_ENV: "test",
+    OPENJOB_CONFIG: configPath,
+    OPENJOB_GROUP_ID: "",
+  };
 
   try {
     const first = runCli(

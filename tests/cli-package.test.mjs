@@ -21,10 +21,37 @@ const installCommand = `npm install --global https://github.com/scwlkr/openjob/r
 test("the repository documents one clean-Mac CLI install command", () => {
   const readme = readFileSync(join(repoPath, "README.md"), "utf8");
   const cliReadme = readFileSync(join(cliPackagePath, "README.md"), "utf8");
+  const qaFixture = readFileSync(
+    join(repoPath, "docs", "qa-fixture.md"),
+    "utf8",
+  );
+  const productionSmoke = readFileSync(
+    join(repoPath, "scripts", "smoke-cli-production.mjs"),
+    "utf8",
+  );
   assert.equal(cliVersion, rootManifest.version);
   assert.match(readme, /Requires macOS and Node\.js 22\.13 or newer\./);
   assert.equal(readme.split(installCommand).length - 1, 1);
   assert.equal(cliReadme.split(installCommand).length - 1, 1);
+  assert.match(cliReadme, /--profile preview-qa-one/);
+  assert.match(qaFixture, /op run -- openjob --profile preview-qa-one/);
+  assert.doesNotMatch(
+    qaFixture,
+    /CLI \(`OPENJOB_API_URL`\)/,
+  );
+  assert.match(productionSmoke, /XDG_CONFIG_HOME/);
+  assert.match(productionSmoke, /delete childEnvironment\.OPENJOB_CONFIG/);
+  assert.match(productionSmoke, /delete childEnvironment\.OPENJOB_API_URL/);
+  assert.doesNotMatch(productionSmoke, /OPENJOB_CONFIG\s*:/);
+  for (const binding of [
+    "OPENJOB_API_URL",
+    "OPENJOB_TEST_AUTH_URL",
+    "OPENJOB_TEST_CREDENTIAL_FILE",
+    "OPENJOB_TEST_FIREBASE_API_KEY",
+    "OPENJOB_TEST_GOOGLE_CLIENT_ID",
+  ]) {
+    assert.match(productionSmoke, new RegExp(`${binding}:`));
+  }
 });
 
 test("the hosted CLI smoke fails closed without a Firebase ID token", () => {
@@ -68,6 +95,7 @@ test("the CLI release artifact installs the complete executable without app code
       "lib/api.mjs",
       "lib/auth.mjs",
       "lib/credential-store.mjs",
+      "lib/profiles.mjs",
       "openapi-types.ts",
       "openjob.mjs",
       "package.json",

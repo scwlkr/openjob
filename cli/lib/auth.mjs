@@ -6,60 +6,45 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { CliError } from "./errors.mjs";
-import { GOOGLE_DESKTOP_CLIENT_ID } from "./oauth-config.mjs";
+import { resolveCliProfile } from "./profiles.mjs";
 
-const FIREBASE_API_KEY = "AIzaSyCnk2KPwHgRu0dhJcy6QDow-hI_rEBTHaU";
-const CLI_AUTH_EXCHANGE_URL = "https://openjob.dev/api/cli-auth/exchange";
-
-function firebaseApiKey(environment) {
-  if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_FIREBASE_API_KEY) {
-    return environment.OPENJOB_TEST_FIREBASE_API_KEY;
-  }
-  return FIREBASE_API_KEY;
-}
-
-export function authEndpoints(environment = process.env) {
-  const key = encodeURIComponent(firebaseApiKey(environment));
-  if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_AUTH_URL) {
-    const base = environment.OPENJOB_TEST_AUTH_URL.replace(/\/$/, "");
-    return {
-      firebaseSignIn: `${base}/firebase/accounts:signInWithIdp?key=${key}`,
-      firebaseToken: `${base}/firebase/token?key=${key}`,
-      oauthAuthorize: `${base}/oauth/authorize`,
-      oauthExchange: `${base}/api/cli-auth/exchange`,
-    };
-  }
+export function authEndpoints(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  const key = encodeURIComponent(profile.firebaseApiKey);
   return {
-    firebaseSignIn: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${key}`,
-    firebaseToken: `https://securetoken.googleapis.com/v1/token?key=${key}`,
-    oauthAuthorize: "https://accounts.google.com/o/oauth2/v2/auth",
-    oauthExchange: CLI_AUTH_EXCHANGE_URL,
+    firebaseSignIn: `${profile.firebaseSignInUrl}?key=${key}`,
+    firebaseToken: `${profile.firebaseTokenUrl}?key=${key}`,
+    oauthAuthorize: profile.oauthAuthorizeUrl,
+    oauthExchange: profile.oauthExchangeUrl,
   };
 }
 
-function googleClientId(environment) {
-  if (environment.NODE_ENV === "test" && environment.OPENJOB_TEST_GOOGLE_CLIENT_ID) {
-    return environment.OPENJOB_TEST_GOOGLE_CLIENT_ID;
-  }
-  return GOOGLE_DESKTOP_CLIENT_ID;
-}
-
-export async function loginWithGoogle({ openBrowser }, environment = process.env) {
+export async function loginWithGoogle(
+  { openBrowser },
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   const state = randomBytes(32).toString("base64url");
   const verifier = randomBytes(64).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const callback = await loopbackCallback(state);
-  const endpoints = authEndpoints(environment);
+  const endpoints = authEndpoints(environment, profile);
   const authorizationUrl = new URL(endpoints.oauthAuthorize);
-  authorizationUrl.search = new URLSearchParams({
-    client_id: googleClientId(environment),
+  const authorizationParameters = new URLSearchParams({
+    client_id: profile.googleDesktopClientId,
     code_challenge: challenge,
     code_challenge_method: "S256",
     redirect_uri: callback.redirectUri,
     response_type: "code",
     scope: "openid email profile",
     state,
-  }).toString();
+  });
+  if (profile.oauthPrompt) {
+    authorizationParameters.set("prompt", profile.oauthPrompt);
+  }
+  authorizationUrl.search = authorizationParameters.toString();
 
   if (openBrowser) {
     const opened = spawnSync("/usr/bin/open", [authorizationUrl.href], {
@@ -100,22 +85,27 @@ export async function loginWithGoogle({ openBrowser }, environment = process.env
     ) {
       throw new CliError("auth_failed", "Firebase sign-in returned no session.", 3);
     }
-    await writeRefreshCredential(firebaseResponse.refreshToken, environment);
-    return firebaseResponse.idToken;
+    return {
+      idToken: firebaseResponse.idToken,
+      refreshToken: firebaseResponse.refreshToken,
+    };
   } finally {
     await callback.close();
   }
 }
 
-export async function refreshIdToken(environment = process.env) {
-  const refreshCredential = await readRefreshCredential(environment);
+export async function refreshIdToken(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  const refreshCredential = await readRefreshCredential(environment, profile);
   if (!refreshCredential) {
     throw new CliError("auth_required", "Run openjob auth login first.", 3);
   }
 
   let response;
   try {
-    response = await fetch(authEndpoints(environment).firebaseToken, {
+    response = await fetch(authEndpoints(environment, profile).firebaseToken, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -139,7 +129,7 @@ export async function refreshIdToken(environment = process.env) {
     typeof payload.refresh_token === "string" &&
     payload.refresh_token !== refreshCredential
   ) {
-    await writeRefreshCredential(payload.refresh_token, environment);
+    await writeRefreshCredential(payload.refresh_token, environment, profile);
   }
   return payload.id_token;
 }

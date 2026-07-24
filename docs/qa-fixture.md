@@ -33,6 +33,31 @@ After #34, #36, and #37 are complete:
 5. Confirm both Users list only the disposable QA Group before running release
    acceptance.
 
+The maintainer CLI permits only `production` and `preview-qa-one`. Preview uses
+a dedicated public Google Desktop OAuth client, a Preview Worker-held client
+secret, and separate macOS Keychain and config namespaces. It never accepts a
+runtime API or provider endpoint override. Add an `OpenJob User ID` field to the
+`OpenJob QA One Google` 1Password item after ordinary User creation, then invoke
+the CLI without exposing that value:
+
+```sh
+OPENJOB_PREVIEW_QA_EXPECTED_USER_ID='op://Personal/OpenJob QA One Google/OpenJob User ID' \
+  op run -- openjob --profile preview-qa-one auth login
+```
+
+Use that unresolved `op://` wrapper for every later Preview CLI invocation too;
+do not export the resolved User ID into a long-lived shell:
+
+```sh
+OPENJOB_PREVIEW_QA_EXPECTED_USER_ID='op://Personal/OpenJob QA One Google/OpenJob User ID' \
+  op run -- openjob --profile preview-qa-one group list
+```
+
+The CLI writes the candidate refresh credential only after `/api/v1/me`
+matches `@qa-one` and that 1Password-bound User ID exactly. A mismatch leaves
+the existing Preview credential unchanged. The profile's Keychain account
+contains only a short SHA-256-derived suffix, never the raw User ID.
+
 The repository now contains Google and Apple authentication, explicit
 provider-linking, and a deployed isolated preview API. Issue #35 must remain
 open until #34's provider/account gates are complete and real provider sign-in
@@ -66,7 +91,7 @@ identity records, deletes collections, repairs non-QA access, or accepts User
 IDs on the command line.
 
 After reset, use the same preview `/api/v1` origin in native, PWA, API harness,
-and CLI (`OPENJOB_API_URL`):
+and the allowlisted `preview-qa-one` CLI profile:
 
 ```text
 https://openjob-preview.walkerworlddiscord.workers.dev/api/v1

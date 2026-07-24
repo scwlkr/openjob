@@ -1,29 +1,12 @@
 import { refreshIdToken } from "./auth.mjs";
 import { CliError } from "./errors.mjs";
+import { resolveCliProfile } from "./profiles.mjs";
 
-const DEFAULT_API_URL = "https://openjob.dev/api/v1";
-
-export function apiBaseUrl(environment = process.env) {
-  const raw = environment.OPENJOB_API_URL || DEFAULT_API_URL;
-  let url;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new CliError("config_invalid", "OPENJOB_API_URL must be a valid URL.", 2);
-  }
-  const loopback =
-    url.hostname === "localhost" ||
-    url.hostname === "127.0.0.1" ||
-    url.hostname === "[::1]" ||
-    url.hostname === "::1";
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
-    throw new CliError(
-      "config_invalid",
-      "OPENJOB_API_URL must use HTTPS unless it targets localhost or loopback.",
-      2,
-    );
-  }
-  return raw.replace(/\/$/, "");
+export function apiBaseUrl(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  return `${profile.apiOrigin}/api/v1`;
 }
 
 /** @returns {Promise<unknown>} */
@@ -32,8 +15,13 @@ export async function apiRequest(
   init = {},
   options = {},
   environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
 ) {
-  return createApiClient(environment).request(path, init, options);
+  return createApiClient(environment, undefined, profile).request(
+    path,
+    init,
+    options,
+  );
 }
 
 /** @returns {Promise<unknown>} */
@@ -42,35 +30,55 @@ export async function apiRequestWithIdToken(
   init = {},
   idToken,
   environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
 ) {
-  return createApiClient(environment, idToken).request(path, init);
+  return createApiClient(environment, idToken, profile, {
+    allowCredentialRefresh: false,
+  }).request(path, init);
 }
 
 /** @returns {Promise<unknown>} */
-export async function apiCollection(path, options = {}, environment = process.env) {
-  return createApiClient(environment).collection(path, options);
+export async function apiCollection(
+  path,
+  options = {},
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  return createApiClient(environment, undefined, profile).collection(
+    path,
+    options,
+  );
 }
 
-export function createApiClient(environment = process.env, initialIdToken) {
+export function createApiClient(
+  environment = process.env,
+  initialIdToken,
+  profile = resolveCliProfile(undefined, environment),
+  { allowCredentialRefresh = true } = {},
+) {
   let idToken = initialIdToken;
 
   async function request(path, init = {}, { retryable = false, quiet = false } = {}) {
-    idToken ??= await refreshIdToken(environment);
+    idToken ??= await refreshIdToken(environment, profile);
     let authenticationReplayed = false;
     let serviceReplayed = false;
     while (true) {
       let response;
       try {
-        response = await send(path, init, idToken, environment);
+        response = await send(path, init, idToken, profile);
       } catch (error) {
         if (!retryable || serviceReplayed) throw error;
         serviceReplayed = true;
         await retryNotice(quiet, environment);
         continue;
       }
-      if (response.status === 401 && !authenticationReplayed) {
+      if (
+        allowCredentialRefresh &&
+        response.status === 401 &&
+        !authenticationReplayed
+      ) {
         authenticationReplayed = true;
-        idToken = await refreshIdToken(environment);
+        idToken = await refreshIdToken(environment, profile);
         continue;
       }
       if (
@@ -134,13 +142,13 @@ async function retryNotice(quiet, environment) {
   await new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-async function send(path, init, idToken, environment) {
+async function send(path, init, idToken, profile) {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${idToken}`);
   headers.set("accept", "application/json");
   if (init.body !== undefined) headers.set("content-type", "application/json");
   try {
-    return await fetch(`${apiBaseUrl(environment)}${path}`, {
+    return await fetch(`${profile.apiOrigin}/api/v1${path}`, {
       ...init,
       headers,
     });
