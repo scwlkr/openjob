@@ -21,7 +21,7 @@ if (!idToken && !useKeychain) {
 async function smoke({ firebaseIdToken, useKeychain: useStoredCredential }) {
   const directory = mkdtempSync(join(tmpdir(), "openjob-cli-production-"));
   const credentialPath = join(directory, "credential");
-  const configPath = join(directory, "config.json");
+  const configHome = join(directory, "config");
   const cli = process.env.OPENJOB_CLI_BIN || "openjob";
   const packageJson = JSON.parse(
     readFileSync(new URL("../cli/package.json", import.meta.url), "utf8"),
@@ -53,22 +53,27 @@ async function smoke({ firebaseIdToken, useKeychain: useStoredCredential }) {
   const childEnvironment = { ...process.env };
   delete childEnvironment.OPENJOB_CLI_SMOKE_TOKEN;
   delete childEnvironment.OPENJOB_CLI_SMOKE_USE_KEYCHAIN;
+  delete childEnvironment.OPENJOB_API_URL;
+  delete childEnvironment.OPENJOB_CONFIG;
+  delete childEnvironment.OPENJOB_PREVIEW_QA_EXPECTED_USER_ID;
+  delete childEnvironment.OPENJOB_PREVIEW_QA_GOOGLE_OAUTH_CLIENT_ID;
+  for (const name of Object.keys(childEnvironment)) {
+    if (name.startsWith("OPENJOB_TEST_")) delete childEnvironment[name];
+  }
   Object.assign(childEnvironment, {
     NODE_ENV: useStoredCredential ? "production" : "test",
-    OPENJOB_API_URL: "https://openjob.dev/api/v1",
-    OPENJOB_CONFIG: configPath,
+    XDG_CONFIG_HOME: configHome,
     OPENJOB_GROUP_ID: "",
   });
   if (address && typeof address === "object") {
     Object.assign(childEnvironment, {
+      OPENJOB_API_URL: "https://openjob.dev/api/v1",
       OPENJOB_TEST_AUTH_URL: `http://127.0.0.1:${address.port}`,
       OPENJOB_TEST_CREDENTIAL_FILE: credentialPath,
       OPENJOB_TEST_FIREBASE_API_KEY: "production-smoke",
+      OPENJOB_TEST_GOOGLE_CLIENT_ID:
+        "production-smoke.apps.googleusercontent.com",
     });
-  } else {
-    delete childEnvironment.OPENJOB_TEST_AUTH_URL;
-    delete childEnvironment.OPENJOB_TEST_CREDENTIAL_FILE;
-    delete childEnvironment.OPENJOB_TEST_FIREBASE_API_KEY;
   }
 
   let group;

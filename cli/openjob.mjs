@@ -2,7 +2,10 @@
 // @ts-check
 
 import { parseArguments } from "./lib/arguments.mjs";
-import { apiCollection, apiRequest, apiRequestWithIdToken } from "./lib/api.mjs";
+import {
+  apiRequestWithIdToken as requestApiWithIdToken,
+  createApiClient,
+} from "./lib/api.mjs";
 import { loginWithGoogle } from "./lib/auth.mjs";
 import {
   confirmDestructiveAction,
@@ -10,14 +13,23 @@ import {
   confirmTaskDeletion,
   inputIsInteractive,
 } from "./lib/confirmation.mjs";
-import { clearCurrentGroup, resolveGroup, writeCurrentGroup } from "./lib/config.mjs";
-import { deleteRefreshCredential } from "./lib/credential-store.mjs";
+import {
+  clearCurrentGroup,
+  resolveGroup as resolveGroupForProfile,
+  writeCurrentGroup,
+} from "./lib/config.mjs";
+import {
+  deleteRefreshCredential,
+  writeRefreshCredential,
+} from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
+import { resolveCliProfile } from "./lib/profiles.mjs";
 import packageJson from "./package.json" with { type: "json" };
 
 /** @typedef {Map<string, string>} CommandOptions */
+/** @typedef {ReturnType<typeof resolveCliProfile>} CliProfile */
 /** @typedef {import("./openapi-types.ts").CurrentUserResponse} CurrentUserResponse */
 /** @typedef {import("./openapi-types.ts").ClaimUsernameRequest} ClaimUsernameRequest */
 /** @typedef {import("./openapi-types.ts").ClaimUsernameResponse} ClaimUsernameResponse */
@@ -48,6 +60,7 @@ import packageJson from "./package.json" with { type: "json" };
 /** @typedef {import("./openapi-types.ts").SetTaskStateResponse} SetTaskStateResponse */
 
 const VERSION = packageJson.version;
+const PROFILE_OPTION = "--profile";
 const OUTPUT_OPTIONS = ["--format", "--force", "--out", "--quiet"];
 const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
 const TASK_COMMON_OPTIONS = GROUP_SCOPED_OPTIONS;
@@ -107,6 +120,7 @@ Resources:
 
 Global options:
   --group <group-id>          Override the client-local current Group
+  --profile <name>            Select production or preview-qa-one
   --format <table|json|jsonl> Output encoding; default: table
   --out <path|->              Write results to a new file or stdout (-)
   --force                     Allow --out to replace an existing file
@@ -173,7 +187,7 @@ function validateCommandOptions(resource, command, options) {
   const allowed = commandOptions(resource, command);
   if (!allowed) return;
   for (const option of options.keys()) {
-    if (!allowed.has(option)) {
+    if (option !== PROFILE_OPTION && !allowed.has(option)) {
       throw new CliError(
         "usage_error",
         `Option ${option} is not valid for ${resource} ${command}.`,
@@ -207,8 +221,33 @@ function clearConcealedConfigGroup(raw, error) {
   const parsed = parseArguments(raw);
   const [resource, command] = parsed.positionals;
   if (!commandOptions(resource, command)?.has("--group")) return;
-  const selected = resolveGroup(parsed.options);
-  if (selected.source === "config") clearCurrentGroup(selected.groupId);
+  const profile = resolveCliProfile(
+    parsed.options.get(PROFILE_OPTION),
+    process.env,
+  );
+  const selected = resolveGroupForProfile(
+    parsed.options,
+    process.env,
+    profile,
+  );
+  if (selected.source === "config") {
+    clearCurrentGroup(selected.groupId, process.env, profile);
+  }
+}
+
+/** @param {CurrentUserResponse} currentUser @param {CliProfile} profile */
+function assertSelectedIdentity(currentUser, profile) {
+  if (profile.expectedUsername === null && profile.expectedUserId === null) return;
+  if (
+    currentUser?.data?.username !== profile.expectedUsername ||
+    currentUser?.data?.userId !== profile.expectedUserId
+  ) {
+    throw new CliError(
+      "profile_identity_mismatch",
+      "Signed-in User does not match the selected CLI profile.",
+      3,
+    );
+  }
 }
 
 /**
@@ -291,8 +330,18 @@ function groupNameMutationBody(command, options) {
     : { name: options.get("--name") ?? "" };
 }
 
-/** @param {string} groupId @param {string} rawUsername @param {CommandOptions} options */
-async function memberByUsername(groupId, rawUsername, options) {
+/**
+ * @param {string} groupId
+ * @param {string} rawUsername
+ * @param {CommandOptions} options
+ * @param {(path: string, options?: { limit?: number, quiet?: boolean }) => Promise<unknown>} apiCollection
+ */
+async function memberByUsername(
+  groupId,
+  rawUsername,
+  options,
+  apiCollection,
+) {
   const username = rawUsername.replace(/^@/, "");
   const members = /** @type {ListMembersResponse} */ (await apiCollection(
     `/groups/${encodeURIComponent(groupId)}/members`,
@@ -354,6 +403,60 @@ async function main(raw) {
   const parsed = parseArguments(raw);
   const [resource, command, ...rest] = parsed.positionals;
   validateCommandOptions(resource, command, parsed.options);
+  const profile = resolveCliProfile(
+    parsed.options.get(PROFILE_OPTION),
+    process.env,
+  );
+  const storedApi = createApiClient(process.env, undefined, profile);
+  const hasBoundIdentity =
+    profile.expectedUsername !== null || profile.expectedUserId !== null;
+  /** @type {Promise<CurrentUserResponse> | undefined} */
+  let selectedIdentityPromise;
+  const selectedIdentity = () => {
+    if (!hasBoundIdentity) {
+      return /** @type {Promise<CurrentUserResponse>} */ (
+        storedApi.request("/me")
+      );
+    }
+    selectedIdentityPromise ??= (async () => {
+      const currentUser = /** @type {CurrentUserResponse} */ (
+        await storedApi.request("/me")
+      );
+      try {
+        assertSelectedIdentity(currentUser, profile);
+      } catch (error) {
+        if (
+          error instanceof CliError &&
+          error.code === "profile_identity_mismatch"
+        ) {
+          await deleteRefreshCredential(process.env, profile);
+        }
+        throw error;
+      }
+      return currentUser;
+    })();
+    return selectedIdentityPromise;
+  };
+  /**
+   * @param {string} path
+   * @param {RequestInit} [init]
+   * @param {{ retryable?: boolean, quiet?: boolean }} [options]
+   */
+  const apiRequest = async (path, init = {}, options = {}) => {
+    if (hasBoundIdentity) await selectedIdentity();
+    return storedApi.request(path, init, options);
+  };
+  /** @param {string} path @param {RequestInit} init @param {string} idToken */
+  const apiRequestWithIdToken = (path, init, idToken) =>
+    requestApiWithIdToken(path, init, idToken, process.env, profile);
+  /** @param {string} path @param {{ limit?: number, quiet?: boolean }} [options] */
+  const apiCollection = async (path, options = {}) => {
+    if (hasBoundIdentity) await selectedIdentity();
+    return storedApi.collection(path, options);
+  };
+  /** @param {CommandOptions} options */
+  const resolveGroup = (options) =>
+    resolveGroupForProfile(options, process.env, profile);
   const format = outputFormat(parsed.options);
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
@@ -363,7 +466,7 @@ async function main(raw) {
     return;
   }
   if (resource === "auth" && command === "status" && rest.length === 0) {
-    const currentUser = /** @type {CurrentUserResponse} */ (await apiRequest("/me"));
+    const currentUser = await selectedIdentity();
     writeResult(
       {
         data: {
@@ -377,11 +480,21 @@ async function main(raw) {
     return;
   }
   if (resource === "auth" && command === "login" && rest.length === 0) {
-    const idToken = await loginWithGoogle({
-      openBrowser: !parsed.options.has("--no-open"),
-    });
+    const candidate = await loginWithGoogle(
+      {
+        openBrowser: !parsed.options.has("--no-open"),
+      },
+      process.env,
+      profile,
+    );
     const currentUser = /** @type {CurrentUserResponse} */ (
-      await apiRequestWithIdToken("/me", {}, idToken)
+      await apiRequestWithIdToken("/me", {}, candidate.idToken)
+    );
+    assertSelectedIdentity(currentUser, profile);
+    await writeRefreshCredential(
+      candidate.refreshToken,
+      process.env,
+      profile,
     );
     writeResult(currentUser);
     return;
@@ -392,12 +505,12 @@ async function main(raw) {
       "Non-interactive logout requires --yes.",
       parsed.options,
     );
-    await deleteRefreshCredential();
+    await deleteRefreshCredential(process.env, profile);
     writeResult({ data: { signedIn: false } });
     return;
   }
   if (resource === "user" && command === "show" && rest.length === 0) {
-    writeResult(/** @type {CurrentUserResponse} */ (await apiRequest("/me")));
+    writeResult(await selectedIdentity());
     return;
   }
   if (resource === "username" && command === "claim") {
@@ -554,7 +667,7 @@ async function main(raw) {
     await apiRequest(`/groups/${encodeURIComponent(groupId)}/actions/leave`, {
       method: "POST",
     });
-    clearCurrentGroup(groupId);
+    clearCurrentGroup(groupId, process.env, profile);
     writeResult({ data: { resource: "membership", groupId, deleted: true } });
     return;
   }
@@ -575,7 +688,7 @@ async function main(raw) {
       method: "POST",
       body: JSON.stringify(body),
     });
-    clearCurrentGroup(groupId);
+    clearCurrentGroup(groupId, process.env, profile);
     writeResult({ data: { resource: "group", groupId, deleted: true } });
     return;
   }
@@ -603,7 +716,12 @@ async function main(raw) {
         parsed.options,
       );
     }
-    const member = await memberByUsername(groupId, username, parsed.options);
+    const member = await memberByUsername(
+      groupId,
+      username,
+      parsed.options,
+      apiCollection,
+    );
     const result = /** @type {PromoteMemberResponse | DemoteMemberResponse | null} */ (
       await apiRequest(
       `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(member.userId)}/actions/${command}`,
@@ -659,7 +777,14 @@ async function main(raw) {
       ? readInputObject(inputPath)
       : {
           userId: username
-            ? (await memberByUsername(groupId, username, parsed.options)).userId
+            ? (
+                await memberByUsername(
+                  groupId,
+                  username,
+                  parsed.options,
+                  apiCollection,
+                )
+              ).userId
             : selectedUserId,
         });
     writeResult(
@@ -726,7 +851,7 @@ async function main(raw) {
   if (resource === "group" && command === "use" && rest.length === 1) {
     const groupId = rest[0];
     await apiRequest(`/groups/${encodeURIComponent(groupId)}`);
-    writeCurrentGroup(groupId);
+    writeCurrentGroup(groupId, process.env, profile);
     writeResult({ data: { groupId, source: "config" } });
     return;
   }

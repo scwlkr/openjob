@@ -8,9 +8,9 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { CliError } from "./errors.mjs";
+import { resolveCliProfile } from "./profiles.mjs";
 
 const SERVICE = "dev.openjob.cli";
-const ACCOUNT = "firebase-refresh-token";
 
 function testCredentialPath(environment) {
   return environment.NODE_ENV === "test"
@@ -18,12 +18,15 @@ function testCredentialPath(environment) {
     : undefined;
 }
 
-export async function readRefreshCredential(environment = process.env) {
+export async function readRefreshCredential(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   const testPath = testCredentialPath(environment);
   if (testPath) return existsSync(testPath) ? readFileSync(testPath, "utf8") : null;
   try {
     const { Entry } = await import("@napi-rs/keyring");
-    return new Entry(SERVICE, ACCOUNT).getPassword();
+    return new Entry(SERVICE, profile.credentialAccount).getPassword();
   } catch {
     throw new CliError(
       "credential_store_error",
@@ -33,7 +36,11 @@ export async function readRefreshCredential(environment = process.env) {
   }
 }
 
-export async function writeRefreshCredential(credential, environment = process.env) {
+export async function writeRefreshCredential(
+  credential,
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   const testPath = testCredentialPath(environment);
   if (testPath) {
     mkdirSync(dirname(testPath), { recursive: true });
@@ -43,7 +50,7 @@ export async function writeRefreshCredential(credential, environment = process.e
   }
   try {
     const { Entry } = await import("@napi-rs/keyring");
-    new Entry(SERVICE, ACCOUNT).setPassword(credential);
+    new Entry(SERVICE, profile.credentialAccount).setPassword(credential);
   } catch {
     throw new CliError(
       "credential_store_error",
@@ -53,7 +60,10 @@ export async function writeRefreshCredential(credential, environment = process.e
   }
 }
 
-export async function deleteRefreshCredential(environment = process.env) {
+export async function deleteRefreshCredential(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   const testPath = testCredentialPath(environment);
   if (testPath) {
     if (existsSync(testPath)) unlinkSync(testPath);
@@ -61,7 +71,7 @@ export async function deleteRefreshCredential(environment = process.env) {
   }
   try {
     const { Entry } = await import("@napi-rs/keyring");
-    new Entry(SERVICE, ACCOUNT).deletePassword();
+    new Entry(SERVICE, profile.credentialAccount).deletePassword();
   } catch {
     throw new CliError(
       "credential_store_error",

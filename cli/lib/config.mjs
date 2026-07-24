@@ -11,15 +11,22 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { CliError } from "./errors.mjs";
+import { resolveCliProfile } from "./profiles.mjs";
 
-export function configPath(environment = process.env) {
+export function configPath(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   if (environment.OPENJOB_CONFIG) return environment.OPENJOB_CONFIG;
   const base = environment.XDG_CONFIG_HOME || join(homedir(), ".config");
-  return join(base, "openjob", "config.json");
+  return join(base, profile.configNamespace, "config.json");
 }
 
-export function readConfig(environment = process.env) {
-  const path = configPath(environment);
+export function readConfig(
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  const path = configPath(environment, profile);
   if (!existsSync(path)) return {};
   try {
     const value = JSON.parse(readFileSync(path, "utf8"));
@@ -41,13 +48,17 @@ export function readConfig(environment = process.env) {
   }
 }
 
-export function resolveGroup(options, environment = process.env) {
+export function resolveGroup(
+  options,
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
   const explicit = options.get("--group");
   if (explicit) return { groupId: explicit, source: "flag" };
   if (environment.OPENJOB_GROUP_ID) {
     return { groupId: environment.OPENJOB_GROUP_ID, source: "environment" };
   }
-  const currentGroupId = readConfig(environment).currentGroupId;
+  const currentGroupId = readConfig(environment, profile).currentGroupId;
   if (currentGroupId) return { groupId: currentGroupId, source: "config" };
   throw new CliError(
     "group_required",
@@ -56,16 +67,26 @@ export function resolveGroup(options, environment = process.env) {
   );
 }
 
-export function writeCurrentGroup(groupId, environment = process.env) {
-  writeConfig({ currentGroupId: groupId }, environment);
+export function writeCurrentGroup(
+  groupId,
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  writeConfig({ currentGroupId: groupId }, environment, profile);
 }
 
-export function clearCurrentGroup(groupId, environment = process.env) {
-  if (readConfig(environment).currentGroupId === groupId) writeConfig({}, environment);
+export function clearCurrentGroup(
+  groupId,
+  environment = process.env,
+  profile = resolveCliProfile(undefined, environment),
+) {
+  if (readConfig(environment, profile).currentGroupId === groupId) {
+    writeConfig({}, environment, profile);
+  }
 }
 
-function writeConfig(config, environment) {
-  const path = configPath(environment);
+function writeConfig(config, environment, profile) {
+  const path = configPath(environment, profile);
   const temporary = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   try {
     mkdirSync(dirname(path), { recursive: true });
