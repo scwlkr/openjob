@@ -81,6 +81,10 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
         `${identity.bundleIdentifier}.auth`,
       );
       assert.equal(config.extra.openjob.environment, environment);
+      assert.equal(
+        config.extra.openjob.qaPasswordTenantId,
+        environment === "preview" ? "OpenJob-QA-Two-mvz9m" : null,
+      );
       if (identity.badge === null) {
         assert.equal(
           Object.hasOwn(config.extra.openjob, "environmentBadge"),

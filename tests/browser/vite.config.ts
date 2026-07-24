@@ -1,12 +1,20 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { webFirebaseConfigFor } from "../../config/web-firebase-config.mjs";
+import {
+  qaPasswordTenantIdFor,
+  webFirebaseConfigFor,
+} from "../../config/web-firebase-config.mjs";
+
+const qaPasswordTenantId = qaPasswordTenantIdFor("preview");
 
 export default defineConfig({
   define: {
     __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(
       webFirebaseConfigFor("preview"),
+    ),
+    __OPENJOB_QA_PASSWORD_AUTH__: JSON.stringify(
+      qaPasswordTenantId ? { tenantId: qaPasswordTenantId } : null,
     ),
   },
   root: fileURLToPath(new URL("./fixture", import.meta.url)),

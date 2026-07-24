@@ -31,6 +31,7 @@ const previewConfig: OpenJobRuntimeConfig = {
   googleIosClientId: "ios.apps.googleusercontent.com",
   googleWebClientId: "web.apps.googleusercontent.com",
   keychainService: "dev.openjob.app.preview.auth",
+  qaPasswordTenantId: "OpenJob-QA-Two-mvz9m",
   releaseVersion: "0.3.3",
   sessionStorageKey: "openjob.native.auth.preview.v1",
 };
@@ -45,6 +46,7 @@ const productionConfig: OpenJobRuntimeConfig = {
   environmentBadge: null,
   firebaseAuthDomain: "openjob-dev.firebaseapp.com",
   keychainService: "dev.openjob.app.auth",
+  qaPasswordTenantId: null,
   sessionStorageKey: "openjob.native.auth.production.v1",
 };
 
@@ -67,6 +69,7 @@ function authController(): NativeAuthController {
     createUser: jest.fn(async () => signedIn),
     restore: jest.fn(async () => signedIn),
     signIn: jest.fn(async () => signedIn),
+    signInWithQaPassword: jest.fn(async () => signedIn),
     signOut: jest.fn(async () => ({ kind: "signed-out" as const })),
     subscribeToCredentialRevocation: jest.fn(() => () => undefined),
     switchUser: jest.fn(async () => ({ kind: "signed-out" as const })),

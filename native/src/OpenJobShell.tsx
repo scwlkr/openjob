@@ -44,7 +44,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 type SignedInUser = {
   methods: SignInMethod[];
-  onManageSignInMethods: () => void;
+  onManageSignInMethods?: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   user: OpenJobUser;
@@ -223,11 +223,13 @@ function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
           {runtimeConfig.environmentBadge ? (
             <BuildBadge label={runtimeConfig.environmentBadge} />
           ) : null}
-          <IconButton
-            accessibilityLabel="Manage Sign-in Methods"
-            icon="link"
-            onPress={signedInUser.onManageSignInMethods}
-          />
+          {signedInUser.onManageSignInMethods ? (
+            <IconButton
+              accessibilityLabel="Manage Sign-in Methods"
+              icon="link"
+              onPress={signedInUser.onManageSignInMethods}
+            />
+          ) : null}
           <IconButton
             accessibilityLabel="Switch User"
             icon="repeat"

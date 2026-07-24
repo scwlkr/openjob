@@ -11,7 +11,8 @@
   },
   "vars": {
     "FIREBASE_PROJECT_ID": "openjob-dev",
-    "GOOGLE_OAUTH_CLIENT_ID": "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com"
+    "GOOGLE_OAUTH_CLIENT_ID": "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com",
+    "OPENJOB_RUNTIME_TIER": "production"
   },
   "env": {
     "preview": {
@@ -19,7 +20,9 @@
       "routes": [],
       "vars": {
         "FIREBASE_PROJECT_ID": "openjob-nonprod",
-        "GOOGLE_OAUTH_CLIENT_ID": "550998178053-t47ol37o4hu6e8gte63r79oj52vn4u94.apps.googleusercontent.com"
+        "GOOGLE_OAUTH_CLIENT_ID": "550998178053-t47ol37o4hu6e8gte63r79oj52vn4u94.apps.googleusercontent.com",
+        "OPENJOB_QA_PASSWORD_TENANT_ID": "OpenJob-QA-Two-mvz9m",
+        "OPENJOB_RUNTIME_TIER": "preview"
       },
       "workers_dev": true
     }

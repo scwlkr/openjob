@@ -32,6 +32,7 @@
     "legacy:smoke": "node scripts/legacy-cutover.mjs smoke",
     "legacy:snapshot": "node scripts/legacy-cutover.mjs snapshot",
     "legacy:retire": "node scripts/legacy-cutover.mjs retire",
+    "qa:user:provision": "node scripts/provision-qa-password-user.mjs",
     "qa:fixture:reset": "node scripts/reset-qa-fixture.mjs",
     "smoke:production": "node scripts/smoke-v1-production.mjs",
     "native:check": "npm --prefix native run check",

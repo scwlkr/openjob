@@ -1136,6 +1136,104 @@ test("offers Google and Apple and restores either linked web session", async ({ 
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
 });
 
+test("offers the Preview QA tenant password path without retaining credentials", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await installApi(page, { user: signedInUser });
+  await page.goto("/?scenario=qa-password-loading");
+
+  const qaForm = page.getByRole("form", { name: "Preview QA sign-in" });
+  const email = qaForm.getByLabel("QA email");
+  const password = qaForm.getByLabel("QA password");
+  await expect(qaForm).toBeVisible();
+  await expect(email).toHaveAttribute("autocomplete", "email");
+  await expect(password).toHaveAttribute("autocomplete", "current-password");
+  await expect(password).toHaveAttribute("type", "password");
+
+  await email.fill("fixture@example.invalid");
+  await password.fill("fixture-input");
+  await qaForm.getByRole("button", { name: "Sign in as QA Two" }).click();
+  await expect(
+    qaForm.getByRole("button", { name: "Signing in…" }),
+  ).toBeDisabled();
+  await expect(email).toBeDisabled();
+  await expect(password).toBeDisabled();
+
+  await expect(
+    page.getByRole("heading", { name: "Create your first Group" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(
+    page.getByRole("button", { name: "Sign-in methods" }),
+  ).toHaveCount(0);
+  expect(await page.evaluate(() => ({
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+    tenantId: (window as typeof window & {
+      __openjobFirebaseTest: { primaryTenantId(): string | null };
+    }).__openjobFirebaseTest.primaryTenantId(),
+    localStorage: { ...window.localStorage },
+    sessionStorage: { ...window.sessionStorage },
+  }))).toEqual(expect.objectContaining({
+    session: "qa-password",
+    tenantId: null,
+  }));
+  const browserStorage = await page.evaluate(() => JSON.stringify({
+    localStorage: { ...window.localStorage },
+    sessionStorage: { ...window.sessionStorage },
+  }));
+  expect(browserStorage).not.toContain("fixture@example.invalid");
+  expect(browserStorage).not.toContain("fixture-input");
+});
+
+test("keeps an unknown Preview QA credential create-only", async ({ page }) => {
+  const state = await installApi(page, { credentialRecognized: false });
+  await page.goto("/");
+
+  const qaForm = page.getByRole("form", { name: "Preview QA sign-in" });
+  await qaForm.getByLabel("QA email").fill("fixture@example.invalid");
+  await qaForm.getByLabel("QA password").fill("fixture-input");
+  await qaForm.getByRole("button", { name: "Sign in as QA Two" }).click();
+
+  await expect(page.getByRole("heading", {
+    name: "This sign-in is not linked yet",
+  })).toBeVisible();
+  await expect(page.getByText(/Preview QA credential/u)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new User" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Link existing" })).toHaveCount(0);
+  expect(state.identityRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Create new User" }).click();
+  await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Link an existing User" }),
+  ).toHaveCount(0);
+  expect(state.identityRequests).toEqual([
+    { path: "/api/v1/me", body: { confirmation: "create" } },
+  ]);
+});
+
+test("reports an invalid Preview QA credential without leaking it", async ({ page }) => {
+  await installApi(page);
+  await page.goto("/?scenario=qa-password-error");
+
+  const qaForm = page.getByRole("form", { name: "Preview QA sign-in" });
+  await qaForm.getByLabel("QA email").fill("fixture@example.invalid");
+  await qaForm.getByLabel("QA password").fill("fixture-input");
+  await qaForm.getByRole("button", { name: "Sign in as QA Two" }).click();
+
+  await expect(page.getByRole("alert")).toHaveText(
+    "That Preview QA email or password is not valid.",
+  );
+  await expect(
+    qaForm.getByRole("button", { name: "Sign in as QA Two" }),
+  ).toBeEnabled();
+  await expect(page.locator("body")).not.toContainText("fixture-input");
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __openjobFirebaseTest: { primaryTenantId(): string | null };
+    }).__openjobFirebaseTest.primaryTenantId()
+  )).toBeNull();
+});
+
 test("requires an explicit choice before an unknown credential creates a User", async ({ page }) => {
   const state = await installApi(page, { credentialRecognized: false });
   await page.setViewportSize({ width: 390, height: 844 });

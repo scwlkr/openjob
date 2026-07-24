@@ -20,6 +20,12 @@ const appleSession: FirebaseSession = {
   provider: "apple",
   refreshToken: "apple-refresh-token",
 };
+const qaPasswordSession: FirebaseSession = {
+  expiresAt: 9_999_999,
+  idToken: "qa-password-id-token",
+  provider: "qa-password",
+  refreshToken: "qa-password-refresh-token",
+};
 const user = {
   userId: "usr_one",
   username: "walker",
@@ -40,6 +46,7 @@ function createDependencies(
   purgeLocalDomainCache: jest.Mock;
   refreshSession: jest.Mock;
   saveStoredSession: jest.Mock;
+  signInWithQaPassword: jest.Mock;
   signInWithProvider: jest.Mock;
 } {
   return {
@@ -60,6 +67,7 @@ function createDependencies(
     purgeLocalDomainCache: jest.fn(async () => undefined),
     refreshSession: jest.fn(async () => googleSession),
     saveStoredSession: jest.fn(async () => undefined),
+    signInWithQaPassword: jest.fn(async () => qaPasswordSession),
     signInWithProvider: jest.fn(async (provider) => ({
       idToken: `${provider}-provider-token`,
       provider,
@@ -77,6 +85,7 @@ function createDependencies(
     purgeLocalDomainCache: jest.Mock;
     refreshSession: jest.Mock;
     saveStoredSession: jest.Mock;
+    signInWithQaPassword: jest.Mock;
     signInWithProvider: jest.Mock;
   };
 }
@@ -155,6 +164,73 @@ test("requires an explicit choice before creating an unknown sign-in", async () 
     methods: ["google"],
     user,
   });
+});
+
+test("signs in the Preview QA User without invoking a linkable provider", async () => {
+  const dependencies = createDependencies({
+    listSignInMethods: jest.fn(async () => []),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(
+    coordinator.signInWithQaPassword(
+      "qa@example.invalid",
+      "fixture-password",
+    ),
+  ).resolves.toEqual({
+    kind: "signed-in",
+    methods: [],
+    user,
+  });
+
+  expect(dependencies.signInWithQaPassword).toHaveBeenCalledWith(
+    "qa@example.invalid",
+    "fixture-password",
+  );
+  expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
+  expect(dependencies.exchangeProviderCredential).not.toHaveBeenCalled();
+  expect(dependencies.saveStoredSession).toHaveBeenCalledWith({
+    provider: "qa-password",
+    refreshToken: "qa-password-refresh-token",
+    version: 1,
+  });
+  await expect(
+    coordinator.authenticateNewMethod("google"),
+  ).rejects.toThrow("cannot link providers");
+  expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
+});
+
+test("allows explicit creation but never linking for an unknown Preview QA credential", async () => {
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(409, "sign_in_method_unrecognized");
+    }),
+    listSignInMethods: jest.fn(async () => []),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(
+    coordinator.signInWithQaPassword(
+      "qa@example.invalid",
+      "fixture-password",
+    ),
+  ).resolves.toEqual({
+    kind: "unrecognized",
+    provider: "qa-password",
+  });
+  await expect(coordinator.authenticateExistingUser()).rejects.toThrow(
+    "cannot be linked",
+  );
+  expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
+
+  await expect(coordinator.createUser()).resolves.toEqual({
+    kind: "signed-in",
+    methods: [],
+    user,
+  });
+  expect(dependencies.createUser).toHaveBeenCalledWith(
+    "qa-password-id-token",
+  );
 });
 
 test("refreshes an unknown credential before a delayed explicit User creation", async () => {

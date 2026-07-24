@@ -1,18 +1,22 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { webFirebaseConfigFor } from "../config/web-firebase-config.mjs";
+import {
+  qaPasswordTenantIdFor,
+  webFirebaseConfigFor,
+} from "../config/web-firebase-config.mjs";
 import { GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID } from "../cli/lib/oauth-config.mjs";
 
 const root = new URL("../", import.meta.url);
 
 test("preview deployment cannot inherit the production Worker or Firebase project", async () => {
-  const [wrangler, packageJson, identities] = await Promise.all([
+  const [wrangler, packageJson, identities, fixture] = await Promise.all([
     readFile(new URL("wrangler.jsonc", root), "utf8").then(JSON.parse),
     readFile(new URL("package.json", root), "utf8").then(JSON.parse),
     readFile(new URL("config/native-identities.json", root), "utf8").then(
       JSON.parse,
     ),
+    readFile(new URL("config/qa-fixture.json", root), "utf8").then(JSON.parse),
   ]);
 
   assert.deepEqual(wrangler.env.preview, {
@@ -21,10 +25,31 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     vars: {
       FIREBASE_PROJECT_ID: "openjob-nonprod",
       GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_QA_DESKTOP_CLIENT_ID,
+      OPENJOB_QA_PASSWORD_TENANT_ID: "OpenJob-QA-Two-mvz9m",
+      OPENJOB_RUNTIME_TIER: "preview",
     },
     workers_dev: true,
   });
+  const qaPasswordTenantId = qaPasswordTenantIdFor("preview");
+  assert.equal(
+    qaPasswordTenantId,
+    identities.environments.preview.firebase.qaPasswordTenantId,
+  );
+  assert.equal(
+    wrangler.env.preview.vars.OPENJOB_QA_PASSWORD_TENANT_ID,
+    qaPasswordTenantId,
+  );
+  assert.equal(
+    fixture.users.qaTwo.authentication.tenantId,
+    qaPasswordTenantId,
+  );
+  assert.equal(qaPasswordTenantIdFor("production"), null);
   assert.equal(wrangler.vars.FIREBASE_PROJECT_ID, "openjob-dev");
+  assert.equal(wrangler.vars.OPENJOB_RUNTIME_TIER, "production");
+  assert.equal(
+    Object.hasOwn(wrangler.vars, "OPENJOB_QA_PASSWORD_TENANT_ID"),
+    false,
+  );
   assert.deepEqual(wrangler.routes, [
     { custom_domain: true, pattern: "openjob.dev" },
   ]);

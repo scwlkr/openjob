@@ -5,6 +5,10 @@ import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
+import {
+  qaPasswordIdentityConfig,
+  type QaPasswordRuntimeBindings,
+} from "./qa-password-config";
 import { createTaskNotificationDispatcher } from "./task-notifications";
 import { createV1GroupsApi, createV1GroupsHandler } from "./v1-groups";
 import { createV1IdentityApi, createV1IdentityHandler } from "./v1-identity";
@@ -15,7 +19,7 @@ import {
 import { createV1TasksApi, createV1TasksHandler } from "./v1-tasks";
 import { createWebPushSender } from "./web-push";
 
-type FirebaseBindings = {
+type FirebaseBindings = QaPasswordRuntimeBindings & {
   FIREBASE_CLIENT_EMAIL?: string;
   FIREBASE_PRIVATE_KEY?: string;
   FIREBASE_PROJECT_ID?: string;
@@ -68,7 +72,10 @@ function getRuntime() {
       console.warn("Push Notification delivery failed.", failure);
     },
   });
-  const verifyIdToken = createFirebaseIdTokenVerifier({ projectId });
+  const verifyIdToken = createFirebaseIdTokenVerifier({
+    projectId,
+    qaPassword: qaPasswordIdentityConfig(bindings, projectId),
+  });
   runtime = {
     groupsApi: createV1GroupsApi({ groups, users, verifyIdToken }),
     identityApi: createV1IdentityApi({

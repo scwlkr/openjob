@@ -54,7 +54,13 @@ async function legacyFirebaseIdentityKey(firebaseUid: string) {
 }
 
 function parseProvider(value: unknown): SignInProvider | null {
-  if (value === "apple" || value === "google") return value;
+  if (
+    value === "apple" ||
+    value === "google" ||
+    value === "qa-password"
+  ) {
+    return value;
+  }
   return null;
 }
 
@@ -535,7 +541,11 @@ export function createFirestoreUserStore(
       secondIdentity: FirebaseTokenIdentity,
       expectedTargetUserId?: string,
     ) {
-      if (firstIdentity.provider === secondIdentity.provider) {
+      if (
+        firstIdentity.provider === "qa-password" ||
+        secondIdentity.provider === "qa-password" ||
+        firstIdentity.provider === secondIdentity.provider
+      ) {
         return { kind: "conflict" as const };
       }
 

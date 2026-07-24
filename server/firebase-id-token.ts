@@ -1,8 +1,11 @@
+import type { QaPasswordIdentityConfig } from "./qa-password-config";
+
 const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const UNKNOWN_KEY_REFRESH_COOLDOWN_MS = 60_000;
 
-export type SignInProvider = "apple" | "google";
+export type LinkableSignInProvider = "apple" | "google";
+export type SignInProvider = LinkableSignInProvider | "qa-password";
 
 export type FirebaseTokenIdentity = {
   authenticatedAt: number;
@@ -14,7 +17,7 @@ type FirebaseTokenPayload = {
   aud?: unknown;
   auth_time?: unknown;
   exp?: unknown;
-  firebase?: { sign_in_provider?: unknown };
+  firebase?: { sign_in_provider?: unknown; tenant?: unknown };
   iat?: unknown;
   iss?: unknown;
   sub?: unknown;
@@ -28,6 +31,7 @@ type FirebaseTokenVerifierOptions = {
   fetchImplementation?: typeof fetch;
   now?: () => number;
   projectId: string;
+  qaPassword?: QaPasswordIdentityConfig;
 };
 
 export type FirebaseIdTokenVerifier = ((
@@ -59,9 +63,22 @@ function isNumericDate(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function signInProvider(value: unknown): SignInProvider | null {
-  if (value === "google.com") return "google";
-  if (value === "apple.com") return "apple";
+function signInProvider(
+  payload: FirebaseTokenPayload,
+  qaPassword: QaPasswordIdentityConfig | undefined,
+): SignInProvider | null {
+  const value = payload.firebase?.sign_in_provider;
+  const tenant = payload.firebase?.tenant;
+  if (tenant === undefined && value === "google.com") return "google";
+  if (tenant === undefined && value === "apple.com") return "apple";
+  if (
+    value === "password" &&
+    qaPassword &&
+    tenant === qaPassword.tenantId &&
+    payload.sub === qaPassword.uid
+  ) {
+    return "qa-password";
+  }
   return null;
 }
 
@@ -71,7 +88,7 @@ function validPayload(
   nowSeconds: number,
 ): payload is FirebaseTokenPayload & {
   auth_time: number;
-  firebase: { sign_in_provider: "apple.com" | "google.com" };
+  firebase: { sign_in_provider: unknown; tenant?: unknown };
   sub: string;
 } {
   return (
@@ -86,7 +103,8 @@ function validPayload(
     typeof payload.sub === "string" &&
     payload.sub.length > 0 &&
     payload.sub.length <= 128 &&
-    signInProvider(payload.firebase?.sign_in_provider) !== null
+    typeof payload.firebase === "object" &&
+    payload.firebase !== null
   );
 }
 
@@ -94,6 +112,7 @@ export function createFirebaseIdTokenVerifier({
   fetchImplementation = fetch,
   now = Date.now,
   projectId,
+  qaPassword,
 }: FirebaseTokenVerifierOptions) {
   let cachedKeys: { expiresAt: number; keys: Map<string, FirebaseJwk> } | null = null;
   let lastRefreshAt = Number.NEGATIVE_INFINITY;
@@ -191,7 +210,7 @@ export function createFirebaseIdTokenVerifier({
       const payload = decodeJson(encodedPayload) as FirebaseTokenPayload;
       const nowSeconds = Math.floor(now() / 1000);
       if (!validPayload(payload, projectId, nowSeconds)) return null;
-      const provider = signInProvider(payload.firebase.sign_in_provider);
+      const provider = signInProvider(payload, qaPassword);
       if (!provider) return null;
       return {
         authenticatedAt: payload.auth_time * 1000,

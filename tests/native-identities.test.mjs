@@ -507,6 +507,10 @@ test("Expo config resolves the public identity for each build environment", asyn
       assert.equal(config.slug, identities.expo.slug);
       assert.equal(config.extra.eas.projectId, identities.expo.projectId);
       assert.equal(config.extra.openjobEnvironment, name);
+      assert.equal(
+        config.extra.openjob.qaPasswordTenantId,
+        name === "preview" ? "OpenJob-QA-Two-mvz9m" : null,
+      );
       assert.equal(config.ios.bundleIdentifier, identity.ios.bundleId);
       assert.equal(
         config.ios.googleServicesFile,

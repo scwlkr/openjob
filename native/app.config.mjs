@@ -115,6 +115,10 @@ export default function createAppConfig({ config = {} } = {}) {
           ? { environmentBadge: environmentBadges[environment] }
           : {}),
         keychainService: `${identity.ios.bundleId}.auth`,
+        qaPasswordTenantId:
+          environment === "preview"
+            ? identity.firebase.qaPasswordTenantId
+            : null,
         releaseVersion: rootPackage.version,
         sessionStorageKey: `openjob.native.auth.${environment}.v1`,
       },

@@ -260,6 +260,51 @@ test("Firestore creates only explicitly confirmed provider-scoped Sign-in Method
   );
 });
 
+test("Firestore persists the internal QA password principal but never links it", async () => {
+  const firestore = createSharedFakeFirestore({ projectId: "openjob-nonprod" });
+  const users = createFirestoreUserStore(
+    {
+      projectId: "openjob-nonprod",
+      clientEmail: "worker@openjob-nonprod.iam.gserviceaccount.com",
+      privateKey: await createSharedPrivateKey(),
+    },
+    firestore.fetch,
+    {
+      now: () => Date.parse("2026-07-24T12:00:00.000Z"),
+      randomUUID: () => "77777777-7777-4777-8777-777777777777",
+    },
+  );
+  const qaPassword = {
+    authenticatedAt: Date.parse("2026-07-24T11:59:00.000Z"),
+    provider: "qa-password",
+    uid: "firebase_qa_two",
+  };
+  const google = {
+    ...qaPassword,
+    provider: "google",
+    uid: "firebase_google",
+  };
+
+  const created = await users.create(qaPassword);
+  assert.equal(created.kind, "created");
+  assert.deepEqual(await users.resolve(qaPassword), created.user);
+  assert.deepEqual(
+    await users.claimUsername(qaPassword, "qa-two"),
+    {
+      kind: "claimed",
+      user: { ...created.user, username: "qa-two" },
+    },
+  );
+  assert.deepEqual(await users.listSignInMethods(created.user.userId), [
+    "qa-password",
+  ]);
+  const commitCount = firestore.commitAttempts();
+  assert.deepEqual(await users.link(qaPassword, google), {
+    kind: "conflict",
+  });
+  assert.equal(firestore.commitAttempts(), commitCount);
+});
+
 test("legacy Google Users migrate without email matching and are never cleanup-eligible", async () => {
   const firestore = createSharedFakeFirestore();
   const config = {

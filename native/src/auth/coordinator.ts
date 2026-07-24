@@ -1,4 +1,5 @@
 export type SignInMethod = "apple" | "google";
+export type AuthenticationMethod = SignInMethod | "qa-password";
 
 export type OpenJobUser = {
   userId: string;
@@ -15,7 +16,7 @@ export type ProviderCredential = {
 export type FirebaseAccessSession = {
   expiresAt: number;
   idToken: string;
-  provider: SignInMethod;
+  provider: AuthenticationMethod;
 };
 
 export type FirebaseSession = FirebaseAccessSession & {
@@ -23,7 +24,7 @@ export type FirebaseSession = FirebaseAccessSession & {
 };
 
 export type StoredSession = {
-  provider: SignInMethod;
+  provider: AuthenticationMethod;
   refreshToken: string;
   version: 1;
 };
@@ -40,7 +41,7 @@ export type AuthFlowResult =
   | {
       kind: "unrecognized";
       notice?: "fresh_authentication_required" | "link_target_changed";
-      provider: SignInMethod;
+      provider: AuthenticationMethod;
     }
   | {
       existingProvider: SignInMethod;
@@ -111,6 +112,10 @@ export type NativeAuthDependencies = {
   purgeLocalDomainCache(): Promise<void>;
   refreshSession(stored: StoredSession): Promise<FirebaseSession>;
   saveStoredSession(stored: StoredSession): Promise<void>;
+  signInWithQaPassword(
+    email: string,
+    password: string,
+  ): Promise<FirebaseSession>;
   signInWithProvider(provider: SignInMethod): Promise<ProviderCredential>;
   subscribeToCredentialRevocation?(
     listener: () => void,
@@ -254,6 +259,43 @@ export class NativeAuthCoordinator {
     }
   }
 
+  async signInWithQaPassword(
+    email: string,
+    password: string,
+  ): Promise<AuthFlowResult> {
+    const epoch = this.operationEpoch;
+    this.candidateSession = null;
+    this.existingSession = null;
+    try {
+      const firebaseSession =
+        await this.dependencies.signInWithQaPassword(email, password);
+      this.assertCurrentOperation(epoch);
+      const accessSession = this.accessSession(firebaseSession);
+      let user: OpenJobUser;
+      try {
+        user = await this.dependencies.getMe(accessSession.idToken);
+      } catch (error) {
+        if (!isUnrecognized(error)) throw error;
+        const session = await this.persistSession(firebaseSession, epoch);
+        this.candidateSession = session;
+        return { kind: "unrecognized", provider: "qa-password" };
+      }
+      this.assertCurrentOperation(epoch);
+      const methods = sortedMethods(
+        await this.dependencies.listSignInMethods(accessSession.idToken),
+      );
+      this.assertCurrentOperation(epoch);
+      const session = await this.persistSession(firebaseSession, epoch);
+      return this.setSignedIn(session, user, methods, epoch);
+    } catch (error) {
+      this.assertCurrentOperation(epoch);
+      if (error instanceof ProviderSignInError) {
+        return { kind: "signed-out", reason: "unavailable" };
+      }
+      throw error;
+    }
+  }
+
   async createUser(): Promise<AuthFlowResult> {
     const epoch = this.operationEpoch;
     try {
@@ -279,6 +321,9 @@ export class NativeAuthCoordinator {
   async authenticateExistingUser(): Promise<AuthFlowResult> {
     const epoch = this.operationEpoch;
     const candidate = this.requireCandidate();
+    if (candidate.provider === "qa-password") {
+      throw new Error("Preview QA password sign-in cannot be linked.");
+    }
     const existingProvider = otherProvider(candidate.provider);
     const credential =
       await this.withOperationLock("provider", () =>
@@ -331,6 +376,9 @@ export class NativeAuthCoordinator {
           : { kind: "cleanup-retry" };
       }
       throw error;
+    }
+    if (existing.provider === "qa-password") {
+      throw new Error("Preview QA password sign-in cannot link providers.");
     }
     const credential = await this.withOperationLock("provider", () =>
       this.dependencies.signInWithProvider(provider),

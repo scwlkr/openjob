@@ -7,10 +7,12 @@ import {
   OAuthProvider,
   onAuthStateChanged,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
 } from "firebase/auth";
 import type {
+  AuthenticationMethod,
   AuthCredentialProof,
   AuthSession,
   OpenJobAuth,
@@ -23,8 +25,12 @@ declare const __OPENJOB_FIREBASE_CONFIG__: {
   authDomain: string;
   projectId: string;
 };
+declare const __OPENJOB_QA_PASSWORD_AUTH__: {
+  tenantId: string;
+} | null;
 
 const firebaseConfig = __OPENJOB_FIREBASE_CONFIG__;
+const qaPasswordAuth = __OPENJOB_QA_PASSWORD_AUTH__;
 
 let clientPromise:
   | Promise<{ auth: ReturnType<typeof getAuth> }>
@@ -80,19 +86,30 @@ function providerFor(method: SignInMethod, fresh = false) {
   return provider;
 }
 
-function signInMethodFor(providerId: string | null): SignInMethod {
+function signInMethodFor(
+  providerId: string | null,
+  tenantId: string | null,
+): AuthenticationMethod {
   if (providerId === "apple.com") return "apple";
   if (providerId === "google.com") return "google";
+  if (
+    providerId === "password" &&
+    qaPasswordAuth &&
+    tenantId === qaPasswordAuth.tenantId
+  ) {
+    return "qa-password";
+  }
   throw new Error("Firebase returned an unsupported Sign-in Method.");
 }
 
 async function sessionFor(user: {
+  tenantId: string | null;
   getIdToken(): Promise<string>;
   getIdTokenResult(): Promise<{ signInProvider: string | null }>;
 }): Promise<AuthSession> {
   const token = await user.getIdTokenResult();
   return {
-    signInMethod: signInMethodFor(token.signInProvider),
+    signInMethod: signInMethodFor(token.signInProvider, user.tenantId),
     getIdToken: () => user.getIdToken(),
   };
 }
@@ -123,6 +140,8 @@ export function createFirebaseAuth(): OpenJobAuth {
   }
 
   return Object.freeze({
+    qaPasswordEnabled: qaPasswordAuth !== null,
+
     observe(listener, onError) {
       let active = true;
       let emission = 0;
@@ -163,6 +182,31 @@ export function createFirebaseAuth(): OpenJobAuth {
       forceAccountSelection = false;
     },
 
+    async signInWithQaPassword(email, password) {
+      if (!qaPasswordAuth) {
+        throw Object.assign(
+          new Error("Preview QA password sign-in is unavailable."),
+          { code: "auth/operation-not-allowed" },
+        );
+      }
+      const { auth } = await firebaseClient();
+      const previousTenantId = auth.tenantId;
+      try {
+        auth.tenantId = qaPasswordAuth.tenantId;
+        const result = await signInWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+        if (result.user.tenantId !== qaPasswordAuth.tenantId) {
+          await signOut(auth);
+          throw new Error("Firebase returned an unexpected tenant.");
+        }
+      } finally {
+        auth.tenantId = previousTenantId;
+      }
+    },
+
     async authenticateForLink(method) {
       const generation = ++secondaryGeneration;
       activeSecondaryGeneration = null;
@@ -189,7 +233,8 @@ export function createFirebaseAuth(): OpenJobAuth {
           activeSecondaryGeneration = generation;
           let disposed = false;
           const proof: AuthCredentialProof = {
-            ...session,
+            signInMethod: method,
+            getIdToken: session.getIdToken,
             async dispose() {
               if (disposed) return;
               await enqueueSecondaryOperation(async () => {

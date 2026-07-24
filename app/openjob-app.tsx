@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  type AuthenticationMethod,
   type AuthCredentialProof,
   type AuthSession,
   type Group,
@@ -93,6 +94,24 @@ function providerError(error: unknown, method: SignInMethod) {
   return `${name} sign-in did not finish. Try again.`;
 }
 
+function qaPasswordError(error: unknown) {
+  const code = firebaseErrorCode(error);
+  if (code === "auth/network-request-failed") {
+    return "You appear to be offline. Check your connection and try again.";
+  }
+  if (
+    code === "auth/invalid-credential" ||
+    code === "auth/invalid-email" ||
+    code === "auth/user-disabled"
+  ) {
+    return "That Preview QA email or password is not valid.";
+  }
+  if (code === "auth/too-many-requests") {
+    return "Preview QA sign-in is temporarily unavailable. Try again later.";
+  }
+  return "Preview QA sign-in did not finish. Try again.";
+}
+
 function linkingError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.code === "fresh_authentication_required") {
@@ -137,11 +156,12 @@ export function OpenJobApp({
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [signingIn, setSigningIn] = useState<SignInMethod | null>(null);
+  const [signingIn, setSigningIn] =
+    useState<AuthenticationMethod | null>(null);
   const [authObserverFailed, setAuthObserverFailed] = useState(false);
   const [authObservation, setAuthObservation] = useState(0);
   const [unrecognizedMethod, setUnrecognizedMethod] =
-    useState<SignInMethod | null>(null);
+    useState<AuthenticationMethod | null>(null);
   const [methodsDialogOpen, setMethodsDialogOpen] = useState(false);
   const [signInMethods, setSignInMethods] = useState<SignInMethod[] | null>(null);
   const [linkingMethod, setLinkingMethod] = useState<SignInMethod | null>(null);
@@ -505,6 +525,30 @@ export function OpenJobApp({
     }
   }
 
+  async function signInWithQaPassword(email: string, password: string) {
+    const epoch = renderedAuthEpoch;
+    if (!auth.qaPasswordEnabled || !isCurrentAuthEpoch(epoch)) return;
+    setSigningIn("qa-password");
+    setError("");
+    try {
+      await auth.signInWithQaPassword(email, password);
+      if (!isCurrentAuthEpoch(epoch)) return;
+      if (authObserverFailed) {
+        beginAuthBoundary();
+        setSession(undefined);
+        setLoading(true);
+        setAuthObserverFailed(false);
+        setAuthObservation((current) => current + 1);
+      }
+    } catch (signInError) {
+      if (isCurrentAuthEpoch(epoch)) {
+        setError(qaPasswordError(signInError));
+      }
+    } finally {
+      setSigningIn(null);
+    }
+  }
+
   async function leaveSession(switchingUser: boolean) {
     if (!isCurrentAuthEpoch(renderedAuthEpoch)) return false;
     const cleanupEpoch = beginAuthBoundary();
@@ -580,6 +624,7 @@ export function OpenJobApp({
   function beginUnknownLink() {
     if (
       !unrecognizedMethod ||
+      unrecognizedMethod === "qa-password" ||
       !isCurrentAuthEpoch(renderedAuthEpoch)
     ) {
       return;
@@ -820,7 +865,13 @@ export function OpenJobApp({
 
   async function openSignInMethods(returnFocus?: HTMLElement | null) {
     const epoch = renderedAuthEpoch;
-    if (!session || !isCurrentAuthEpoch(epoch)) return;
+    if (
+      !session ||
+      session.signInMethod === "qa-password" ||
+      !isCurrentAuthEpoch(epoch)
+    ) {
+      return;
+    }
     if (returnFocus) setMethodsReturnFocus(returnFocus);
     setMethodsDialogOpen(true);
     setSignInMethods(null);
@@ -1105,7 +1156,11 @@ export function OpenJobApp({
     return (
       <SignedOut
         error={error}
+        onQaPasswordSignIn={(email, password) =>
+          void signInWithQaPassword(email, password)
+        }
         onSignIn={(method) => void signIn(method)}
+        qaPasswordEnabled={auth.qaPasswordEnabled}
         signingIn={signingIn}
       />
     );
@@ -1141,7 +1196,8 @@ export function OpenJobApp({
     );
   }
   if (!user) return <LoadingScreen />;
-  const methodsDialog = methodsDialogOpen ? (
+  const methodsDialog =
+    methodsDialogOpen && session.signInMethod !== "qa-password" ? (
     <SignInMethodsDialog
       error={linkError}
       linkingMethod={linkingMethod}
@@ -1162,8 +1218,10 @@ export function OpenJobApp({
         <UsernameOnboarding
           error={error}
           onClaim={claimUsername}
-          onLinkExisting={(returnFocus) =>
-            void openSignInMethods(returnFocus)
+          onLinkExisting={
+            session.signInMethod === "qa-password"
+              ? undefined
+              : (returnFocus) => void openSignInMethods(returnFocus)
           }
           onSignOut={() => void signOut()}
           onSwitchUser={() => void switchUser()}
@@ -1198,8 +1256,10 @@ export function OpenJobApp({
         onCreate={createGroup}
         onGroupRemoved={removeGroup}
         onGroupUpdated={updateGroup}
-        onManageSignInMethods={(returnFocus) =>
-          void openSignInMethods(returnFocus)
+        onManageSignInMethods={
+          session.signInMethod === "qa-password"
+            ? undefined
+            : (returnFocus) => void openSignInMethods(returnFocus)
         }
         onRetry={() => void bootstrap(session, renderedAuthEpoch)}
         onSelect={(group) => void selectGroup(group.groupId)}

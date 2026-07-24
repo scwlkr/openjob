@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
 import vinext from "vinext";
 import { defineConfig } from "vite";
-import { webFirebaseConfigFor } from "./config/web-firebase-config.mjs";
+import {
+  qaPasswordTenantIdFor,
+  webFirebaseConfigFor,
+} from "./config/web-firebase-config.mjs";
 import packageMetadata from "./package.json" with { type: "json" };
 
 export default defineConfig(async () => {
@@ -24,11 +27,17 @@ export default defineConfig(async () => {
   const webFirebaseConfig = webFirebaseConfigFor(
     process.env.CLOUDFLARE_ENV,
   );
+  const qaPasswordTenantId = qaPasswordTenantIdFor(
+    process.env.CLOUDFLARE_ENV,
+  );
 
   return {
     define: {
       __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfig),
       __OPENJOB_GIT_COMMIT__: JSON.stringify(gitCommit),
+      __OPENJOB_QA_PASSWORD_AUTH__: JSON.stringify(
+        qaPasswordTenantId ? { tenantId: qaPasswordTenantId } : null,
+      ),
       __OPENJOB_VERSION__: JSON.stringify(packageMetadata.version),
     },
     plugins: [

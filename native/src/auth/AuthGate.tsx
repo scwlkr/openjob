@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,8 +16,8 @@ import {
   NativeAuthCoordinator,
   OpenJobApiError,
   ProviderSignInError,
+  type AuthenticationMethod,
   type SignedInResult,
-  type SignInMethod,
 } from "./coordinator";
 import { createNativeAuthController } from "./dependencies";
 
@@ -31,13 +32,14 @@ export type NativeAuthController = Pick<
   | "createUser"
   | "restore"
   | "signIn"
+  | "signInWithQaPassword"
   | "signOut"
   | "subscribeToCredentialRevocation"
   | "switchUser"
 >;
 
 type SignedInViewProps = {
-  onManageSignInMethods: () => void;
+  onManageSignInMethods?: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   result: SignedInResult;
@@ -45,7 +47,8 @@ type SignedInViewProps = {
 
 type AuthGateState = AuthFlowResult | { kind: "restoring" };
 
-function methodName(method: SignInMethod) {
+function methodName(method: AuthenticationMethod) {
+  if (method === "qa-password") return "Preview QA";
   return method === "apple" ? "Apple" : "Google";
 }
 
@@ -224,7 +227,12 @@ export function NativeAuthGate({
   const [message, setMessage] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
   const [linkFromManager, setLinkFromManager] = useState(false);
+  const [qaEmail, setQaEmail] = useState("");
+  const [qaPassword, setQaPassword] = useState("");
   const { palette } = useOpenJobTheme();
+  const qaPasswordEnabled =
+    runtimeConfig.environment === "preview" &&
+    runtimeConfig.qaPasswordTenantId !== null;
 
   async function perform(
     operation: () => Promise<AuthFlowResult>,
@@ -361,15 +369,17 @@ export function NativeAuthGate({
           label="Create a new OpenJob User"
           onPress={() => void perform(() => auth.createUser())}
         />
-        <ActionButton
-          disabled={busy}
-          label="Link to an existing User"
-          onPress={() => {
-            setLinkFromManager(false);
-            void perform(() => auth.authenticateExistingUser());
-          }}
-          secondary
-        />
+        {state.provider !== "qa-password" ? (
+          <ActionButton
+            disabled={busy}
+            label="Link to an existing User"
+            onPress={() => {
+              setLinkFromManager(false);
+              void perform(() => auth.authenticateExistingUser());
+            }}
+            secondary
+          />
+        ) : null}
         <ActionButton
           disabled={busy}
           label="Cancel"
@@ -419,7 +429,8 @@ export function NativeAuthGate({
   if (state.kind === "signed-in") {
     if (!managing) {
       return renderSignedIn({
-        onManageSignInMethods: () => setManaging(true),
+        onManageSignInMethods:
+          state.methods.length === 0 ? undefined : () => setManaging(true),
         onSignOut: () => void perform(() => auth.signOut()),
         onSwitchUser: () => void perform(() => auth.switchUser()),
         result: state,
@@ -499,6 +510,68 @@ export function NativeAuthGate({
         onPress={() => void perform(() => auth.signIn("apple"))}
         secondary
       />
+      {qaPasswordEnabled ? (
+        <View style={styles.qaForm}>
+          <Text style={[styles.qaTitle, { color: palette.ink }]}>
+            Preview QA sign-in
+          </Text>
+          <TextInput
+            accessibilityLabel="Preview QA email"
+            autoCapitalize="none"
+            autoComplete="email"
+            editable={!busy}
+            keyboardType="email-address"
+            onChangeText={setQaEmail}
+            placeholder="QA email"
+            placeholderTextColor={palette.muted}
+            style={[
+              styles.input,
+              {
+                backgroundColor: palette.paper,
+                borderColor: palette.line,
+                color: palette.ink,
+              },
+            ]}
+            textContentType="emailAddress"
+            value={qaEmail}
+          />
+          <TextInput
+            accessibilityLabel="Preview QA password"
+            autoCapitalize="none"
+            autoComplete="current-password"
+            editable={!busy}
+            onChangeText={setQaPassword}
+            placeholder="QA password"
+            placeholderTextColor={palette.muted}
+            secureTextEntry
+            style={[
+              styles.input,
+              {
+                backgroundColor: palette.paper,
+                borderColor: palette.line,
+                color: palette.ink,
+              },
+            ]}
+            textContentType="password"
+            value={qaPassword}
+          />
+          <ActionButton
+            disabled={
+              busy || qaEmail.trim().length === 0 || qaPassword.length === 0
+            }
+            label="Sign in as Preview QA User"
+            onPress={() => {
+              const email = qaEmail.trim();
+              const password = qaPassword;
+              setQaPassword("");
+              void perform(() =>
+                auth.signInWithQaPassword(email, password),
+              );
+            }}
+            secondary
+          />
+        </View>
+      ) : null}
     </AuthScaffold>
   );
 }
@@ -540,6 +613,22 @@ const styles = StyleSheet.create({
   },
   methodText: {
     fontFamily: "Geist_400Regular",
+    fontSize: 16,
+  },
+  input: {
+    borderWidth: 1,
+    fontFamily: "Geist_400Regular",
+    fontSize: 16,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  qaForm: {
+    gap: 10,
+    marginTop: 12,
+  },
+  qaTitle: {
+    fontFamily: "Geist_700Bold",
     fontSize: 16,
   },
   safeArea: {

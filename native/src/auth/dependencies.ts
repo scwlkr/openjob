@@ -8,9 +8,12 @@ import { createSecureSessionStore } from "./session-store";
 
 export function createNativeAuthController(config: OpenJobRuntimeConfig) {
   const api = createNativeOpenJobApi({ apiBaseUrl: config.apiBaseUrl });
+  const qaPasswordTenantId =
+    config.environment === "preview" ? config.qaPasswordTenantId : null;
   const firebase = createFirebaseAuthClient({
     apiKey: config.firebaseApiKey,
     authDomain: config.firebaseAuthDomain,
+    qaPasswordTenantId,
   });
   const provider = createProviderGateway({
     appleRedirectUri: config.appleRedirectUri,
@@ -19,6 +22,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     googleWebClientId: config.googleWebClientId,
   });
   const store = createSecureSessionStore({
+    allowQaPassword: qaPasswordTenantId !== null,
     keychainService: config.keychainService,
     storageKey: config.sessionStorageKey,
   });
@@ -45,6 +49,8 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     purgeLocalDomainCache,
     refreshSession: (stored) => firebase.refresh(stored),
     saveStoredSession: (stored) => store.save(stored),
+    signInWithQaPassword: (email, password) =>
+      firebase.signInWithPassword(email, password),
     signInWithProvider: (method) => provider.signIn(method),
     subscribeToCredentialRevocation: (listener) =>
       provider.subscribeToCredentialRevocation(listener),

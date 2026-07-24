@@ -6,22 +6,29 @@ import {
 } from "./coordinator";
 
 type SecureSessionStoreConfig = {
+  allowQaPassword: boolean;
   keychainService: string;
   storageKey: string;
 };
 
-function isStoredSession(value: unknown): value is StoredSession {
+function isStoredSession(
+  value: unknown,
+  allowQaPassword: boolean,
+): value is StoredSession {
   if (!value || typeof value !== "object") return false;
   const session = value as Partial<StoredSession>;
   return (
     session.version === 1 &&
-    (session.provider === "apple" || session.provider === "google") &&
+    (session.provider === "apple" ||
+      session.provider === "google" ||
+      (allowQaPassword && session.provider === "qa-password")) &&
     typeof session.refreshToken === "string" &&
     session.refreshToken.length > 0
   );
 }
 
 export function createSecureSessionStore({
+  allowQaPassword,
   keychainService,
   storageKey,
 }: SecureSessionStoreConfig) {
@@ -49,7 +56,7 @@ export function createSecureSessionStore({
 
       try {
         const session: unknown = JSON.parse(serialized);
-        if (isStoredSession(session)) return session;
+        if (isStoredSession(session, allowQaPassword)) return session;
       } catch {
         // Corrupt credentials are removed below.
       }
@@ -103,6 +110,9 @@ export function createSecureSessionStore({
     },
 
     async save(session: StoredSession) {
+      if (session.provider === "qa-password" && !allowQaPassword) {
+        throw new ProviderSignInError("unavailable");
+      }
       await SecureStore.setItemAsync(
         storageKey,
         JSON.stringify(session),

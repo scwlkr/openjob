@@ -12,3 +12,13 @@ export function webFirebaseConfigFor(targetEnvironment) {
     projectId: firebase.projectId,
   };
 }
+
+export function qaPasswordTenantIdFor(targetEnvironment) {
+  if (targetEnvironment !== "preview") return null;
+  const tenantId =
+    identities.environments.preview.firebase.qaPasswordTenantId;
+  if (typeof tenantId !== "string" || tenantId.length === 0) {
+    throw new Error("Preview QA password tenant configuration is missing.");
+  }
+  return tenantId;
+}

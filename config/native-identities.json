@@ -301,6 +301,7 @@
         "authDomain": "openjob-nonprod.firebaseapp.com",
         "googleWebClientId": "550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com",
         "projectId": "openjob-nonprod",
+        "qaPasswordTenantId": "OpenJob-QA-Two-mvz9m",
         "webAppId": "1:550998178053:web:477d5bcab4c50b413fdf6c"
       },
       "ios": {

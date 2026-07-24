@@ -149,6 +149,78 @@ test("Firebase verification returns only safe Google and Apple Sign-in Method id
     ),
     null,
   );
+
+  for (const providerClaim of ["google.com", "apple.com"]) {
+    const tenantToken = await authority.issue({
+      uid: "firebase_tenant_provider",
+      claims: {
+        firebase: {
+          sign_in_provider: providerClaim,
+          tenant: "unexpected-tenant",
+        },
+      },
+    });
+    assert.equal(await verifyIdToken.verifyToken(tenantToken), null);
+  }
+});
+
+test("Firebase verification accepts only the exact allowlisted Preview QA password principal", async () => {
+  const authority = await createTestFirebaseAuthority({
+    now: NOW,
+    projectId: "openjob-nonprod",
+  });
+  const exact = {
+    tenantId: "OpenJob-QA-Two-mvz9m",
+    uid: "firebase_qa_two",
+  };
+  const verifyIdToken = createFirebaseIdTokenVerifier({
+    fetchImplementation: authority.fetch,
+    now: () => Date.parse(NOW),
+    projectId: "openjob-nonprod",
+    qaPassword: exact,
+  });
+  const unconfigured = createFirebaseIdTokenVerifier({
+    fetchImplementation: authority.fetch,
+    now: () => Date.parse(NOW),
+    projectId: "openjob-nonprod",
+  });
+  const issuePassword = (uid, tenant = exact.tenantId) =>
+    authority.issue({
+      uid,
+      claims: {
+        email: "ignored@example.test",
+        firebase: { sign_in_provider: "password", tenant },
+      },
+    });
+  const token = await issuePassword(exact.uid);
+
+  assert.deepEqual(await verifyIdToken.verifyToken(token), {
+    authenticatedAt: Date.parse(NOW) - 60_000,
+    provider: "qa-password",
+    uid: exact.uid,
+  });
+  assert.equal(await unconfigured.verifyToken(token), null);
+  assert.equal(
+    await verifyIdToken.verifyToken(
+      await issuePassword("firebase_not_qa_two"),
+    ),
+    null,
+  );
+  assert.equal(
+    await verifyIdToken.verifyToken(
+      await issuePassword(exact.uid, "another-tenant"),
+    ),
+    null,
+  );
+  assert.equal(
+    await verifyIdToken.verifyToken(
+      await authority.issue({
+        uid: exact.uid,
+        claims: { firebase: { sign_in_provider: "password" } },
+      }),
+    ),
+    null,
+  );
 });
 
 test("GET /me resolves only an explicitly created OpenJob User", async (t) => {
