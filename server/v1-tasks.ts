@@ -1,3 +1,4 @@
+import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import { isGroupId, type GroupId } from "./v1-groups.ts";
 import {
   isReservedUsername,
@@ -13,6 +14,7 @@ import {
   jsonResponse,
   readPagination,
   rateLimitedErrorResponse,
+  signInMethodUnrecognizedResponse,
   type RequestIdFactory,
 } from "./v1-http.ts";
 
@@ -127,7 +129,7 @@ export type TaskStore = {
 
 type UserStore = {
   getByUsername(username: Username): Promise<OpenJobUser | null>;
-  getOrCreate(firebaseUid: string): Promise<OpenJobUser>;
+  resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null>;
 };
 
 type TasksApiOptions = {
@@ -138,7 +140,7 @@ type TasksApiOptions = {
   requestId?: () => string;
   tasks: TaskStore;
   users: UserStore;
-  verifyIdToken(request: Request): Promise<{ uid: string } | null>;
+  verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
 };
 
 const TASK_TEXT_CONTROL_CHARACTERS =
@@ -662,7 +664,8 @@ export function createV1TasksApi({
             status: 401,
           });
         }
-        const user = await users.getOrCreate(identity.uid);
+        const user = await users.resolve(identity);
+        if (!user) return signInMethodUnrecognizedResponse(requestId);
         const url = new URL(request.url);
         const path = taskResourceFromPath(url.pathname);
         if (path.kind === "invalid_group") return groupNotFound(requestId);

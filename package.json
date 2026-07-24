@@ -22,6 +22,7 @@
     "release:prepare": "node scripts/release.mjs prepare",
     "release:publish": "node scripts/release.mjs publish",
     "deploy": "node scripts/release.mjs deploy",
+    "deploy:preview": "CLOUDFLARE_ENV=preview vinext deploy",
     "deploy:raw": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
     "openapi:check": "node scripts/validate-openapi.mjs",

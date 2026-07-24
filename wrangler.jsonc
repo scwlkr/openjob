@@ -12,6 +12,16 @@
   "vars": {
     "FIREBASE_PROJECT_ID": "openjob-dev"
   },
+  "env": {
+    "preview": {
+      "name": "openjob-preview",
+      "routes": [],
+      "vars": {
+        "FIREBASE_PROJECT_ID": "openjob-nonprod"
+      },
+      "workers_dev": true
+    }
+  },
   "routes": [
     { "pattern": "openjob.dev", "custom_domain": true }
   ],

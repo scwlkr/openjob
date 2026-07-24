@@ -20,6 +20,7 @@ import {
   type Task,
   type TaskPriority,
 } from "./openjob-contracts";
+import { TASK_EDITOR_DRAFT_KEY } from "./openjob-private-state";
 import styles from "./openjob.module.css";
 
 type StatusFilter = "open" | "done" | "all";
@@ -48,12 +49,12 @@ type StoredEditorDraft = {
   input: TaskFormInput;
   mode: EditorMode;
   taskId: string | null;
+  userId: string;
 };
 type MemberSection =
   | { kind: "current" | "former"; key: string; label: string }
   | { kind: "unassigned"; key: "unassigned"; label: "Unassigned" };
 
-const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
 const TASK_EDITOR_EXIT_MS = 140;
 const NARROW_TASK_EDITOR_QUERY = "(max-width: 720px)";
 const ALL_TASKS_FILTER = { status: "all" } as const;
@@ -174,6 +175,7 @@ function readEditorDraft(): StoredEditorDraft | null {
     if (
       !value ||
       typeof value.groupId !== "string" ||
+      typeof value.userId !== "string" ||
       !value.input ||
       typeof value.input.text !== "string" ||
       typeof value.input.assigneeUsername !== "string" ||
@@ -382,11 +384,13 @@ export function TaskList({
   group,
   onSessionExpired,
   session,
+  userId,
 }: {
   api: OpenJobApi;
   group: Group;
   onSessionExpired: (error: unknown) => Promise<boolean>;
   session: AuthSession;
+  userId: string;
 }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -540,7 +544,12 @@ export function TaskList({
   useEffect(() => {
     if (loading || editor) return;
     const draft = readEditorDraft();
-    if (!draft || draft.groupId !== group.groupId) return;
+    if (!draft) return;
+    if (draft.userId !== userId) {
+      window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+      return;
+    }
+    if (draft.groupId !== group.groupId) return;
     let restoredEditor: Editor;
     if (draft.mode === "new") {
       restoredEditor = { mode: "new", username: draft.input.assigneeUsername };
@@ -558,7 +567,7 @@ export function TaskList({
       setEditor(restoredEditor);
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [editor, group.groupId, loading, tasks]);
+  }, [editor, group.groupId, loading, tasks, userId]);
 
   const load = useCallback(async () => {
     const loadGeneration = ++activeLoadGeneration.current;
@@ -797,6 +806,7 @@ export function TaskList({
       input,
       mode: editor.mode,
       taskId: editor.mode === "new" ? null : editor.task.taskId,
+      userId,
     } satisfies StoredEditorDraft));
   }
 

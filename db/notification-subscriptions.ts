@@ -4,6 +4,7 @@ import {
   type FirebaseConfig,
   type FirestoreDocument,
 } from "./firestore-rest.ts";
+import { userHistoryWrite } from "./user-history.ts";
 
 export type StoredNotificationSubscription = {
   installationId: string;
@@ -235,6 +236,7 @@ export function createFirestoreNotificationSubscriptionStore(
         };
         try {
           await commit([
+            userHistoryWrite(firestore, input.userId),
             {
               update: {
                 name: firestore.documentName(pathFor(input.installationId)),

@@ -149,6 +149,49 @@ test("the harness controls two Firebase-shaped identities and time", async (t) =
   assert.equal((await response.json()).data.createdAt, "2026-07-20T08:31:30.000Z");
 });
 
+test("the harness exposes a second provider credential without putting it in a URL", async (t) => {
+  const harness = createV1TestHarness({
+    createWorker: createProbeWorker,
+    identities: {
+      google: {
+        userId: "user_google",
+        claims: {
+          aud: "openjob-dev",
+          auth_time: 1_784_116_800,
+          exp: 1_784_120_400,
+          firebase: { sign_in_provider: "google.com" },
+          iat: 1_784_116_800,
+          iss: "https://securetoken.google.com/openjob-dev",
+          sub: "firebase_google",
+          user_id: "firebase_google",
+        },
+      },
+      apple: {
+        userId: "user_apple",
+        claims: {
+          aud: "openjob-dev",
+          auth_time: 1_784_116_800,
+          exp: 1_784_120_400,
+          firebase: { sign_in_provider: "apple.com" },
+          iat: 1_784_116_800,
+          iss: "https://securetoken.google.com/openjob-dev",
+          sub: "firebase_apple",
+          user_id: "firebase_apple",
+        },
+      },
+    },
+  });
+  t.after(() => harness.close());
+
+  assert.equal(harness.credentialTokenFor("apple"), "openjob-test-token:apple");
+  const response = await harness.request({
+    as: "apple",
+    method: "GET",
+    path: "/api/v1/__harness/identity",
+  });
+  assert.equal((await response.json()).data.provider, "apple.com");
+});
+
 test("the harness serializes state transitions used by concurrency tests", async (t) => {
   const harness = createV1TestHarness({ createWorker: createProbeWorker });
   t.after(() => harness.close());

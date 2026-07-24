@@ -88,10 +88,10 @@ function createGroupsHarness({ additionalMemberRole } = {}) {
   return createV1TestHarness({
     createWorker(controls) {
       const users = {
-        async getOrCreate(firebaseUid) {
+        async resolve(identity) {
           return {
-            userId: firebaseUid.replace("firebase_", "user_"),
-            username: firebaseUid.replace("firebase_", ""),
+            userId: identity.uid.replace("firebase_", "user_"),
+            username: identity.uid.replace("firebase_", ""),
           };
         },
         async claimUsername() {
@@ -101,7 +101,13 @@ function createGroupsHarness({ additionalMemberRole } = {}) {
       const groups = createMemoryGroupStore(controls, additionalMemberRole);
       const verifyIdToken = async (request) => {
         const identity = controls.identities.authenticate(request);
-        return identity ? { uid: identity.claims.sub } : null;
+        return identity
+          ? {
+              authenticatedAt: Date.now(),
+              provider: "google",
+              uid: identity.claims.sub,
+            }
+          : null;
       };
       const identityApi = createV1IdentityApi({
         groups,

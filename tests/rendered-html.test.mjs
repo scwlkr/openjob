@@ -49,7 +49,9 @@ test("keeps Firebase auth, the v1 API, storage, and social metadata wired", asyn
   assert.match(layout, /\/site\.webmanifest/);
   assert.match(layout, /themeColor: "#1e4ed8"/);
   assert.match(auth, /browserLocalPersistence/);
+  assert.match(auth, /inMemoryPersistence/);
   assert.match(auth, /GoogleAuthProvider/);
+  assert.match(auth, /OAuthProvider\("apple\.com"\)/);
   assert.match(api, /\/api\/v1\/me/);
   assert.match(api, /\/api\/v1\/groups/);
   assert.match(firebase, /"googleSignIn"/);

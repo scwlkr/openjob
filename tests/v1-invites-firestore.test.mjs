@@ -99,7 +99,17 @@ async function createInviteHarness(names) {
   };
 }
 
+async function createUser(request, name) {
+  const response = await request(name, {
+    body: { confirmation: "create" },
+    method: "POST",
+    path: "/api/v1/me",
+  });
+  assert.ok(response.status === 200 || response.status === 201);
+}
+
 async function claimUsername(request, name) {
+  await createUser(request, name);
   const response = await request(name, {
     body: { username: name },
     method: "PUT",
@@ -128,6 +138,9 @@ test("Invite Links admit a confirmed User, rotate safely, and expose the current
   ]);
   t.after(() => harness.close());
   const assertContract = await createOpenApiResponseValidator();
+  await Promise.all(
+    ["newuser", "pending"].map((name) => createUser(request, name)),
+  );
   const createdBeforeUsername = await request("newuser", {
     body: { name: "Onboarding Group" },
     method: "POST",

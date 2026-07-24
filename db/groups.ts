@@ -9,6 +9,7 @@ import {
   advanceGroupStateRevisionWrite,
   readGroupStateRevision,
 } from "./group-state.ts";
+import { userHistoryWrite } from "./user-history.ts";
 import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
 import {
   InvalidBanCursorError,
@@ -675,6 +676,7 @@ export function createFirestoreGroupStore(
         try {
           await commit([
             groupIdReservationWrite(groupId),
+            userHistoryWrite(firestore, user.userId),
             {
               update: {
                 name: firestore.documentName(groupDocumentPath),
@@ -901,6 +903,7 @@ export function createFirestoreGroupStore(
             verify: firestore.documentName(userBanPath),
             currentDocument: { exists: false },
           },
+          userHistoryWrite(firestore, user.userId),
           {
             update: {
               name: firestore.documentName(memberDocumentPath),
