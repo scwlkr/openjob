@@ -456,6 +456,84 @@ test("returns an expired current-User proof to a usable reauthentication action"
   expect(auth.authenticateNewMethod).toHaveBeenCalledTimes(2);
 });
 
+test("returns an unknown-first expired proof to existing-User authentication", async () => {
+  const unrecognized: AuthFlowResult = {
+    kind: "unrecognized",
+    provider: "google",
+  };
+  const confirmation: AuthFlowResult = {
+    existingProvider: "apple",
+    kind: "confirm-link",
+    newProvider: "google",
+    user,
+  };
+  const auth = controller({
+    authenticateExistingUser: jest.fn(async () => confirmation),
+    confirmLink: jest.fn(async () => ({
+      ...unrecognized,
+      notice: "fresh_authentication_required" as const,
+    })),
+    restore: jest.fn(async () => unrecognized),
+  });
+  await renderGate(auth);
+
+  await fireEvent.press(
+    await screen.findByRole("button", {
+      name: "Link to an existing User",
+    }),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm link" }));
+
+  expect(
+    await screen.findByText(
+      "The second sign-in expired. Authenticate it again.",
+    ),
+  ).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Link to an existing User" }),
+  );
+  expect(auth.authenticateExistingUser).toHaveBeenCalledTimes(2);
+});
+
+test("returns an unknown-first changed target to existing-User authentication", async () => {
+  const unrecognized: AuthFlowResult = {
+    kind: "unrecognized",
+    provider: "google",
+  };
+  const confirmation: AuthFlowResult = {
+    existingProvider: "apple",
+    kind: "confirm-link",
+    newProvider: "google",
+    user,
+  };
+  const auth = controller({
+    authenticateExistingUser: jest.fn(async () => confirmation),
+    confirmLink: jest.fn(async () => ({
+      ...unrecognized,
+      notice: "link_target_changed" as const,
+    })),
+    restore: jest.fn(async () => unrecognized),
+  });
+  await renderGate(auth);
+
+  await fireEvent.press(
+    await screen.findByRole("button", {
+      name: "Link to an existing User",
+    }),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm link" }));
+
+  expect(
+    await screen.findByText(
+      "That User changed. Authenticate again and confirm the current User.",
+    ),
+  ).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Link to an existing User" }),
+  );
+  expect(auth.authenticateExistingUser).toHaveBeenCalledTimes(2);
+});
+
 test("keeps Sign-in Method status and errors legible in dark appearance", async () => {
   const auth = controller({
     restore: jest.fn(async () => signedIn),

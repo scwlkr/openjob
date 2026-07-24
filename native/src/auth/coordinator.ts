@@ -37,7 +37,11 @@ export type SignedInResult = {
 
 export type AuthFlowResult =
   | SignedInResult
-  | { kind: "unrecognized"; provider: SignInMethod }
+  | {
+      kind: "unrecognized";
+      notice?: "fresh_authentication_required" | "link_target_changed";
+      provider: SignInMethod;
+    }
   | {
       existingProvider: SignInMethod;
       kind: "confirm-link";
@@ -397,46 +401,35 @@ export class NativeAuthCoordinator {
         error instanceof OpenJobApiError &&
         error.code === "fresh_authentication_required"
       ) {
+        await this.discardAdditionalLinkProof(epoch, existingCurrent);
         if (existingCurrent && this.activeResult) {
-          this.candidateSession = null;
-          this.existingSession = null;
-          this.linkMode = null;
-          this.expectedTargetUserId = null;
           return {
             ...this.activeResult,
             notice: "fresh_authentication_required",
           };
         }
-        return (await this.removePrivateData())
-          ? { kind: "signed-out", reason: "expired" }
-          : { kind: "cleanup-retry" };
+        return {
+          kind: "unrecognized",
+          notice: "fresh_authentication_required",
+          provider: candidate.provider,
+        };
       }
       if (
         error instanceof OpenJobApiError &&
         error.code === "link_target_changed"
       ) {
+        await this.discardAdditionalLinkProof(epoch, existingCurrent);
         if (existingCurrent && this.activeResult) {
-          try {
-            await this.withProviderSessionLock(() =>
-              this.dependencies.clearProviderSession(),
-            );
-          } catch {
-            return (await this.removePrivateData())
-              ? { kind: "signed-out", reason: "revoked" }
-              : { kind: "cleanup-retry" };
-          }
-          this.candidateSession = null;
-          this.existingSession = null;
-          this.linkMode = null;
-          this.expectedTargetUserId = null;
           return {
             ...this.activeResult,
             notice: "link_target_changed",
           };
         }
-        return (await this.removePrivateData())
-          ? { kind: "signed-out", reason: "expired" }
-          : { kind: "cleanup-retry" };
+        return {
+          kind: "unrecognized",
+          notice: "link_target_changed",
+          provider: candidate.provider,
+        };
       }
       if (
         (error instanceof ProviderSignInError &&
@@ -638,6 +631,20 @@ export class NativeAuthCoordinator {
       throw new Error("A new Sign-in Method is required.");
     }
     return this.candidateSession;
+  }
+
+  private async discardAdditionalLinkProof(
+    epoch: number,
+    existingCurrent: boolean,
+  ) {
+    await this.withProviderSessionLock(() =>
+      this.dependencies.clearProviderSession(),
+    );
+    this.assertCurrentOperation(epoch);
+    if (existingCurrent) this.candidateSession = null;
+    this.existingSession = null;
+    this.linkMode = null;
+    this.expectedTargetUserId = null;
   }
 
   private async removePrivateData() {

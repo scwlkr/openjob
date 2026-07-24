@@ -859,7 +859,7 @@ test("restarts an unknown-first link when its additional proof expires", async (
       .mockRejectedValueOnce(
         new OpenJobApiError(409, "sign_in_method_unrecognized"),
       )
-      .mockResolvedValueOnce(user),
+      .mockResolvedValue(user),
     linkSignInMethod: jest.fn(async () => {
       throw new OpenJobApiError(401, "fresh_authentication_required");
     }),
@@ -870,12 +870,95 @@ test("restarts an unknown-first link when its additional proof expires", async (
   await coordinator.authenticateExistingUser();
 
   await expect(coordinator.confirmLink()).resolves.toEqual({
-    kind: "signed-out",
-    reason: "expired",
+    kind: "unrecognized",
+    notice: "fresh_authentication_required",
+    provider: "google",
   });
-  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
-  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+
+  await expect(coordinator.authenticateExistingUser()).resolves.toEqual({
+    existingProvider: "apple",
+    kind: "confirm-link",
+    newProvider: "google",
+    user,
+  });
 });
+
+test("restarts an unknown-first link when its confirmed target changes", async () => {
+  const dependencies = createDependencies({
+    getMe: jest
+      .fn()
+      .mockRejectedValueOnce(
+        new OpenJobApiError(409, "sign_in_method_unrecognized"),
+      )
+      .mockResolvedValue(user),
+    linkSignInMethod: jest.fn(async () => {
+      throw new OpenJobApiError(409, "link_target_changed");
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+  await coordinator.authenticateExistingUser();
+
+  await expect(coordinator.confirmLink()).resolves.toEqual({
+    kind: "unrecognized",
+    notice: "link_target_changed",
+    provider: "google",
+  });
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+
+  await expect(coordinator.authenticateExistingUser()).resolves.toEqual({
+    existingProvider: "apple",
+    kind: "confirm-link",
+    newProvider: "google",
+    user,
+  });
+});
+
+test.each([
+  ["fresh_authentication_required", 401],
+  ["link_target_changed", 409],
+] as const)(
+  "retains unknown-first confirmation when clearing the secondary proof fails after %s",
+  async (code, status) => {
+    const cleanupError = new ProviderSignInError("unavailable");
+    const dependencies = createDependencies({
+      clearProviderSession: jest
+        .fn()
+        .mockRejectedValueOnce(cleanupError)
+        .mockResolvedValue(undefined),
+      getMe: jest
+        .fn()
+        .mockRejectedValueOnce(
+          new OpenJobApiError(409, "sign_in_method_unrecognized"),
+        )
+        .mockResolvedValue(user),
+      linkSignInMethod: jest.fn(async () => {
+        throw new OpenJobApiError(status, code);
+      }),
+    });
+    const coordinator = new NativeAuthCoordinator(dependencies);
+
+    await coordinator.signIn("google");
+    await coordinator.authenticateExistingUser();
+
+    await expect(coordinator.confirmLink()).rejects.toBe(cleanupError);
+    expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+    expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+
+    await expect(coordinator.confirmLink()).resolves.toEqual({
+      kind: "unrecognized",
+      notice: code,
+      provider: "google",
+    });
+    expect(dependencies.linkSignInMethod).toHaveBeenCalledTimes(2);
+  },
+);
 
 test("returns an existing User to the method manager when a new proof expires", async () => {
   const dependencies = createDependencies({

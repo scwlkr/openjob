@@ -38,9 +38,11 @@ function userFor(method: SignInMethod, fresh: boolean): TestUser {
       ? [{ providerId: "apple.com" }, { providerId: "google.com" }]
       : [{ providerId }],
     async getIdToken() {
-      const tokenError = !fresh
-        ? window.sessionStorage.getItem("openjob-test:token-error")
-        : null;
+      const tokenError = window.sessionStorage.getItem(
+        fresh
+          ? "openjob-test:fresh-token-error"
+          : "openjob-test:token-error",
+      );
       if (tokenError) {
         throw Object.assign(new Error("Test Firebase credential failure."), {
           code: tokenError,

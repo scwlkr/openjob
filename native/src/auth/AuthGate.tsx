@@ -51,13 +51,13 @@ function methodName(method: SignInMethod) {
 
 function resultMessage(result: AuthFlowResult) {
   if (
-    result.kind === "signed-in" &&
+    (result.kind === "signed-in" || result.kind === "unrecognized") &&
     result.notice === "fresh_authentication_required"
   ) {
     return "The second sign-in expired. Authenticate it again.";
   }
   if (
-    result.kind === "signed-in" &&
+    (result.kind === "signed-in" || result.kind === "unrecognized") &&
     result.notice === "link_target_changed"
   ) {
     return "That User changed. Authenticate again and confirm the current User.";
