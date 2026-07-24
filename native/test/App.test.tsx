@@ -13,7 +13,8 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import { OpenJobNativeApp } from "../App";
-import { confirmsEmbeddedBundle } from "../src/OpenJobShell";
+import { resolveAppearanceKey } from "../src/appearance-keyboard";
+import { hasEmbeddedBundleOnlyPolicy } from "../src/OpenJobShell";
 import type { NativeAuthController } from "../src/auth/AuthGate";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
 
@@ -91,9 +92,9 @@ beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
-test("confirms an OTA-disabled Release bundle when Expo's asset hint is false", () => {
+test("requires an embedded-only Release bundle when Expo's asset hint is false", () => {
   expect(
-    confirmsEmbeddedBundle({
+    hasEmbeddedBundleOnlyPolicy({
       isDevelopment: false,
       updatesEnabled: false,
       usingEmbeddedAssets: false,
@@ -101,9 +102,9 @@ test("confirms an OTA-disabled Release bundle when Expo's asset hint is false", 
   ).toBe(true);
 });
 
-test("does not confirm Metro or OTA-enabled launches as embedded", () => {
+test("does not report an embedded-only policy for Metro or OTA-enabled launches", () => {
   expect(
-    confirmsEmbeddedBundle({
+    hasEmbeddedBundleOnlyPolicy({
       isDevelopment: true,
       updatesEnabled: false,
       usingEmbeddedAssets: false,
@@ -111,7 +112,7 @@ test("does not confirm Metro or OTA-enabled launches as embedded", () => {
   ).toBe(false);
   for (const usingEmbeddedAssets of [false, true]) {
     expect(
-      confirmsEmbeddedBundle({
+      hasEmbeddedBundleOnlyPolicy({
         isDevelopment: false,
         updatesEnabled: true,
         usingEmbeddedAssets,
@@ -134,9 +135,13 @@ test("bootstraps the branded preview shell from its embedded bundle", async () =
   expect(screen.getByText("OTA disabled")).toBeOnTheScreen();
   expect(screen.getByText("/api/v1 only")).toBeOnTheScreen();
   expect(screen.getByLabelText("OpenJob")).toBeOnTheScreen();
-  expect(screen.getByTestId("openjob-wordmark-period")).toHaveStyle({
-    backgroundColor: "#6387ff",
-  });
+  expect(screen.getByTestId("openjob-wordmark-canonical")).toBeOnTheScreen();
+  expect(
+    screen.getByTestId("openjob-brandmark-canonical", {
+      includeHiddenElements: true,
+    }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText("OPENJOB")).not.toBeOnTheScreen();
 });
 
 test("production omits the non-production build badge", async () => {
@@ -191,7 +196,7 @@ test("restores the selected appearance and pushed native-stack screen", async ()
   );
   expect(await screen.findByRole("header", { name: "Appearance" })).toBeOnTheScreen();
   await fireEvent.press(
-    screen.getByRole("button", { name: "Use dark appearance" }),
+    screen.getByRole("radio", { name: "Use dark appearance" }),
   );
   expect(await screen.findByText("Dark selected")).toBeOnTheScreen();
 
@@ -224,7 +229,7 @@ test("keeps selected dark-mode labels legible and exposes focus and hover states
   });
 
   await fireEvent.press(appearanceButton);
-  const darkOption = await screen.findByRole("button", {
+  const darkOption = await screen.findByRole("radio", {
     name: "Use dark appearance",
   });
   await fireEvent.press(darkOption);
@@ -234,6 +239,77 @@ test("keeps selected dark-mode labels legible and exposes focus and hover states
 
   await fireEvent(darkOption, "focus");
   expect(darkOption).toHaveStyle({ borderWidth: 3 });
+});
+
+test("maps iOS and Android hardware-key codes without cross-platform collisions", () => {
+  expect(resolveAppearanceKey("ios", 79)).toBe("next");
+  expect(resolveAppearanceKey("ios", 81)).toBe("next");
+  expect(resolveAppearanceKey("ios", 80)).toBe("previous");
+  expect(resolveAppearanceKey("ios", 82)).toBe("previous");
+  expect(resolveAppearanceKey("ios", 41)).toBe("escape");
+  expect(resolveAppearanceKey("ios", 20)).toBeNull();
+
+  expect(resolveAppearanceKey("android", 20)).toBe("next");
+  expect(resolveAppearanceKey("android", 22)).toBe("next");
+  expect(resolveAppearanceKey("android", 19)).toBe("previous");
+  expect(resolveAppearanceKey("android", 21)).toBe("previous");
+  expect(resolveAppearanceKey("android", 111)).toBe("escape");
+  expect(resolveAppearanceKey("android", 81)).toBeNull();
+});
+
+test("moves radio selection and focus with arrows and handles Enter, Space, and Escape", async () => {
+  await renderNativeApp(previewConfig);
+
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open appearance settings" }),
+  );
+  const systemOption = await screen.findByRole("radio", {
+    name: "Use system appearance",
+  });
+  const lightOption = screen.getByRole("radio", {
+    name: "Use light appearance",
+  });
+  const darkOption = screen.getByRole("radio", {
+    name: "Use dark appearance",
+  });
+
+  await fireEvent(systemOption, "keyDownPress", {
+    nativeEvent: { keyCode: 81 },
+  });
+  expect(await screen.findByText("Light selected")).toBeOnTheScreen();
+  await waitFor(() => {
+    expect(lightOption).toHaveStyle({ borderWidth: 3 });
+  });
+
+  await fireEvent(lightOption, "keyDownPress", {
+    nativeEvent: { keyCode: 81 },
+  });
+  expect(await screen.findByText("Dark selected")).toBeOnTheScreen();
+  await waitFor(() => {
+    expect(darkOption).toHaveStyle({ borderWidth: 3 });
+  });
+
+  await fireEvent(darkOption, "keyDownPress", {
+    nativeEvent: { keyCode: 81 },
+  });
+  expect(await screen.findByText("System selected")).toBeOnTheScreen();
+
+  await fireEvent(darkOption, "keyUpPress", {
+    nativeEvent: { keyCode: 44 },
+  });
+  expect(await screen.findByText("Dark selected")).toBeOnTheScreen();
+
+  await fireEvent(systemOption, "keyUpPress", {
+    nativeEvent: { keyCode: 40 },
+  });
+  expect(await screen.findByText("System selected")).toBeOnTheScreen();
+
+  await fireEvent(systemOption, "keyDownPress", {
+    nativeEvent: { keyCode: 41 },
+  });
+  expect(
+    await screen.findByText("One clear list for your team."),
+  ).toBeOnTheScreen();
 });
 
 test("survives lifecycle changes and respects system Reduced Motion", async () => {

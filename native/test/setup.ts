@@ -14,6 +14,48 @@ jest.mock("@expo-google-fonts/geist", () => ({
   useFonts: () => [true, null],
 }));
 
+jest.mock("react-native-external-keyboard", () => {
+  const React = jest.requireActual("react");
+  const { Pressable } = jest.requireActual("react-native");
+  const activationKeyCodes = new Set([23, 40, 44, 62, 66]);
+  const KeyboardPressable = React.forwardRef(
+    (
+      {
+        onFocus,
+        onKeyDownPress,
+        onKeyUpPress,
+        onPress,
+        ...props
+      }: {
+        onFocus?: () => void;
+        onKeyDownPress?: (event: { nativeEvent: { keyCode: number } }) => void;
+        onKeyUpPress?: (event: { nativeEvent: { keyCode: number } }) => void;
+        onPress?: () => void;
+        [key: string]: unknown;
+      },
+      ref: unknown,
+    ) => {
+      React.useImperativeHandle(ref, () => ({
+        focus: () => onFocus?.(),
+        keyboardFocus: () => onFocus?.(),
+        screenReaderFocus: () => undefined,
+      }));
+      return React.createElement(Pressable, {
+        ...props,
+        onFocus,
+        onKeyDownPress,
+        onKeyUpPress: (event: { nativeEvent: { keyCode: number } }) => {
+          onKeyUpPress?.(event);
+          if (activationKeyCodes.has(event.nativeEvent.keyCode)) onPress?.();
+        },
+        onPress,
+      });
+    },
+  );
+
+  return { K: { Pressable: KeyboardPressable } };
+});
+
 jest.mock("expo-splash-screen", () => ({
   hideAsync: jest.fn(async () => undefined),
   preventAutoHideAsync: jest.fn(async () => undefined),

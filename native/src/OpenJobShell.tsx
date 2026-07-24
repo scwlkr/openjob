@@ -8,8 +8,9 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import * as Updates from "expo-updates";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,7 +18,16 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import {
+  K,
+  type KeyboardFocus,
+  type OnKeyPress,
+} from "react-native-external-keyboard";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  type AppearanceKeyboardAction,
+  resolveAppearanceKey,
+} from "./appearance-keyboard";
 import { useAppLifecycle, useReducedMotion } from "./device-state";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
 import type {
@@ -29,6 +39,7 @@ import {
   saveNavigationState,
 } from "./storage";
 import { useOpenJobTheme } from "./theme";
+import { OpenJobBrandmark, OpenJobWordmark } from "./brand-marks";
 
 type RootStackParamList = {
   Shell: undefined;
@@ -41,6 +52,11 @@ type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const appearancePreferences: AppearancePreference[] = [
+  "system",
+  "light",
+  "dark",
+];
 
 type SignedInUser = {
   methods: SignInMethod[];
@@ -50,7 +66,7 @@ type SignedInUser = {
   user: OpenJobUser;
 };
 
-export function confirmsEmbeddedBundle({
+export function hasEmbeddedBundleOnlyPolicy({
   isDevelopment,
   updatesEnabled,
   usingEmbeddedAssets,
@@ -81,23 +97,8 @@ function useControlInteraction() {
 }
 
 function Wordmark() {
-  const { palette } = useOpenJobTheme();
-  return (
-    <View
-      accessibilityLabel="OpenJob"
-      accessibilityRole="header"
-      style={styles.wordmark}
-    >
-      <Text style={[styles.wordmarkText, { color: palette.ink }]}>OPENJOB</Text>
-      <View
-        style={[
-          styles.wordmarkPeriod,
-          { backgroundColor: palette.wordmarkPeriod },
-        ]}
-        testID="openjob-wordmark-period"
-      />
-    </View>
-  );
+  const { isDark } = useOpenJobTheme();
+  return <OpenJobWordmark inverse={isDark} />;
 }
 
 function BuildBadge({ label }: { label: string }) {
@@ -188,12 +189,12 @@ function StatusCard({
 
 function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
   const { width } = useWindowDimensions();
-  const { palette } = useOpenJobTheme();
+  const { isDark, palette } = useOpenJobTheme();
   const lifecycle = useAppLifecycle();
   const reducedMotion = useReducedMotion();
   const wide = width >= 720;
   const compactHeader = width < 520;
-  const embeddedBundle = confirmsEmbeddedBundle({
+  const embeddedBundle = hasEmbeddedBundleOnlyPolicy({
     isDevelopment: __DEV__,
     updatesEnabled: Updates.isEnabled,
     usingEmbeddedAssets: Updates.isUsingEmbeddedAssets,
@@ -284,20 +285,8 @@ function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
               },
             ]}
           >
-            <View style={styles.brandmark} accessibilityElementsHidden>
-              <View
-                style={[styles.brandmarkOuter, { backgroundColor: palette.ink }]}
-              >
-                <View
-                  style={[
-                    styles.brandmarkInner,
-                    { backgroundColor: palette.paper },
-                  ]}
-                />
-              </View>
-              <View
-                style={[styles.brandmarkDot, { backgroundColor: palette.blue }]}
-              />
+            <View style={styles.brandmark}>
+              <OpenJobBrandmark inverse={isDark} />
             </View>
             <Text style={[styles.cardKicker, { color: palette.muted }]}>
               SHARED TASK LIST
@@ -349,21 +338,41 @@ function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
 }
 
 function AppearanceOption({
+  focusRef,
+  isSelected,
   label,
+  onKeyboardAction,
+  onSelect,
   preference,
 }: {
+  focusRef: (instance: KeyboardFocus | null) => void;
+  isSelected: boolean;
   label: string;
+  onKeyboardAction: (
+    preference: AppearancePreference,
+    action: AppearanceKeyboardAction,
+  ) => void;
+  onSelect: (preference: AppearancePreference) => void;
   preference: AppearancePreference;
 }) {
-  const { palette, preference: selected, setPreference } = useOpenJobTheme();
-  const isSelected = preference === selected;
+  const { palette } = useOpenJobTheme();
   const { focused, hovered, interactionProps } = useControlInteraction();
+
   return (
-    <Pressable
+    <K.Pressable
       accessibilityLabel={`Use ${label.toLowerCase()} appearance`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      onPress={() => setPreference(preference)}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: isSelected }}
+      focusable={isSelected}
+      onKeyDownPress={(event: OnKeyPress) => {
+        const action = resolveAppearanceKey(
+          Platform.OS,
+          event.nativeEvent.keyCode,
+        );
+        if (action) onKeyboardAction(preference, action);
+      }}
+      onPress={() => onSelect(preference)}
+      ref={focusRef}
       {...interactionProps}
       style={({ pressed }) => [
         styles.appearanceOption,
@@ -397,14 +406,52 @@ function AppearanceOption({
       >
         {isSelected ? `${label} selected` : "Select"}
       </Text>
-    </Pressable>
+    </K.Pressable>
   );
 }
 
 function AppearanceScreen({
   navigation,
 }: NativeStackScreenProps<RootStackParamList, "Appearance">) {
-  const { palette } = useOpenJobTheme();
+  const {
+    palette,
+    preference: selected,
+    setPreference,
+  } = useOpenJobTheme();
+  const optionRefs = useRef<Record<AppearancePreference, KeyboardFocus | null>>({
+    dark: null,
+    light: null,
+    system: null,
+  });
+  const pendingKeyboardFocus = useRef<AppearancePreference | null>(null);
+
+  useEffect(() => {
+    if (pendingKeyboardFocus.current !== selected) return;
+    const frame = requestAnimationFrame(() => {
+      optionRefs.current[selected]?.keyboardFocus();
+      pendingKeyboardFocus.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
+
+  const handleKeyboardAction = (
+    preference: AppearancePreference,
+    action: AppearanceKeyboardAction,
+  ) => {
+    if (action === "escape") {
+      navigation.goBack();
+      return;
+    }
+    const direction = action === "next" ? 1 : -1;
+    const currentIndex = appearancePreferences.indexOf(preference);
+    const nextIndex =
+      (currentIndex + direction + appearancePreferences.length) %
+      appearancePreferences.length;
+    const nextPreference = appearancePreferences[nextIndex]!;
+    pendingKeyboardFocus.current = nextPreference;
+    setPreference(nextPreference);
+  };
+
   return (
     <SafeAreaView
       edges={["top", "right", "bottom", "left"]}
@@ -430,10 +477,24 @@ function AppearanceScreen({
           System is the default. Your choice is restored on this device without
           storing credentials or Task data.
         </Text>
-        <View style={styles.appearanceOptions}>
-          <AppearanceOption label="System" preference="system" />
-          <AppearanceOption label="Light" preference="light" />
-          <AppearanceOption label="Dark" preference="dark" />
+        <View
+          accessibilityLabel="Appearance preference"
+          accessibilityRole="radiogroup"
+          style={styles.appearanceOptions}
+        >
+          {appearancePreferences.map((preference) => (
+            <AppearanceOption
+              focusRef={(instance) => {
+                optionRefs.current[preference] = instance;
+              }}
+              isSelected={preference === selected}
+              key={preference}
+              label={`${preference[0]!.toUpperCase()}${preference.slice(1)}`}
+              onKeyboardAction={handleKeyboardAction}
+              onSelect={setPreference}
+              preference={preference}
+            />
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -507,23 +568,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   brandmark: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    gap: 7,
-    marginBottom: 52,
-  },
-  brandmarkDot: {
-    height: 16,
-    width: 16,
-  },
-  brandmarkInner: {
-    height: 36,
-    width: 36,
-  },
-  brandmarkOuter: {
-    height: 68,
-    padding: 16,
-    width: 68,
+    marginBottom: 32,
   },
   buildBadge: {
     borderWidth: 1,
@@ -698,20 +743,5 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: 12,
     paddingVertical: 12,
-  },
-  wordmark: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    gap: 3,
-  },
-  wordmarkPeriod: {
-    height: 6,
-    marginBottom: 4,
-    width: 6,
-  },
-  wordmarkText: {
-    fontFamily: "Geist_900Black",
-    fontSize: 18,
-    letterSpacing: -1.2,
   },
 });
