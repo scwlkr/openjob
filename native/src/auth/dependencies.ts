@@ -28,6 +28,8 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
   });
 
   return new NativeAuthCoordinator({
+    claimUsername: (token, username) =>
+      api.claimUsername(token, username),
     clearCleanupPending: () => store.clearCleanupPending(),
     clearProviderSession: () => provider.clearSession(),
     clearStoredSession: () => store.clear(),

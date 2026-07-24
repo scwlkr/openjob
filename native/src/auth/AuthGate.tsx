@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Pressable,
   ScrollView,
@@ -28,6 +29,7 @@ export type NativeAuthController = Pick<
   | "authenticateExistingUser"
   | "authenticateNewMethod"
   | "cancelPending"
+  | "claimUsername"
   | "confirmLink"
   | "createUser"
   | "restore"
@@ -46,6 +48,13 @@ type SignedInViewProps = {
 };
 
 type AuthGateState = AuthFlowResult | { kind: "restoring" };
+
+const USERNAME_PATTERN =
+  /^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])$/u;
+const USERNAME_GUIDANCE =
+  "2–32 lowercase letters or numbers. Dots, dashes, and underscores can sit inside.";
+const USERNAME_VALIDATION =
+  "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.";
 
 function methodName(method: AuthenticationMethod) {
   if (method === "qa-password") return "Preview QA";
@@ -91,6 +100,9 @@ function errorMessage(error: unknown) {
     );
   }
   if (error instanceof OpenJobApiError) {
+    if (error.code === "username_taken") {
+      return "That Username is unavailable. Try another.";
+    }
     if (error.code === "sign_in_method_conflict") {
       return "That Sign-in Method belongs to another User and cannot be linked.";
     }
@@ -206,6 +218,103 @@ function AuthScaffold({
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function UsernameClaimForm({
+  busy,
+  error,
+  onClaim,
+}: {
+  busy: boolean;
+  error: string | null;
+  onClaim: (username: string) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [validation, setValidation] = useState<string | null>(null);
+  const { palette } = useOpenJobTheme();
+  const status = validation ?? error;
+
+  useEffect(() => {
+    if (status) {
+      AccessibilityInfo.announceForAccessibility(status);
+    }
+  }, [status]);
+
+  function claimCurrentUsername() {
+    if (busy) return;
+    if (!USERNAME_PATTERN.test(username)) {
+      setValidation(USERNAME_VALIDATION);
+      return;
+    }
+    setValidation(null);
+    onClaim(username);
+  }
+
+  return (
+    <View style={styles.usernameForm}>
+      <Text style={[styles.inputLabel, { color: palette.ink }]}>
+        Username
+      </Text>
+      <View style={styles.usernameInputRow}>
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={[styles.usernamePrefix, { color: palette.ink }]}
+        >
+          @
+        </Text>
+        <TextInput
+          accessibilityHint={USERNAME_GUIDANCE}
+          accessibilityLabel="Username"
+          autoCapitalize="none"
+          autoComplete="username"
+          autoCorrect={false}
+          editable={!busy}
+          onChangeText={(value) => {
+            setUsername(value);
+            setValidation(
+              value.length > 0 && !USERNAME_PATTERN.test(value)
+                ? USERNAME_VALIDATION
+                : null,
+            );
+          }}
+          onSubmitEditing={claimCurrentUsername}
+          placeholder="username"
+          placeholderTextColor={palette.muted}
+          returnKeyType="done"
+          spellCheck={false}
+          style={[
+            styles.input,
+            styles.usernameInput,
+            {
+              backgroundColor: palette.paper,
+              borderColor: palette.line,
+              color: palette.ink,
+            },
+          ]}
+          textContentType="username"
+          value={username}
+        />
+      </View>
+      <Text style={[styles.guidance, { color: palette.muted }]}>
+        {USERNAME_GUIDANCE}
+      </Text>
+      {status ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+          style={[styles.message, { color: palette.muted }]}
+        >
+          {status}
+        </Text>
+      ) : null}
+      <ActionButton
+        disabled={busy || username.length === 0}
+        label={busy ? "Claiming…" : "Claim Username"}
+        onPress={claimCurrentUsername}
+      />
+    </View>
   );
 }
 
@@ -426,6 +535,56 @@ export function NativeAuthGate({
     );
   }
 
+  if (state.kind === "signed-in" && state.user.usernameRequired) {
+    const methodToLink =
+      state.methods.length === 1
+        ? state.methods[0] === "google"
+          ? "apple"
+          : "google"
+        : null;
+    return (
+      <AuthScaffold title="Claim your Username">
+        <Text style={[styles.onboardingText, { color: palette.muted }]}>
+          Members will use it to recognize you and assign work. You choose it
+          once.
+        </Text>
+        <UsernameClaimForm
+          busy={busy}
+          error={message}
+          key={state.user.userId}
+          onClaim={(username) =>
+            void perform(() => auth.claimUsername(username))
+          }
+        />
+        {methodToLink ? (
+          <ActionButton
+            disabled={busy}
+            label="Link an existing User"
+            onPress={() => {
+              setLinkFromManager(false);
+              void perform(() =>
+                auth.authenticateNewMethod(methodToLink),
+              );
+            }}
+            secondary
+          />
+        ) : null}
+        <ActionButton
+          disabled={busy}
+          label="Sign out"
+          onPress={() => void perform(() => auth.signOut())}
+          secondary
+        />
+        <ActionButton
+          disabled={busy}
+          label="Switch User"
+          onPress={() => void perform(() => auth.switchUser())}
+          secondary
+        />
+      </AuthScaffold>
+    );
+  }
+
   if (state.kind === "signed-in") {
     if (!managing) {
       return renderSignedIn({
@@ -623,6 +782,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  inputLabel: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 16,
+  },
+  guidance: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  onboardingText: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 16,
+    lineHeight: 24,
+  },
   qaForm: {
     gap: 10,
     marginTop: 12,
@@ -630,6 +803,21 @@ const styles = StyleSheet.create({
   qaTitle: {
     fontFamily: "Geist_700Bold",
     fontSize: 16,
+  },
+  usernameForm: {
+    gap: 10,
+  },
+  usernameInput: {
+    flex: 1,
+  },
+  usernameInputRow: {
+    alignItems: "center",
+    flexDirection: "row",
+  },
+  usernamePrefix: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 18,
+    marginRight: 8,
   },
   safeArea: {
     flex: 1,

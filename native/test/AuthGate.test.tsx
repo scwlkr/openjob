@@ -4,7 +4,12 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react-native";
-import { Pressable, Text, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { NativeAuthGate } from "../src/auth/AuthGate";
 import { OpenJobApiError } from "../src/auth/coordinator";
 import type {
@@ -44,12 +49,17 @@ const signedIn: SignedInResult = {
   user,
 };
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 function controller(
   overrides: Partial<NativeAuthController> = {},
 ): NativeAuthController & {
   authenticateExistingUser: jest.Mock;
   authenticateNewMethod: jest.Mock;
   cancelPending: jest.Mock;
+  claimUsername: jest.Mock;
   confirmLink: jest.Mock;
   createUser: jest.Mock;
   restore: jest.Mock;
@@ -63,6 +73,7 @@ function controller(
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
     cancelPending: jest.fn(async () => ({ kind: "signed-out" })),
+    claimUsername: jest.fn(async () => signedIn),
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
     restore: jest.fn(async () => ({ kind: "signed-out" })),
@@ -74,6 +85,171 @@ function controller(
     ...overrides,
   } as unknown as ReturnType<typeof controller>;
 }
+
+test("blocks the signed-in shell until an accessible immutable Username claim succeeds", async () => {
+  const announce = jest
+    .spyOn(AccessibilityInfo, "announceForAccessibility")
+    .mockImplementation(() => undefined);
+  const emptyShell: SignedInResult = {
+    kind: "signed-in",
+    methods: ["google"],
+    user: {
+      userId: "usr_one",
+      username: null,
+      usernameRequired: true,
+    },
+  };
+  const auth = controller({
+    claimUsername: jest
+      .fn()
+      .mockRejectedValueOnce(
+        new OpenJobApiError(
+          409,
+          "username_taken",
+          "That Username is unavailable.",
+        ),
+      )
+      .mockResolvedValueOnce({
+        ...signedIn,
+        user: { ...user, username: "walker-two" },
+      }),
+    createUser: jest.fn(async () => emptyShell),
+    signIn: jest.fn(async () => ({
+      kind: "unrecognized" as const,
+      provider: "google" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Continue with Google" }),
+  );
+  await fireEvent.press(
+    await screen.findByRole("button", {
+      name: "Create a new OpenJob User",
+    }),
+  );
+
+  expect(
+    await screen.findByRole("header", { name: "Claim your Username" }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText(/Signed in as/u)).not.toBeOnTheScreen();
+  expect(
+    screen.getByText(
+      "2–32 lowercase letters or numbers. Dots, dashes, and underscores can sit inside.",
+    ),
+  ).toBeOnTheScreen();
+
+  await fireEvent.changeText(
+    screen.getByLabelText("Username"),
+    "Bad Name",
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Claim Username" }),
+  );
+  expect(
+    await screen.findByText(
+      "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
+    ),
+  ).toBeOnTheScreen();
+  await waitFor(() =>
+    expect(announce).toHaveBeenCalledWith(
+      "Use 2 to 32 lowercase letters, numbers, or internal ._- characters.",
+    ),
+  );
+  expect(auth.claimUsername).not.toHaveBeenCalled();
+
+  await fireEvent.changeText(
+    screen.getByLabelText("Username"),
+    "walker",
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Claim Username" }),
+  );
+  expect(
+    await screen.findByText("That Username is unavailable. Try another."),
+  ).toBeOnTheScreen();
+  await waitFor(() =>
+    expect(announce).toHaveBeenCalledWith(
+      "That Username is unavailable. Try another.",
+    ),
+  );
+  expect(screen.queryByText(/Signed in as/u)).not.toBeOnTheScreen();
+
+  await fireEvent.changeText(
+    screen.getByLabelText("Username"),
+    "walker-two",
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Claim Username" }),
+  );
+  expect(
+    await screen.findByText("Signed in as walker-two"),
+  ).toBeOnTheScreen();
+  expect(auth.claimUsername).toHaveBeenNthCalledWith(1, "walker");
+  expect(auth.claimUsername).toHaveBeenNthCalledWith(2, "walker-two");
+});
+
+test("clears the irreversible Username draft and error when the User session changes", async () => {
+  const firstShell: SignedInResult = {
+    kind: "signed-in",
+    methods: ["google"],
+    user: {
+      userId: "usr_first",
+      username: null,
+      usernameRequired: true,
+    },
+  };
+  const secondShell: SignedInResult = {
+    kind: "signed-in",
+    methods: ["google"],
+    user: {
+      userId: "usr_second",
+      username: null,
+      usernameRequired: true,
+    },
+  };
+  const auth = controller({
+    claimUsername: jest.fn(async () => {
+      throw new OpenJobApiError(
+        409,
+        "username_taken",
+        "That Username is unavailable.",
+      );
+    }),
+    restore: jest.fn(async () => firstShell),
+    signIn: jest.fn(async () => secondShell),
+    switchUser: jest.fn(async () => ({ kind: "signed-out" as const })),
+  });
+  await renderGate(auth);
+
+  await fireEvent.changeText(
+    await screen.findByLabelText("Username"),
+    "first-user-draft",
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Claim Username" }),
+  );
+  expect(
+    await screen.findByText("That Username is unavailable. Try another."),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Switch User" }),
+  );
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Continue with Google" }),
+  );
+
+  expect(await screen.findByLabelText("Username")).toHaveProp("value", "");
+  expect(
+    screen.queryByText("That Username is unavailable. Try another."),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Claim Username" }),
+  ).toHaveProp("accessibilityState", { disabled: true });
+  expect(auth.claimUsername).toHaveBeenCalledTimes(1);
+});
 
 function SignedInSurface({
   onManageSignInMethods,
@@ -347,10 +523,12 @@ test("requires fresh existing authentication and confirmation before linking", a
 
 test.each([
   {
+    expectedDestination: "Signed in as walker",
     expectedHeading: "Link Apple to @walker?",
     target: user,
   },
   {
+    expectedDestination: "Claim your Username",
     expectedHeading: "Link Apple to usr_target_shell?",
     target: {
       userId: "usr_target_shell",
@@ -359,6 +537,7 @@ test.each([
     },
   },
 ])("confirms and renders the explicitly proved empty-shell target", async ({
+  expectedDestination,
   expectedHeading,
   target,
 }) => {
@@ -389,20 +568,14 @@ test.each([
   await renderGate(auth);
 
   await fireEvent.press(
-    await screen.findByRole("button", { name: "Manage Sign-in Methods" }),
+    await screen.findByRole("button", { name: "Link an existing User" }),
   );
-  await fireEvent.press(screen.getByRole("button", { name: "Link Apple" }));
   expect(
     await screen.findByRole("header", { name: expectedHeading }),
   ).toBeOnTheScreen();
   await fireEvent.press(screen.getByRole("button", { name: "Confirm link" }));
-  await fireEvent.press(
-    await screen.findByRole("button", { name: "Back to OpenJob" }),
-  );
   expect(
-    await screen.findByText(
-      `Signed in as ${target.username ?? target.userId}`,
-    ),
+    await screen.findByText(expectedDestination),
   ).toBeOnTheScreen();
 });
 

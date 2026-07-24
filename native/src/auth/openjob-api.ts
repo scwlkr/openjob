@@ -99,6 +99,13 @@ export function createNativeOpenJobApi({
       });
     },
 
+    claimUsername(token: string, username: string) {
+      return userRequest("/me/username", token, {
+        body: JSON.stringify({ username }),
+        method: "PUT",
+      });
+    },
+
     getMe(token: string) {
       return userRequest("/me", token);
     },

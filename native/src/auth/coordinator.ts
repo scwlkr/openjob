@@ -91,6 +91,10 @@ export class OpenJobApiError extends Error {
 }
 
 export type NativeAuthDependencies = {
+  claimUsername(
+    idToken: string,
+    username: string,
+  ): Promise<OpenJobUser>;
   clearCleanupPending(): Promise<void>;
   clearProviderSession(): Promise<void>;
   clearStoredSession(): Promise<void>;
@@ -303,6 +307,54 @@ export class NativeAuthCoordinator {
       const user = await this.dependencies.createUser(candidate.idToken);
       this.assertCurrentOperation(epoch);
       return this.finishSignedIn(candidate, user, epoch);
+    } catch (error) {
+      this.assertCurrentOperation(epoch);
+      if (
+        (error instanceof ProviderSignInError &&
+          error.code === "revoked") ||
+        (error instanceof OpenJobApiError && error.status === 401)
+      ) {
+        return (await this.removePrivateData())
+          ? { kind: "signed-out", reason: "revoked" }
+          : { kind: "cleanup-retry" };
+      }
+      throw error;
+    }
+  }
+
+  async claimUsername(username: string): Promise<AuthFlowResult> {
+    const epoch = this.operationEpoch;
+    try {
+      const session = await this.currentSession(epoch);
+      const methods = this.activeResult?.methods;
+      if (!methods) {
+        throw new Error("An authenticated OpenJob User is required.");
+      }
+      let user: OpenJobUser;
+      try {
+        user = await this.dependencies.claimUsername(
+          session.idToken,
+          username,
+        );
+      } catch (claimError) {
+        if (
+          !(
+            claimError instanceof OpenJobApiError &&
+            claimError.code === "username_immutable"
+          )
+        ) {
+          throw claimError;
+        }
+        try {
+          user = await this.dependencies.getMe(session.idToken);
+        } catch {
+          throw claimError;
+        }
+        this.assertCurrentOperation(epoch);
+        if (user.usernameRequired) throw claimError;
+      }
+      this.assertCurrentOperation(epoch);
+      return this.setSignedIn(session, user, methods, epoch);
     } catch (error) {
       this.assertCurrentOperation(epoch);
       if (

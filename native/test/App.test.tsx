@@ -65,6 +65,7 @@ function authController(): NativeAuthController {
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
     cancelPending: jest.fn(async () => signedIn),
+    claimUsername: jest.fn(async () => signedIn),
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
     restore: jest.fn(async () => signedIn),

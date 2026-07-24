@@ -35,6 +35,7 @@ const user = {
 function createDependencies(
   overrides: Partial<NativeAuthDependencies> = {},
 ): NativeAuthDependencies & {
+  claimUsername: jest.Mock;
   clearProviderSession: jest.Mock;
   clearStoredSession: jest.Mock;
   createUser: jest.Mock;
@@ -50,6 +51,7 @@ function createDependencies(
   signInWithProvider: jest.Mock;
 } {
   return {
+    claimUsername: jest.fn(async () => user),
     clearCleanupPending: jest.fn(async () => undefined),
     clearProviderSession: jest.fn(async () => undefined),
     clearStoredSession: jest.fn(async () => undefined),
@@ -74,6 +76,7 @@ function createDependencies(
     })),
     ...overrides,
   } as unknown as NativeAuthDependencies & {
+    claimUsername: jest.Mock;
     clearProviderSession: jest.Mock;
     clearStoredSession: jest.Mock;
     createUser: jest.Mock;
@@ -89,6 +92,105 @@ function createDependencies(
     signInWithProvider: jest.Mock;
   };
 }
+
+test("claims the immutable Username with the active session and preserves its methods", async () => {
+  const emptyShell = {
+    userId: "usr_one",
+    username: null,
+    usernameRequired: true,
+  };
+  const claimed = {
+    ...emptyShell,
+    username: "walker",
+    usernameRequired: false,
+  };
+  const dependencies = createDependencies({
+    claimUsername: jest.fn(async () => claimed),
+    getMe: jest.fn(async () => emptyShell),
+    listSignInMethods: jest.fn(async () => [
+      "google" as const,
+      "apple" as const,
+    ]),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+  await expect(coordinator.claimUsername("walker")).resolves.toEqual({
+    kind: "signed-in",
+    methods: ["apple", "google"],
+    user: claimed,
+  });
+
+  expect(dependencies.claimUsername).toHaveBeenCalledWith(
+    "google-id-token",
+    "walker",
+  );
+  expect(dependencies.listSignInMethods).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveStoredSession).toHaveBeenCalledTimes(1);
+});
+
+test("recovers a concurrent immutable claim from the current User", async () => {
+  const emptyShell = {
+    userId: "usr_one",
+    username: null,
+    usernameRequired: true,
+  };
+  const claimedElsewhere = {
+    ...emptyShell,
+    username: "already-claimed",
+    usernameRequired: false,
+  };
+  const immutable = new OpenJobApiError(
+    409,
+    "username_immutable",
+    "Username cannot be changed.",
+  );
+  const dependencies = createDependencies({
+    claimUsername: jest.fn(async () => {
+      throw immutable;
+    }),
+    getMe: jest
+      .fn()
+      .mockResolvedValueOnce(emptyShell)
+      .mockResolvedValueOnce(claimedElsewhere),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+  await expect(coordinator.claimUsername("other-draft")).resolves.toEqual({
+    kind: "signed-in",
+    methods: ["google"],
+    user: claimedElsewhere,
+  });
+  expect(dependencies.getMe).toHaveBeenLastCalledWith("google-id-token");
+  expect(dependencies.listSignInMethods).toHaveBeenCalledTimes(1);
+});
+
+test("keeps the immutable error when the current User still needs a Username", async () => {
+  const emptyShell = {
+    userId: "usr_one",
+    username: null,
+    usernameRequired: true,
+  };
+  const immutable = new OpenJobApiError(
+    409,
+    "username_immutable",
+    "Username cannot be changed.",
+  );
+  const dependencies = createDependencies({
+    claimUsername: jest.fn(async () => {
+      throw immutable;
+    }),
+    getMe: jest.fn(async () => emptyShell),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+  await expect(
+    coordinator.claimUsername("other-draft"),
+  ).rejects.toBe(immutable);
+  expect(dependencies.getMe).toHaveBeenCalledTimes(2);
+});
 
 test("restores and persists only the refresh credential for a returning provider", async () => {
   const dependencies = createDependencies();

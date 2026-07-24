@@ -14,9 +14,10 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-test("uses the authenticated contract for discovery, create, and confirmed link", async () => {
+test("uses the authenticated contract for discovery, create, Username claim, and confirmed link", async () => {
   const fetchImplementation = jest
     .fn()
+    .mockResolvedValueOnce(jsonResponse({ data: user }))
     .mockResolvedValueOnce(jsonResponse({ data: user }))
     .mockResolvedValueOnce(jsonResponse({ data: user }))
     .mockResolvedValueOnce(jsonResponse({ data: ["apple", "google"] }))
@@ -28,6 +29,9 @@ test("uses the authenticated contract for discovery, create, and confirmed link"
 
   await expect(api.getMe("current-token")).resolves.toEqual(user);
   await expect(api.createUser("current-token")).resolves.toEqual(user);
+  await expect(
+    api.claimUsername("current-token", "walker"),
+  ).resolves.toEqual(user);
   await expect(api.listSignInMethods("current-token")).resolves.toEqual([
     "apple",
     "google",
@@ -55,6 +59,13 @@ test("uses the authenticated contract for discovery, create, and confirmed link"
       expect.objectContaining({
         body: JSON.stringify({ confirmation: "create" }),
         method: "POST",
+      }),
+    ],
+    [
+      "https://preview.example/api/v1/me/username",
+      expect.objectContaining({
+        body: JSON.stringify({ username: "walker" }),
+        method: "PUT",
       }),
     ],
     [
