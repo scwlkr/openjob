@@ -53,6 +53,7 @@ function jsonToBase64Url(value: unknown) {
 
 function privateKeyBytes(privateKey: string) {
   const base64 = privateKey
+    .replaceAll("\\n", "\n")
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
     .replace(/\s/g, "");
