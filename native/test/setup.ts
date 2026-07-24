@@ -53,16 +53,7 @@ jest.mock("@invertase/react-native-apple-authentication", () => ({
     performRequest: jest.fn(),
     Scope: { EMAIL: 0, FULL_NAME: 1 },
   },
-  appleAuthAndroid: {
-    configure: jest.fn(),
-    Error: {
-      NOT_CONFIGURED: "NOT_CONFIGURED",
-      SIGNIN_CANCELLED: "SIGNIN_CANCELLED",
-      SIGNIN_FAILED: "SIGNIN_FAILED",
-    },
-    isSupported: true,
-    ResponseType: { ALL: "ALL" },
-    Scope: { ALL: "ALL" },
-    signIn: jest.fn(),
-  },
+  // The package exports an empty object when its Android native module is
+  // unavailable, including on iOS.
+  appleAuthAndroid: {},
 }));
