@@ -92,6 +92,12 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
   }
 
   async function claim(name) {
+    const creation = await request(name, {
+      body: { confirmation: "create" },
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    assert.ok(creation.status === 200 || creation.status === 201);
     const response = await request(name, {
       body: { username: name },
       method: "PUT",

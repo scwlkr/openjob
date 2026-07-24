@@ -43,6 +43,8 @@ type Task = {
   completedAt: string | null;
 };
 
+type SignInMethod = "apple" | "google";
+
 type ApiState = {
   user: { userId: string; username: string | null; usernameRequired: boolean };
   groups: Group[];
@@ -66,6 +68,10 @@ type ApiState = {
   failTaskMutationNetwork: boolean;
   hangMe: boolean;
   hangTasks: boolean;
+  meDelayMs: number;
+  createGroupDelayMs: number;
+  getGroupDelayMs: number;
+  linkDelayMs: number;
   membershipDenied: boolean;
   taskMutationDelayMs: number;
   notificationSubscription: {
@@ -77,6 +83,16 @@ type ApiState = {
   notificationRequests: { method: string; userId: string }[];
   notificationRegistrationDelayMs: number;
   notificationRegistrationsCompleted: number;
+  credentialRecognized: boolean;
+  freshCredentialRecognized: boolean;
+  signInMethods: SignInMethod[];
+  identityRequests: Array<{ path: string; body: unknown }>;
+  linkAuthorizationHeaders: string[];
+  linkFailureCode:
+    | "fresh_authentication_required"
+    | "link_target_changed"
+    | "sign_in_method_conflict"
+    | null;
 };
 
 const signedInUser = {
@@ -297,7 +313,7 @@ async function failIndexedDbWrites(page: Page) {
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "meDelayMs" | "createGroupDelayMs" | "getGroupDelayMs" | "linkDelayMs" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs" | "credentialRecognized" | "freshCredentialRecognized" | "signInMethods" | "linkFailureCode">> = {},
 ) {
   const members = [...(initial.members ?? [])];
   const bans = [...(initial.bans ?? [])];
@@ -341,12 +357,22 @@ async function installApi(
     failTaskMutationNetwork: initial.failTaskMutationNetwork ?? false,
     hangMe: initial.hangMe ?? false,
     hangTasks: initial.hangTasks ?? false,
+    meDelayMs: initial.meDelayMs ?? 0,
+    createGroupDelayMs: initial.createGroupDelayMs ?? 0,
+    getGroupDelayMs: initial.getGroupDelayMs ?? 0,
+    linkDelayMs: initial.linkDelayMs ?? 0,
     membershipDenied: initial.membershipDenied ?? false,
     taskMutationDelayMs: initial.taskMutationDelayMs ?? 0,
     notificationSubscription: initial.notificationSubscription ?? null,
     notificationRequests: [],
     notificationRegistrationDelayMs: initial.notificationRegistrationDelayMs ?? 0,
     notificationRegistrationsCompleted: 0,
+    credentialRecognized: initial.credentialRecognized ?? true,
+    freshCredentialRecognized: initial.freshCredentialRecognized ?? true,
+    signInMethods: [...(initial.signInMethods ?? ["google"])],
+    identityRequests: [],
+    linkAuthorizationHeaders: [],
+    linkFailureCode: initial.linkFailureCode ?? null,
   };
 
   const removeMember = (userId: string) => {
@@ -362,6 +388,11 @@ async function installApi(
     const request = route.request();
     const url = new URL(request.url());
     const authorization = request.headers().authorization ?? "";
+    const isLinkRequest =
+      url.pathname === "/api/v1/me/sign-in-methods" &&
+      request.method() === "POST";
+    const isFreshIdentityRequest =
+      url.pathname === "/api/v1/me" && request.method() === "GET";
     state.authorizationHeaders.push(authorization);
 
     const reply = (status: number, body: unknown) =>
@@ -398,13 +429,80 @@ async function installApi(
       return true;
     };
 
-    if (authorization !== "Bearer browser-test-token") {
+    if (
+      authorization !== "Bearer browser-test-token" &&
+      !(
+        (isLinkRequest || isFreshIdentityRequest) &&
+        (authorization === "Bearer browser-fresh-apple-token" ||
+          authorization === "Bearer browser-fresh-google-token")
+      )
+    ) {
       await error(401, "authentication_required", "Authentication is required.");
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/sign-in-methods" &&
+      request.method() === "GET"
+    ) {
+      await reply(200, { data: [...state.signInMethods].sort() });
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/sign-in-methods" &&
+      request.method() === "POST"
+    ) {
+      const body = request.postDataJSON() as {
+        confirmation?: unknown;
+        credentialToken?: unknown;
+        expectedTargetUserId?: unknown;
+      };
+      state.identityRequests.push({ path: url.pathname, body });
+      state.linkAuthorizationHeaders.push(authorization);
+      const confirmedUser = state.user;
+      if (state.linkDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.linkDelayMs)
+        );
+      }
+      if (state.linkFailureCode) {
+        const status = state.linkFailureCode === "fresh_authentication_required"
+          ? 401
+          : 409;
+        await error(
+          status,
+          state.linkFailureCode,
+          state.linkFailureCode === "fresh_authentication_required"
+            ? "Fresh provider authentication is required."
+            : state.linkFailureCode === "link_target_changed"
+              ? "The confirmed User changed before linking."
+              : "That Sign-in Method is already linked to another User.",
+        );
+        return;
+      }
+      if (
+        body.confirmation !== "link" ||
+        body.expectedTargetUserId !== confirmedUser.userId ||
+        (authorization === "Bearer browser-test-token"
+          ? body.credentialToken !== "browser-fresh-apple-token" &&
+            body.credentialToken !== "browser-fresh-google-token"
+          : body.credentialToken !== "browser-test-token")
+      ) {
+        await error(400, "invalid_request", "One or more fields are invalid.");
+        return;
+      }
+      state.signInMethods = ["apple", "google"];
+      state.credentialRecognized = true;
+      await reply(200, { data: confirmedUser });
       return;
     }
 
     if (url.pathname === "/api/v1/me" && request.method() === "GET") {
       if (state.hangMe) return await new Promise<void>(() => undefined);
+      if (state.meDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, state.meDelayMs));
+      }
       if (state.meFailureStatus) {
         await error(
           state.meFailureStatus,
@@ -415,7 +513,31 @@ async function installApi(
         );
         return;
       }
+      if (
+        authorization === "Bearer browser-test-token"
+          ? !state.credentialRecognized
+          : !state.freshCredentialRecognized
+      ) {
+        await error(
+          409,
+          "sign_in_method_unrecognized",
+          "That Sign-in Method is not linked to an OpenJob User.",
+        );
+        return;
+      }
       await reply(200, { data: state.user });
+      return;
+    }
+
+    if (url.pathname === "/api/v1/me" && request.method() === "POST") {
+      const body = request.postDataJSON() as { confirmation?: unknown };
+      state.identityRequests.push({ path: url.pathname, body });
+      if (body.confirmation !== "create") {
+        await error(400, "invalid_request", "One or more fields are invalid.");
+        return;
+      }
+      state.credentialRecognized = true;
+      await reply(201, { data: state.user });
       return;
     }
 
@@ -524,6 +646,11 @@ async function installApi(
         createdAt: "2026-07-16T16:00:00.000Z",
       };
       state.groups.push(group);
+      if (state.createGroupDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.createGroupDelayMs)
+        );
+      }
       await reply(201, { data: group });
       return;
     }
@@ -912,6 +1039,11 @@ async function installApi(
 
     const groupId = decodeURIComponent(url.pathname.slice("/api/v1/groups/".length));
     if (request.method() === "GET" && groupId) {
+      if (state.getGroupDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.getGroupDelayMs)
+        );
+      }
       if (state.getGroupFailureStatus) {
         await error(
           state.getGroupFailureStatus,
@@ -972,6 +1104,1039 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("offers Google and Apple and restores either linked web session", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  await installApi(page, { user: signedInUser });
+  await page.goto("/");
+
+  const google = page.getByRole("button", { name: "Continue with Google" });
+  const apple = page.getByRole("button", { name: "Continue with Apple" });
+  await expect(google).toBeVisible();
+  await expect(apple).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  await google.focus();
+  await page.keyboard.press("Tab");
+  await expect(apple).toBeFocused();
+  for (const button of [google, apple]) {
+    const box = await button.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+  await expect.poll(() =>
+    page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    )
+  ).toBe("apple");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+});
+
+test("requires an explicit choice before an unknown credential creates a User", async ({ page }) => {
+  const state = await installApi(page, { credentialRecognized: false });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("heading", {
+    name: "This sign-in is not linked yet",
+  })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new User" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Link existing" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  for (const name of ["Create new User", "Link existing"]) {
+    const box = await page.getByRole("button", { name }).boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(state.identityRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Create new User" }).click();
+  await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
+  expect(state.identityRequests).toEqual([
+    { path: "/api/v1/me", body: { confirmation: "create" } },
+  ]);
+  const browserSurface = await page.evaluate(() => ({
+    url: window.location.href,
+    localStorage: { ...window.localStorage },
+    sessionStorage: { ...window.sessionStorage },
+  }));
+  expect(JSON.stringify(browserSurface)).not.toContain("browser-test-token");
+  expect(JSON.stringify(browserSurface)).not.toContain("browser-fresh");
+});
+
+test("links an unknown credential only after fresh provider auth and confirmation", async ({ page }) => {
+  const state = await installApi(page, {
+    credentialRecognized: false,
+    groups: [walkerLabs],
+    signInMethods: ["apple"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Link existing" }).click();
+
+  await expect(page.getByRole("heading", { name: "Link an existing User" })).toBeVisible();
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm linking" })).toBeVisible();
+  await expect(page.getByText(/existing User @shane/u)).toBeVisible();
+  expect(state.identityRequests).toEqual([]);
+
+  const confirmLink = page.getByRole("button", { name: "Confirm link" });
+  await expect(confirmLink).toHaveAccessibleDescription(/@shane/u);
+  await confirmLink.click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  expect(state.identityRequests).toEqual([
+    {
+      path: "/api/v1/me/sign-in-methods",
+      body: {
+        confirmation: "link",
+        credentialToken: "browser-fresh-apple-token",
+        expectedTargetUserId: "user_shane",
+      },
+    },
+  ]);
+  expect(state.linkAuthorizationHeaders).toEqual([
+    "Bearer browser-test-token",
+  ]);
+  expect(state.user.userId).toBe("user_shane");
+});
+
+test("refuses an unrecognized existing-provider proof before confirmation", async ({ page }) => {
+  const state = await installApi(page, {
+    credentialRecognized: false,
+    freshCredentialRecognized: false,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Link existing" }).click();
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "not linked to an existing User",
+  );
+  await expect(
+    page.getByRole("button", { name: "Confirm link" }),
+  ).toHaveCount(0);
+  expect(state.identityRequests).toEqual([]);
+});
+
+test("uses the actual auth event when a Firebase User has both providers", async ({ page }) => {
+  await installApi(page, {
+    credentialRecognized: false,
+    signInMethods: ["apple"],
+    user: signedInUser,
+  });
+  await page.goto("/?scenario=multi-provider");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Link existing" }).click();
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Apple" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toHaveCount(0);
+});
+
+test("lets a signed-in User add a missing provider without leaving the User", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+
+  await expect(page.getByRole("dialog", { name: "Sign-in methods" })).toBeVisible();
+  await expect(page.getByText("Google — Linked")).toBeVisible();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm linking" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Confirm link" }),
+  ).toBeFocused();
+  expect(state.identityRequests).toEqual([]);
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("dialog", { name: "Sign-in methods" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  expect(state.user.userId).toBe("user_shane");
+  expect(state.signInMethods).toEqual(["apple", "google"]);
+});
+
+test("traps method-dialog focus and restores it to the User menu", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  const userMenu = page.getByRole("button", { name: "User menu" });
+  await userMenu.click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Sign-in methods" });
+  const close = dialog.getByRole("button", { name: "Close" });
+  const linkApple = dialog.getByRole("button", { name: "Link Apple" });
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(linkApple).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(userMenu).toBeFocused();
+});
+
+test("keeps a secondary provider proof until failed disposal can be retried", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:secondary-signout-failure",
+      "once",
+    );
+  });
+
+  await page.getByRole("button", { name: "Cancel linking" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "could not safely discard that provider sign-in",
+  );
+  await expect(
+    page.getByRole("dialog", { name: "Confirm linking" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Cancel linking" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Confirm linking" }),
+  ).toHaveCount(0);
+});
+
+test("clears a secondary provider when fresh credential validation fails", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:fresh-token-result-error",
+      "auth/network-request-failed",
+    );
+  });
+
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "You appear to be offline",
+  );
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }).__openjobFirebaseTest.secondarySignedIn()
+  )).toBe(false);
+
+  await page.evaluate(() => {
+    window.sessionStorage.removeItem(
+      "openjob-test:fresh-token-result-error",
+    );
+  });
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Confirm linking" }),
+  ).toBeVisible();
+});
+
+test("discards a deferred secondary popup after an external sign-out", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:defer-secondary-popup",
+      "true",
+    );
+  });
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(page.getByRole("button", { name: "Opening Apple…" })).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: {
+        emitPrimarySignedOut(): void;
+        releaseSecondaryPopup(): void;
+      };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { releaseSecondaryPopup(): void };
+    }).__openjobFirebaseTest.releaseSecondaryPopup();
+  });
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Confirm linking" }),
+  ).toHaveCount(0);
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }).__openjobFirebaseTest.secondarySignedIn()
+  )).toBe(false);
+});
+
+test("does not let a delayed link restore an exited User over a new session", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    linkDelayMs: 500,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect.poll(() => state.identityRequests.length).toBe(1);
+
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { emitPrimarySignedOut(): void };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  state.user = {
+    userId: "user_morgan",
+    username: "morgan",
+    usernameRequired: false,
+  };
+  state.groups = [];
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Create your first Group" }),
+  ).toBeVisible();
+  await page.waitForTimeout(600);
+
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByText("Signed in as @morgan")).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("google");
+});
+
+test("keeps cancellation, offline auth, and identity conflicts recoverable", async ({ page }) => {
+  const state = await installApi(page, { user: signedInUser });
+  await page.goto("/?scenario=auth-cancel");
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Sign-in was canceled. You can try again.",
+  );
+  await expect(page.getByRole("button", { name: "Continue with Apple" })).toBeVisible();
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+
+  await signOut(page);
+  state.groups = [walkerLabs];
+  state.linkFailureCode = "sign_in_method_conflict";
+  state.signInMethods = ["google"];
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  await page.goto("/?scenario=auth-offline");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "You appear to be offline. Check your connection and try again.",
+  );
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "belongs to another User and cannot be linked",
+  );
+  await expect(page.getByRole("button", { name: "Link Apple" })).toBeVisible();
+  expect(state.user.userId).toBe("user_shane");
+});
+
+test("re-authenticates an expired linking proof without signing out the User", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    linkFailureCode: "fresh_authentication_required",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "provider confirmation expired",
+  );
+  await expect(page.getByRole("button", { name: "Link Apple" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("signed-in");
+
+  state.linkFailureCode = null;
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(page.getByRole("heading", { name: "Walker Labs", exact: true })).toBeVisible();
+  expect(state.signInMethods).toEqual(["apple", "google"]);
+});
+
+test("discards an expired secondary token without expiring the primary session", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:fresh-token-error",
+      "auth/user-token-expired",
+    );
+  });
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "provider confirmation expired",
+  );
+  await expect(page.getByRole("button", { name: "Link Apple" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("signed-in");
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }).__openjobFirebaseTest.secondarySignedIn()
+  )).toBe(false);
+  expect(state.identityRequests).toEqual([]);
+
+  await page.evaluate(() => {
+    window.sessionStorage.removeItem("openjob-test:fresh-token-error");
+  });
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  expect(state.signInMethods).toEqual(["apple", "google"]);
+});
+
+test("retains an expired secondary proof until it can be safely discarded", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:fresh-token-error",
+      "auth/user-token-expired",
+    );
+    window.sessionStorage.setItem(
+      "openjob-test:secondary-signout-failure",
+      "once",
+    );
+  });
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "could not safely discard that provider sign-in",
+  );
+  await expect(
+    page.getByRole("dialog", { name: "Confirm linking" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }).__openjobFirebaseTest.secondarySignedIn()
+  )).toBe(true);
+  expect(state.identityRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "provider confirmation expired",
+  );
+  await expect(page.getByRole("button", { name: "Link Apple" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("signed-in");
+  expect(state.identityRequests).toEqual([]);
+});
+
+test("restarts linking when the explicitly confirmed target changes", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    linkFailureCode: "link_target_changed",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "That User changed. Authenticate again",
+  );
+  await expect(page.getByRole("button", { name: "Link Apple" })).toBeVisible();
+
+  state.linkFailureCode = null;
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  expect(state.identityRequests).toHaveLength(2);
+});
+
+test("re-authenticates an expired additional proof in an unknown-first link", async ({ page }) => {
+  const state = await installApi(page, {
+    credentialRecognized: false,
+    linkFailureCode: "fresh_authentication_required",
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Link existing" }).click();
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "provider confirmation expired",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Apple" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBe("google");
+  expect(state.identityRequests).toHaveLength(1);
+
+  state.linkFailureCode = null;
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Create your first Group" }),
+  ).toBeVisible();
+  expect(state.identityRequests).toHaveLength(2);
+});
+
+test("forces account selection when leaving an unknown credential", async ({ page }) => {
+  await installApi(page, {
+    credentialRecognized: false,
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Use a different sign-in" }).click();
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  expect(
+    await page.evaluate(() =>
+      window.sessionStorage.getItem("openjob-test:provider-prompt")
+    ),
+  ).toBe("select_account");
+});
+
+test("blocks on failed expired-session cleanup instead of claiming sign-out", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    meFailureStatus: 401,
+    user: signedInUser,
+  });
+  await page.goto("/?scenario=signout-failure");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "OpenJob could not safely sign out",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBe("signed-in");
+
+  await page.reload();
+  await expect(page.getByRole("alert")).toContainText(
+    "OpenJob could not safely sign out",
+  );
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBe("signed-in");
+
+  state.meFailureStatus = null;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBeNull();
+});
+
+test("finishes local sign-out when notification pause cannot refresh an expired token", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [walkerLabs],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "openjob:notification-installation",
+      JSON.stringify({
+        enabled: true,
+        installationId: "installation_expired_1234567890",
+        invitationSettled: true,
+        ownerUserId: "user_shane",
+      }),
+    );
+    window.sessionStorage.setItem(
+      "openjob-test:token-error",
+      "auth/user-token-expired",
+    );
+  });
+
+  await signOut(page);
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBeNull();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(
+        window.localStorage.getItem(
+          "openjob:notification-installation",
+        ) ?? "null",
+      )
+    ),
+  ).toMatchObject({
+    enabled: true,
+    ownerUserId: null,
+  });
+});
+
+test("removes a terminal Firebase credential during restoration", async ({ page }) => {
+  await startSignedIn(page);
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:token-error",
+      "auth/user-token-expired",
+    );
+  });
+  await installApi(page, { user: signedInUser });
+  await page.goto("/");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Your session expired. Sign in again.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBeNull();
+});
+
+test("cleans a terminal Firebase observer failure before showing sign-in", async ({ page }) => {
+  await startSignedIn(page);
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:token-result-error",
+      "auth/invalid-user-token",
+    );
+  });
+  await installApi(page, { user: signedInUser });
+  await page.goto("/");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Your session expired. Sign in again.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBeNull();
+});
+
+test("keeps a network-failed Firebase observer session retryable", async ({ page }) => {
+  await startSignedIn(page);
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:token-result-error",
+      "auth/network-request-failed",
+    );
+  });
+  await installApi(page, { user: signedInUser });
+  await page.goto("/");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "could not restore your sign-in",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBe("signed-in");
+
+  await page.evaluate(() => {
+    window.sessionStorage.removeItem(
+      "openjob-test:token-result-error",
+    );
+  });
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Create your first Group" }),
+  ).toBeVisible();
+});
+
+test("removes a terminal Firebase credential during an authenticated action", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    groups: [],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "User menu" }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:token-error",
+      "auth/user-disabled",
+    );
+  });
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Sign-in methods" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Your session expired. Sign in again.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Continue with Apple" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("openjob-test:firebase-session")
+    ),
+  ).toBeNull();
+});
+
+test("lets an authenticated empty shell link existing before Username claim", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    signInMethods: ["google"],
+    user: {
+      userId: "user_empty_shell",
+      username: null,
+      usernameRequired: true,
+    },
+  });
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", { name: "Claim your Username" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Link an existing User" }).click();
+  state.user = signedInUser;
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(page.getByText(/@shane/u)).toBeVisible();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  expect(state.identityRequests).toEqual([
+    {
+      path: "/api/v1/me/sign-in-methods",
+      body: {
+        confirmation: "link",
+        credentialToken: "browser-fresh-apple-token",
+        expectedTargetUserId: "user_shane",
+      },
+    },
+  ]);
+});
+
+test("lets an empty shell link a genuinely unknown second provider", async ({ page }) => {
+  await startSignedIn(page);
+  const emptyShell = {
+    userId: "user_empty_shell",
+    username: null,
+    usernameRequired: true,
+  };
+  const state = await installApi(page, {
+    freshCredentialRecognized: false,
+    signInMethods: ["google"],
+    user: emptyShell,
+  });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Link an existing User" }).click();
+  await page.getByRole("button", { name: "Link Apple" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Confirm linking",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/user_empty_shell/u)).toBeVisible();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Claim your Username" }),
+  ).toBeVisible();
+  expect(state.identityRequests).toEqual([
+    {
+      path: "/api/v1/me/sign-in-methods",
+      body: {
+        confirmation: "link",
+        credentialToken: "browser-fresh-apple-token",
+        expectedTargetUserId: "user_empty_shell",
+      },
+    },
+  ]);
+});
+
+test("does not relink after a committed link is followed by Group-load failure", async ({ page }) => {
+  const state = await installApi(page, {
+    credentialRecognized: false,
+    failGroups: true,
+    groups: [walkerLabs],
+    signInMethods: ["apple"],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await page.getByRole("button", { name: "Link existing" }).click();
+  await page.getByRole("button", { name: "Continue with Apple" }).click();
+  await page.getByRole("button", { name: "Confirm link" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "OpenJob could not load right now",
+  );
+  expect(state.identityRequests).toHaveLength(1);
+
+  state.failGroups = false;
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  expect(state.identityRequests).toHaveLength(1);
+});
+
+test("switches Users by purging the primary session before another provider starts", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Walker Labs", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("No open Tasks.")).toBeVisible();
+  await page.evaluate(async (groupId) => {
+    window.localStorage.setItem("openjob:selected-group-id", groupId);
+    window.sessionStorage.setItem(
+      "openjob:pending-task-editor",
+      JSON.stringify({
+        groupId,
+        input: {
+          assigneeUsername: "shane",
+          dueDate: "",
+          priority: "normal",
+          text: "Private unfinished Task",
+        },
+        mode: "new",
+        taskId: null,
+      }),
+    );
+    window.localStorage.setItem(
+      "openjob:notification-installation",
+      JSON.stringify({
+        enabled: true,
+        installationId: "installation_private_1234567890",
+        invitationSettled: true,
+        ownerUserId: "user_shane",
+      }),
+    );
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.open("openjob-notifications", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("installation-state")) {
+          request.result.createObjectStore("installation-state");
+        }
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(
+          "installation-state",
+          "readwrite",
+        );
+        const store = transaction.objectStore("installation-state");
+        store.put(
+          {
+            active: true,
+            installationId: "installation_private_1234567890",
+            ownerUserId: "user_shane",
+          },
+          "current",
+        );
+        store.put({ groupId }, "pending-launch");
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+  }, walkerLabs.groupId);
+  await page.getByRole("button", { name: "User menu" }).click();
+  await page.getByRole("button", { name: "Switch User" }).click();
+
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+  expect(await page.evaluate(async () => {
+    const installation = JSON.parse(
+      window.localStorage.getItem(
+        "openjob:notification-installation",
+      ) ?? "null",
+    );
+    const indexed = await new Promise<{
+      current: unknown;
+      pending: unknown;
+    }>((resolve, reject) => {
+      const request = window.indexedDB.open("openjob-notifications", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(
+          "installation-state",
+          "readonly",
+        );
+        const store = transaction.objectStore("installation-state");
+        const current = store.get("current");
+        const pending = store.get("pending-launch");
+        transaction.oncomplete = () => {
+          database.close();
+          resolve({
+            current: current.result ?? null,
+            pending: pending.result ?? null,
+          });
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+    return {
+      draft: window.sessionStorage.getItem(
+        "openjob:pending-task-editor",
+      ),
+      installation,
+      selectedGroup: window.localStorage.getItem(
+        "openjob:selected-group-id",
+      ),
+      ...indexed,
+    };
+  })).toEqual({
+    current: {
+      active: false,
+      installationId: "installation_private_1234567890",
+      ownerUserId: null,
+    },
+    draft: null,
+    installation: {
+      enabled: true,
+      installationId: "installation_private_1234567890",
+      invitationSettled: true,
+      ownerUserId: null,
+    },
+    pending: null,
+    selectedGroup: null,
+  });
+
+  state.user = { userId: "user_eli", username: "eli", usernameRequired: false };
+  state.groups = [];
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.sessionStorage.getItem("openjob-test:provider-prompt")
+    ),
+  ).toBe("select_account");
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByText("Signed in as @eli")).toBeVisible();
 });
 
 test("offers notifications once only after entry into a usable Group", async ({ page }) => {
@@ -1853,7 +3018,7 @@ test("distinguishes loading and failures from a User with no Groups", async ({ p
 test("turns Firebase initialization failure into an understandable auth state", async ({ page }) => {
   await installApi(page);
   await page.goto("/?scenario=auth-error");
-  await expect(page.getByRole("alert")).toContainText("Google sign-in could not start. Try again.");
+  await expect(page.getByRole("alert")).toContainText("Sign-in could not start. Try again.");
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Claim your Username" })).toBeVisible();
 });
@@ -1869,6 +3034,133 @@ test("returns an expired session to a working sign-in path", async ({ page }) =>
   state.meFailureStatus = null;
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByRole("heading", { name: "Create your first Group" })).toBeVisible();
+});
+
+test("does not restore private Group state after sign-out interrupts bootstrap", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    groups: [walkerLabs],
+    meDelayMs: 250,
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect.poll(() => state.authorizationHeaders.length).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { emitPrimarySignedOut(): void };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await page.waitForTimeout(350);
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob:selected-group-id")
+  )).toBeNull();
+});
+
+test("does not restore a selected Group after sign-out interrupts selection", async ({ page }) => {
+  await startSignedIn(page);
+  await installApi(page, {
+    getGroupDelayMs: 250,
+    groups: [walkerLabs, openJobCore],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Choose a Group" }),
+  ).toBeVisible();
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { emitPrimarySignedOut(): void };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob:selected-group-id")
+  )).toBeNull();
+});
+
+test("ignores an old Group failure after a different User signs in", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    getGroupDelayMs: 500,
+    groups: [walkerLabs, openJobCore],
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Choose a Group" }),
+  ).toBeVisible();
+  const requestsBeforeSelection = state.authorizationHeaders.length;
+  await openGroupMenu(page);
+  await page.getByRole("button", { name: "Walker Labs", exact: true }).click();
+  await expect.poll(
+    () => state.authorizationHeaders.length,
+  ).toBeGreaterThan(requestsBeforeSelection);
+  state.getGroupFailureStatus = 401;
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { emitPrimarySignedOut(): void };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+
+  state.user = {
+    userId: "user_morgan",
+    username: "morgan",
+    usernameRequired: false,
+  };
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Choose a Group" }),
+  ).toBeVisible();
+  await page.waitForTimeout(600);
+  await expect(
+    page.getByRole("heading", { name: "Choose a Group" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "User menu" }).click();
+  await expect(page.getByText("Signed in as @morgan")).toBeVisible();
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("google");
+});
+
+test("does not restore a created Group after sign-out interrupts creation", async ({ page }) => {
+  await startSignedIn(page);
+  const state = await installApi(page, {
+    createGroupDelayMs: 250,
+    user: signedInUser,
+  });
+  await page.goto("/");
+  await page.getByLabel("Group name").fill("Private after sign-out");
+  await page.getByRole("button", { name: "Create Group" }).click();
+  await expect.poll(() => state.groups.length).toBe(1);
+  await page.evaluate(() => {
+    (window as typeof window & {
+      __openjobFirebaseTest: { emitPrimarySignedOut(): void };
+    }).__openjobFirebaseTest.emitPrimarySignedOut();
+  });
+
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(() =>
+    window.localStorage.getItem("openjob:selected-group-id")
+  )).toBeNull();
 });
 
 test("recovers when a session expires during a mutation", async ({ page }) => {

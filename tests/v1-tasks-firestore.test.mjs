@@ -97,6 +97,13 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
   }
 
   async function claim(headers, username) {
+    const creation = await harness.request({
+      body: { confirmation: "create" },
+      headers,
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    assert.ok(creation.status === 200 || creation.status === 201);
     const response = await harness.request({
       body: { username },
       headers,

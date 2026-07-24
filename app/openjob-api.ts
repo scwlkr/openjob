@@ -8,6 +8,7 @@ import {
   type Member,
   type NotificationSubscriptionState,
   type OpenJobApi,
+  type SignInMethod,
   type Task,
   type User,
 } from "./openjob-contracts";
@@ -75,6 +76,42 @@ export function createOpenJobApi(): OpenJobApi {
   return Object.freeze({
     async getMe(token) {
       const response = await request<{ data: User }>("/api/v1/me", token);
+      return response.data;
+    },
+
+    async createUser(token) {
+      const response = await request<{ data: User }>("/api/v1/me", token, {
+        method: "POST",
+        body: JSON.stringify({ confirmation: "create" }),
+      });
+      return response.data;
+    },
+
+    async listSignInMethods(token) {
+      const response = await request<{ data: SignInMethod[] }>(
+        "/api/v1/me/sign-in-methods",
+        token,
+      );
+      return response.data;
+    },
+
+    async linkSignInMethod(
+      token,
+      credentialToken,
+      expectedTargetUserId,
+    ) {
+      const response = await request<{ data: User }>(
+        "/api/v1/me/sign-in-methods",
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            confirmation: "link",
+            credentialToken,
+            expectedTargetUserId,
+          }),
+        },
+      );
       return response.data;
     },
 

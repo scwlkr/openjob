@@ -71,7 +71,12 @@ function getRuntime() {
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId });
   runtime = {
     groupsApi: createV1GroupsApi({ groups, users, verifyIdToken }),
-    identityApi: createV1IdentityApi({ groups, users, verifyIdToken }),
+    identityApi: createV1IdentityApi({
+      groups,
+      users,
+      verifyCredentialToken: verifyIdToken.verifyToken,
+      verifyIdToken,
+    }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,

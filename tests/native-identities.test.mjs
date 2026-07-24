@@ -144,6 +144,22 @@ test("provider callbacks and associated Google identifiers are explicit", async 
   );
 });
 
+test("native API and Firebase public runtime config remain isolated by trust tier", async () => {
+  const identities = await readIdentities();
+  const { development, preview, production } = identities.environments;
+
+  assert.equal(
+    development.api.baseUrl,
+    "https://openjob-preview.walkerworlddiscord.workers.dev/api/v1",
+  );
+  assert.equal(preview.api.baseUrl, development.api.baseUrl);
+  assert.equal(production.api.baseUrl, "https://openjob.dev/api/v1");
+  assert.notEqual(preview.api.baseUrl, production.api.baseUrl);
+  assert.match(development.firebase.apiKey, /^AIza/u);
+  assert.equal(development.firebase.apiKey, preview.firebase.apiKey);
+  assert.notEqual(preview.firebase.apiKey, production.firebase.apiKey);
+});
+
 test("Apple sign-in and TestFlight identities are separated by trust tier", async () => {
   const identities = await readIdentities();
 

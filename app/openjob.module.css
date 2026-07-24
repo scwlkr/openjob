@@ -64,11 +64,17 @@
 }
 
 .lede { max-width: 600px; margin: 24px 0 0; color: var(--muted); font-size: clamp(17px, 2vw, 21px); line-height: 1.55; }
-.googleButton, .primaryButton { min-height: 52px; border: 1px solid var(--blue); background: var(--blue); color: #fff; padding: 0 20px; font-weight: 800; cursor: pointer; }
-.googleButton { display: inline-flex; align-items: center; gap: 13px; min-width: 236px; margin-top: 38px; }
-.googleButton span { display: grid; place-items: center; width: 25px; height: 25px; background: #fff; color: #2458c5; font-family: Arial, sans-serif; font-weight: 900; }
+.googleButton, .appleButton, .primaryButton { min-height: 52px; border: 1px solid var(--blue); background: var(--blue); color: #fff; padding: 0 20px; font-weight: 800; cursor: pointer; }
+.providerButtons { display: grid; gap: 10px; width: min(100%, 260px); margin-top: 38px; }
+.googleButton, .appleButton { display: inline-flex; align-items: center; gap: 13px; min-width: 236px; }
+.googleButton span, .appleButton span { display: grid; place-items: center; width: 25px; height: 25px; background: #fff; font-family: Arial, sans-serif; font-weight: 900; }
+.googleButton span { color: #2458c5; }
+.appleButton { border-color: var(--ink); background: var(--ink); }
+.appleButton span { color: var(--ink); }
 .googleButton:hover, .primaryButton:hover { background: var(--blue-dark); }
-.googleButton:disabled, .primaryButton:disabled { cursor: not-allowed; opacity: .48; }
+.appleButton:hover { background: #30332e; }
+.googleButton:disabled, .appleButton:disabled, .primaryButton:disabled { cursor: not-allowed; opacity: .48; }
+.googleButton:focus-visible, .appleButton:focus-visible, .onboardingShell button:focus-visible, .dialog button:focus-visible { outline: 3px solid #7d9aff; outline-offset: 2px; }
 .authNote, .guidance { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .authNote { max-width: 380px; margin: 14px 0 0; }
 .inlineError, .fieldError { color: #982f27; font-size: 13px; font-weight: 700; }
@@ -80,6 +86,9 @@
 .onboardingCard { width: min(100%, 680px); margin: 10vh auto 0; }
 .onboardingCard h1, .emptyGroups h1, .chooseGroup h1 { font-size: clamp(46px, 6vw, 72px); }
 .onboardingCard form, .groupForm { margin-top: 34px; }
+.authDecisionActions { display: grid; gap: 10px; width: min(100%, 300px); margin-top: 30px; }
+.authDecisionActions .primaryButton { margin-top: 0; }
+.authDecisionActions .secondaryButton, .authDecisionActions .textButton { min-height: 48px; }
 .onboardingCard label, .groupForm label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
 .prefixedInput { display: grid; grid-template-columns: 52px 1fr; border: 1px solid var(--ink); background: #fff; box-shadow: 7px 7px 0 var(--ink); }
 .prefixedInput span { display: grid; place-items: center; border-right: 1px solid var(--line); color: var(--blue); font-size: 24px; font-weight: 850; }
@@ -242,10 +251,16 @@
 .updateBanner { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 4px solid var(--blue); background: #dfe6ff; color: #173890; }
 .updateBanner button { border: 1px solid currentColor; background: transparent; color: inherit; padding: 0 12px; font-weight: 850; cursor: pointer; }
 
-.dialogBackdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(21,23,19,.58); padding: 20px; }
+.dialogBackdrop { --ink: #151713; --paper: #eef0ea; --blue: #1e4ed8; --muted: #656a61; --line: #b9bdb3; position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(21,23,19,.58); color: var(--ink); padding: 20px; }
 .dialog { width: min(100%, 620px); background: var(--paper); padding: 28px; box-shadow: 12px 12px 0 var(--ink); }
 .dialog h2 { margin: 10px 0 0; font-size: 40px; letter-spacing: -.06em; }
 .dialog .groupForm { max-width: none; margin-top: 24px; box-shadow: none; }
+.dialogActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.dialogActions button { min-height: 44px; }
+.signInMethodList { display: grid; gap: 8px; margin-top: 22px; }
+.signInMethodList > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 54px; border-top: 1px solid var(--line); padding: 8px 0; }
+.signInMethodList span { font-weight: 800; }
+.signInMethodList button { min-height: 44px; border: 0; background: transparent; color: var(--blue); padding: 0 8px; font-weight: 800; cursor: pointer; }
 .centeredScreen { display: grid; place-items: center; padding: 24px; }
 .centeredScreen > p { color: var(--muted); font-size: 13px; }
 .loadingMark { display: grid; place-items: center; width: 68px; height: 68px; margin: 0 auto 16px; background: var(--blue); color: #fff; font-weight: 950; box-shadow: 8px 8px 0 var(--ink); }
@@ -264,7 +279,7 @@
 .readonlyField, .inlineGovernanceForm label { display: grid; gap: 7px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
 .readonlyField input, .inlineGovernanceForm input { width: 100%; min-width: 0; height: 43px; border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); padding: 0 11px; font: inherit; font-size: 12px; text-transform: none; }
 .governanceCard > time { display: block; margin: 10px 0 18px; color: var(--muted); font-size: 11px; }
-.secondaryButton, .dangerButton { min-height: 40px; border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 0 13px; font-weight: 800; cursor: pointer; }
+.secondaryButton, .dangerButton { min-height: 44px; border: 1px solid var(--ink); background: var(--ink); color: #fff; padding: 0 13px; font-weight: 800; cursor: pointer; }
 .secondaryButton:disabled, .dangerButton:disabled { cursor: not-allowed; opacity: .42; }
 .governanceRows { display: grid; gap: 8px; }
 .governanceRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding: 12px 0 4px; }

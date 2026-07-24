@@ -2,7 +2,11 @@ const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const UNKNOWN_KEY_REFRESH_COOLDOWN_MS = 60_000;
 
-type FirebaseTokenIdentity = {
+export type SignInProvider = "apple" | "google";
+
+export type FirebaseTokenIdentity = {
+  authenticatedAt: number;
+  provider: SignInProvider;
   uid: string;
 };
 
@@ -24,6 +28,12 @@ type FirebaseTokenVerifierOptions = {
   fetchImplementation?: typeof fetch;
   now?: () => number;
   projectId: string;
+};
+
+export type FirebaseIdTokenVerifier = ((
+  request: Request,
+) => Promise<FirebaseTokenIdentity | null>) & {
+  verifyToken(token: string): Promise<FirebaseTokenIdentity | null>;
 };
 
 function decodeBase64Url(value: string) {
@@ -49,11 +59,21 @@ function isNumericDate(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function signInProvider(value: unknown): SignInProvider | null {
+  if (value === "google.com") return "google";
+  if (value === "apple.com") return "apple";
+  return null;
+}
+
 function validPayload(
   payload: FirebaseTokenPayload,
   projectId: string,
   nowSeconds: number,
-): payload is FirebaseTokenPayload & { sub: string } {
+): payload is FirebaseTokenPayload & {
+  auth_time: number;
+  firebase: { sign_in_provider: "apple.com" | "google.com" };
+  sub: string;
+} {
   return (
     payload.aud === projectId &&
     payload.iss === `https://securetoken.google.com/${projectId}` &&
@@ -66,7 +86,7 @@ function validPayload(
     typeof payload.sub === "string" &&
     payload.sub.length > 0 &&
     payload.sub.length <= 128 &&
-    payload.firebase?.sign_in_provider === "google.com"
+    signInProvider(payload.firebase?.sign_in_provider) !== null
   );
 }
 
@@ -126,17 +146,13 @@ export function createFirebaseIdTokenVerifier({
     return keys.get(kid) ?? null;
   }
 
-  return async function verifyIdToken(
-    request: Request,
+  async function verifyToken(
+    token: string,
   ): Promise<FirebaseTokenIdentity | null> {
-    const authorization = request.headers.get("authorization");
-    const match = authorization?.match(/^Bearer ([^\s]+)$/);
-    if (!match) return null;
-
     let segments: string[];
     let header: { alg?: unknown; kid?: unknown };
     try {
-      segments = match[1].split(".");
+      segments = token.split(".");
       if (segments.length !== 3) return null;
       header = decodeJson(segments[0]) as {
         alg?: unknown;
@@ -175,9 +191,25 @@ export function createFirebaseIdTokenVerifier({
       const payload = decodeJson(encodedPayload) as FirebaseTokenPayload;
       const nowSeconds = Math.floor(now() / 1000);
       if (!validPayload(payload, projectId, nowSeconds)) return null;
-      return { uid: payload.sub };
+      const provider = signInProvider(payload.firebase.sign_in_provider);
+      if (!provider) return null;
+      return {
+        authenticatedAt: payload.auth_time * 1000,
+        provider,
+        uid: payload.sub,
+      };
     } catch {
       return null;
     }
+  }
+
+  const verifyIdToken = async function verifyIdToken(
+    request: Request,
+  ): Promise<FirebaseTokenIdentity | null> {
+    const authorization = request.headers.get("authorization");
+    const match = authorization?.match(/^Bearer ([^\s]+)$/);
+    return match ? verifyToken(match[1]) : null;
   };
+
+  return Object.assign(verifyIdToken, { verifyToken }) as FirebaseIdTokenVerifier;
 }
