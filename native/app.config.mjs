@@ -51,6 +51,7 @@ export default function createAppConfig({ config = {} } = {}) {
           iosUrlScheme: identity.ios.googleReversedClientId,
         },
       ],
+      "./plugins/with-google-signin-modular-headers.cjs",
       [
         "expo-splash-screen",
         {
@@ -74,7 +75,6 @@ export default function createAppConfig({ config = {} } = {}) {
       },
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
       supportsTablet: true,
-      usesAppleSignIn: true,
     },
     android: {
       ...config.android,
