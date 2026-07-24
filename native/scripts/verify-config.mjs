@@ -87,6 +87,9 @@ async function copyProject(targetRoot) {
     cp(join(nativeRoot, "app.config.mjs"), join(targetNative, "app.config.mjs")),
     cp(join(nativeRoot, "package.json"), join(targetNative, "package.json")),
   ]);
+  await cp(join(nativeRoot, "plugins"), join(targetNative, "plugins"), {
+    recursive: true,
+  });
   await symlink(join(nativeRoot, "node_modules"), join(targetNative, "node_modules"));
   return targetNative;
 }
@@ -128,9 +131,10 @@ for (const environment of environments) {
       cwd: generatedNative,
       environment,
     });
-    const [ios, android] = await Promise.all([
+    const [ios, android, podfile] = await Promise.all([
       readTextTree(join(generatedNative, "ios")),
       readTextTree(join(generatedNative, "android")),
+      readFile(join(generatedNative, "ios", "Podfile"), "utf8"),
     ]);
 
     assert.ok(
@@ -152,6 +156,18 @@ for (const environment of environments) {
     assert.match(
       ios,
       /com\.apple\.developer\.applesignin[\s\S]{0,180}(?:Default|<string>Default<\/string>)/u,
+    );
+    assert.equal(
+      podfile.match(/pod 'GoogleUtilities', :modular_headers => true/gu)
+        ?.length,
+      1,
+      `${environment} GoogleUtilities module map configuration was not generated exactly once`,
+    );
+    assert.equal(
+      podfile.match(/pod 'RecaptchaInterop', :modular_headers => true/gu)
+        ?.length,
+      1,
+      `${environment} RecaptchaInterop module map configuration was not generated exactly once`,
     );
     assert.match(
       android,
