@@ -28,12 +28,19 @@ and the exact QA Two UID allowlist in approved service secret stores. Never put
 those values in Git, shell history, command arguments, screenshots, issue
 comments, or diagnostics.
 
-The two canonical vault items are `OpenJob Preview Owner Binding` and
-`OpenJob QA Two Preview Password`. The owner binding contains the
+The three canonical vault items are `OpenJob Preview Owner Binding`,
+`OpenJob QA Two Preview Password`, and the
+`OpenJob Preview QA Fixture Operator` document. The owner binding contains the
 nonproduction stable OpenJob User ID plus a reference to the existing Google
-account; it never duplicates the Google password. Provision QA Two only with
-the target-fixed operator command. On the first run, omit the optional User-ID
-assertion:
+account; it never duplicates the Google password. The operator is a dedicated
+`openjob-nonprod` service account with only `roles/datastore.user`; its JSON
+key stays in the document. A short-lived parent process captures
+`op document get` in memory, maps only `client_email` and `private_key` into
+the reset child's environment, and discards them when the child exits. If a
+tool requires a file, create one mode `0600` and remove it in a `finally`
+cleanup. Never use shell command substitution for the document. Provision QA
+Two only with the target-fixed operator command. On the first run, omit the
+optional User-ID assertion:
 
 ```sh
 OPENJOB_QA_TWO_EMAIL='op://Personal/OpenJob QA Two Preview Password/username' \
@@ -117,6 +124,12 @@ their values:
 - `FIREBASE_PRIVATE_KEY`
 - `OPENJOB_QA_OWNER_USER_ID`
 - `OPENJOB_QA_TWO_USER_ID`
+
+The launcher must capture the operator document and the two binding items
+inside one short-lived process, map their fields to the environment names
+above, invoke the reset as its child, and discard every resolved value on
+exit. Do not place the resolved JSON, private key, User IDs, or email in shell
+arguments, history, terminal output, or a long-lived exported environment.
 
 Then run the exact target-confirmed command:
 

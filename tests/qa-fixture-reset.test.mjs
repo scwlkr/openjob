@@ -162,6 +162,42 @@ test("a clean QA fixture reset creates the canonical state and is idempotent", a
   assert.equal(firestore.commitAttempts(), commitsAfterFirstReset + 1);
 });
 
+test("Firestore timestamp normalization does not make a reset look dirty", async () => {
+  const { firestore, store } = await createFixtureHarness();
+  const input = resetInput(store);
+  await resetQaFixture(input);
+
+  let normalizedDocuments = 0;
+  for (const [path, stored] of firestore.documents) {
+    if (path !== GROUP_PATH && !path.startsWith(`${GROUP_PATH}/`)) continue;
+    const next = structuredClone(stored);
+    let normalized = false;
+    for (const value of Object.values(next.fields ?? {})) {
+      if (
+        typeof value.timestampValue === "string" &&
+        /\.0+Z$/.test(value.timestampValue)
+      ) {
+        value.timestampValue = value.timestampValue.replace(/\.0+Z$/, "Z");
+        normalized = true;
+      }
+    }
+    if (normalized) {
+      firestore.documents.set(path, next);
+      normalizedDocuments += 1;
+    }
+  }
+
+  assert.equal(normalizedDocuments, 10);
+  assert.deepEqual(await resetQaFixture(input), {
+    changed: false,
+    environment: "preview",
+    fixtureId: FIXTURE_ID,
+    groupId: GROUP_ID,
+    taskCount: 7,
+    writes: 0,
+  });
+});
+
 test("a dirty QA fixture reset restores roles, Tasks, and notification state narrowly", async () => {
   const { firestore, store } = await createFixtureHarness();
   const input = resetInput(store);

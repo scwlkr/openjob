@@ -16,7 +16,12 @@ function stable(value) {
   return Object.fromEntries(
     Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => [key, stable(entry)]),
+      .map(([key, entry]) => [
+        key,
+        key === "timestampValue" && typeof entry === "string"
+          ? entry.replace(/\.0+Z$/, "Z")
+          : stable(entry),
+      ]),
   );
 }
 
