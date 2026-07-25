@@ -28,8 +28,10 @@ import {
   type AppearanceKeyboardAction,
   resolveAppearanceKey,
 } from "./appearance-keyboard";
+import { ReadOnlyTaskList } from "./ReadOnlyTaskList";
 import { useAppLifecycle, useReducedMotion } from "./device-state";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
+import type { NativeTaskListController } from "./task-list-contracts";
 import type {
   OpenJobUser,
   SignInMethod,
@@ -48,6 +50,7 @@ type RootStackParamList = {
 
 type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
   signedInUser: SignedInUser;
+  taskListController: NativeTaskListController;
   runtimeConfig: OpenJobRuntimeConfig;
 };
 
@@ -187,7 +190,12 @@ function StatusCard({
   );
 }
 
-function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
+function ShellScreen({
+  navigation,
+  runtimeConfig,
+  signedInUser,
+  taskListController,
+}: ShellProps) {
   const { width } = useWindowDimensions();
   const { isDark, palette } = useOpenJobTheme();
   const lifecycle = useAppLifecycle();
@@ -248,91 +256,96 @@ function ShellScreen({ navigation, runtimeConfig, signedInUser }: ShellProps) {
           />
         </View>
       </View>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          wide && styles.scrollContentWide,
-        ]}
-      >
-        <View style={[styles.hero, wide && styles.heroWide]}>
-          <View style={styles.heroCopy}>
-            <Text style={[styles.kicker, { color: palette.blue }]}>
-              SIGNED IN
-            </Text>
-            <Text
-              accessibilityRole="header"
-              style={[styles.title, { color: palette.ink }]}
-            >
-              One clear list for your team.
-            </Text>
-            <Text style={[styles.lede, { color: palette.muted }]}>
-              {`Signed in as ${
-                signedInUser.user.username
-                  ? `@${signedInUser.user.username}`
-                  : signedInUser.user.userId
-              }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${signedInUser.methods
-                .map((method) => method === "apple" ? "Apple" : "Google")
-                .join(" and ")}.`}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.foundationCard,
-              {
-                backgroundColor: palette.paper,
-                borderColor: palette.ink,
-                shadowColor: palette.blue,
-              },
-            ]}
-          >
-            <View style={styles.brandmark}>
-              <OpenJobBrandmark inverse={isDark} />
+      <ReadOnlyTaskList
+        chooserFooter={
+          <View style={styles.chooserFoundation}>
+            <View style={[styles.hero, wide && styles.heroWide]}>
+              <View style={styles.heroCopy}>
+                <Text style={[styles.kicker, { color: palette.blue }]}>
+                  SIGNED IN
+                </Text>
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.title, { color: palette.ink }]}
+                >
+                  One clear list for your team.
+                </Text>
+                <Text style={[styles.lede, { color: palette.muted }]}>
+                  {`Signed in as ${
+                    signedInUser.user.username
+                      ? `@${signedInUser.user.username}`
+                      : signedInUser.user.userId
+                  }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${signedInUser.methods
+                    .map((method) =>
+                      method === "apple" ? "Apple" : "Google",
+                    )
+                    .join(" and ")}.`}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.foundationCard,
+                  {
+                    backgroundColor: palette.paper,
+                    borderColor: palette.ink,
+                    shadowColor: palette.blue,
+                  },
+                ]}
+              >
+                <View style={styles.brandmark}>
+                  <OpenJobBrandmark inverse={isDark} />
+                </View>
+                <Text style={[styles.cardKicker, { color: palette.muted }]}>
+                  SHARED TASK LIST
+                </Text>
+                <Text style={[styles.cardTitle, { color: palette.ink }]}>
+                  One User. Every linked Sign-in Method.
+                </Text>
+              </View>
             </View>
-            <Text style={[styles.cardKicker, { color: palette.muted }]}>
-              SHARED TASK LIST
-            </Text>
-            <Text style={[styles.cardTitle, { color: palette.ink }]}>
-              One User. Every linked Sign-in Method.
-            </Text>
+            <View style={[styles.statusGrid, wide && styles.statusGridWide]}>
+              <StatusCard
+                detail={
+                  embeddedBundle
+                    ? "Launches without update discovery"
+                    : "Release verification required"
+                }
+                icon="package"
+                title="Embedded store bundle"
+              />
+              <StatusCard
+                detail="No remote channel, URL, or signing metadata"
+                icon="slash"
+                title="OTA disabled"
+              />
+              <StatusCard
+                detail="Domain behavior stays on the shared service"
+                icon="link"
+                title={`${runtimeConfig.apiBasePath} only`}
+              />
+              <StatusCard
+                detail={
+                  lifecycle === "active" ? "Ready for work" : "Paused safely"
+                }
+                icon={lifecycle === "active" ? "activity" : "pause"}
+                title="Lifecycle"
+              />
+              <StatusCard
+                detail={reducedMotion ? "Reduced Motion on" : "System motion"}
+                icon="wind"
+                title="Motion"
+              />
+              <StatusCard
+                detail={`OpenJob ${runtimeConfig.releaseVersion}`}
+                icon="smartphone"
+                title="Synchronized release"
+              />
+            </View>
           </View>
-        </View>
-        <View style={[styles.statusGrid, wide && styles.statusGridWide]}>
-          <StatusCard
-            detail={
-              embeddedBundle
-                ? "Launches without update discovery"
-                : "Release verification required"
-            }
-            icon="package"
-            title="Embedded store bundle"
-          />
-          <StatusCard
-            detail="No remote channel, URL, or signing metadata"
-            icon="slash"
-            title="OTA disabled"
-          />
-          <StatusCard
-            detail="Domain behavior stays on the shared service"
-            icon="link"
-            title={`${runtimeConfig.apiBasePath} only`}
-          />
-          <StatusCard
-            detail={lifecycle === "active" ? "Ready for work" : "Paused safely"}
-            icon={lifecycle === "active" ? "activity" : "pause"}
-            title="Lifecycle"
-          />
-          <StatusCard
-            detail={reducedMotion ? "Reduced Motion on" : "System motion"}
-            icon="wind"
-            title="Motion"
-          />
-          <StatusCard
-            detail={`OpenJob ${runtimeConfig.releaseVersion}`}
-            icon="smartphone"
-            title="Synchronized release"
-          />
-        </View>
-      </ScrollView>
+        }
+        controller={taskListController}
+        onSessionRevoked={signedInUser.onSignOut}
+      />
     </SafeAreaView>
   );
 }
@@ -506,11 +519,13 @@ export function OpenJobShell({
   reducedMotion,
   runtimeConfig,
   signedInUser,
+  taskListController,
 }: {
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
   reducedMotion: boolean;
   runtimeConfig: OpenJobRuntimeConfig;
   signedInUser: SignedInUser;
+  taskListController: NativeTaskListController;
 }) {
   const { navigationTheme, palette } = useOpenJobTheme();
   const screenOptions = useMemo(
@@ -537,6 +552,7 @@ export function OpenJobShell({
               {...props}
               runtimeConfig={runtimeConfig}
               signedInUser={signedInUser}
+              taskListController={taskListController}
             />
           )}
         </Stack.Screen>
@@ -592,6 +608,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     lineHeight: 28,
     marginTop: 8,
+  },
+  chooserFoundation: {
+    gap: 52,
+    marginTop: 52,
   },
   foundationCard: {
     borderWidth: 1,

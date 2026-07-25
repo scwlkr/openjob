@@ -61,7 +61,10 @@ function createDependencies(
     ),
     getMe: jest.fn(async () => user),
     linkSignInMethod: jest.fn(async () => user),
+    listGroups: jest.fn(async () => []),
+    listMembers: jest.fn(async () => []),
     listSignInMethods: jest.fn(async () => ["google" as const]),
+    listTasks: jest.fn(async () => []),
     loadCleanupPending: jest.fn(async () => false),
     loadStoredSession: jest.fn(async () => null),
     markCleanupPending: jest.fn(async () => undefined),
@@ -127,6 +130,65 @@ test("claims the immutable Username with the active session and preserves its me
   );
   expect(dependencies.listSignInMethods).toHaveBeenCalledTimes(1);
   expect(dependencies.saveStoredSession).toHaveBeenCalledTimes(1);
+});
+
+test("reads Groups and a service-ordered Task List without exposing the active credential", async () => {
+  const groups = [
+    {
+      groupId: "grp_one",
+      name: "Walker Workshop",
+      role: "admin" as const,
+      createdAt: "2026-07-20T12:00:00.000Z",
+    },
+  ];
+  const members = [
+    {
+      userId: "usr_one",
+      username: "walker",
+      role: "admin" as const,
+      joinedAt: "2026-07-20T12:00:00.000Z",
+    },
+  ];
+  const tasks = [
+    {
+      taskId: "task_one",
+      groupId: "grp_one",
+      text: "Read this Task",
+      assignee: {
+        state: "assigned" as const,
+        userId: "usr_one",
+        username: "walker",
+      },
+      priority: "normal" as const,
+      dueDate: null,
+      state: "open" as const,
+      createdAt: "2026-07-20T12:01:00.000Z",
+      completedAt: null,
+    },
+  ];
+  const dependencies = createDependencies({
+    listGroups: jest.fn(async () => groups),
+    listMembers: jest.fn(async () => members),
+    listTasks: jest.fn(async () => tasks),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await coordinator.signIn("google");
+
+  await expect(coordinator.listGroups()).resolves.toEqual(groups);
+  await expect(coordinator.readTaskList("grp_one")).resolves.toEqual({
+    members,
+    tasks,
+  });
+  expect(dependencies.listGroups).toHaveBeenCalledWith("google-id-token");
+  expect(dependencies.listMembers).toHaveBeenCalledWith(
+    "google-id-token",
+    "grp_one",
+  );
+  expect(dependencies.listTasks).toHaveBeenCalledWith(
+    "google-id-token",
+    "grp_one",
+  );
 });
 
 test("recovers a concurrent immutable claim from the current User", async () => {

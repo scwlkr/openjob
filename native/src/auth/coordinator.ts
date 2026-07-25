@@ -1,3 +1,10 @@
+import type {
+  NativeGroup,
+  NativeMember,
+  NativeTask,
+  NativeTaskListController,
+} from "../task-list-contracts";
+
 export type SignInMethod = "apple" | "google";
 export type AuthenticationMethod = SignInMethod | "qa-password";
 
@@ -108,7 +115,13 @@ export type NativeAuthDependencies = {
     credentialToken: string,
     expectedTargetUserId: string,
   ): Promise<OpenJobUser>;
+  listGroups(idToken: string): Promise<NativeGroup[]>;
+  listMembers(
+    idToken: string,
+    groupId: string,
+  ): Promise<NativeMember[]>;
   listSignInMethods(idToken: string): Promise<SignInMethod[]>;
+  listTasks(idToken: string, groupId: string): Promise<NativeTask[]>;
   loadCleanupPending(): Promise<boolean>;
   loadStoredSession(): Promise<StoredSession | null>;
   markCleanupPending(): Promise<void>;
@@ -144,7 +157,7 @@ function sortedMethods(methods: SignInMethod[]) {
 
 const LINK_CONFIRMATION_VALIDITY_MS = 5 * 60_000;
 
-export class NativeAuthCoordinator {
+export class NativeAuthCoordinator implements NativeTaskListController {
   private activeResult: SignedInResult | null = null;
   private activeSession: FirebaseAccessSession | null = null;
   private candidateSession: FirebaseAccessSession | null = null;
@@ -605,6 +618,25 @@ export class NativeAuthCoordinator {
         });
       }) ?? (() => undefined)
     );
+  }
+
+  async listGroups() {
+    const epoch = this.operationEpoch;
+    const session = await this.currentSession(epoch);
+    const groups = await this.dependencies.listGroups(session.idToken);
+    this.assertCurrentOperation(epoch);
+    return groups;
+  }
+
+  async readTaskList(groupId: string) {
+    const epoch = this.operationEpoch;
+    const session = await this.currentSession(epoch);
+    const [members, tasks] = await Promise.all([
+      this.dependencies.listMembers(session.idToken, groupId),
+      this.dependencies.listTasks(session.idToken, groupId),
+    ]);
+    this.assertCurrentOperation(epoch);
+    return { members, tasks };
   }
 
   private async finishSignedIn(

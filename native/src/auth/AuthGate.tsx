@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { OpenJobRuntimeConfig } from "../runtime-config";
+import type { NativeTaskListController } from "../task-list-contracts";
 import { useOpenJobTheme } from "../theme";
 import {
   type AuthFlowResult,
@@ -32,6 +33,8 @@ export type NativeAuthController = Pick<
   | "claimUsername"
   | "confirmLink"
   | "createUser"
+  | "listGroups"
+  | "readTaskList"
   | "restore"
   | "signIn"
   | "signInWithQaPassword"
@@ -45,6 +48,7 @@ type SignedInViewProps = {
   onSignOut: () => void;
   onSwitchUser: () => void;
   result: SignedInResult;
+  taskListController: NativeTaskListController;
 };
 
 type AuthGateState = AuthFlowResult | { kind: "restoring" };
@@ -598,6 +602,7 @@ export function NativeAuthGate({
         onSignOut: () => void perform(() => auth.signOut()),
         onSwitchUser: () => void perform(() => auth.switchUser()),
         result: state,
+        taskListController: auth,
       });
     }
 

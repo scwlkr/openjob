@@ -16,7 +16,15 @@ import { OpenJobNativeApp } from "../App";
 import { resolveAppearanceKey } from "../src/appearance-keyboard";
 import { hasEmbeddedBundleOnlyPolicy } from "../src/OpenJobShell";
 import type { NativeAuthController } from "../src/auth/AuthGate";
+import {
+  OpenJobApiError,
+  ProviderSignInError,
+} from "../src/auth/coordinator";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
+import type {
+  NativeGroup,
+  NativeTaskListSnapshot,
+} from "../src/task-list-contracts";
 
 const previewConfig: OpenJobRuntimeConfig = {
   apiBasePath: "/api/v1",
@@ -61,7 +69,9 @@ const signedIn = {
   },
 };
 
-function authController(): NativeAuthController {
+function authController(
+  overrides: Partial<NativeAuthController> = {},
+): NativeAuthController {
   return {
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
@@ -69,22 +79,76 @@ function authController(): NativeAuthController {
     claimUsername: jest.fn(async () => signedIn),
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
+    listGroups: jest.fn(async () => []),
+    readTaskList: jest.fn(async () => ({ members: [], tasks: [] })),
     restore: jest.fn(async () => signedIn),
     signIn: jest.fn(async () => signedIn),
     signInWithQaPassword: jest.fn(async () => signedIn),
     signOut: jest.fn(async () => ({ kind: "signed-out" as const })),
     subscribeToCredentialRevocation: jest.fn(() => () => undefined),
     switchUser: jest.fn(async () => ({ kind: "signed-out" as const })),
+    ...overrides,
   };
 }
 
-function renderNativeApp(runtimeConfig: OpenJobRuntimeConfig) {
+function renderNativeApp(
+  runtimeConfig: OpenJobRuntimeConfig,
+  controller = authController(),
+) {
   return render(
     <OpenJobNativeApp
-      authController={authController()}
+      authController={controller}
       runtimeConfig={runtimeConfig}
     />,
   );
+}
+
+const adaptiveGroups: NativeGroup[] = [
+  {
+    groupId: "grp_one",
+    name: "Walker Workshop",
+    role: "admin",
+    createdAt: "2026-07-20T12:00:00.000Z",
+  },
+  {
+    groupId: "grp_two",
+    name: "Field Notes",
+    role: "member",
+    createdAt: "2026-07-21T12:00:00.000Z",
+  },
+];
+
+function oneTaskSnapshot(
+  groupId: string,
+  text: string,
+): NativeTaskListSnapshot {
+  return {
+    members: [
+      {
+        userId: "usr_one",
+        username: "walker",
+        role: "admin",
+        joinedAt: "2026-07-20T12:00:00.000Z",
+      },
+    ],
+    tasks: [
+      {
+        taskId: `task_${groupId}`,
+        groupId,
+        text,
+        assignee: {
+          state: "assigned",
+          userId: "usr_one",
+          username: "walker",
+        },
+        priority: "normal",
+        dueDate: null,
+        state: "open",
+        createdAt: "2026-07-20T12:01:00.000Z",
+        completedAt: null,
+      },
+    ],
+  };
 }
 
 beforeEach(async () => {
@@ -331,4 +395,336 @@ test("survives lifecycle changes and respects system Reduced Motion", async () =
   expect(await screen.findByText("Paused safely")).toBeOnTheScreen();
   await act(() => appStateListener?.("active"));
   expect(await screen.findByText("Ready for work")).toBeOnTheScreen();
+});
+
+test("moves from authentication to a real service-ordered read-only Task List", async () => {
+  const controller = authController({
+    listGroups: jest.fn(async (): Promise<NativeGroup[]> => [
+      {
+        groupId: "grp_one",
+        name: "Walker Workshop",
+        role: "admin",
+        createdAt: "2026-07-20T12:00:00.000Z",
+      },
+      {
+        groupId: "grp_two",
+        name: "Field Notes",
+        role: "member",
+        createdAt: "2026-07-21T12:00:00.000Z",
+      },
+    ]),
+    readTaskList: jest.fn(async (): Promise<NativeTaskListSnapshot> => ({
+      members: [
+        {
+          userId: "usr_one",
+          username: "walker",
+          role: "admin",
+          joinedAt: "2026-07-20T12:00:00.000Z",
+        },
+        {
+          userId: "usr_two",
+          username: "qa-two",
+          role: "member",
+          joinedAt: "2026-07-20T12:01:00.000Z",
+        },
+      ],
+      tasks: [
+        {
+          taskId: "task_open",
+          groupId: "grp_one",
+          text: "Ship the native Task List",
+          assignee: {
+            state: "assigned",
+            userId: "usr_two",
+            username: "qa-two",
+          },
+          priority: "high",
+          dueDate: "2026-07-24",
+          state: "open",
+          createdAt: "2026-07-20T12:02:00.000Z",
+          completedAt: null,
+        },
+        {
+          taskId: "task_done",
+          groupId: "grp_one",
+          text: "Prove service ordering",
+          assignee: {
+            state: "assigned",
+            userId: "usr_former",
+            username: "former",
+          },
+          priority: "normal",
+          dueDate: null,
+          state: "done",
+          createdAt: "2026-07-20T12:03:00.000Z",
+          completedAt: "2026-07-22T12:00:00.000Z",
+        },
+        {
+          taskId: "task_unassigned",
+          groupId: "grp_one",
+          text: "Recover this Task",
+          assignee: { state: "unassigned" },
+          priority: "low",
+          dueDate: null,
+          state: "open",
+          createdAt: "2026-07-20T12:04:00.000Z",
+          completedAt: null,
+        },
+      ],
+    })),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(
+    await screen.findByRole("header", { name: "Choose a Group" }),
+  ).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Open Walker Workshop" }),
+  );
+
+  expect(
+    await screen.findByRole("header", { name: "Walker Workshop Task List" }),
+  ).toBeOnTheScreen();
+  expect(screen.getByText("Ship the native Task List")).toBeOnTheScreen();
+  expect(screen.getByText("Recover this Task")).toBeOnTheScreen();
+  expect(screen.queryByText("Prove service ordering")).not.toBeOnTheScreen();
+  expect(screen.getByRole("header", { name: "@qa-two" })).toBeOnTheScreen();
+  expect(screen.getByRole("header", { name: "Unassigned" })).toBeOnTheScreen();
+  expect(
+    screen.getByLabelText(
+      "Open Task. Ship the native Task List. Assigned to @qa-two. High priority. Overdue, due Jul 24.",
+    ),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByRole("tab", { name: "Done 1" }));
+  expect(await screen.findByText("Prove service ordering")).toBeOnTheScreen();
+  expect(screen.queryByText("Ship the native Task List")).not.toBeOnTheScreen();
+  expect(
+    screen.getByRole("header", { name: "Former Member, @former" }),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByRole("tab", { name: "All 3" }));
+  expect(await screen.findByText("Ship the native Task List")).toBeOnTheScreen();
+  expect(screen.getByText("Prove service ordering")).toBeOnTheScreen();
+  expect(screen.getByText("Recover this Task")).toBeOnTheScreen();
+  expect(controller.readTaskList).toHaveBeenCalledWith("grp_one");
+  expect(
+    screen.queryByRole("button", { name: /Ship the native Task List/iu }),
+  ).not.toBeOnTheScreen();
+});
+
+test("clears the prior Group immediately while a switched Group loads", async () => {
+  const original = Dimensions.get("window");
+  await act(() => {
+    Dimensions.set({
+      window: { ...original, height: 800, width: 390 },
+    });
+  });
+  let resolveSecond:
+    | ((snapshot: NativeTaskListSnapshot) => void)
+    | undefined;
+  const second = new Promise<NativeTaskListSnapshot>((resolve) => {
+    resolveSecond = resolve;
+  });
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    readTaskList: jest
+      .fn()
+      .mockResolvedValueOnce(
+        oneTaskSnapshot("grp_one", "First Group Task"),
+      )
+      .mockReturnValueOnce(second),
+  });
+  let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
+
+  try {
+    rendered = await renderNativeApp(previewConfig, controller);
+    await fireEvent.press(
+      await screen.findByRole("button", { name: "Open Walker Workshop" }),
+    );
+    expect(await screen.findByText("First Group Task")).toBeOnTheScreen();
+
+    const switcher = screen.getByRole("button", {
+      name: "Switch Group, currently Walker Workshop",
+    });
+    await fireEvent(switcher, "focus");
+    expect(switcher).toHaveStyle({ borderWidth: 3 });
+    await fireEvent.press(switcher);
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Open Field Notes" }),
+    );
+
+    expect(screen.queryByText("First Group Task")).not.toBeOnTheScreen();
+    expect(
+      screen.getByLabelText("Loading Field Notes Task List"),
+    ).toBeOnTheScreen();
+
+    await act(() => {
+      resolveSecond?.(oneTaskSnapshot("grp_two", "Second Group Task"));
+    });
+    expect(await screen.findByText("Second Group Task")).toBeOnTheScreen();
+  } finally {
+    await rendered?.unmount();
+    await act(() => {
+      Dimensions.set({ window: original });
+    });
+  }
+});
+
+test("adapts one Task List between wide sidebar and narrow large-text layouts", async () => {
+  const original = Dimensions.get("window");
+  await act(() => {
+    Dimensions.set({
+      window: { ...original, height: 900, width: 900 },
+    });
+  });
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    readTaskList: jest.fn(async (groupId) =>
+      oneTaskSnapshot(groupId, "Responsive Task"),
+    ),
+  });
+  let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
+
+  try {
+    rendered = await renderNativeApp(previewConfig, controller);
+    await fireEvent.press(
+      await screen.findByRole("button", { name: "Open Walker Workshop" }),
+    );
+    expect(await screen.findByText("Responsive Task")).toBeOnTheScreen();
+    expect(screen.getByRole("header", { name: "Groups" })).toBeOnTheScreen();
+    expect(
+      screen.getByRole("button", { name: "Open Walker Workshop" }),
+    ).toHaveProp("accessibilityState", { selected: true });
+    expect(
+      screen.queryByRole("button", {
+        name: "Switch Group, currently Walker Workshop",
+      }),
+    ).not.toBeOnTheScreen();
+
+    await act(() => {
+      Dimensions.set({
+        window: { ...original, fontScale: 2, height: 900, width: 500 },
+      });
+    });
+
+    expect(screen.queryByRole("header", { name: "Groups" })).not.toBeOnTheScreen();
+    expect(
+      screen.getByRole("button", {
+        name: "Switch Group, currently Walker Workshop",
+      }),
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Responsive Task")).toBeOnTheScreen();
+
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Open appearance settings" }),
+    );
+    await fireEvent.press(
+      await screen.findByRole("radio", { name: "Use dark appearance" }),
+    );
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Back to OpenJob" }),
+    );
+    expect(
+      await screen.findByLabelText(
+        "Open Task. Responsive Task. Assigned to @walker. Normal priority.",
+      ),
+    ).toHaveStyle({ backgroundColor: "#151b28" });
+  } finally {
+    await rendered?.unmount();
+    await act(() => {
+      Dimensions.set({ window: original });
+    });
+  }
+});
+
+test("recovers from retryable Group and Task List failures", async () => {
+  const controller = authController({
+    listGroups: jest
+      .fn()
+      .mockRejectedValueOnce(new ProviderSignInError("offline"))
+      .mockResolvedValueOnce(adaptiveGroups),
+    readTaskList: jest
+      .fn()
+      .mockRejectedValueOnce(new ProviderSignInError("offline"))
+      .mockResolvedValueOnce({ members: [], tasks: [] }),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(
+    await screen.findByText(
+      "OpenJob is offline. Check your connection and retry.",
+    ),
+  ).toBeOnTheScreen();
+  await fireEvent.press(screen.getAllByRole("button", { name: "Retry Groups" })[0]!);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open Walker Workshop" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Retry Task List" }),
+  ).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Retry Task List" }),
+  );
+  expect(await screen.findByText("No open Tasks")).toBeOnTheScreen();
+});
+
+test("removes an inaccessible Group and offers the remaining accessible Groups", async () => {
+  const controller = authController({
+    listGroups: jest
+      .fn()
+      .mockResolvedValueOnce(adaptiveGroups)
+      .mockResolvedValueOnce([adaptiveGroups[1]]),
+    readTaskList: jest.fn(async () => {
+      throw new OpenJobApiError(
+        404,
+        "group_not_found",
+        "Group was not found.",
+      );
+    }),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open Walker Workshop" }),
+  );
+
+  expect(
+    await screen.findByText(
+      "Walker Workshop is no longer accessible. Choose another Group.",
+    ),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Open Walker Workshop" }),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Open Field Notes" }),
+  ).toBeOnTheScreen();
+});
+
+test("returns a revoked Task List session to the stable sign-in screen", async () => {
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    readTaskList: jest.fn(async () => {
+      throw new OpenJobApiError(
+        401,
+        "authentication_required",
+        "Authentication is required.",
+      );
+    }),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open Walker Workshop" }),
+  );
+
+  expect(
+    await screen.findByRole("header", {
+      name: "Sign in to your shared Task Lists",
+    }),
+  ).toBeOnTheScreen();
+  expect(controller.signOut).toHaveBeenCalledTimes(1);
 });

@@ -88,6 +88,7 @@ function ThemedSurface({
           onSignOut,
           onSwitchUser,
           result,
+          taskListController,
         }) => (
           <OpenJobShell
             signedInUser={{
@@ -100,6 +101,7 @@ function ThemedSurface({
             initialState={bootstrap.navigationState}
             reducedMotion={reducedMotion}
             runtimeConfig={runtimeConfig}
+            taskListController={taskListController}
           />
         )}
         runtimeConfig={runtimeConfig}
