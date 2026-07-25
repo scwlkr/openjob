@@ -234,6 +234,16 @@ for (const environment of environments) {
       /android:dataExtractionRules="@xml\/secure_store_data_extraction_rules"/u,
       `${environment} Android protected-storage extraction exclusion was not generated`,
     );
+    assert.match(
+      ios,
+      /["']?expo\.sqlite\.useSQLCipher["']?\s*[:=]\s*["']?true/u,
+      `${environment} iOS SQLCipher build flag was not generated`,
+    );
+    assert.match(
+      android,
+      /expo\.sqlite\.useSQLCipher\s*=\s*true/u,
+      `${environment} Android SQLCipher build flag was not generated`,
+    );
     assert.match(ios, /EXUpdatesEnabled[\s\S]{0,120}<false\s*\/>/u);
     assert.match(
       ios,

@@ -1,5 +1,9 @@
 import type { OpenJobRuntimeConfig } from "../runtime-config";
-import { purgeLocalDomainCache } from "../domain-cache";
+import {
+  createSqlCipherTaskListCache,
+  purgeLocalDomainCache,
+  registerLocalDomainPurgeBoundary,
+} from "../domain-cache";
 import { NativeAuthCoordinator } from "./coordinator";
 import { createFirebaseAuthClient } from "./firebase-rest";
 import { createNativeOpenJobApi } from "./openjob-api";
@@ -26,6 +30,12 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     keychainService: config.keychainService,
     storageKey: config.sessionStorageKey,
   });
+  const domainCache = createSqlCipherTaskListCache({
+    databaseName: `openjob-${config.environment}-task-list-v1.db`,
+    keyStorageKey: `openjob.native.cache.${config.environment}.v1`,
+    keychainService: `${config.keychainService}.cache`,
+  });
+  registerLocalDomainPurgeBoundary(() => domainCache.purge());
 
   return new NativeAuthCoordinator({
     claimUsername: (token, username) =>
@@ -46,7 +56,9 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     listGroups: (token) => api.listGroups(token),
     listMembers: (token, groupId) => api.listMembers(token, groupId),
     listSignInMethods: (token) => api.listSignInMethods(token),
-    listTasks: (token, groupId) => api.listTasks(token, groupId),
+    listTasks: (token, groupId, validator) =>
+      api.listTasks(token, groupId, validator),
+    loadLocalTaskListCache: (ownerUserId) => domainCache.load(ownerUserId),
     loadCleanupPending: () => store.loadCleanupPending(),
     loadStoredSession: () => store.load(),
     markCleanupPending: () => store.markCleanupPending(),
@@ -54,6 +66,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     purgeLocalDomainCache,
     refreshSession: (stored) => firebase.refresh(stored),
     saveStoredSession: (stored) => store.save(stored),
+    saveLocalTaskListCache: (entry) => domainCache.save(entry),
     signInWithQaPassword: (email, password) =>
       firebase.signInWithPassword(email, password),
     signInWithProvider: (method) => provider.signIn(method),

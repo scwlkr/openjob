@@ -34,22 +34,30 @@ export type NativeAuthController = Pick<
   | "confirmLink"
   | "createUser"
   | "listGroups"
+  | "loadCachedTaskList"
+  | "purgeCachedTaskList"
   | "readTaskList"
   | "revokeSession"
   | "restore"
+  | "restoreCachedSession"
+  | "saveCachedTaskList"
   | "signIn"
   | "signInWithQaPassword"
   | "signOut"
   | "subscribeToCredentialRevocation"
+  | "syncTaskList"
   | "switchUser"
 >;
 
 type SignedInViewProps = {
   onManageSignInMethods?: () => void;
+  onRestoreSession: () => void;
   onSessionRevoked: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   result: SignedInResult;
+  restoreReason?: "offline" | "unavailable";
+  sessionReady: boolean;
   taskListController: NativeTaskListController;
 };
 
@@ -366,23 +374,54 @@ export function NativeAuthGate({
     }
   }
 
-  useEffect(() => {
-    let mounted = true;
-    void auth
-      .restore()
-      .then((result) => {
-        if (!mounted) return;
+  async function retryRestore() {
+    const fallback =
+      state.kind === "signed-in" && state.provisional ? state : null;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await auth.restore();
+      if (result.kind === "restore-retry" && fallback) {
+        setState({ ...fallback, restoreReason: result.reason });
+        setMessage(resultMessage(result));
+      } else {
         setState(result);
         setMessage(resultMessage(result));
-      })
-      .catch((error: unknown) => {
+      }
+    } catch (error) {
+      if (fallback) setState(fallback);
+      else setState({ kind: "signed-out" });
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      let cached: SignedInResult | null = null;
+      try {
+        cached = await auth.restoreCachedSession();
+        if (mounted && cached) setState(cached);
+        const result = await auth.restore();
         if (!mounted) return;
-        setState({ kind: "signed-out" });
+        if (cached && result.kind === "restore-retry") {
+          setState({ ...cached, restoreReason: result.reason });
+          setMessage(resultMessage(result));
+          return;
+        }
+        setState(result);
+        setMessage(resultMessage(result));
+      } catch (error) {
+        if (!mounted) return;
+        if (cached) setState(cached);
+        else setState({ kind: "signed-out" });
         setMessage(errorMessage(error));
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setBusy(false);
-      });
+      }
+    })();
     return () => {
       mounted = false;
     };
@@ -601,10 +640,13 @@ export function NativeAuthGate({
       return renderSignedIn({
         onManageSignInMethods:
           state.methods.length === 0 ? undefined : () => setManaging(true),
+        onRestoreSession: () => void retryRestore(),
         onSessionRevoked: () => void perform(() => auth.revokeSession()),
         onSignOut: () => void perform(() => auth.signOut()),
         onSwitchUser: () => void perform(() => auth.switchUser()),
         result: state,
+        restoreReason: state.restoreReason,
+        sessionReady: !state.provisional,
         taskListController: auth,
       });
     }

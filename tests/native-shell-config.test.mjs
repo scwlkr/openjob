@@ -6,6 +6,14 @@ const rootPackageUrl = new URL("../package.json", import.meta.url);
 const nativePackageUrl = new URL("../native/package.json", import.meta.url);
 const easUrl = new URL("../native/eas.json", import.meta.url);
 const nativeReadmeUrl = new URL("../native/README.md", import.meta.url);
+const nativeDomainCacheUrl = new URL(
+  "../native/src/domain-cache.ts",
+  import.meta.url,
+);
+const nativeTaskListUrl = new URL(
+  "../native/src/ReadOnlyTaskList.tsx",
+  import.meta.url,
+);
 
 async function readJson(url) {
   return JSON.parse(await readFile(url, "utf8"));
@@ -114,6 +122,14 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
         config.plugins.some(
           (plugin) =>
             Array.isArray(plugin) &&
+            plugin[0] === "expo-sqlite" &&
+            plugin[1].useSQLCipher === true,
+        ),
+      );
+      assert.ok(
+        config.plugins.some(
+          (plugin) =>
+            Array.isArray(plugin) &&
             plugin[0] ===
               "@react-native-google-signin/google-signin" &&
             plugin[1].iosUrlScheme.startsWith(
@@ -188,6 +204,8 @@ test("native package exposes focused simulator, build, and repository-gate comma
   assert.equal(typeof nativePackage.scripts.typecheck, "string");
   assert.equal(typeof nativePackage.scripts.test, "string");
   assert.equal(typeof nativePackage.scripts["bundle:verify"], "string");
+  assert.equal(nativePackage.dependencies["expo-file-system"], "~57.0.1");
+  assert.equal(nativePackage.dependencies["expo-sqlite"], "~57.0.1");
   assert.equal(
     rootPackage.scripts["native:check"],
     "npm --prefix native run check",
@@ -215,6 +233,28 @@ test("native runbook documents both-runtime launch, builds, versioning, and offl
   assert.match(runbook, /ios:release/u);
   assert.match(runbook, /android:release/u);
   assert.match(runbook, /networking unavailable/iu);
+  assert.match(runbook, /SQLCipher/u);
+  assert.match(runbook, /Offline · Read-only · Last updated/u);
+  assert.match(runbook, /TestFlight/u);
+  assert.match(runbook, /Play Internal/u);
   assert.match(runbook, /Reduced Motion/u);
   assert.doesNotMatch(runbook, /eas update(?:\s|$)/u);
+});
+
+test("native Task data has one encrypted read-only persistence path", async () => {
+  const [cacheSource, taskListSource] = await Promise.all([
+    readFile(nativeDomainCacheUrl, "utf8"),
+    readFile(nativeTaskListUrl, "utf8"),
+  ]);
+
+  assert.match(cacheSource, /new Directory\(Paths\.cache/u);
+  assert.match(cacheSource, /PRAGMA key/u);
+  assert.match(cacheSource, /PRAGMA cipher_version/u);
+  assert.match(cacheSource, /WHEN_UNLOCKED_THIS_DEVICE_ONLY/u);
+  assert.match(cacheSource, /BEGIN IMMEDIATE/u);
+  assert.doesNotMatch(cacheSource, /AsyncStorage|console\.|writeAsString/u);
+  assert.doesNotMatch(
+    taskListSource,
+    /\b(?:create|update|delete|assign|complete)Task\b/u,
+  );
 });

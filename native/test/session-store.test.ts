@@ -74,6 +74,27 @@ test("stores and restores the Preview-only QA refresh credential", async () => {
   await expect(store.load()).resolves.toEqual(session);
 });
 
+test("stores and restores a canonical owner binding without access tokens", async () => {
+  const session = {
+    ownerUserId: "usr_one",
+    provider: "google" as const,
+    refreshToken: "refresh-only",
+    version: 2 as const,
+  };
+
+  await store.save(session);
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+    JSON.stringify(session),
+  );
+
+  await expect(store.load()).resolves.toEqual(session);
+  const serialized = JSON.stringify(
+    (SecureStore.setItemAsync as jest.Mock).mock.calls,
+  );
+  expect(serialized).toContain("usr_one");
+  expect(serialized).not.toContain("idToken");
+});
+
 test("rejects Preview QA credentials when password auth is not configured", async () => {
   const disabledStore = createSecureSessionStore({
     allowQaPassword: false,

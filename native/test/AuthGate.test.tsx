@@ -63,6 +63,7 @@ function controller(
   confirmLink: jest.Mock;
   createUser: jest.Mock;
   restore: jest.Mock;
+  restoreCachedSession: jest.Mock;
   signIn: jest.Mock;
   signInWithQaPassword: jest.Mock;
   signOut: jest.Mock;
@@ -77,6 +78,7 @@ function controller(
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
     restore: jest.fn(async () => ({ kind: "signed-out" })),
+    restoreCachedSession: jest.fn(async () => null),
     signIn: jest.fn(async () => signedIn),
     signInWithQaPassword: jest.fn(async () => signedIn),
     signOut: jest.fn(async () => ({ kind: "signed-out" })),

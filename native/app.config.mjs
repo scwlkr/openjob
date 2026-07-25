@@ -45,6 +45,7 @@ export default function createAppConfig({ config = {} } = {}) {
           faceIDPermission: false,
         },
       ],
+      ["expo-sqlite", { useSQLCipher: true }],
       [
         "@react-native-google-signin/google-signin",
         {

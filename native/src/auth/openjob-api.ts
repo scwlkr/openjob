@@ -9,6 +9,7 @@ import type {
   NativeGroup,
   NativeMember,
   NativeTask,
+  NativeTaskListReadResult,
 } from "../task-list-contracts";
 
 type NativeOpenJobApiConfig = {
@@ -82,20 +83,42 @@ function isTask(value: unknown): value is NativeTask {
   );
 }
 
+function isEntityTag(value: string | null): value is string {
+  return (
+    value !== null &&
+    /^(?:W\/)?"[\x21\x23-\x7E\x80-\xFF]*"$/u.test(value)
+  );
+}
+
+function invalidTaskListValidator() {
+  return new OpenJobApiError(
+    502,
+    "invalid_response",
+    "OpenJob returned an invalid Task List validator.",
+  );
+}
+
+function invalidPaginatedTaskList() {
+  return new OpenJobApiError(
+    502,
+    "invalid_response",
+    "OpenJob returned an invalid paginated Task List response.",
+  );
+}
+
 export function createNativeOpenJobApi({
   apiBaseUrl,
   fetchImplementation = fetch,
 }: NativeOpenJobApiConfig) {
   const baseUrl = apiBaseUrl.replace(/\/+$/u, "");
 
-  async function requestEnvelope(
+  async function sendRequest(
     path: string,
     token: string,
     init: RequestInit = {},
   ) {
-    let response: Response;
     try {
-      response = await fetchImplementation(`${baseUrl}${path}`, {
+      return await fetchImplementation(`${baseUrl}${path}`, {
         ...init,
         headers: {
           accept: "application/json",
@@ -108,7 +131,9 @@ export function createNativeOpenJobApi({
     } catch {
       throw new ProviderSignInError("offline");
     }
+  }
 
+  async function readEnvelope(response: Response) {
     let body: {
       data?: unknown;
       error?: { code?: unknown; message?: unknown };
@@ -119,16 +144,33 @@ export function createNativeOpenJobApi({
     } catch {
       // Status handling below remains stable for empty or non-JSON edge errors.
     }
+    return body;
+  }
+
+  function throwResponseError(
+    response: Response,
+    body: Awaited<ReturnType<typeof readEnvelope>>,
+  ): never {
+    throw new OpenJobApiError(
+      response.status,
+      typeof body.error?.code === "string"
+        ? body.error.code
+        : "request_failed",
+      typeof body.error?.message === "string"
+        ? body.error.message
+        : "OpenJob could not complete the request.",
+    );
+  }
+
+  async function requestEnvelope(
+    path: string,
+    token: string,
+    init: RequestInit = {},
+  ) {
+    const response = await sendRequest(path, token, init);
+    const body = await readEnvelope(response);
     if (!response.ok) {
-      throw new OpenJobApiError(
-        response.status,
-        typeof body.error?.code === "string"
-          ? body.error.code
-          : "request_failed",
-        typeof body.error?.message === "string"
-          ? body.error.message
-          : "OpenJob could not complete the request.",
-      );
+      throwResponseError(response, body);
     }
     return body;
   }
@@ -178,6 +220,106 @@ export function createNativeOpenJobApi({
       if (cursor) seenCursors.add(cursor);
     } while (cursor !== null);
     return items;
+  }
+
+  async function readTaskPage(response: Response) {
+    const body = await readEnvelope(response);
+    if (!response.ok) throwResponseError(response, body);
+    const validator = response.headers.get("etag");
+    if (!isEntityTag(validator)) throw invalidTaskListValidator();
+    if (
+      !Array.isArray(body.data) ||
+      !body.data.every(isTask) ||
+      (body.nextCursor !== null &&
+        (typeof body.nextCursor !== "string" ||
+          body.nextCursor.length === 0))
+    ) {
+      throw new OpenJobApiError(
+        502,
+        "invalid_response",
+        "OpenJob returned invalid Task List data.",
+      );
+    }
+    return {
+      nextCursor: body.nextCursor,
+      tasks: body.data,
+      validator,
+    };
+  }
+
+  async function listTasks(
+    token: string,
+    groupId: string,
+    previousValidator?: string | null,
+  ): Promise<NativeTaskListReadResult> {
+    const path = `/groups/${encodeURIComponent(groupId)}/tasks`;
+    const parameters = new URLSearchParams({ status: "all", limit: "500" });
+    const firstPath = `${path}?${parameters.toString()}`;
+    const firstResponse = await sendRequest(firstPath, token, {
+      headers:
+        previousValidator === undefined || previousValidator === null
+          ? undefined
+          : { "if-none-match": previousValidator },
+    });
+
+    if (firstResponse.status === 304) {
+      const validator = firstResponse.headers.get("etag");
+      if (!isEntityTag(validator)) throw invalidTaskListValidator();
+      return { kind: "not-modified", validator };
+    }
+
+    const firstPage = await readTaskPage(firstResponse);
+    const tasks = [...firstPage.tasks];
+    const seenCursors = new Set<string>();
+    let cursor = firstPage.nextCursor;
+    while (cursor !== null) {
+      if (seenCursors.has(cursor)) {
+        throw new OpenJobApiError(
+          502,
+          "invalid_response",
+          "OpenJob returned invalid Task List data.",
+        );
+      }
+      seenCursors.add(cursor);
+      const query = new URLSearchParams(parameters);
+      query.set("cursor", cursor);
+      const continuationResponse = await sendRequest(
+        `${path}?${query.toString()}`,
+        token,
+      );
+      if (continuationResponse.status === 304) {
+        throw invalidPaginatedTaskList();
+      }
+      const page = await readTaskPage(continuationResponse);
+      tasks.push(...page.tasks);
+      cursor = page.nextCursor;
+    }
+
+    const revalidationResponse = await sendRequest(firstPath, token, {
+      headers: { "if-none-match": firstPage.validator },
+    });
+    if (revalidationResponse.status === 304) {
+      const validator = revalidationResponse.headers.get("etag");
+      if (!isEntityTag(validator) || validator !== firstPage.validator) {
+        throw invalidTaskListValidator();
+      }
+      return {
+        kind: "changed",
+        tasks,
+        validator,
+      };
+    }
+    if (revalidationResponse.ok) {
+      throw new OpenJobApiError(
+        409,
+        "task_list_changed",
+        "The Task List changed while it was loading.",
+      );
+    }
+    throwResponseError(
+      revalidationResponse,
+      await readEnvelope(revalidationResponse),
+    );
   }
 
   async function userRequest(
@@ -239,14 +381,7 @@ export function createNativeOpenJobApi({
       return methods;
     },
 
-    listTasks(token: string, groupId: string) {
-      return listAll(
-        `/groups/${encodeURIComponent(groupId)}/tasks`,
-        token,
-        isTask,
-        new URLSearchParams({ status: "all" }),
-      );
-    },
+    listTasks,
 
     linkSignInMethod(
       token: string,

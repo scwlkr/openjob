@@ -64,7 +64,12 @@ function createDependencies(
     listGroups: jest.fn(async () => []),
     listMembers: jest.fn(async () => []),
     listSignInMethods: jest.fn(async () => ["google" as const]),
-    listTasks: jest.fn(async () => []),
+    listTasks: jest.fn(async () => ({
+      kind: "changed" as const,
+      tasks: [],
+      validator: '"task-list"',
+    })),
+    loadLocalTaskListCache: jest.fn(async () => null),
     loadCleanupPending: jest.fn(async () => false),
     loadStoredSession: jest.fn(async () => null),
     markCleanupPending: jest.fn(async () => undefined),
@@ -72,6 +77,7 @@ function createDependencies(
     purgeLocalDomainCache: jest.fn(async () => undefined),
     refreshSession: jest.fn(async () => googleSession),
     saveStoredSession: jest.fn(async () => undefined),
+    saveLocalTaskListCache: jest.fn(async () => undefined),
     signInWithQaPassword: jest.fn(async () => qaPasswordSession),
     signInWithProvider: jest.fn(async (provider) => ({
       idToken: `${provider}-provider-token`,
@@ -169,7 +175,11 @@ test("reads Groups and a service-ordered Task List without exposing the active c
   const dependencies = createDependencies({
     listGroups: jest.fn(async () => groups),
     listMembers: jest.fn(async () => members),
-    listTasks: jest.fn(async () => tasks),
+    listTasks: jest.fn(async () => ({
+      kind: "changed" as const,
+      tasks,
+      validator: '"task-list-1"',
+    })),
   });
   const coordinator = new NativeAuthCoordinator(dependencies);
 
@@ -188,7 +198,29 @@ test("reads Groups and a service-ordered Task List without exposing the active c
   expect(dependencies.listTasks).toHaveBeenCalledWith(
     "google-id-token",
     "grp_one",
+    undefined,
   );
+});
+
+test("reuses a conditional Task List without reading Members", async () => {
+  const dependencies = createDependencies({
+    listTasks: jest.fn(async () => ({
+      kind: "not-modified" as const,
+      validator: '"task-list-1"',
+    })),
+    now: () => 1_000,
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(
+    coordinator.syncTaskList("grp_one", '"task-list-1"'),
+  ).resolves.toEqual({
+    freshAt: "1970-01-01T00:00:01.000Z",
+    kind: "not-modified",
+    validator: '"task-list-1"',
+  });
+  expect(dependencies.listMembers).not.toHaveBeenCalled();
 });
 
 test("recovers a concurrent immutable claim from the current User", async () => {
@@ -303,13 +335,76 @@ test("restores and persists only the refresh credential for a returning provider
     user,
   });
   expect(dependencies.saveStoredSession).toHaveBeenCalledWith({
+    ownerUserId: "usr_one",
     provider: "google",
     refreshToken: "google-refresh-token",
-    version: 1,
+    version: 2,
   });
   expect(JSON.stringify(dependencies.saveStoredSession.mock.calls)).not.toContain(
     "google-id-token",
   );
+});
+
+test("bootstraps only a securely owner-bound session before networking", async () => {
+  const versionTwo: StoredSession = {
+    ownerUserId: "usr_one",
+    provider: "google",
+    refreshToken: "stored-refresh",
+    version: 2,
+  };
+  const bound = new NativeAuthCoordinator(
+    createDependencies({
+      loadLocalTaskListCache: jest.fn(
+        async () => ({ ownerUserId: "usr_one" }) as never,
+      ),
+      loadStoredSession: jest.fn(async () => versionTwo),
+    }),
+  );
+
+  await expect(bound.restoreCachedSession()).resolves.toEqual({
+    kind: "signed-in",
+    methods: [],
+    provisional: true,
+    user: {
+      userId: "usr_one",
+      username: null,
+      usernameRequired: false,
+    },
+  });
+
+  const legacy = new NativeAuthCoordinator(
+    createDependencies({
+      loadStoredSession: jest.fn(
+        async (): Promise<StoredSession> => ({
+          provider: "google",
+          refreshToken: "legacy-refresh",
+          version: 1,
+        }),
+      ),
+    }),
+  );
+  await expect(legacy.restoreCachedSession()).resolves.toBeNull();
+});
+
+test("purges all private state when a bound credential resolves to another User", async () => {
+  const stored: StoredSession = {
+    ownerUserId: "usr_previous",
+    provider: "google",
+    refreshToken: "stored-refresh",
+    version: 2,
+  };
+  const dependencies = createDependencies({
+    loadStoredSession: jest.fn(async () => stored),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.restore()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "revoked",
+  });
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveStoredSession).not.toHaveBeenCalled();
 });
 
 test("restores a valid unknown credential to its explicit decision screen", async () => {
@@ -391,9 +486,10 @@ test("signs in the Preview QA User without invoking a linkable provider", async 
   expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
   expect(dependencies.exchangeProviderCredential).not.toHaveBeenCalled();
   expect(dependencies.saveStoredSession).toHaveBeenCalledWith({
+    ownerUserId: "usr_one",
     provider: "qa-password",
     refreshToken: "qa-password-refresh-token",
-    version: 1,
+    version: 2,
   });
   await expect(
     coordinator.authenticateNewMethod("google"),
@@ -608,9 +704,10 @@ test("adds a fresh second provider to the current signed-in User", async () => {
     "usr_one",
   );
   expect(dependencies.saveStoredSession).toHaveBeenLastCalledWith({
+    ownerUserId: "usr_one",
     provider: "google",
     refreshToken: "google-refresh-token",
-    version: 1,
+    version: 2,
   });
 });
 

@@ -1,5 +1,7 @@
 import { Feather } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native";
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -8,6 +10,7 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Platform,
   ScrollView,
   SectionList,
@@ -30,16 +33,25 @@ import {
   ProviderSignInError,
 } from "./auth/coordinator";
 import { OpenJobBrandmark } from "./brand-marks";
+import { useAppLifecycle } from "./device-state";
 import type {
+  NativeCachedTaskList,
   NativeGroup,
   NativeTask,
   NativeTaskListController,
   NativeTaskListSnapshot,
+  NativeTaskListSyncResult,
+  NativeTaskStatus,
 } from "./task-list-contracts";
+import {
+  nextPollDelayMs,
+  reconcileTaskListSnapshot,
+  retainRemovedTasksForExit,
+} from "./task-list-freshness";
 import { useOpenJobTheme } from "./theme";
 import { useControlInteraction } from "./use-control-interaction";
 
-type TaskStatus = "open" | "done" | "all";
+type TaskStatus = NativeTaskStatus;
 const taskStatuses: TaskStatus[] = ["open", "done", "all"];
 
 type TaskSection = {
@@ -405,17 +417,54 @@ function taskAccessibilityLabel(task: NativeTask) {
     .join(" ");
 }
 
-function TaskRow({ task }: { task: NativeTask }) {
+const TaskRow = memo(function TaskRow({
+  animate,
+  reducedMotion,
+  removing,
+  task,
+}: {
+  animate: boolean;
+  reducedMotion: boolean;
+  removing: boolean;
+  task: NativeTask;
+}) {
   const { palette } = useOpenJobTheme();
   const due = dueDescription(task);
+  const [progress] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (!animate || reducedMotion) {
+      progress.setValue(1);
+      return;
+    }
+    progress.setValue(removing ? 1 : 0);
+    const animation = Animated.timing(progress, {
+      duration: 180,
+      toValue: removing ? 0 : 1,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [animate, progress, reducedMotion, removing, task]);
   return (
-    <View
+    <Animated.View
       accessible
       accessibilityLabel={taskAccessibilityLabel(task)}
       style={[
         styles.taskRow,
         { backgroundColor: palette.paper, borderColor: palette.line },
+        {
+          opacity: progress,
+          transform: [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            },
+          ],
+        },
       ]}
+      testID={`openjob-row-${task.taskId}${animate ? "-affected" : ""}`}
     >
       <View style={styles.taskCopy}>
         <Text style={[styles.taskText, { color: palette.ink }]}>
@@ -464,9 +513,9 @@ function TaskRow({ task }: { task: NativeTask }) {
           </Text>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
-}
+});
 
 function sectionsFor(
   snapshot: NativeTaskListSnapshot,
@@ -510,6 +559,7 @@ function sectionsFor(
 }
 
 function TaskListHeader({
+  freshnessMessage,
   group,
   onRetry,
   onShowChooser,
@@ -519,6 +569,7 @@ function TaskListHeader({
   wide,
   setStatus,
 }: {
+  freshnessMessage: string | null;
   group: NativeGroup;
   onRetry: () => void;
   onShowChooser: () => void;
@@ -651,6 +702,13 @@ function TaskListHeader({
           </Text>
           <ActionButton label="Retry Task List" onPress={onRetry} />
         </View>
+      ) : freshnessMessage ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[styles.freshness, { color: palette.muted }]}
+        >
+          {freshnessMessage}
+        </Text>
       ) : null}
     </View>
   );
@@ -670,17 +728,67 @@ function isRevoked(error: unknown) {
   );
 }
 
+type RefreshOutcome = "changed" | "error" | "ignored" | "not-modified";
+type PendingChange = {
+  group: NativeGroup;
+  result: Extract<NativeTaskListSyncResult, { kind: "changed" }>;
+};
+
+function readableTimestamp(value: string | null) {
+  if (!value) return "an unknown time";
+  const date = new Date(value);
+  return Number.isFinite(date.valueOf()) ? date.toLocaleString() : value;
+}
+
+function savedMessage(freshAt: string | null) {
+  return `Saved copy · Read-only · Last updated ${readableTimestamp(freshAt)}.`;
+}
+
+function staleMessage(freshAt: string | null, error: unknown) {
+  const prefix =
+    error instanceof ProviderSignInError && error.code === "offline"
+      ? "Offline"
+      : "Refresh unavailable";
+  return `${prefix} · Read-only · Last updated ${readableTimestamp(freshAt)}.`;
+}
+
 export function ReadOnlyTaskList({
   controller,
+  onRestoreSession,
   onSessionRevoked,
+  ownerUserId,
+  reducedMotion,
+  restoreReason,
+  sessionReady,
 }: {
   controller: NativeTaskListController;
+  onRestoreSession: () => void;
   onSessionRevoked: () => void;
+  ownerUserId: string;
+  reducedMotion: boolean;
+  restoreReason?: "offline" | "unavailable";
+  sessionReady: boolean;
 }) {
   const { width } = useWindowDimensions();
   const { palette } = useOpenJobTheme();
+  const appState = useAppLifecycle();
+  const isFocused = useIsFocused();
   const wide = width >= 760;
-  const requestGeneration = useRef(0);
+  const groupGeneration = useRef(0);
+  const refreshGeneration = useRef(0);
+  const refreshInFlight = useRef<Promise<RefreshOutcome> | null>(null);
+  const unchangedCount = useRef(0);
+  const gestureActive = useRef(false);
+  const momentumActive = useRef(false);
+  const pendingChange = useRef<PendingChange | null>(null);
+  const changedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const removalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedGroupRef = useRef<NativeGroup | null>(null);
+  const snapshotRef = useRef<NativeTaskListSnapshot | null>(null);
+  const statusRef = useRef<TaskStatus>("open");
+  const validatorRef = useRef<string | null>(null);
+  const freshAtRef = useRef<string | null>(null);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
   const [groups, setGroups] = useState<NativeGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupMessage, setGroupMessage] = useState<string | null>(null);
@@ -689,80 +797,391 @@ export function ReadOnlyTaskList({
   const [snapshot, setSnapshot] = useState<NativeTaskListSnapshot | null>(null);
   const [taskMessage, setTaskMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<TaskStatus>("open");
+  const [freshAt, setFreshAt] = useState<string | null>(null);
+  const [freshness, setFreshness] = useState<
+    "fresh" | "offline" | "saved" | null
+  >(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [changedTaskIds, setChangedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [removingTaskIds, setRemovingTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const clearSelection = useCallback(() => {
+    refreshGeneration.current += 1;
+    refreshInFlight.current = null;
+    selectedGroupRef.current = null;
+    snapshotRef.current = null;
+    validatorRef.current = null;
+    freshAtRef.current = null;
+    pendingChange.current = null;
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setSelectedGroup(null);
+    setSnapshot(null);
+    setFreshAt(null);
+    setFreshness(null);
+    setShowChooser(true);
+    setTaskMessage(null);
+    setRemovingTaskIds(new Set());
+  }, []);
 
   const loadGroups = useCallback(
     async (message: string | null = null) => {
-      const generation = ++requestGeneration.current;
+      if (!sessionReady) return;
+      const generation = ++groupGeneration.current;
       setGroupsLoading(true);
       setGroupMessage(message);
       try {
         const nextGroups = await controller.listGroups();
-        if (generation !== requestGeneration.current) return;
+        if (generation !== groupGeneration.current) return;
+        const current = selectedGroupRef.current;
+        if (current) {
+          const accessible = nextGroups.find(
+            ({ groupId }) => groupId === current.groupId,
+          );
+          if (!accessible) {
+            try {
+              await controller.purgeCachedTaskList();
+            } catch {
+              onSessionRevoked();
+              return;
+            }
+            if (generation !== groupGeneration.current) return;
+            clearSelection();
+            setGroups(nextGroups);
+            setGroupMessage(
+              `${current.name} is no longer accessible. Choose another Group.`,
+            );
+            return;
+          }
+          selectedGroupRef.current = accessible;
+          setSelectedGroup(accessible);
+        }
         setGroups(nextGroups);
         setGroupMessage(message);
       } catch (error) {
-        if (generation !== requestGeneration.current) return;
+        if (generation !== groupGeneration.current) return;
         if (isRevoked(error)) {
           onSessionRevoked();
           return;
         }
-        setGroups([]);
-        setGroupMessage(errorMessage(error));
+        if (selectedGroupRef.current && snapshotRef.current) {
+          setFreshness("offline");
+          setTaskMessage(staleMessage(freshAtRef.current, error));
+        } else {
+          setGroups([]);
+          setGroupMessage(errorMessage(error));
+        }
       } finally {
-        if (generation === requestGeneration.current) setGroupsLoading(false);
+        if (generation === groupGeneration.current) setGroupsLoading(false);
       }
     },
-    [controller, onSessionRevoked],
+    [clearSelection, controller, onSessionRevoked, sessionReady],
   );
 
   useEffect(() => {
     let active = true;
+    void Promise.resolve()
+      .then(() => controller.loadCachedTaskList())
+      .then((cached) => {
+        if (!active) return;
+        if (cached) {
+          selectedGroupRef.current = cached.group;
+          snapshotRef.current = cached.snapshot;
+          statusRef.current = cached.status;
+          validatorRef.current = cached.validator;
+          freshAtRef.current = cached.freshAt;
+          setGroups([cached.group]);
+          setGroupsLoading(false);
+          setSelectedGroup(cached.group);
+          setShowChooser(false);
+          setSnapshot(cached.snapshot);
+          setStatus(cached.status);
+          setFreshAt(cached.freshAt);
+          setFreshness("saved");
+          setTaskMessage(savedMessage(cached.freshAt));
+        }
+        setCacheLoaded(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setGroupsLoading(false);
+        setCacheLoaded(true);
+      });
+    return () => {
+      active = false;
+      groupGeneration.current += 1;
+      refreshGeneration.current += 1;
+      refreshInFlight.current = null;
+      if (changedTimer.current) clearTimeout(changedTimer.current);
+      if (removalTimer.current) clearTimeout(removalTimer.current);
+    };
+  }, [controller, ownerUserId]);
+
+  useEffect(() => {
+    let active = true;
     void Promise.resolve().then(() => {
-      if (active) void loadGroups();
+      if (active && cacheLoaded && sessionReady) void loadGroups();
     });
     return () => {
       active = false;
-      requestGeneration.current += 1;
     };
-  }, [loadGroups]);
+  }, [cacheLoaded, loadGroups, sessionReady]);
+
+  const applyChanged = useCallback(
+    async (
+      group: NativeGroup,
+      result: Extract<NativeTaskListSyncResult, { kind: "changed" }>,
+    ) => {
+      const previous = snapshotRef.current;
+      const reconciled = previous
+        ? reconcileTaskListSnapshot(previous, result.snapshot)
+        : {
+            changedTaskIds: result.snapshot.tasks.map(({ taskId }) => taskId),
+            removedTaskIds: [] as string[],
+            snapshot: result.snapshot,
+          };
+      snapshotRef.current = reconciled.snapshot;
+      validatorRef.current = result.validator;
+      freshAtRef.current = result.freshAt;
+      if (removalTimer.current) clearTimeout(removalTimer.current);
+      removalTimer.current = null;
+      if (!reducedMotion && previous && reconciled.removedTaskIds.length > 0) {
+        setRemovingTaskIds(new Set(reconciled.removedTaskIds));
+        setSnapshot(
+          retainRemovedTasksForExit(
+            previous,
+            reconciled.snapshot,
+            reconciled.removedTaskIds,
+          ),
+        );
+        removalTimer.current = setTimeout(() => {
+          setSnapshot(reconciled.snapshot);
+          setRemovingTaskIds(new Set());
+          removalTimer.current = null;
+        }, 180);
+      } else {
+        setRemovingTaskIds(new Set());
+        setSnapshot(reconciled.snapshot);
+      }
+      setFreshAt(result.freshAt);
+      setFreshness("fresh");
+      setTaskMessage(null);
+      const affected = new Set([
+        ...reconciled.changedTaskIds,
+        ...reconciled.removedTaskIds,
+      ]);
+      setChangedTaskIds(affected);
+      if (changedTimer.current) clearTimeout(changedTimer.current);
+      changedTimer.current = setTimeout(() => {
+        setChangedTaskIds(new Set());
+      }, 240);
+      const cached: NativeCachedTaskList = {
+        freshAt: result.freshAt,
+        group,
+        snapshot: reconciled.snapshot,
+        status: statusRef.current,
+        validator: result.validator,
+      };
+      await controller.saveCachedTaskList(cached).catch(() => undefined);
+    },
+    [controller, reducedMotion],
+  );
+
+  const applyPendingChange = useCallback(() => {
+    gestureActive.current = false;
+    const pending = pendingChange.current;
+    pendingChange.current = null;
+    if (pending) void applyChanged(pending.group, pending.result);
+  }, [applyChanged]);
+
+  const finishDrag = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (!momentumActive.current) applyPendingChange();
+    });
+  }, [applyPendingChange]);
+
+  const runRefresh = useCallback((): Promise<RefreshOutcome> => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const group = selectedGroupRef.current;
+    if (!sessionReady || !group) return Promise.resolve("error");
+    const generation = refreshGeneration.current;
+    const operation = (async (): Promise<RefreshOutcome> => {
+      try {
+        const result = await controller.syncTaskList(
+          group.groupId,
+          validatorRef.current,
+        );
+        if (
+          generation !== refreshGeneration.current ||
+          selectedGroupRef.current?.groupId !== group.groupId
+        ) {
+          return "ignored";
+        }
+        if (result.kind === "not-modified") {
+          validatorRef.current = result.validator;
+          freshAtRef.current = result.freshAt;
+          setFreshAt(result.freshAt);
+          setFreshness("fresh");
+          setTaskMessage(null);
+          const current = snapshotRef.current;
+          if (current) {
+            await controller.saveCachedTaskList({
+              freshAt: result.freshAt,
+              group,
+              snapshot: current,
+              status: statusRef.current,
+              validator: result.validator,
+            }).catch(() => undefined);
+          }
+          return "not-modified";
+        }
+        if (gestureActive.current) {
+          pendingChange.current = { group, result };
+        } else {
+          await applyChanged(group, result);
+        }
+        return "changed";
+      } catch (error) {
+        if (generation !== refreshGeneration.current) return "ignored";
+        if (isRevoked(error)) {
+          onSessionRevoked();
+          return "error";
+        }
+        if (error instanceof OpenJobApiError && error.status === 404) {
+          try {
+            await controller.purgeCachedTaskList();
+          } catch {
+            onSessionRevoked();
+            return "error";
+          }
+          clearSelection();
+          await loadGroups(
+            `${group.name} is no longer accessible. Choose another Group.`,
+          );
+          return "error";
+        }
+        setFreshness(snapshotRef.current ? "offline" : null);
+        setTaskMessage(
+          snapshotRef.current
+            ? staleMessage(freshAtRef.current, error)
+            : errorMessage(error),
+        );
+        return "error";
+      }
+    })();
+    refreshInFlight.current = operation;
+    void operation.finally(() => {
+      if (refreshInFlight.current === operation) refreshInFlight.current = null;
+    });
+    return operation;
+  }, [applyChanged, clearSelection, controller, loadGroups, onSessionRevoked, sessionReady]);
+
+  useEffect(() => {
+    if (
+      !cacheLoaded ||
+      !sessionReady ||
+      !selectedGroup ||
+      showChooser ||
+      !isFocused ||
+      appState === "background" ||
+      appState === "inactive"
+    ) {
+      return;
+    }
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      const outcome = await runRefresh();
+      if (!active) return;
+      const unchanged = outcome === "not-modified" || outcome === "error";
+      const delay = nextPollDelayMs(unchanged ? unchangedCount.current : 0);
+      unchangedCount.current = unchanged ? unchangedCount.current + 1 : 0;
+      timer = setTimeout(() => void poll(), delay);
+    };
+    void poll();
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [appState, cacheLoaded, isFocused, runRefresh, selectedGroup, sessionReady, showChooser]);
 
   const selectGroup = useCallback(
-    async (group: NativeGroup) => {
-      const generation = ++requestGeneration.current;
+    (group: NativeGroup) => {
+      if (selectedGroupRef.current?.groupId === group.groupId) {
+        setShowChooser(false);
+        return;
+      }
+      refreshGeneration.current += 1;
+      refreshInFlight.current = null;
+      unchangedCount.current = 0;
+      selectedGroupRef.current = group;
+      snapshotRef.current = null;
+      validatorRef.current = null;
+      freshAtRef.current = null;
+      statusRef.current = "open";
+      pendingChange.current = null;
+      if (removalTimer.current) clearTimeout(removalTimer.current);
+      removalTimer.current = null;
       setSelectedGroup(group);
       setShowChooser(false);
       setSnapshot(null);
       setTaskMessage(null);
       setStatus("open");
-      try {
-        const nextSnapshot = await controller.readTaskList(group.groupId);
-        if (generation !== requestGeneration.current) return;
-        setSnapshot(nextSnapshot);
-      } catch (error) {
-        if (generation !== requestGeneration.current) return;
-        if (isRevoked(error)) {
-          onSessionRevoked();
-          return;
-        }
-        if (error instanceof OpenJobApiError && error.status === 404) {
-          setSelectedGroup(null);
-          setShowChooser(true);
-          setSnapshot(null);
-          await loadGroups(
-            `${group.name} is no longer accessible. Choose another Group.`,
-          );
-          return;
-        }
-        setTaskMessage(errorMessage(error));
+      setFreshAt(null);
+      setFreshness(null);
+      setRemovingTaskIds(new Set());
+    },
+    [],
+  );
+
+  const selectStatus = useCallback(
+    (next: TaskStatus) => {
+      statusRef.current = next;
+      setStatus(next);
+      const group = selectedGroupRef.current;
+      const current = snapshotRef.current;
+      const currentValidator = validatorRef.current;
+      const currentFreshAt = freshAtRef.current;
+      if (group && current && currentValidator && currentFreshAt) {
+        void controller.saveCachedTaskList({
+          freshAt: currentFreshAt,
+          group,
+          snapshot: current,
+          status: next,
+          validator: currentValidator,
+        }).catch(() => undefined);
       }
     },
-    [controller, loadGroups, onSessionRevoked],
+    [controller],
   );
+
+  const retryTaskList = useCallback(() => {
+    unchangedCount.current = 0;
+    if (!sessionReady) {
+      onRestoreSession();
+      return;
+    }
+    setRefreshing(true);
+    void runRefresh().finally(() => setRefreshing(false));
+  }, [onRestoreSession, runRefresh, sessionReady]);
 
   const sections = useMemo(
     () => (snapshot ? sectionsFor(snapshot, status) : []),
     [snapshot, status],
   );
+  const visibleTaskMessage =
+    !sessionReady && snapshot && restoreReason
+      ? staleMessage(
+          freshAt,
+          restoreReason === "offline"
+            ? new ProviderSignInError("offline")
+            : new ProviderSignInError("unavailable"),
+        )
+      : taskMessage;
 
   if (!selectedGroup || showChooser) {
     return (
@@ -779,7 +1198,7 @@ export function ReadOnlyTaskList({
     );
   }
 
-  const taskList = snapshot || taskMessage ? (
+  const taskList = snapshot || visibleTaskMessage ? (
     <SectionList
       contentContainerStyle={[
         styles.taskListContent,
@@ -788,7 +1207,7 @@ export function ReadOnlyTaskList({
       keyboardShouldPersistTaps="handled"
       keyExtractor={(task) => task.taskId}
       ListEmptyComponent={
-        taskMessage ? null : (
+        visibleTaskMessage ? null : (
           <View style={styles.emptyTaskState}>
             <Text style={[styles.stateTitle, { color: palette.ink }]}>
               {`No ${status === "all" ? "" : `${status} `}Tasks`}
@@ -803,18 +1222,43 @@ export function ReadOnlyTaskList({
       }
       ListHeaderComponent={
         <TaskListHeader
+          freshnessMessage={
+            freshness === "fresh" && freshAt
+              ? `Fresh · Last checked ${readableTimestamp(freshAt)}.`
+              : null
+          }
           group={selectedGroup}
-          onRetry={() => void selectGroup(selectedGroup)}
+          onRetry={retryTaskList}
           onShowChooser={() => setShowChooser(true)}
-          retryMessage={taskMessage}
-          setStatus={setStatus}
+          retryMessage={visibleTaskMessage}
+          setStatus={selectStatus}
           snapshot={snapshot ?? emptySnapshot}
           status={status}
           wide={wide}
         />
       }
       maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-      renderItem={({ item }) => <TaskRow task={item} />}
+      onMomentumScrollBegin={() => {
+        momentumActive.current = true;
+      }}
+      onMomentumScrollEnd={() => {
+        momentumActive.current = false;
+        applyPendingChange();
+      }}
+      onRefresh={retryTaskList}
+      onScrollBeginDrag={() => {
+        gestureActive.current = true;
+      }}
+      onScrollEndDrag={finishDrag}
+      refreshing={refreshing}
+      renderItem={({ item }) => (
+        <TaskRow
+          animate={changedTaskIds.has(item.taskId)}
+          reducedMotion={reducedMotion}
+          removing={removingTaskIds.has(item.taskId)}
+          task={item}
+        />
+      )}
       renderSectionHeader={({ section }) => (
         <Text
           accessibilityLabel={section.screenReaderLabel}
@@ -964,6 +1408,11 @@ const styles = StyleSheet.create({
     minWidth: 86,
     paddingHorizontal: 15,
     paddingVertical: 12,
+  },
+  freshness: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 13,
+    lineHeight: 19,
   },
   groupButton: {
     alignItems: "center",

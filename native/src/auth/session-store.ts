@@ -18,7 +18,10 @@ function isStoredSession(
   if (!value || typeof value !== "object") return false;
   const session = value as Partial<StoredSession>;
   return (
-    session.version === 1 &&
+    (session.version === 1 ||
+      (session.version === 2 &&
+        typeof session.ownerUserId === "string" &&
+        session.ownerUserId.length > 0)) &&
     (session.provider === "apple" ||
       session.provider === "google" ||
       (allowQaPassword && session.provider === "qa-password")) &&

@@ -23,6 +23,31 @@ A non-secret cleanup-pending tombstone is mirrored in AsyncStorage and
 SecureStore so an interrupted purge is retried after relaunch; it contains no
 credential, User, Group, or Task data.
 
+## Encrypted read-only Task List cache
+
+The last opened Group, Task List, membership snapshot, selected filter,
+service ETag, freshness time, and canonical owner User ID are the only domain
+state stored locally. One environment-isolated SQLCipher database lives under
+the platform cache directory. Its random 32-byte key is generated per install
+and kept in device-only SecureStore; neither the database nor key is eligible
+for device backup. Task data is never written to AsyncStorage, logs, or a
+second file path.
+
+The owner binding is checked before cached content can paint. Missing keys,
+wrong owners, malformed rows, and unavailable SQLCipher fail closed by purging
+the database and key. Sign out, Switch User, credential revocation, and loss of
+Group access use that same serialized purge boundary.
+
+An owner-bound snapshot may paint before network restoration finishes. The
+visible Task List then checks its opaque service ETag immediately, on
+foreground, on pull-to-refresh, and on a visible 5/10/20/40/60-second backoff.
+Polling stops while the screen is hidden or the app is inactive/backgrounded.
+Offline state remains strictly read-only and shows
+`Offline · Read-only · Last updated …` with Retry; no mutation controls are
+rendered. Remote reconciliation uses stable Task IDs, retains unchanged row
+objects and scroll position, animates only inserted/changed/removed rows, and
+defers paint while drag or momentum scrolling is active.
+
 ## Install and run
 
 From the repository root, `npm install` installs both the web/CLI and pinned
@@ -82,6 +107,25 @@ commands do the same with the production identity.
 For physical development-client proof, open each EAS build link on its intended
 registered device, install, launch, and record the build ID, commit, device/OS,
 and result. The iOS and Android build must come from the same synced commit.
+
+For release-candidate offline/freshness proof, install that exact commit from
+TestFlight on iOS and Play Internal on Android, then use the shared resettable
+QA fixture on both:
+
+1. Online, open a Group Task List, choose a non-default filter, and record the
+   visible Tasks and freshness time.
+2. Make networking unavailable, terminate and relaunch. Confirm the saved
+   Group, filter, and Task List paint immediately with
+   `Offline · Read-only · Last updated …`, Retry, and no mutation control.
+3. Restore networking and Retry. Confirm an unchanged list advances only the
+   freshness time. Make one remote Task edit with the fixture's second User,
+   then foreground and pull once; only that row should animate and scroll
+   position should stay anchored.
+4. While the Task List is visible, observe the capped freshness backoff. Hide
+   the screen and background the app; confirm polling stops, then foreground
+   and confirm one immediate check.
+5. Sign out and sign in as the second fixture User. Confirm no first-User Group
+   or Task paints before or after networking is disabled again.
 
 ## Appearance and lifecycle smoke
 

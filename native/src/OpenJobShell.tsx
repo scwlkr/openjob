@@ -44,7 +44,12 @@ type RootStackParamList = {
 };
 
 type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
+  onRestoreSession: () => void;
+  ownerUserId: string;
+  reducedMotion: boolean;
+  restoreReason?: "offline" | "unavailable";
   signedInUser: SignedInUser;
+  sessionReady: boolean;
   taskListController: NativeTaskListController;
   runtimeConfig: OpenJobRuntimeConfig;
 };
@@ -122,7 +127,12 @@ function IconButton({
 
 function ShellScreen({
   navigation,
+  onRestoreSession,
+  ownerUserId,
+  reducedMotion,
+  restoreReason,
   runtimeConfig,
+  sessionReady,
   signedInUser,
   taskListController,
 }: ShellProps) {
@@ -180,7 +190,13 @@ function ShellScreen({
       </View>
       <ReadOnlyTaskList
         controller={taskListController}
+        key={ownerUserId}
+        onRestoreSession={onRestoreSession}
         onSessionRevoked={signedInUser.onSessionRevoked}
+        ownerUserId={ownerUserId}
+        reducedMotion={reducedMotion}
+        restoreReason={restoreReason}
+        sessionReady={sessionReady}
       />
     </SafeAreaView>
   );
@@ -352,15 +368,23 @@ function AppearanceScreen({
 
 export function OpenJobShell({
   initialState,
+  onRestoreSession,
+  ownerUserId,
   reducedMotion,
+  restoreReason,
   runtimeConfig,
   signedInUser,
+  sessionReady,
   taskListController,
 }: {
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
+  onRestoreSession: () => void;
+  ownerUserId: string;
   reducedMotion: boolean;
+  restoreReason?: "offline" | "unavailable";
   runtimeConfig: OpenJobRuntimeConfig;
   signedInUser: SignedInUser;
+  sessionReady: boolean;
   taskListController: NativeTaskListController;
 }) {
   const { navigationTheme, palette } = useOpenJobTheme();
@@ -386,7 +410,12 @@ export function OpenJobShell({
           {(props) => (
             <ShellScreen
               {...props}
+              onRestoreSession={onRestoreSession}
+              ownerUserId={ownerUserId}
+              reducedMotion={reducedMotion}
+              restoreReason={restoreReason}
               runtimeConfig={runtimeConfig}
+              sessionReady={sessionReady}
               signedInUser={signedInUser}
               taskListController={taskListController}
             />

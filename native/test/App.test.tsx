@@ -21,6 +21,7 @@ import {
 } from "../src/auth/coordinator";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
 import type {
+  NativeCachedTaskList,
   NativeGroup,
   NativeTaskListSnapshot,
 } from "../src/task-list-contracts";
@@ -71,6 +72,17 @@ const signedIn = {
 function authController(
   overrides: Partial<NativeAuthController> = {},
 ): NativeAuthController {
+  const readTaskList =
+    overrides.readTaskList ??
+    jest.fn(async () => ({ members: [], tasks: [] }));
+  const syncTaskList =
+    overrides.syncTaskList ??
+    jest.fn(async (groupId: string) => ({
+      freshAt: "2026-07-25T12:00:00.000Z",
+      kind: "changed" as const,
+      snapshot: await readTaskList(groupId),
+      validator: '"task-list"',
+    }));
   return {
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
@@ -79,16 +91,21 @@ function authController(
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
     listGroups: jest.fn(async () => []),
-    readTaskList: jest.fn(async () => ({ members: [], tasks: [] })),
+    loadCachedTaskList: jest.fn(async () => null),
+    purgeCachedTaskList: jest.fn(async () => undefined),
+    readTaskList,
     revokeSession: jest.fn(async () => ({
       kind: "signed-out" as const,
       reason: "revoked" as const,
     })),
     restore: jest.fn(async () => signedIn),
+    restoreCachedSession: jest.fn(async () => null),
+    saveCachedTaskList: jest.fn(async () => undefined),
     signIn: jest.fn(async () => signedIn),
     signInWithQaPassword: jest.fn(async () => signedIn),
     signOut: jest.fn(async () => ({ kind: "signed-out" as const })),
     subscribeToCredentialRevocation: jest.fn(() => () => undefined),
+    syncTaskList,
     switchUser: jest.fn(async () => ({ kind: "signed-out" as const })),
     ...overrides,
   };
@@ -151,6 +168,18 @@ function oneTaskSnapshot(
         completedAt: null,
       },
     ],
+  };
+}
+
+function cachedTaskList(
+  snapshot = oneTaskSnapshot("grp_one", "Cached Task"),
+): NativeCachedTaskList {
+  return {
+    freshAt: "2026-07-25T12:00:00.000Z",
+    group: adaptiveGroups[0]!,
+    snapshot,
+    status: "open",
+    validator: '"cached-validator"',
   };
 }
 
@@ -528,12 +557,11 @@ test("clears the prior Group immediately while a switched Group loads", async ()
   });
   const controller = authController({
     listGroups: jest.fn(async () => adaptiveGroups),
-    readTaskList: jest
-      .fn()
-      .mockResolvedValueOnce(
-        oneTaskSnapshot("grp_one", "First Group Task"),
-      )
-      .mockReturnValueOnce(second),
+    readTaskList: jest.fn(async (groupId) =>
+      groupId === "grp_one"
+        ? oneTaskSnapshot("grp_one", "First Group Task")
+        : second,
+    ),
   });
   let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
 
@@ -754,4 +782,309 @@ test("returns a revoked Task List session to the stable sign-in screen", async (
   ).toBeOnTheScreen();
   expect(controller.revokeSession).toHaveBeenCalledTimes(1);
   expect(controller.signOut).not.toHaveBeenCalled();
+});
+
+test("paints the owner-bound cached Task List while network restore is still pending", async () => {
+  let finishRestore: ((result: typeof signedIn) => void) | undefined;
+  const restoring = new Promise<typeof signedIn>((resolve) => {
+    finishRestore = resolve;
+  });
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cachedTaskList()),
+    restore: jest.fn(async () => restoring),
+    restoreCachedSession: jest.fn(async () => ({
+      kind: "signed-in" as const,
+      methods: [],
+      provisional: true,
+      user: {
+        userId: "usr_one",
+        username: null,
+        usernameRequired: false,
+      },
+    })),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(screen.getByText(/Saved copy · Read-only/iu)).toBeOnTheScreen();
+  expect(controller.listGroups).not.toHaveBeenCalled();
+  expect(controller.syncTaskList).not.toHaveBeenCalled();
+
+  await act(() => finishRestore?.(signedIn));
+});
+
+test("labels a protected cold-start snapshot offline when session restore cannot reach OpenJob", async () => {
+  const controller = authController({
+    loadCachedTaskList: jest.fn(async () => cachedTaskList()),
+    restore: jest.fn(async () => ({
+      kind: "restore-retry" as const,
+      reason: "offline" as const,
+    })),
+    restoreCachedSession: jest.fn(async () => ({
+      kind: "signed-in" as const,
+      methods: [],
+      provisional: true,
+      user: {
+        userId: "usr_one",
+        username: null,
+        usernameRequired: false,
+      },
+    })),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(
+    await screen.findByText(/Offline · Read-only · Last updated/iu),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Retry Task List" }),
+  ).toBeOnTheScreen();
+  expect(controller.listGroups).not.toHaveBeenCalled();
+  expect(controller.syncTaskList).not.toHaveBeenCalled();
+});
+
+test("retains a cached Task List offline with freshness and retry affordances", async () => {
+  const syncTaskList = jest.fn(async () => {
+    throw new ProviderSignInError("offline");
+  });
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cachedTaskList()),
+    syncTaskList,
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(await screen.findByText(/Offline · Read-only · Last updated/iu)).toBeOnTheScreen();
+  expect(screen.getByRole("button", { name: "Retry Task List" })).toBeOnTheScreen();
+  expect(syncTaskList).toHaveBeenCalledWith(
+    "grp_one",
+    '"cached-validator"',
+  );
+  expect(screen.queryByText(/Updates available/iu)).not.toBeOnTheScreen();
+});
+
+test("advances cached freshness on 304 without replacing the rendered Task", async () => {
+  const cached = cachedTaskList();
+  const syncTaskList = jest.fn(async () => ({
+    freshAt: "2026-07-25T12:05:00.000Z",
+    kind: "not-modified" as const,
+    validator: cached.validator,
+  }));
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cached),
+    syncTaskList,
+  });
+
+  await renderNativeApp(previewConfig, controller);
+
+  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
+  expect(controller.saveCachedTaskList).toHaveBeenCalledWith({
+    ...cached,
+    freshAt: "2026-07-25T12:05:00.000Z",
+  });
+  expect(screen.getByTestId("openjob-row-task_grp_one")).not.toHaveProp(
+    "nativeID",
+  );
+});
+
+test("stops Task List polling in background and checks immediately on foreground", async () => {
+  let appStateListener: ((state: AppStateStatus) => void) | undefined;
+  jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => {
+    appStateListener = listener;
+    return { remove: jest.fn() };
+  });
+  const syncTaskList = jest.fn(async () => ({
+    freshAt: "2026-07-25T12:05:00.000Z",
+    kind: "not-modified" as const,
+    validator: '"cached-validator"',
+  }));
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cachedTaskList()),
+    syncTaskList,
+  });
+  const rendered = await renderNativeApp(previewConfig, controller);
+  expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
+
+  await act(() => appStateListener?.("background"));
+  const callsWhileVisible = syncTaskList.mock.calls.length;
+  jest.useFakeTimers();
+  try {
+    await act(async () => {
+      jest.advanceTimersByTime(120_000);
+      await Promise.resolve();
+    });
+    expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible);
+
+    await act(async () => {
+      appStateListener?.("active");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible + 1);
+  } finally {
+    rendered.unmount();
+    jest.useRealTimers();
+  }
+});
+
+test("defers a remote row change during drag and animates only that Task", async () => {
+  const initial = oneTaskSnapshot("grp_one", "Before remote edit");
+  initial.tasks.push({
+    ...initial.tasks[0]!,
+    taskId: "task_unchanged",
+    text: "Unchanged Task",
+  });
+  const next: NativeTaskListSnapshot = {
+    members: initial.members.map((member) => ({ ...member })),
+    tasks: [
+      { ...initial.tasks[0]!, text: "After remote edit" },
+      { ...initial.tasks[1]! },
+    ],
+  };
+  let returnChange = false;
+  let finishChange:
+    | ((result: {
+        freshAt: string;
+        kind: "changed";
+        snapshot: NativeTaskListSnapshot;
+        validator: string;
+      }) => void)
+    | undefined;
+  const changed = new Promise<{
+    freshAt: string;
+    kind: "changed";
+    snapshot: NativeTaskListSnapshot;
+    validator: string;
+  }>((resolve) => {
+    finishChange = resolve;
+  });
+  const syncTaskList = jest.fn(async () =>
+    returnChange
+      ? changed
+      : {
+          freshAt: "2026-07-25T12:01:00.000Z",
+          kind: "not-modified" as const,
+          validator: '"cached-validator"',
+        },
+  );
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cachedTaskList(initial)),
+    syncTaskList,
+  });
+  await renderNativeApp(previewConfig, controller);
+  expect(await screen.findByText("Before remote edit")).toBeOnTheScreen();
+  expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
+
+  const list = screen.getByTestId("openjob-task-list");
+  await fireEvent(list, "scrollBeginDrag");
+  returnChange = true;
+  await fireEvent(list, "refresh");
+  await act(() =>
+    finishChange?.({
+      freshAt: "2026-07-25T12:02:00.000Z",
+      kind: "changed",
+      snapshot: next,
+      validator: '"changed-validator"',
+    }),
+  );
+
+  expect(screen.getByText("Before remote edit")).toBeOnTheScreen();
+  expect(screen.queryByText("After remote edit")).not.toBeOnTheScreen();
+
+  await fireEvent(list, "scrollEndDrag", { nativeEvent: {} });
+  expect(await screen.findByText("After remote edit")).toBeOnTheScreen();
+  expect(
+    screen.getByTestId("openjob-row-task_grp_one-affected"),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByTestId("openjob-row-task_unchanged"),
+  ).toBeOnTheScreen();
+});
+
+test("animates only a removed row before applying the final stable Task order", async () => {
+  jest
+    .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+    .mockResolvedValue(false);
+  const initial = oneTaskSnapshot("grp_one", "Removed remotely");
+  initial.tasks.push({
+    ...initial.tasks[0]!,
+    taskId: "task_kept",
+    text: "Kept Task",
+  });
+  const next: NativeTaskListSnapshot = {
+    members: initial.members,
+    tasks: [initial.tasks[1]!],
+  };
+  let removeTask = false;
+  let finishRemoval:
+    | ((result: {
+        freshAt: string;
+        kind: "changed";
+        snapshot: NativeTaskListSnapshot;
+        validator: string;
+      }) => void)
+    | undefined;
+  const removal = new Promise<{
+    freshAt: string;
+    kind: "changed";
+    snapshot: NativeTaskListSnapshot;
+    validator: string;
+  }>((resolve) => {
+    finishRemoval = resolve;
+  });
+  const syncTaskList = jest.fn(async () =>
+    removeTask
+      ? removal
+      : {
+          freshAt: "2026-07-25T12:01:00.000Z",
+          kind: "not-modified" as const,
+          validator: '"cached-validator"',
+        },
+  );
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    loadCachedTaskList: jest.fn(async () => cachedTaskList(initial)),
+    syncTaskList,
+  });
+  const rendered = await renderNativeApp(previewConfig, controller);
+  expect(await screen.findByText("Removed remotely")).toBeOnTheScreen();
+  expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
+
+  jest.useFakeTimers();
+  try {
+    removeTask = true;
+    await fireEvent(screen.getByTestId("openjob-task-list"), "refresh");
+    await act(() =>
+      finishRemoval?.({
+        freshAt: "2026-07-25T12:03:00.000Z",
+        kind: "changed",
+        snapshot: next,
+        validator: '"removed-validator"',
+      }),
+    );
+
+    expect(
+      screen.getByTestId("openjob-row-task_grp_one-affected"),
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("openjob-row-task_kept")).toBeOnTheScreen();
+    await act(async () => {
+      jest.advanceTimersByTime(181);
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("Removed remotely")).not.toBeOnTheScreen();
+    expect(screen.getByText("Kept Task")).toBeOnTheScreen();
+  } finally {
+    rendered.unmount();
+    jest.useRealTimers();
+  }
 });
