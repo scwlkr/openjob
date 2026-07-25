@@ -7,8 +7,7 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import * as Updates from "expo-updates";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Platform,
   Pressable,
@@ -29,19 +28,15 @@ import {
   resolveAppearanceKey,
 } from "./appearance-keyboard";
 import { ReadOnlyTaskList } from "./ReadOnlyTaskList";
-import { useAppLifecycle, useReducedMotion } from "./device-state";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
 import type { NativeTaskListController } from "./task-list-contracts";
-import type {
-  OpenJobUser,
-  SignInMethod,
-} from "./auth/coordinator";
 import {
   type AppearancePreference,
   saveNavigationState,
 } from "./storage";
 import { useOpenJobTheme } from "./theme";
-import { OpenJobBrandmark, OpenJobWordmark } from "./brand-marks";
+import { OpenJobWordmark } from "./brand-marks";
+import { useControlInteraction } from "./use-control-interaction";
 
 type RootStackParamList = {
   Shell: undefined;
@@ -62,42 +57,11 @@ const appearancePreferences: AppearancePreference[] = [
 ];
 
 type SignedInUser = {
-  methods: SignInMethod[];
   onManageSignInMethods?: () => void;
+  onSessionRevoked: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
-  user: OpenJobUser;
 };
-
-export function hasEmbeddedBundleOnlyPolicy({
-  isDevelopment,
-  updatesEnabled,
-  usingEmbeddedAssets,
-}: {
-  isDevelopment: boolean;
-  updatesEnabled: boolean;
-  usingEmbeddedAssets: boolean;
-}) {
-  return (
-    !updatesEnabled && (!isDevelopment || usingEmbeddedAssets)
-  );
-}
-
-function useControlInteraction() {
-  const [focused, setFocused] = useState(false);
-  const [hovered, setHovered] = useState(false);
-
-  return {
-    focused,
-    hovered,
-    interactionProps: {
-      onBlur: () => setFocused(false),
-      onFocus: () => setFocused(true),
-      onHoverIn: () => setHovered(true),
-      onHoverOut: () => setHovered(false),
-    },
-  };
-}
 
 function Wordmark() {
   const { isDark } = useOpenJobTheme();
@@ -156,40 +120,6 @@ function IconButton({
   );
 }
 
-function StatusCard({
-  detail,
-  icon,
-  title,
-}: {
-  detail: string;
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-}) {
-  const { palette } = useOpenJobTheme();
-  return (
-    <View
-      accessible
-      accessibilityLabel={`${title}. ${detail}`}
-      style={[
-        styles.statusCard,
-        { backgroundColor: palette.card, borderColor: palette.line },
-      ]}
-    >
-      <View
-        style={[styles.statusIcon, { backgroundColor: palette.background }]}
-      >
-        <Feather color={palette.blue} name={icon} size={20} />
-      </View>
-      <View style={styles.statusCopy}>
-        <Text style={[styles.statusTitle, { color: palette.ink }]}>{title}</Text>
-        <Text style={[styles.statusDetail, { color: palette.muted }]}>
-          {detail}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function ShellScreen({
   navigation,
   runtimeConfig,
@@ -197,16 +127,8 @@ function ShellScreen({
   taskListController,
 }: ShellProps) {
   const { width } = useWindowDimensions();
-  const { isDark, palette } = useOpenJobTheme();
-  const lifecycle = useAppLifecycle();
-  const reducedMotion = useReducedMotion();
-  const wide = width >= 720;
+  const { palette } = useOpenJobTheme();
   const compactHeader = width < 520;
-  const embeddedBundle = hasEmbeddedBundleOnlyPolicy({
-    isDevelopment: __DEV__,
-    updatesEnabled: Updates.isEnabled,
-    usingEmbeddedAssets: Updates.isUsingEmbeddedAssets,
-  });
 
   return (
     <SafeAreaView
@@ -257,94 +179,8 @@ function ShellScreen({
         </View>
       </View>
       <ReadOnlyTaskList
-        chooserFooter={
-          <View style={styles.chooserFoundation}>
-            <View style={[styles.hero, wide && styles.heroWide]}>
-              <View style={styles.heroCopy}>
-                <Text style={[styles.kicker, { color: palette.blue }]}>
-                  SIGNED IN
-                </Text>
-                <Text
-                  accessibilityRole="header"
-                  style={[styles.title, { color: palette.ink }]}
-                >
-                  One clear list for your team.
-                </Text>
-                <Text style={[styles.lede, { color: palette.muted }]}>
-                  {`Signed in as ${
-                    signedInUser.user.username
-                      ? `@${signedInUser.user.username}`
-                      : signedInUser.user.userId
-                  }. Your User ID, Username, Groups, and Tasks stay anchored to one OpenJob User across ${signedInUser.methods
-                    .map((method) =>
-                      method === "apple" ? "Apple" : "Google",
-                    )
-                    .join(" and ")}.`}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.foundationCard,
-                  {
-                    backgroundColor: palette.paper,
-                    borderColor: palette.ink,
-                    shadowColor: palette.blue,
-                  },
-                ]}
-              >
-                <View style={styles.brandmark}>
-                  <OpenJobBrandmark inverse={isDark} />
-                </View>
-                <Text style={[styles.cardKicker, { color: palette.muted }]}>
-                  SHARED TASK LIST
-                </Text>
-                <Text style={[styles.cardTitle, { color: palette.ink }]}>
-                  One User. Every linked Sign-in Method.
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.statusGrid, wide && styles.statusGridWide]}>
-              <StatusCard
-                detail={
-                  embeddedBundle
-                    ? "Launches without update discovery"
-                    : "Release verification required"
-                }
-                icon="package"
-                title="Embedded store bundle"
-              />
-              <StatusCard
-                detail="No remote channel, URL, or signing metadata"
-                icon="slash"
-                title="OTA disabled"
-              />
-              <StatusCard
-                detail="Domain behavior stays on the shared service"
-                icon="link"
-                title={`${runtimeConfig.apiBasePath} only`}
-              />
-              <StatusCard
-                detail={
-                  lifecycle === "active" ? "Ready for work" : "Paused safely"
-                }
-                icon={lifecycle === "active" ? "activity" : "pause"}
-                title="Lifecycle"
-              />
-              <StatusCard
-                detail={reducedMotion ? "Reduced Motion on" : "System motion"}
-                icon="wind"
-                title="Motion"
-              />
-              <StatusCard
-                detail={`OpenJob ${runtimeConfig.releaseVersion}`}
-                icon="smartphone"
-                title="Synchronized release"
-              />
-            </View>
-          </View>
-        }
         controller={taskListController}
-        onSessionRevoked={signedInUser.onSignOut}
+        onSessionRevoked={signedInUser.onSessionRevoked}
       />
     </SafeAreaView>
   );
@@ -583,9 +419,6 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_600SemiBold",
     fontSize: 12,
   },
-  brandmark: {
-    marginBottom: 32,
-  },
   buildBadge: {
     borderWidth: 1,
     justifyContent: "center",
@@ -596,43 +429,6 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_700Bold",
     fontSize: 11,
     textTransform: "uppercase",
-  },
-  cardKicker: {
-    fontFamily: "Geist_700Bold",
-    fontSize: 10,
-    letterSpacing: 1.2,
-  },
-  cardTitle: {
-    fontFamily: "Geist_700Bold",
-    fontSize: 24,
-    letterSpacing: -0.8,
-    lineHeight: 28,
-    marginTop: 8,
-  },
-  chooserFoundation: {
-    gap: 52,
-    marginTop: 52,
-  },
-  foundationCard: {
-    borderWidth: 1,
-    flex: 1,
-    minHeight: 320,
-    padding: 26,
-    shadowOffset: { height: 12, width: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  hero: {
-    gap: 44,
-  },
-  heroCopy: {
-    flex: 1.25,
-    justifyContent: "center",
-  },
-  heroWide: {
-    alignItems: "stretch",
-    flexDirection: "row",
-    minHeight: 450,
   },
   iconButton: {
     alignItems: "center",
@@ -646,27 +442,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.6,
   },
-  lede: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 17,
-    lineHeight: 27,
-    marginTop: 20,
-    maxWidth: 580,
-  },
   safeArea: {
     flex: 1,
-  },
-  scrollContent: {
-    gap: 52,
-    paddingBottom: 44,
-    paddingHorizontal: 20,
-    paddingTop: 44,
-  },
-  scrollContentWide: {
-    alignSelf: "center",
-    maxWidth: 1180,
-    paddingHorizontal: 38,
-    width: "100%",
   },
   settingsContent: {
     alignSelf: "center",
@@ -695,50 +472,6 @@ const styles = StyleSheet.create({
     letterSpacing: -2.3,
     lineHeight: 50,
     marginTop: 10,
-  },
-  statusCard: {
-    alignItems: "center",
-    borderWidth: 1,
-    flex: 1,
-    flexDirection: "row",
-    gap: 14,
-    minHeight: 98,
-    minWidth: 230,
-    padding: 15,
-  },
-  statusCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  statusDetail: {
-    fontFamily: "Geist_400Regular",
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  statusGrid: {
-    gap: 10,
-  },
-  statusGridWide: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  statusIcon: {
-    alignItems: "center",
-    height: 44,
-    justifyContent: "center",
-    width: 44,
-  },
-  statusTitle: {
-    fontFamily: "Geist_700Bold",
-    fontSize: 14,
-  },
-  title: {
-    fontFamily: "Geist_900Black",
-    fontSize: 54,
-    letterSpacing: -3,
-    lineHeight: 57,
-    marginTop: 12,
-    maxWidth: 620,
   },
   topBar: {
     alignItems: "center",

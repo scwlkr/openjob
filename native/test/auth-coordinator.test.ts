@@ -974,6 +974,19 @@ test("cancellation is stable and sign-out or switch-user purges session data", a
   expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(2);
 });
 
+test("revoked Task List access purges session data and preserves the revoked reason", async () => {
+  const dependencies = createDependencies();
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.revokeSession()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "revoked",
+  });
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+});
+
 test("canceling an unknown persisted sign-in clears it while manager cancel preserves the active User", async () => {
   const unknownDependencies = createDependencies({
     getMe: jest.fn(async () => {

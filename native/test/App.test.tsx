@@ -14,7 +14,6 @@ import {
 } from "@testing-library/react-native";
 import { OpenJobNativeApp } from "../App";
 import { resolveAppearanceKey } from "../src/appearance-keyboard";
-import { hasEmbeddedBundleOnlyPolicy } from "../src/OpenJobShell";
 import type { NativeAuthController } from "../src/auth/AuthGate";
 import {
   OpenJobApiError,
@@ -81,6 +80,10 @@ function authController(
     createUser: jest.fn(async () => signedIn),
     listGroups: jest.fn(async () => []),
     readTaskList: jest.fn(async () => ({ members: [], tasks: [] })),
+    revokeSession: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "revoked" as const,
+    })),
     restore: jest.fn(async () => signedIn),
     signIn: jest.fn(async () => signedIn),
     signInWithQaPassword: jest.fn(async () => signedIn),
@@ -156,48 +159,14 @@ beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
-test("requires an embedded-only Release bundle when Expo's asset hint is false", () => {
-  expect(
-    hasEmbeddedBundleOnlyPolicy({
-      isDevelopment: false,
-      updatesEnabled: false,
-      usingEmbeddedAssets: false,
-    }),
-  ).toBe(true);
-});
-
-test("does not report an embedded-only policy for Metro or OTA-enabled launches", () => {
-  expect(
-    hasEmbeddedBundleOnlyPolicy({
-      isDevelopment: true,
-      updatesEnabled: false,
-      usingEmbeddedAssets: false,
-    }),
-  ).toBe(false);
-  for (const usingEmbeddedAssets of [false, true]) {
-    expect(
-      hasEmbeddedBundleOnlyPolicy({
-        isDevelopment: false,
-        updatesEnabled: true,
-        usingEmbeddedAssets,
-      }),
-    ).toBe(false);
-  }
-});
-
 test("bootstraps the branded preview shell from its embedded bundle", async () => {
   await renderNativeApp(previewConfig);
 
   expect(
-    await screen.findByText("One clear list for your team."),
+    await screen.findByRole("header", { name: "Choose a Group" }),
   ).toBeOnTheScreen();
   expect(screen.getByText("Preview build")).toBeOnTheScreen();
-  expect(screen.getByText("Embedded store bundle")).toBeOnTheScreen();
-  expect(
-    screen.getByText("Launches without update discovery"),
-  ).toBeOnTheScreen();
-  expect(screen.getByText("OTA disabled")).toBeOnTheScreen();
-  expect(screen.getByText("/api/v1 only")).toBeOnTheScreen();
+  expect(screen.getByText("No Groups yet")).toBeOnTheScreen();
   expect(screen.getByLabelText("OpenJob")).toBeOnTheScreen();
   expect(screen.getByTestId("openjob-wordmark-canonical")).toBeOnTheScreen();
   expect(
@@ -212,7 +181,7 @@ test("production omits the non-production build badge", async () => {
   await renderNativeApp(productionConfig);
 
   expect(
-    await screen.findByText("One clear list for your team."),
+    await screen.findByRole("header", { name: "Choose a Group" }),
   ).toBeOnTheScreen();
   expect(screen.queryByText(/build$/iu)).not.toBeOnTheScreen();
 });
@@ -372,7 +341,7 @@ test("moves radio selection and focus with arrows and handles Enter, Space, and 
     nativeEvent: { keyCode: 41 },
   });
   expect(
-    await screen.findByText("One clear list for your team."),
+    await screen.findByRole("header", { name: "Choose a Group" }),
   ).toBeOnTheScreen();
 });
 
@@ -388,13 +357,15 @@ test("survives lifecycle changes and respects system Reduced Motion", async () =
 
   await renderNativeApp(previewConfig);
 
-  expect(await screen.findByText("Reduced Motion on")).toBeOnTheScreen();
+  expect(
+    await screen.findByRole("header", { name: "Choose a Group" }),
+  ).toBeOnTheScreen();
   await act(() => appStateListener?.("active"));
-  expect(screen.getByText("Ready for work")).toBeOnTheScreen();
+  expect(screen.getByText("Choose a Group")).toBeOnTheScreen();
   await act(() => appStateListener?.("background"));
-  expect(await screen.findByText("Paused safely")).toBeOnTheScreen();
+  expect(screen.getByText("Choose a Group")).toBeOnTheScreen();
   await act(() => appStateListener?.("active"));
-  expect(await screen.findByText("Ready for work")).toBeOnTheScreen();
+  expect(screen.getByText("Choose a Group")).toBeOnTheScreen();
 });
 
 test("moves from authentication to a real service-ordered read-only Task List", async () => {
@@ -479,8 +450,20 @@ test("moves from authentication to a real service-ordered read-only Task List", 
   expect(
     await screen.findByRole("header", { name: "Choose a Group" }),
   ).toBeOnTheScreen();
+  const firstGroup = screen.getByRole("button", {
+    name: "Open Walker Workshop",
+  });
+  const secondGroup = screen.getByRole("button", {
+    name: "Open Field Notes",
+  });
+  await fireEvent(firstGroup, "keyDownPress", {
+    nativeEvent: { keyCode: 81 },
+  });
+  await waitFor(() => {
+    expect(secondGroup).toHaveStyle({ borderWidth: 3 });
+  });
   await fireEvent.press(
-    screen.getByRole("button", { name: "Open Walker Workshop" }),
+    firstGroup,
   );
 
   expect(
@@ -496,15 +479,31 @@ test("moves from authentication to a real service-ordered read-only Task List", 
       "Open Task. Ship the native Task List. Assigned to @qa-two. High priority. Overdue, due Jul 24.",
     ),
   ).toBeOnTheScreen();
+  expect(screen.queryByText("Normal")).not.toBeOnTheScreen();
 
-  await fireEvent.press(screen.getByRole("tab", { name: "Done 1" }));
+  const openTab = screen.getByRole("tab", { name: "Open 2" });
+  const doneTab = screen.getByRole("tab", { name: "Done 1" });
+  await fireEvent(openTab, "keyDownPress", {
+    nativeEvent: { keyCode: 81 },
+  });
   expect(await screen.findByText("Prove service ordering")).toBeOnTheScreen();
   expect(screen.queryByText("Ship the native Task List")).not.toBeOnTheScreen();
+  await waitFor(() => {
+    expect(doneTab).toHaveStyle({ borderWidth: 3 });
+  });
   expect(
     screen.getByRole("header", { name: "Former Member, @former" }),
   ).toBeOnTheScreen();
 
-  await fireEvent.press(screen.getByRole("tab", { name: "All 3" }));
+  await fireEvent(openTab, "keyUpPress", {
+    nativeEvent: { keyCode: 40 },
+  });
+  expect(await screen.findByText("Ship the native Task List")).toBeOnTheScreen();
+  await fireEvent(
+    screen.getByRole("tab", { name: "All 3" }),
+    "keyUpPress",
+    { nativeEvent: { keyCode: 44 } },
+  );
   expect(await screen.findByText("Ship the native Task List")).toBeOnTheScreen();
   expect(screen.getByText("Prove service ordering")).toBeOnTheScreen();
   expect(screen.getByText("Recover this Task")).toBeOnTheScreen();
@@ -551,6 +550,17 @@ test("clears the prior Group immediately while a switched Group loads", async ()
     await fireEvent(switcher, "focus");
     expect(switcher).toHaveStyle({ borderWidth: 3 });
     await fireEvent.press(switcher);
+    await fireEvent(
+      screen.getByRole("button", { name: "Open Walker Workshop" }),
+      "keyDownPress",
+      { nativeEvent: { keyCode: 41 } },
+    );
+    expect(await screen.findByText("First Group Task")).toBeOnTheScreen();
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: "Switch Group, currently Walker Workshop",
+      }),
+    );
     await fireEvent.press(
       screen.getByRole("button", { name: "Open Field Notes" }),
     );
@@ -593,7 +603,12 @@ test("adapts one Task List between wide sidebar and narrow large-text layouts", 
       await screen.findByRole("button", { name: "Open Walker Workshop" }),
     );
     expect(await screen.findByText("Responsive Task")).toBeOnTheScreen();
+    const taskList = screen.getByTestId("openjob-task-list");
+    expect(screen.getByTestId("openjob-adaptive-layout")).toHaveStyle({
+      flexDirection: "row",
+    });
     expect(screen.getByRole("header", { name: "Groups" })).toBeOnTheScreen();
+    expect(screen.getByTestId("openjob-group-sidebar-scroll")).toBeOnTheScreen();
     expect(
       screen.getByRole("button", { name: "Open Walker Workshop" }),
     ).toHaveProp("accessibilityState", { selected: true });
@@ -610,6 +625,10 @@ test("adapts one Task List between wide sidebar and narrow large-text layouts", 
     });
 
     expect(screen.queryByRole("header", { name: "Groups" })).not.toBeOnTheScreen();
+    expect(screen.getByTestId("openjob-task-list")).toBe(taskList);
+    expect(screen.getByTestId("openjob-adaptive-layout")).not.toHaveStyle({
+      flexDirection: "row",
+    });
     expect(
       screen.getByRole("button", {
         name: "Switch Group, currently Walker Workshop",
@@ -658,7 +677,11 @@ test("recovers from retryable Group and Task List failures", async () => {
       "OpenJob is offline. Check your connection and retry.",
     ),
   ).toBeOnTheScreen();
-  await fireEvent.press(screen.getAllByRole("button", { name: "Retry Groups" })[0]!);
+  expect(screen.queryByText("No Groups yet")).not.toBeOnTheScreen();
+  expect(
+    screen.getAllByRole("button", { name: "Retry Groups" }),
+  ).toHaveLength(1);
+  await fireEvent.press(screen.getByRole("button", { name: "Retry Groups" }));
   await fireEvent.press(
     await screen.findByRole("button", { name: "Open Walker Workshop" }),
   );
@@ -726,5 +749,9 @@ test("returns a revoked Task List session to the stable sign-in screen", async (
       name: "Sign in to your shared Task Lists",
     }),
   ).toBeOnTheScreen();
-  expect(controller.signOut).toHaveBeenCalledTimes(1);
+  expect(
+    screen.getByText("That saved sign-in expired. Sign in again."),
+  ).toBeOnTheScreen();
+  expect(controller.revokeSession).toHaveBeenCalledTimes(1);
+  expect(controller.signOut).not.toHaveBeenCalled();
 });

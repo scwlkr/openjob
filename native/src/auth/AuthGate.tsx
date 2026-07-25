@@ -35,6 +35,7 @@ export type NativeAuthController = Pick<
   | "createUser"
   | "listGroups"
   | "readTaskList"
+  | "revokeSession"
   | "restore"
   | "signIn"
   | "signInWithQaPassword"
@@ -45,6 +46,7 @@ export type NativeAuthController = Pick<
 
 type SignedInViewProps = {
   onManageSignInMethods?: () => void;
+  onSessionRevoked: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
   result: SignedInResult;
@@ -599,6 +601,7 @@ export function NativeAuthGate({
       return renderSignedIn({
         onManageSignInMethods:
           state.methods.length === 0 ? undefined : () => setManaging(true),
+        onSessionRevoked: () => void perform(() => auth.revokeSession()),
         onSignOut: () => void perform(() => auth.signOut()),
         onSwitchUser: () => void perform(() => auth.switchUser()),
         result: state,

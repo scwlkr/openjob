@@ -598,6 +598,12 @@ export class NativeAuthCoordinator implements NativeTaskListController {
       : { kind: "cleanup-retry" };
   }
 
+  async revokeSession(): Promise<AuthFlowResult> {
+    return (await this.removePrivateData())
+      ? { kind: "signed-out", reason: "revoked" }
+      : { kind: "cleanup-retry" };
+  }
+
   async switchUser(): Promise<AuthFlowResult> {
     return (await this.removePrivateData())
       ? { kind: "signed-out" }

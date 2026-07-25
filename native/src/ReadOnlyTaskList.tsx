@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import {
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -9,6 +8,7 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   SectionList,
   StyleSheet,
@@ -16,11 +16,20 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { K } from "react-native-external-keyboard";
+import {
+  K,
+  type KeyboardFocus,
+  type OnKeyPress,
+} from "react-native-external-keyboard";
+import {
+  type AppearanceKeyboardAction,
+  resolveAppearanceKey,
+} from "./appearance-keyboard";
 import {
   OpenJobApiError,
   ProviderSignInError,
 } from "./auth/coordinator";
+import { OpenJobBrandmark } from "./brand-marks";
 import type {
   NativeGroup,
   NativeTask,
@@ -28,8 +37,10 @@ import type {
   NativeTaskListSnapshot,
 } from "./task-list-contracts";
 import { useOpenJobTheme } from "./theme";
+import { useControlInteraction } from "./use-control-interaction";
 
 type TaskStatus = "open" | "done" | "all";
+const taskStatuses: TaskStatus[] = ["open", "done", "all"];
 
 type TaskSection = {
   data: NativeTask[];
@@ -40,27 +51,16 @@ type TaskSection = {
 
 const emptySnapshot: NativeTaskListSnapshot = { members: [], tasks: [] };
 
-function useControlInteraction() {
-  const [focused, setFocused] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  return {
-    focused,
-    hovered,
-    interactionProps: {
-      onBlur: () => setFocused(false),
-      onFocus: () => setFocused(true),
-      onHoverIn: () => setHovered(true),
-      onHoverOut: () => setHovered(false),
-    },
-  };
-}
-
 function GroupButton({
+  focusRef,
   group,
+  onKeyboardAction,
   onPress,
   selected,
 }: {
+  focusRef: (instance: KeyboardFocus | null) => void;
   group: NativeGroup;
+  onKeyboardAction: (action: AppearanceKeyboardAction) => void;
   onPress: () => void;
   selected: boolean;
 }) {
@@ -71,7 +71,15 @@ function GroupButton({
       accessibilityLabel={`Open ${group.name}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      onKeyDownPress={(event: OnKeyPress) => {
+        const action = resolveAppearanceKey(
+          Platform.OS,
+          event.nativeEvent.keyCode,
+        );
+        if (action) onKeyboardAction(action);
+      }}
       onPress={onPress}
+      ref={focusRef}
       {...interactionProps}
       style={({ pressed }) => [
         styles.groupButton,
@@ -114,6 +122,46 @@ function GroupButton({
   );
 }
 
+function GroupControls({
+  groups,
+  onEscape,
+  onSelect,
+  selectedGroupId,
+}: {
+  groups: NativeGroup[];
+  onEscape?: () => void;
+  onSelect: (group: NativeGroup) => void;
+  selectedGroupId: string | null;
+}) {
+  const groupRefs = useRef<(KeyboardFocus | null)[]>([]);
+  const handleKeyboardAction = (
+    index: number,
+    action: AppearanceKeyboardAction,
+  ) => {
+    if (action === "escape") {
+      onEscape?.();
+      return;
+    }
+    const direction = action === "next" ? 1 : -1;
+    const nextIndex =
+      (index + direction + groups.length) % groups.length;
+    groupRefs.current[nextIndex]?.keyboardFocus();
+  };
+
+  return groups.map((group, index) => (
+    <GroupButton
+      focusRef={(instance) => {
+        groupRefs.current[index] = instance;
+      }}
+      group={group}
+      key={group.groupId}
+      onKeyboardAction={(action) => handleKeyboardAction(index, action)}
+      onPress={() => onSelect(group)}
+      selected={group.groupId === selectedGroupId}
+    />
+  ));
+}
+
 function ActionButton({
   label,
   onPress,
@@ -147,27 +195,30 @@ function ActionButton({
 }
 
 function GroupChooser({
-  footer,
   groups,
   loading,
   message,
+  onEscape,
   onRetry,
   onSelect,
 }: {
-  footer: ReactNode;
   groups: NativeGroup[];
   loading: boolean;
   message: string | null;
+  onEscape?: () => void;
   onRetry: () => void;
   onSelect: (group: NativeGroup) => void;
 }) {
-  const { palette } = useOpenJobTheme();
+  const { isDark, palette } = useOpenJobTheme();
   return (
     <ScrollView
       contentContainerStyle={styles.chooserContent}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.chooserHeader}>
+        <View style={styles.chooserBrandmark}>
+          <OpenJobBrandmark inverse={isDark} />
+        </View>
         <Text style={[styles.kicker, { color: palette.blue }]}>
           SHARED TASK LIST
         </Text>
@@ -209,16 +260,14 @@ function GroupChooser({
         </View>
       ) : groups.length > 0 ? (
         <View style={styles.groupChoices}>
-          {groups.map((group) => (
-            <GroupButton
-              group={group}
-              key={group.groupId}
-              onPress={() => onSelect(group)}
-              selected={false}
-            />
-          ))}
+          <GroupControls
+            groups={groups}
+            onEscape={onEscape}
+            onSelect={onSelect}
+            selectedGroupId={null}
+          />
         </View>
-      ) : (
+      ) : message ? null : (
         <View style={styles.centeredState}>
           <Text style={[styles.stateTitle, { color: palette.ink }]}>
             No Groups yet
@@ -229,18 +278,21 @@ function GroupChooser({
           <ActionButton label="Retry Groups" onPress={onRetry} />
         </View>
       )}
-      {footer}
     </ScrollView>
   );
 }
 
 function FilterTab({
   count,
+  focusRef,
+  onKeyboardAction,
   onPress,
   selected,
   status,
 }: {
   count: number;
+  focusRef: (instance: KeyboardFocus | null) => void;
+  onKeyboardAction: (action: AppearanceKeyboardAction) => void;
   onPress: () => void;
   selected: boolean;
   status: TaskStatus;
@@ -253,7 +305,16 @@ function FilterTab({
       accessibilityLabel={`${name} ${count}`}
       accessibilityRole="tab"
       accessibilityState={{ selected }}
+      focusable={selected}
+      onKeyDownPress={(event: OnKeyPress) => {
+        const action = resolveAppearanceKey(
+          Platform.OS,
+          event.nativeEvent.keyCode,
+        );
+        if (action) onKeyboardAction(action);
+      }}
       onPress={onPress}
+      ref={focusRef}
       {...interactionProps}
       style={({ pressed }) => [
         styles.filterTab,
@@ -379,17 +440,19 @@ function TaskRow({ task }: { task: NativeTask }) {
         </View>
       </View>
       <View style={styles.taskBadges}>
-        <View
-          style={[
-            styles.taskBadge,
-            { backgroundColor: palette.card, borderColor: palette.line },
-          ]}
-        >
-          <Text style={[styles.taskBadgeText, { color: palette.ink }]}>
-            {task.priority[0]!.toUpperCase()}
-            {task.priority.slice(1)}
-          </Text>
-        </View>
+        {task.priority === "normal" ? null : (
+          <View
+            style={[
+              styles.taskBadge,
+              { backgroundColor: palette.card, borderColor: palette.line },
+            ]}
+          >
+            <Text style={[styles.taskBadgeText, { color: palette.ink }]}>
+              {task.priority[0]!.toUpperCase()}
+              {task.priority.slice(1)}
+            </Text>
+          </View>
+        )}
         <View
           style={[
             styles.taskBadge,
@@ -466,6 +529,12 @@ function TaskListHeader({
   setStatus: (status: TaskStatus) => void;
 }) {
   const { palette } = useOpenJobTheme();
+  const filterRefs = useRef<Record<TaskStatus, KeyboardFocus | null>>({
+    all: null,
+    done: null,
+    open: null,
+  });
+  const pendingKeyboardFocus = useRef<TaskStatus | null>(null);
   const {
     focused: switcherFocused,
     hovered: switcherHovered,
@@ -479,6 +548,32 @@ function TaskListHeader({
       open,
     };
   }, [snapshot.tasks]);
+  useEffect(() => {
+    if (pendingKeyboardFocus.current !== status) return;
+    const frame = requestAnimationFrame(() => {
+      filterRefs.current[status]?.keyboardFocus();
+      pendingKeyboardFocus.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [status]);
+  const handleFilterKeyboardAction = (
+    current: TaskStatus,
+    action: AppearanceKeyboardAction,
+  ) => {
+    if (action === "escape") {
+      onShowChooser();
+      return;
+    }
+    const direction = action === "next" ? 1 : -1;
+    const currentIndex = taskStatuses.indexOf(current);
+    const nextStatus =
+      taskStatuses[
+        (currentIndex + direction + taskStatuses.length) %
+          taskStatuses.length
+      ]!;
+    pendingKeyboardFocus.current = nextStatus;
+    setStatus(nextStatus);
+  };
   return (
     <View style={styles.listHeader}>
       {!wide ? (
@@ -526,10 +621,16 @@ function TaskListHeader({
         accessibilityRole="tablist"
         style={styles.filters}
       >
-        {(["open", "done", "all"] as const).map((candidate) => (
+        {taskStatuses.map((candidate) => (
           <FilterTab
             count={counts[candidate]}
+            focusRef={(instance) => {
+              filterRefs.current[candidate] = instance;
+            }}
             key={candidate}
+            onKeyboardAction={(action) =>
+              handleFilterKeyboardAction(candidate, action)
+            }
             onPress={() => setStatus(candidate)}
             selected={status === candidate}
             status={candidate}
@@ -570,11 +671,9 @@ function isRevoked(error: unknown) {
 }
 
 export function ReadOnlyTaskList({
-  chooserFooter,
   controller,
   onSessionRevoked,
 }: {
-  chooserFooter: ReactNode;
   controller: NativeTaskListController;
   onSessionRevoked: () => void;
 }) {
@@ -668,10 +767,12 @@ export function ReadOnlyTaskList({
   if (!selectedGroup || showChooser) {
     return (
       <GroupChooser
-        footer={chooserFooter}
         groups={groups}
         loading={groupsLoading}
         message={groupMessage}
+        onEscape={
+          selectedGroup ? () => setShowChooser(false) : undefined
+        }
         onRetry={() => void loadGroups()}
         onSelect={(group) => void selectGroup(group)}
       />
@@ -728,6 +829,7 @@ export function ReadOnlyTaskList({
       )}
       sections={sections}
       stickySectionHeadersEnabled
+      testID="openjob-task-list"
     />
   ) : (
     <View
@@ -742,39 +844,50 @@ export function ReadOnlyTaskList({
     </View>
   );
 
-  if (!wide) return taskList;
   return (
-    <View style={styles.wideLayout}>
-      <View
-        accessibilityLabel="Groups"
-        style={[
-          styles.sidebar,
-          { backgroundColor: palette.card, borderColor: palette.line },
-        ]}
-      >
-        <Text
-          accessibilityRole="header"
-          style={[styles.sidebarTitle, { color: palette.ink }]}
+    <View
+      style={[styles.adaptiveLayout, wide && styles.wideLayout]}
+      testID="openjob-adaptive-layout"
+    >
+      {wide ? (
+        <View
+          accessibilityLabel="Groups"
+          style={[
+            styles.sidebar,
+            { backgroundColor: palette.card, borderColor: palette.line },
+          ]}
         >
-          Groups
-        </Text>
-        <View style={styles.sidebarGroups}>
-          {groups.map((group) => (
-            <GroupButton
-              group={group}
-              key={group.groupId}
-              onPress={() => void selectGroup(group)}
-              selected={group.groupId === selectedGroup.groupId}
+          <Text
+            accessibilityRole="header"
+            style={[styles.sidebarTitle, { color: palette.ink }]}
+          >
+            Groups
+          </Text>
+          <ScrollView
+            contentContainerStyle={styles.sidebarGroups}
+            keyboardShouldPersistTaps="handled"
+            style={styles.sidebarScroll}
+            testID="openjob-group-sidebar-scroll"
+          >
+            <GroupControls
+              groups={groups}
+              onSelect={(group) => void selectGroup(group)}
+              selectedGroupId={selectedGroup.groupId}
             />
-          ))}
+          </ScrollView>
         </View>
+      ) : null}
+      <View key="task-list" style={styles.wideTaskList}>
+        {taskList}
       </View>
-      <View style={styles.wideTaskList}>{taskList}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  adaptiveLayout: {
+    flex: 1,
+  },
   actionButton: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -798,6 +911,11 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     padding: 24,
     width: "100%",
+  },
+  chooserBrandmark: {
+    height: 54,
+    marginBottom: 22,
+    width: 54,
   },
   chooserHeader: {
     alignSelf: "center",
@@ -924,6 +1042,9 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_900Black",
     fontSize: 24,
     letterSpacing: -0.8,
+  },
+  sidebarScroll: {
+    flex: 1,
   },
   stateMessage: {
     fontFamily: "Geist_400Regular",

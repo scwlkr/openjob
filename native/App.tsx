@@ -85,18 +85,17 @@ function ThemedSurface({
         controller={authController}
         renderSignedIn={({
           onManageSignInMethods,
+          onSessionRevoked,
           onSignOut,
           onSwitchUser,
-          result,
           taskListController,
         }) => (
           <OpenJobShell
             signedInUser={{
-              methods: result.methods,
               onManageSignInMethods,
+              onSessionRevoked,
               onSignOut,
               onSwitchUser,
-              user: result.user,
             }}
             initialState={bootstrap.navigationState}
             reducedMotion={reducedMotion}
