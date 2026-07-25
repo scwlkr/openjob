@@ -86,7 +86,9 @@ async function createGovernanceHarness(names) {
     const token = tokens.get(name);
     return harness.request({
       ...options,
-      headers: token ? { authorization: `Bearer ${token}` } : undefined,
+      headers: token
+        ? { ...options.headers, authorization: `Bearer ${token}` }
+        : options.headers,
     });
   }
 
@@ -145,6 +147,133 @@ async function runOrderedCommitRace(firestore, firstRequest, secondRequest) {
   await firestore.waitForPendingCommits();
   return Promise.all([first, secondRequest()]);
 }
+
+test("every Group-visible mutation family advances the conditional Task List validator", async (t) => {
+  const { claim, createGroup, harness, join, request } =
+    await createGovernanceHarness(["shane", "eli", "maya", "zoe"]);
+  t.after(() => harness.close());
+  const users = {
+    shane: await claim("shane"),
+    eli: await claim("eli"),
+    maya: await claim("maya"),
+    zoe: await claim("zoe"),
+  };
+  const group = await createGroup("Visible State");
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+
+  async function changedSince(previous) {
+    const response = await request("shane", {
+      headers: previous ? { "if-none-match": previous } : undefined,
+      path: `${tasksPath}?status=all&limit=500`,
+    });
+    assert.equal(response.status, 200);
+    const next = response.headers.get("etag");
+    assert.match(next, /^"[^"]+"$/u);
+    if (previous) assert.notEqual(next, previous);
+    return next;
+  }
+
+  async function unchangedSince(previous) {
+    const response = await request("shane", {
+      headers: { "if-none-match": previous },
+      path: `${tasksPath}?status=all&limit=500`,
+    });
+    assert.equal(response.status, 304);
+    assert.equal(response.headers.get("etag"), previous);
+  }
+
+  let validator = await changedSince(null);
+  const renamed = await request("shane", {
+    body: { name: "Renamed Visible State" },
+    method: "PATCH",
+    path: `/api/v1/groups/${group.groupId}`,
+  });
+  assert.equal(renamed.status, 200);
+  validator = await changedSince(validator);
+
+  await join("eli", group.groupId);
+  validator = await changedSince(validator);
+
+  for (const action of ["promote", "demote"]) {
+    const roleChange = await request("shane", {
+      method: "POST",
+      path: `/api/v1/groups/${group.groupId}/members/${users.eli.userId}/actions/${action}`,
+    });
+    assert.equal(roleChange.status, 200);
+    validator = await changedSince(validator);
+  }
+
+  const created = await request("shane", {
+    body: { text: "Exercise every mutation", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(created.status, 201);
+  const task = (await created.json()).data;
+  validator = await changedSince(validator);
+
+  const edited = await request("eli", {
+    body: { text: "Exercise each visible mutation" },
+    method: "PATCH",
+    path: `${tasksPath}/${task.taskId}`,
+  });
+  assert.equal(edited.status, 200);
+  validator = await changedSince(validator);
+
+  const completed = await request("eli", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${task.taskId}/state`,
+  });
+  assert.equal(completed.status, 200);
+  validator = await changedSince(validator);
+  const repeated = await request("eli", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${task.taskId}/state`,
+  });
+  assert.equal(repeated.status, 200);
+  await unchangedSince(validator);
+
+  const deleted = await request("eli", {
+    method: "DELETE",
+    path: `${tasksPath}/${task.taskId}`,
+  });
+  assert.equal(deleted.status, 204);
+  validator = await changedSince(validator);
+
+  const left = await request("eli", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/actions/leave`,
+  });
+  assert.equal(left.status, 204);
+  validator = await changedSince(validator);
+
+  await join("maya", group.groupId);
+  validator = await changedSince(validator);
+  const kicked = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${users.maya.userId}/actions/kick`,
+  });
+  assert.equal(kicked.status, 204);
+  validator = await changedSince(validator);
+
+  await join("zoe", group.groupId);
+  validator = await changedSince(validator);
+  const banned = await request("shane", {
+    body: { userId: users.zoe.userId },
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/bans/actions/ban`,
+  });
+  assert.equal(banned.status, 201);
+  validator = await changedSince(validator);
+  const unbanned = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/bans/${users.zoe.userId}/actions/unban`,
+  });
+  assert.equal(unbanned.status, 204);
+  await changedSince(validator);
+});
 
 test("an Admin promotes only a current Member through the stable API contract", async (t) => {
   const { claim, createGroup, harness, join, request } =

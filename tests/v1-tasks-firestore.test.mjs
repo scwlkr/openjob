@@ -376,6 +376,23 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     data: [task, soonerForEli, laterForEli],
     nextCursor: null,
   });
+  const validator = listed.headers.get("etag");
+  assert.match(validator, /^"[^"]+"$/u);
+  const corruptTaskName =
+    `${database}/v1Groups/${group.groupId}/tasks/task_corrupt`;
+  firestore.documents.set(corruptTaskName, {
+    name: corruptTaskName,
+    fields: { taskId: { stringValue: "task_corrupt" } },
+    updateTime: "2026-07-15T12:30:00.000000Z",
+  });
+  const unchanged = await harness.request({
+    headers: { ...shaneHeaders, "if-none-match": validator },
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks`,
+  });
+  assert.equal(unchanged.status, 304);
+  await assertContract(unchanged, "/api/v1/groups/{groupId}/tasks", "get");
+  firestore.documents.delete(corruptTaskName);
 
   const completedForDeletion = await harness.request({
     body: { state: "done" },
@@ -384,6 +401,13 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     path: `/api/v1/groups/${group.groupId}/tasks/${soonerForEli.taskId}/state`,
   });
   assert.equal(completedForDeletion.status, 200);
+  const changed = await harness.request({
+    headers: { ...shaneHeaders, "if-none-match": validator },
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/tasks`,
+  });
+  assert.equal(changed.status, 200);
+  assert.notEqual(changed.headers.get("etag"), validator);
 
   for (const deletedTask of [laterForEli, soonerForEli]) {
     const deleted = await harness.request({

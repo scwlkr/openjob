@@ -63,6 +63,13 @@ export type TaskNotificationIntent = {
 
 export type TaskStore = {
   hasAccess(actorUserId: string, groupId: GroupId): Promise<boolean>;
+  readState(
+    actorUserId: string,
+    groupId: GroupId,
+  ): Promise<
+    | { kind: "found"; revision: number }
+    | { kind: "not_found" }
+  >;
   create(
     actorUserId: string,
     groupId: GroupId,
@@ -443,6 +450,55 @@ type TaskListOptions = {
   limit: number;
 };
 
+async function taskListValidator(
+  groupId: GroupId,
+  revision: number,
+  options: TaskListOptions,
+) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      JSON.stringify([
+        groupId,
+        revision,
+        options.status,
+        options.assignee,
+        options.cursor,
+        options.limit,
+      ]),
+    ),
+  );
+  let binary = "";
+  for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte);
+  const encoded = btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/u, "");
+  return `"oj-task-list-${encoded}"`;
+}
+
+function validatorMatches(header: string | null, validator: string) {
+  if (!header) return false;
+  return header.split(",").some((candidate) => {
+    const normalized = candidate.trim();
+    return (
+      normalized === "*" ||
+      normalized === validator ||
+      (normalized.startsWith("W/") && normalized.slice(2) === validator)
+    );
+  });
+}
+
+function notModified(validator: string) {
+  return new Response(null, {
+    status: 304,
+    headers: {
+      "cache-control": "no-store",
+      etag: validator,
+    },
+  });
+}
+
 function readTaskListOptions(url: URL):
   | { fields: Record<string, string> }
   | TaskListOptions {
@@ -701,12 +757,19 @@ export function createV1TasksApi({
         }
 
         if (path.kind === "valid" && path.taskId === null && request.method === "GET") {
-          if (!(await tasks.hasAccess(user.userId, path.groupId))) {
-            return groupNotFound(requestId);
-          }
+          const state = await tasks.readState(user.userId, path.groupId);
+          if (state.kind === "not_found") return groupNotFound(requestId);
           const options = readTaskListOptions(url);
           if ("fields" in options) {
             return invalidTaskInput(requestId, options.fields);
+          }
+          const validator = await taskListValidator(
+            path.groupId,
+            state.revision,
+            options,
+          );
+          if (validatorMatches(request.headers.get("if-none-match"), validator)) {
+            return notModified(validator);
           }
           const result = await tasks.list(user.userId, path.groupId);
           if (result.kind === "not_found") return groupNotFound(requestId);
@@ -746,13 +809,15 @@ export function createV1TasksApi({
           }
           const page = ordered.slice(start, start + options.limit);
           const hasMore = start + page.length < ordered.length;
-          return jsonResponse({
+          const response = jsonResponse({
             data: page,
             nextCursor:
               hasMore && page.length > 0
                 ? encodeTaskCursor(path.groupId, options, page.at(-1)!.taskId)
                 : null,
           });
+          response.headers.set("etag", validator);
+          return response;
         }
 
         if (

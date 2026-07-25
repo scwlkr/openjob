@@ -11,7 +11,7 @@ const USERS = {
   maya: { userId: "user_maya", username: "maya" },
 };
 
-function createMemoryTaskStore(controls) {
+function createMemoryTaskStore(controls, metrics) {
   let nextTask = 1;
 
   async function isMember(state, groupId, userId) {
@@ -23,6 +23,12 @@ function createMemoryTaskStore(controls) {
   return Object.freeze({
     async hasAccess(actorUserId, groupId) {
       return isMember(controls.state, groupId, actorUserId);
+    },
+
+    async readState(actorUserId, groupId) {
+      return (await isMember(controls.state, groupId, actorUserId))
+        ? { kind: "found", revision: 7 }
+        : { kind: "not_found" };
     },
 
     async create(actorUserId, groupId, assignee, input) {
@@ -133,6 +139,7 @@ function createMemoryTaskStore(controls) {
     },
 
     async list(actorUserId, groupId) {
+      if (metrics) metrics.taskListReads += 1;
       if (!(await isMember(controls.state, groupId, actorUserId))) {
         return { kind: "not_found" };
       }
@@ -148,6 +155,7 @@ function createMemoryTaskStore(controls) {
 
 function createTasksHarness({
   memberNames = ["shane", "eli"],
+  metrics,
   seedTasks = [],
 } = {}) {
   return createV1TestHarness({
@@ -185,13 +193,78 @@ function createTasksHarness({
       };
       return createV1TasksApi({
         requestId: () => "req_tasks_test",
-        tasks: createMemoryTaskStore(controls),
+        tasks: createMemoryTaskStore(controls, metrics),
         users,
         verifyIdToken,
       });
     },
   });
 }
+
+test("a matching conditional Task List request returns 304 without listing Tasks", async (t) => {
+  const metrics = { taskListReads: 0 };
+  const harness = createTasksHarness({ memberNames: ["shane"], metrics });
+  const assertContract = await createOpenApiResponseValidator();
+  t.after(() => harness.close());
+
+  const first = await harness.request({
+    as: "shane",
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=all`,
+  });
+  assert.equal(first.status, 200);
+  await assertContract(first, "/api/v1/groups/{groupId}/tasks", "get");
+  const validator = first.headers.get("etag");
+  assert.match(validator, /^"[^"]+"$/u);
+  assert.equal(metrics.taskListReads, 1);
+
+  const unchanged = await harness.request({
+    as: "shane",
+    headers: { "if-none-match": `"unrelated", W/${validator}` },
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=all`,
+  });
+  assert.equal(unchanged.status, 304);
+  await assertContract(unchanged, "/api/v1/groups/{groupId}/tasks", "get");
+  assert.equal(await unchanged.text(), "");
+  assert.equal(unchanged.headers.get("etag"), validator);
+  assert.equal(metrics.taskListReads, 1);
+
+  const wildcard = await harness.request({
+    as: "shane",
+    headers: { "if-none-match": "*" },
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=all`,
+  });
+  assert.equal(wildcard.status, 304);
+  assert.equal(metrics.taskListReads, 1);
+
+  const defaultView = await harness.request({
+    as: "shane",
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  const explicitDefaultView = await harness.request({
+    as: "shane",
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=open&limit=100`,
+  });
+  assert.equal(defaultView.headers.get("etag"), explicitDefaultView.headers.get("etag"));
+  assert.notEqual(defaultView.headers.get("etag"), validator);
+
+  const invalid = await harness.request({
+    as: "shane",
+    headers: { "if-none-match": "*" },
+    path: `/api/v1/groups/${GROUP_ID}/tasks?status=invalid`,
+  });
+  assert.equal(invalid.status, 400);
+  const inaccessible = await harness.request({
+    as: "eli",
+    headers: { "if-none-match": "*" },
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  assert.equal(inaccessible.status, 404);
+  const unauthenticated = await harness.request({
+    headers: { "if-none-match": "*" },
+    path: `/api/v1/groups/${GROUP_ID}/tasks`,
+  });
+  assert.equal(unauthenticated.status, 401);
+});
 
 test("a Member creates an assigned Task and another Member retrieves it", async (t) => {
   const harness = createTasksHarness();

@@ -487,12 +487,33 @@ export function createFirestoreGroupStore(
     return group ? publicGroup(group, membership.role) : null;
   }
 
-  function stateRevisionWrite(group: StoredGroup) {
-    return advanceGroupStateRevisionWrite({
+  function stateRevisionWrite(
+    group: StoredGroup,
+    additionalFields: Record<string, unknown> = {},
+  ) {
+    const revisionWrite = advanceGroupStateRevisionWrite({
       documentName: firestore.documentName(group.path),
       revision: group.stateRevision,
       updateTime: group.updateTime,
     });
+    return Object.keys(additionalFields).length === 0
+      ? revisionWrite
+      : {
+          ...revisionWrite,
+          update: {
+            ...revisionWrite.update,
+            fields: {
+              ...revisionWrite.update.fields,
+              ...additionalFields,
+            },
+          },
+          updateMask: {
+            fieldPaths: [
+              ...revisionWrite.updateMask.fieldPaths,
+              ...Object.keys(additionalFields),
+            ],
+          },
+        };
   }
 
   async function rotateCurrentInvite(
@@ -895,10 +916,7 @@ export function createFirestoreGroupStore(
             verify: firestore.documentName(pointer.path),
             currentDocument: { updateTime: pointer.updateTime },
           },
-          {
-            verify: firestore.documentName(group.path),
-            currentDocument: { updateTime: group.updateTime },
-          },
+          stateRevisionWrite(group),
           {
             verify: firestore.documentName(userBanPath),
             currentDocument: { exists: false },
@@ -1222,14 +1240,7 @@ export function createFirestoreGroupStore(
               verify: firestore.documentName(member.path),
               currentDocument: { updateTime: member.updateTime },
             },
-            {
-              update: {
-                name: firestore.documentName(group.path),
-                fields: { name: { stringValue: name } },
-              },
-              updateMask: { fieldPaths: ["name"] },
-              currentDocument: { updateTime: group.updateTime },
-            },
+            stateRevisionWrite(group, { name: { stringValue: name } }),
           ]);
           return {
             kind: "renamed" as const,

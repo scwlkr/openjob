@@ -380,6 +380,16 @@ export function createFirestoreTaskStore(
       return Boolean(await readAccess(actorUserId, groupId));
     },
 
+    async readState(actorUserId, groupId) {
+      const access = await readAccess(actorUserId, groupId);
+      return access
+        ? {
+            kind: "found" as const,
+            revision: readGroupStateRevision(access.group),
+          }
+        : { kind: "not_found" as const };
+    },
+
     async create(actorUserId, groupId, assignee, input) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const creationAccess = await readCreationAccess(

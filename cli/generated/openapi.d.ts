@@ -1363,6 +1363,8 @@ export interface components {
         /** @description Filtered, stably ordered, cursor-paginated Tasks. */
         TaskCollectionResponse: {
             headers: {
+                /** @description Opaque validator for Group-visible Task List state. */
+                ETag: string;
                 [name: string]: unknown;
             };
             content: {
@@ -2720,7 +2722,10 @@ export interface operations {
                  */
                 limit?: components["parameters"]["Limit"];
             };
-            header?: never;
+            header?: {
+                /** @description Opaque validator from an earlier response for this Task List. */
+                "If-None-Match"?: string;
+            };
             path: {
                 /**
                  * @description Immutable, opaque, never-reused Group ID.
@@ -2733,6 +2738,15 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TaskCollectionResponse"];
+            /** @description The authorized Group-visible state has not changed. */
+            304: {
+                headers: {
+                    /** @description Current opaque Group state validator. */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];

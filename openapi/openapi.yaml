@@ -758,9 +758,23 @@ paths:
         - $ref: "#/components/parameters/TaskAssignee"
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
+        - name: If-None-Match
+          in: header
+          required: false
+          description: Opaque validator from an earlier response for this Task List.
+          schema:
+            type: string
       responses:
         "200":
           $ref: "#/components/responses/TaskCollectionResponse"
+        "304":
+          description: The authorized Group-visible state has not changed.
+          headers:
+            ETag:
+              description: Current opaque Group state validator.
+              required: true
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/ValidationErrorResponse"
         "401":
@@ -1283,6 +1297,12 @@ components:
               completedAt: null
     TaskCollectionResponse:
       description: Filtered, stably ordered, cursor-paginated Tasks.
+      headers:
+        ETag:
+          description: Opaque validator for Group-visible Task List state.
+          required: true
+          schema:
+            type: string
       content:
         application/json:
           schema:
