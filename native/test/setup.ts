@@ -61,6 +61,16 @@ jest.mock("expo-splash-screen", () => ({
   preventAutoHideAsync: jest.fn(async () => undefined),
 }));
 
+jest.mock("expo-network", () => ({
+  addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })),
+  getNetworkStateAsync: jest.fn(async () => ({
+    isConnected: true,
+    isInternetReachable: true,
+    type: "UNKNOWN",
+  })),
+  NetworkStateType: { NONE: "NONE", UNKNOWN: "UNKNOWN" },
+}));
+
 jest.mock("expo-updates", () => ({
   channel: "",
   isEmbeddedLaunch: false,

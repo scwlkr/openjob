@@ -7,7 +7,7 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -66,6 +66,14 @@ type SignedInUser = {
   onSessionRevoked: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
+};
+
+type DiagnosticsSettings = {
+  enabled: boolean;
+  onCrashVerification: () => boolean;
+  onSendVerification: () => Promise<boolean>;
+  onSetEnabled: (enabled: boolean) => Promise<boolean>;
+  verificationEnabled: boolean;
 };
 
 function Wordmark() {
@@ -276,8 +284,11 @@ function AppearanceOption({
 }
 
 function AppearanceScreen({
+  diagnostics,
   navigation,
-}: NativeStackScreenProps<RootStackParamList, "Appearance">) {
+}: NativeStackScreenProps<RootStackParamList, "Appearance"> & {
+  diagnostics: DiagnosticsSettings;
+}) {
   const {
     palette,
     preference: selected,
@@ -289,6 +300,10 @@ function AppearanceScreen({
     system: null,
   });
   const pendingKeyboardFocus = useRef<AppearancePreference | null>(null);
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (pendingKeyboardFocus.current !== selected) return;
@@ -315,6 +330,47 @@ function AppearanceScreen({
     const nextPreference = appearancePreferences[nextIndex]!;
     pendingKeyboardFocus.current = nextPreference;
     setPreference(nextPreference);
+  };
+
+  const toggleDiagnostics = async () => {
+    const next = !diagnostics.enabled;
+    setDiagnosticsBusy(true);
+    setDiagnosticsStatus(null);
+    try {
+      const stored = await diagnostics.onSetEnabled(next);
+      setDiagnosticsStatus(
+        stored ? "Diagnostics are on." : "Diagnostics are off.",
+      );
+    } catch {
+      if (!next) {
+        setDiagnosticsStatus(
+          "Diagnostics are off. Native cleanup was incomplete; try again.",
+        );
+      } else {
+        setDiagnosticsStatus("Diagnostics remain off. Try again.");
+      }
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+
+  const sendVerification = async () => {
+    setDiagnosticsBusy(true);
+    setDiagnosticsStatus("Sending a scrubbed verification event…");
+    try {
+      const sent = await diagnostics.onSendVerification();
+      setDiagnosticsStatus(
+        sent
+          ? "Scrubbed verification event queued. Confirm it in Sentry."
+          : "Verification could not be sent. Nothing private was attached.",
+      );
+    } catch {
+      setDiagnosticsStatus(
+        "Verification could not be sent. Nothing private was attached.",
+      );
+    } finally {
+      setDiagnosticsBusy(false);
+    }
   };
 
   return (
@@ -361,12 +417,100 @@ function AppearanceScreen({
             />
           ))}
         </View>
+        <View
+          style={[styles.privacySection, { borderTopColor: palette.line }]}
+        >
+          <Text style={[styles.kicker, { color: palette.blue }]}>PRIVACY</Text>
+          <Text style={[styles.privacyTitle, { color: palette.ink }]}>Diagnostics</Text>
+          <Text style={[styles.settingsLede, { color: palette.muted }]}>
+            Crashes and hangs only. OpenJob sends scrubbed technical versions,
+            timing, OS version, coarse device class, and a safe operation name—
+            never Task text, Group details, User identity, credentials, URLs,
+            request bodies, screenshots, or a permanent device identity.
+          </Text>
+          <Pressable
+            accessibilityLabel="Share diagnostics"
+            accessibilityRole="switch"
+            accessibilityState={{
+              checked: diagnostics.enabled,
+              disabled: diagnosticsBusy,
+            }}
+            disabled={diagnosticsBusy}
+            onPress={() => void toggleDiagnostics()}
+            style={({ pressed }) => [
+              styles.diagnosticsSwitch,
+              {
+                backgroundColor: pressed ? palette.background : palette.card,
+                borderColor: diagnostics.enabled ? palette.blue : palette.line,
+              },
+            ]}
+          >
+            <View>
+              <Text style={[styles.diagnosticsLabel, { color: palette.ink }]}>
+                Share diagnostics
+              </Text>
+              <Text style={[styles.diagnosticsDetail, { color: palette.muted }]}>
+                Crashes and hangs only
+              </Text>
+            </View>
+            <Text style={[styles.diagnosticsValue, { color: palette.blue }]}>
+              {diagnostics.enabled ? "On" : "Off"}
+            </Text>
+          </Pressable>
+          {diagnosticsStatus ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.diagnosticsStatus, { color: palette.muted }]}
+            >
+              {diagnosticsStatus}
+            </Text>
+          ) : null}
+          {diagnostics.verificationEnabled && diagnostics.enabled ? (
+            <View style={styles.verificationActions}>
+              <Pressable
+                accessibilityLabel="Send diagnostic verification"
+                accessibilityRole="button"
+                disabled={diagnosticsBusy}
+                onPress={() => void sendVerification()}
+                style={({ pressed }) => [
+                  styles.verificationButton,
+                  {
+                    backgroundColor: pressed ? palette.blueStrong : palette.blue,
+                    borderColor: palette.blue,
+                  },
+                ]}
+              >
+                <Text style={[styles.verificationButtonText, { color: palette.onBlue }]}>
+                  Send verification
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Crash this verification build"
+                accessibilityRole="button"
+                disabled={diagnosticsBusy}
+                onPress={diagnostics.onCrashVerification}
+                style={({ pressed }) => [
+                  styles.verificationButton,
+                  {
+                    backgroundColor: pressed ? palette.background : palette.card,
+                    borderColor: palette.line,
+                  },
+                ]}
+              >
+                <Text style={[styles.verificationButtonText, { color: palette.ink }]}>
+                  Native crash verification
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 export function OpenJobShell({
+  diagnostics,
   initialState,
   onRestoreSession,
   ownerUserId,
@@ -377,6 +521,7 @@ export function OpenJobShell({
   sessionReady,
   taskListController,
 }: {
+  diagnostics: DiagnosticsSettings;
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
   onRestoreSession: () => void;
   ownerUserId: string;
@@ -421,7 +566,9 @@ export function OpenJobShell({
             />
           )}
         </Stack.Screen>
-        <Stack.Screen component={AppearanceScreen} name="Appearance" />
+        <Stack.Screen name="Appearance">
+          {(props) => <AppearanceScreen {...props} diagnostics={diagnostics} />}
+        </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -448,6 +595,36 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_600SemiBold",
     fontSize: 12,
   },
+  diagnosticsDetail: {
+    fontFamily: "Geist_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 3,
+  },
+  diagnosticsLabel: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 16,
+  },
+  diagnosticsStatus: {
+    fontFamily: "Geist_600SemiBold",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  diagnosticsSwitch: {
+    alignItems: "center",
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  diagnosticsValue: {
+    fontFamily: "Geist_900Black",
+    fontSize: 14,
+    textTransform: "uppercase",
+  },
   buildBadge: {
     borderWidth: 1,
     justifyContent: "center",
@@ -470,6 +647,18 @@ const styles = StyleSheet.create({
     fontFamily: "Geist_700Bold",
     fontSize: 11,
     letterSpacing: 1.6,
+  },
+  privacySection: {
+    borderTopWidth: 1,
+    gap: 12,
+    marginTop: 44,
+    paddingTop: 36,
+  },
+  privacyTitle: {
+    fontFamily: "Geist_900Black",
+    fontSize: 32,
+    letterSpacing: -1.3,
+    lineHeight: 38,
   },
   safeArea: {
     flex: 1,
@@ -525,5 +714,21 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: 12,
     paddingVertical: 12,
+  },
+  verificationActions: {
+    gap: 10,
+    marginTop: 4,
+  },
+  verificationButton: {
+    alignItems: "center",
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  verificationButtonText: {
+    fontFamily: "Geist_700Bold",
+    fontSize: 14,
   },
 });

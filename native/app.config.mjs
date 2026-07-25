@@ -16,6 +16,142 @@ const environmentBadges = {
   preview: "Preview",
   production: null,
 };
+const sentrySlugPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+const appleAppPrivacy = {
+  NSPrivacyCollectedDataTypes: [
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType:
+        "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+  ],
+  NSPrivacyTracking: false,
+  NSPrivacyTrackingDomains: [],
+};
+
+function optionalEnvironmentValue(name) {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+function isPublicSentryDsn(value) {
+  try {
+    const dsn = new URL(value);
+    return (
+      dsn.protocol === "https:" &&
+      dsn.username.length > 0 &&
+      dsn.password.length === 0 &&
+      dsn.hostname.length > 0 &&
+      /^\/\d+$/u.test(dsn.pathname) &&
+      dsn.search.length === 0 &&
+      dsn.hash.length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+function readDiagnosticsDsn() {
+  const dsn = optionalEnvironmentValue("EXPO_PUBLIC_SENTRY_DSN");
+  if (!dsn) return null;
+  if (!isPublicSentryDsn(dsn)) {
+    throw new Error(
+      "EXPO_PUBLIC_SENTRY_DSN must be a valid HTTPS Sentry DSN.",
+    );
+  }
+  return dsn;
+}
+
+function sentryPluginOptions() {
+  const organization = optionalEnvironmentValue("SENTRY_ORG");
+  const project = optionalEnvironmentValue("SENTRY_PROJECT");
+  for (const [name, value] of [
+    ["SENTRY_ORG", organization],
+    ["SENTRY_PROJECT", project],
+  ]) {
+    if (value && !sentrySlugPattern.test(value)) {
+      throw new Error(`${name} must be a valid Sentry slug.`);
+    }
+  }
+  if (Boolean(organization) !== Boolean(project)) {
+    throw new Error("SENTRY_ORG and SENTRY_PROJECT must be set together.");
+  }
+  return {
+    experimental_android: {
+      autoUploadNativeSymbols: true,
+      autoUploadProguardMapping: true,
+      dexguardEnabled: false,
+      enableAndroidGradlePlugin: true,
+      includeNativeSources: false,
+      includeProguardMapping: true,
+      includeSourceContext: false,
+      uploadNativeSymbols: true,
+    },
+    ...(organization ? { organization } : {}),
+    ...(project ? { project } : {}),
+    url: "https://sentry.io/",
+  };
+}
 
 export default function createAppConfig({ config = {} } = {}) {
   const environment = process.env.OPENJOB_NATIVE_ENV ?? "development";
@@ -23,6 +159,14 @@ export default function createAppConfig({ config = {} } = {}) {
   if (!identity) {
     throw new Error(`Unsupported OpenJob native environment: ${environment}`);
   }
+  const diagnosticsDsn = readDiagnosticsDsn();
+  const diagnosticsVerificationEnabled =
+    environment === "preview" &&
+    diagnosticsDsn !== null &&
+    process.env.OPENJOB_DIAGNOSTICS_VERIFICATION === "1";
+  const diagnosticsStartupCrashVerificationEnabled =
+    diagnosticsVerificationEnabled &&
+    process.env.OPENJOB_DIAGNOSTICS_STARTUP_CRASH_VERIFICATION === "1";
 
   return {
     ...config,
@@ -37,6 +181,8 @@ export default function createAppConfig({ config = {} } = {}) {
     icon: "../public/icon-512.png",
     scheme: identity.auth.appScheme,
     plugins: [
+      ["@sentry/react-native/expo", sentryPluginOptions()],
+      "./plugins/with-sentry-android-privacy.cjs",
       "expo-font",
       [
         "expo-secure-store",
@@ -76,6 +222,12 @@ export default function createAppConfig({ config = {} } = {}) {
         "com.apple.developer.applesignin": ["Default"],
       },
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        OpenJobSentryDSN: diagnosticsDsn ?? "",
+        OpenJobSentryEnvironment: environment,
+      },
+      privacyManifests: appleAppPrivacy,
       supportsTablet: true,
       usesAppleSignIn: true,
     },
@@ -107,6 +259,9 @@ export default function createAppConfig({ config = {} } = {}) {
         appleRedirectUri: identity.auth.firebaseHandlerUrl,
         appleServiceId:
           identities.apple.signInServices[identity.tier].serviceId,
+        diagnosticsDsn: diagnosticsDsn ?? "",
+        diagnosticsStartupCrashVerificationEnabled,
+        diagnosticsVerificationEnabled,
         environment,
         firebaseApiKey: identity.firebase.apiKey,
         firebaseAuthDomain: identity.firebase.authDomain,

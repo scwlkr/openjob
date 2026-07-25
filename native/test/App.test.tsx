@@ -15,10 +15,13 @@ import {
 import { OpenJobNativeApp } from "../App";
 import { resolveAppearanceKey } from "../src/appearance-keyboard";
 import type { NativeAuthController } from "../src/auth/AuthGate";
+import * as authDependencies from "../src/auth/dependencies";
 import {
   OpenJobApiError,
   ProviderSignInError,
 } from "../src/auth/coordinator";
+import type { NativeDiagnosticsController } from "../src/diagnostics";
+import * as runtimeConfigModule from "../src/runtime-config";
 import type { OpenJobRuntimeConfig } from "../src/runtime-config";
 import type {
   NativeCachedTaskList,
@@ -33,6 +36,9 @@ const previewConfig: OpenJobRuntimeConfig = {
   appleRedirectUri:
     "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
   appleServiceId: "dev.openjob.auth.nonprod",
+  diagnosticsDsn: null,
+  diagnosticsStartupCrashVerificationEnabled: false,
+  diagnosticsVerificationEnabled: false,
   environment: "preview",
   environmentBadge: "Preview",
   firebaseApiKey: "public-key",
@@ -114,13 +120,38 @@ function authController(
 function renderNativeApp(
   runtimeConfig: OpenJobRuntimeConfig,
   controller = authController(),
+  diagnosticsController?: NativeDiagnosticsController,
 ) {
   return render(
     <OpenJobNativeApp
       authController={controller}
+      diagnosticsController={diagnosticsController}
       runtimeConfig={runtimeConfig}
     />,
   );
+}
+
+function diagnosticsController(
+  initial = true,
+): NativeDiagnosticsController & {
+  captureException: jest.Mock;
+  flush: jest.Mock;
+  initialize: jest.Mock;
+  setSharingEnabled: jest.Mock;
+  triggerNativeCrashVerification: jest.Mock;
+} {
+  let enabled = initial;
+  return {
+    captureException: jest.fn(() => "diagnostic-event"),
+    flush: jest.fn(async () => true),
+    initialize: jest.fn(async () => enabled),
+    isSharingEnabled: jest.fn(() => enabled),
+    setSharingEnabled: jest.fn(async (next: boolean) => {
+      enabled = next;
+      return enabled;
+    }),
+    triggerNativeCrashVerification: jest.fn(() => true),
+  };
 }
 
 const adaptiveGroups: NativeGroup[] = [
@@ -207,6 +238,187 @@ test("bootstraps the branded preview shell from its embedded bundle", async () =
   expect(screen.queryByText("OPENJOB")).not.toBeOnTheScreen();
 });
 
+test("offers Retry and sign out when bootstrap fails fatally", async () => {
+  const controller = authController();
+  const diagnostics = diagnosticsController();
+  diagnostics.initialize
+    .mockRejectedValueOnce(new Error("storage unavailable"))
+    .mockResolvedValue(true);
+
+  await renderNativeApp(previewConfig, controller, diagnostics);
+
+  expect(
+    await screen.findByRole("alert", { name: "OpenJob could not start safely" }),
+  ).toBeOnTheScreen();
+  const signOut = screen.getByRole("button", { name: "Sign out safely" });
+  const retry = screen.getByRole("button", { name: "Retry OpenJob" });
+  const stopDiagnostics = screen.getByRole("button", {
+    name: "Stop sharing diagnostics",
+  });
+
+  await fireEvent.press(stopDiagnostics);
+  await waitFor(() =>
+    expect(diagnostics.setSharingEnabled).toHaveBeenCalledWith(false),
+  );
+  expect(screen.getByText("Diagnostics are off.")).toBeOnTheScreen();
+  await fireEvent.press(signOut);
+  await waitFor(() => expect(controller.signOut).toHaveBeenCalledTimes(1));
+  await fireEvent.press(retry);
+
+  expect(
+    await screen.findByRole("header", { name: "Choose a Group" }),
+  ).toBeOnTheScreen();
+  expect(diagnostics.initialize).toHaveBeenCalledTimes(2);
+});
+
+test("keeps bootstrap sign-out in recovery when cleanup is incomplete", async () => {
+  const controller = authController({
+    signOut: jest.fn(async () => ({ kind: "cleanup-retry" as const })),
+  });
+  const diagnostics = diagnosticsController();
+  diagnostics.initialize.mockRejectedValueOnce(
+    new Error("storage unavailable"),
+  );
+
+  await renderNativeApp(previewConfig, controller, diagnostics);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Sign out safely" }),
+  );
+
+  expect(
+    await screen.findByText("Sign out cleanup is incomplete. Retry it."),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText("Signed out safely.")).not.toBeOnTheScreen();
+});
+
+test("recovers when embedded runtime configuration initially cannot be read", async () => {
+  jest
+    .spyOn(runtimeConfigModule, "readRuntimeConfig")
+    .mockImplementationOnce(() => {
+      throw new Error("invalid embedded configuration");
+    })
+    .mockReturnValue(previewConfig);
+
+  await render(
+    <OpenJobNativeApp
+      authController={authController()}
+      diagnosticsController={diagnosticsController()}
+    />,
+  );
+  expect(
+    await screen.findByRole("alert", {
+      name: "OpenJob could not start safely",
+    }),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Retry OpenJob" }),
+  );
+
+  expect(
+    await screen.findByRole("header", { name: "Choose a Group" }),
+  ).toBeOnTheScreen();
+});
+
+test("purges local authentication state without runtime configuration or an injected controller", async () => {
+  jest
+    .spyOn(runtimeConfigModule, "readRuntimeConfig")
+    .mockImplementation(() => {
+      throw new Error("invalid embedded configuration");
+    });
+  const purge = jest
+    .spyOn(authDependencies, "purgeNativeAuthStateWithoutRuntimeConfig")
+    .mockResolvedValue();
+
+  await render(
+    <OpenJobNativeApp diagnosticsController={diagnosticsController()} />,
+  );
+  expect(
+    await screen.findByRole("alert", {
+      name: "OpenJob could not start safely",
+    }),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Sign out safely" }),
+  );
+
+  await waitFor(() => expect(purge).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("Signed out safely.")).toBeOnTheScreen();
+});
+
+test.each([
+  {
+    heading: "Sign in to your shared Task Lists",
+    result: { kind: "signed-out" as const },
+  },
+  {
+    heading: "Reconnect to OpenJob",
+    result: { kind: "restore-retry" as const, reason: "offline" as const },
+  },
+])("keeps diagnostics opt-out reachable from $heading", async ({ heading, result }) => {
+  const diagnostics = diagnosticsController();
+  const controller = authController({
+    restore: jest.fn(async () => result),
+  });
+
+  await renderNativeApp(previewConfig, controller, diagnostics);
+
+  expect(
+    await screen.findByRole("header", { name: heading }),
+  ).toBeOnTheScreen();
+  const sharing = screen.getByRole("switch", { name: "Share diagnostics" });
+  expect(sharing).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ checked: true }),
+  );
+
+  await fireEvent.press(sharing);
+
+  await waitFor(() =>
+    expect(diagnostics.setSharingEnabled).toHaveBeenCalledWith(false),
+  );
+  expect(sharing).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ checked: false }),
+  );
+});
+
+test("covers background snapshots with a branded curtain while active screenshots stay available", async () => {
+  const appStateListeners: Array<(state: AppStateStatus) => void> = [];
+  jest.spyOn(AppState, "addEventListener").mockImplementation((event, listener) => {
+    if (event === "change") {
+      appStateListeners.push(listener as (state: AppStateStatus) => void);
+    }
+    return { remove: jest.fn() };
+  });
+  const controller = authController({
+    listGroups: jest.fn(async () => adaptiveGroups),
+    readTaskList: jest.fn(async () =>
+      oneTaskSnapshot("grp_one", "Private Task text"),
+    ),
+  });
+
+  await renderNativeApp(previewConfig, controller);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open Walker Workshop" }),
+  );
+  expect(await screen.findByText("Private Task text")).toBeOnTheScreen();
+  expect(screen.queryByTestId("openjob-privacy-curtain")).not.toBeOnTheScreen();
+
+  await act(() => {
+    for (const listener of appStateListeners) listener("background");
+  });
+  expect(screen.getByTestId("openjob-privacy-curtain")).toBeOnTheScreen();
+  expect(screen.getByText("OpenJob is private in the app switcher.")).toBeOnTheScreen();
+
+  await act(() => {
+    for (const listener of appStateListeners) listener("active");
+  });
+  expect(screen.queryByTestId("openjob-privacy-curtain")).not.toBeOnTheScreen();
+  expect(screen.getByText("Private Task text")).toBeOnTheScreen();
+});
+
 test("production omits the non-production build badge", async () => {
   await renderNativeApp(productionConfig);
 
@@ -214,6 +426,119 @@ test("production omits the non-production build badge", async () => {
     await screen.findByRole("header", { name: "Choose a Group" }),
   ).toBeOnTheScreen();
   expect(screen.queryByText(/build$/iu)).not.toBeOnTheScreen();
+});
+
+test("lets the User stop later diagnostics and guards verification controls from production", async () => {
+  const diagnostics = diagnosticsController();
+  const rendered = await renderNativeApp(
+    {
+      ...previewConfig,
+      diagnosticsDsn: "https://public@example.ingest.sentry.io/1",
+      diagnosticsVerificationEnabled: true,
+    },
+    authController(),
+    diagnostics,
+  );
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open appearance settings" }),
+  );
+
+  const sharing = await screen.findByRole("switch", {
+    name: "Share diagnostics",
+  });
+  expect(sharing).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ checked: true }),
+  );
+  expect(screen.getByText("Crashes and hangs only")).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Send diagnostic verification" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Crash this verification build" }),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Send diagnostic verification" }),
+  );
+  expect(
+    await screen.findByText(
+      "Scrubbed verification event queued. Confirm it in Sentry.",
+    ),
+  ).toBeOnTheScreen();
+
+  diagnostics.flush.mockRejectedValueOnce(new Error("transport unavailable"));
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Send diagnostic verification" }),
+  );
+  expect(
+    await screen.findByText(
+      "Verification could not be sent. Nothing private was attached.",
+    ),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(sharing);
+  await waitFor(() => {
+    expect(diagnostics.setSharingEnabled).toHaveBeenCalledWith(false);
+  });
+  expect(sharing).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ checked: false }),
+  );
+  expect(await screen.findByText("Diagnostics are off.")).toBeOnTheScreen();
+
+  await rendered.unmount();
+  await AsyncStorage.clear();
+  await renderNativeApp(productionConfig, authController(), diagnosticsController());
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open appearance settings" }),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Send diagnostic verification" }),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Crash this verification build" }),
+  ).not.toBeOnTheScreen();
+});
+
+test("keeps diagnostics off in parent state when native cleanup reports a warning", async () => {
+  const diagnostics = diagnosticsController();
+  diagnostics.setSharingEnabled.mockImplementationOnce(async () => {
+    (diagnostics.isSharingEnabled as jest.Mock).mockReturnValue(false);
+    throw new Error("native cleanup incomplete");
+  });
+  await renderNativeApp(
+    {
+      ...previewConfig,
+      diagnosticsDsn: "https://public@example.ingest.sentry.io/1",
+    },
+    authController(),
+    diagnostics,
+  );
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open appearance settings" }),
+  );
+  await fireEvent.press(
+    await screen.findByRole("switch", { name: "Share diagnostics" }),
+  );
+  expect(
+    await screen.findByText(
+      "Diagnostics are off. Native cleanup was incomplete; try again.",
+    ),
+  ).toBeOnTheScreen();
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Back to OpenJob" }),
+  );
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Open appearance settings" }),
+  );
+  expect(
+    await screen.findByRole("switch", { name: "Share diagnostics" }),
+  ).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ checked: false }),
+  );
 });
 
 test("wraps every User action inside a narrow phone header", async () => {
@@ -897,10 +1222,10 @@ test("advances cached freshness on 304 without replacing the rendered Task", asy
 });
 
 test("stops Task List polling outside active state and checks immediately on foreground", async () => {
-  let appStateListener: ((state: AppStateStatus) => void) | undefined;
+  const appStateListeners: Array<(state: AppStateStatus) => void> = [];
   AppState.currentState = "unknown";
   jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => {
-    appStateListener = listener;
+    appStateListeners.push(listener);
     return { remove: jest.fn() };
   });
   const syncTaskList = jest.fn(async () => ({
@@ -914,12 +1239,18 @@ test("stops Task List polling outside active state and checks immediately on for
     syncTaskList,
   });
   const rendered = await renderNativeApp(previewConfig, controller);
-  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(
+    await screen.findByText("Cached Task", { includeHiddenElements: true }),
+  ).toBeOnTheScreen();
   expect(syncTaskList).not.toHaveBeenCalled();
-  await act(() => appStateListener?.("active"));
+  await act(() => {
+    for (const listener of appStateListeners) listener("active");
+  });
   expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
 
-  await act(() => appStateListener?.("background"));
+  await act(() => {
+    for (const listener of appStateListeners) listener("background");
+  });
   const callsWhileVisible = syncTaskList.mock.calls.length;
   jest.useFakeTimers();
   try {
@@ -930,7 +1261,7 @@ test("stops Task List polling outside active state and checks immediately on for
     expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible);
 
     await act(async () => {
-      appStateListener?.("unknown");
+      for (const listener of appStateListeners) listener("unknown");
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -942,7 +1273,7 @@ test("stops Task List polling outside active state and checks immediately on for
     expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible);
 
     await act(async () => {
-      appStateListener?.("active");
+      for (const listener of appStateListeners) listener("active");
       await Promise.resolve();
       await Promise.resolve();
     });

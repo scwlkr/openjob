@@ -168,6 +168,130 @@ terminate the app, and relaunch it. The branded shell must render from the
 embedded bundle and make no remote update-manifest request. Restore networking,
 rotate, background/foreground, and relaunch once more.
 
+## Privacy and diagnostics
+
+The privacy inventory covers the whole native app. Google or Apple sign-in and
+Firebase session exchange send provider account claims and credentials for
+authentication. Authenticated `/api/v1` calls send the Firebase bearer token,
+OpenJob User and Group identifiers, a claimed Username, and the operation needed
+to create or link an account or read the selected Group's Members and Tasks.
+Those account and app-functionality flows are required for the relevant journey,
+encrypted in transit, linked to the OpenJob account, and not controlled by the
+Share diagnostics setting. OpenJob does not use them for advertising or
+cross-app tracking.
+
+Sentry is the only app-level crash and hang processor. Native hang integrations
+cover UI/main-thread hangs, while a foreground-only local heartbeat reports a
+confirmed, recovered JavaScript event-loop stall after five seconds without
+adding tracing. It uses monotonic timing, ignores suspended time, and rate-limits
+reports. A permanent JavaScript lock cannot report itself, and the recovered
+event's stack identifies the detector callback rather than the blocked work.
+OpenJob sends crashes, hangs, safe operation names and timing,
+app/build/runtime version, OS version, and coarse device class. The client strips Task text, Group names and IDs,
+Usernames, email, provider and authentication material, request bodies,
+identifier-bearing URLs, screenshots, view hierarchies, and permanent
+installation identity before transport. Session Replay, user identity,
+automatic breadcrumbs, broad tracing, profiling, product analytics, and ad or
+device tracking are disabled. These Sentry rows are optional because every User
+can disable Share diagnostics without losing account or Task List access.
+
+The pinned Sentry core binaries still contain dormant replay, profiling, and
+tracing implementation even though OpenJob removes their integrations and never
+initializes those features. That inventory does not satisfy a literal
+"no such code ships" policy; a release with that policy needs a crash-only SDK
+fork or an amended binary criterion.
+
+Share diagnostics defaults on and is stored only in native preferences. Android
+SharedPreferences and iOS NSUserDefaults are read before React Native starts, so
+native crash/hang capture begins during bootstrap only when the persisted switch
+allows it. Disabling gates delivery, writes that launch-time switch, cancels and
+closes Sentry, and purges its queued envelopes and installation cache. The UI
+reads this native preference as its single source of truth. The binary does not
+include `expo-application`, Play Install Referrer, or its Android-ID accessor.
+
+The generated Apple app privacy manifest declares the data collected by
+OpenJob-owned code:
+
+| Apple data type | Linked | Tracking | Collection | Purpose |
+| --- | --- | --- | --- | --- |
+| Name | Yes | No | Required account data | App Functionality |
+| Email Address | Yes | No | Required account data | App Functionality |
+| User ID | Yes | No | Required account data | App Functionality |
+| Other User Content | Yes | No | Required Group/Task data | App Functionality |
+| Product Interaction | Yes | No | Required authenticated operations | App Functionality |
+| Crash Data | No | No | Optional Share diagnostics | App Functionality |
+| Performance Data | No | No | Optional Share diagnostics | App Functionality |
+| Other Diagnostic Data | No | No | Optional Share diagnostics | App Functionality |
+
+Third-party manifests remain separate in the signed app. Xcode's archive
+privacy report must merge the table above with every bundled SDK manifest
+before the App Store Connect Nutrition Label is submitted. In the pinned
+GoogleSignIn SDK, that report additionally includes linked Phone Number and
+Coarse Location for App Functionality; linked Other Data Types and User ID for
+App Functionality and Analytics; and linked Device ID and Other Usage Data for
+Analytics. Those Analytics purposes are GoogleSignIn's bundled declaration,
+not OpenJob product analytics. The app manifest does not duplicate those SDK
+rows because Xcode aggregates them from the SDK's own manifest.
+
+The Play Data Safety form must likewise separate required account/app data from
+optional Sentry data. Firebase and Sentry act as service providers; ordinary
+provider authentication is User-initiated. None of these rows is sold or used
+for advertising or cross-app tracking.
+
+| Play data type | Declaration |
+| --- | --- |
+| Name | Collected, required, not shared; App functionality and Account management |
+| Email address | Collected, required, not shared; App functionality and Account management |
+| User IDs | Collected, required, not shared; App functionality and Account management |
+| Other user-generated content | Collected, required, not shared; App functionality |
+| App interactions | Collected, required, not shared; App functionality |
+| Crash logs | Collected, optional, not shared; App functionality and Analytics |
+| Diagnostics | Collected, optional, not shared; App functionality and Analytics |
+| Device or other IDs | Pending final merged-manifest, Play SDK Index, and traffic inspection |
+
+Do not infer the Android declaration from an iOS SDK privacy manifest. Reconcile
+the Play table against the exact release dependency report, Play SDK Index, and
+captured on-device traffic before submission, including provider-auth data that
+is sent only after a User starts that journey.
+
+Do not submit either store declaration until captured iOS and Android Preview
+traffic confirms that provider, Firebase, OpenJob API, and Sentry behavior plus
+the built SDK inventory match these rows. Reconcile the generated
+`PrivacyInfo.xcprivacy`, Play SDK Index, and final binary after every relevant
+SDK upgrade.
+
+Sentry build configuration comes only from the matching EAS environment:
+
+- `EXPO_PUBLIC_SENTRY_DSN` supplies the client endpoint at build time. It is not
+  committed even though a client DSN is not an authentication secret.
+- `SENTRY_ORG` and `SENTRY_PROJECT` select the non-secret upload destination.
+- `SENTRY_AUTH_TOKEN` is an EAS `Sensitive` variable used only by native symbol
+  and source-map upload steps. Never pass it through Expo public config, commit
+  it, or include it in build evidence.
+- `OPENJOB_DIAGNOSTICS_VERIFICATION=1` exposes the guarded verification actions
+  only in Preview and only when a DSN is present. Production always excludes
+  those actions.
+- `OPENJOB_DIAGNOSTICS_STARTUP_CRASH_VERIFICATION=1` additionally makes that
+  guarded Preview build fail once, before diagnostics initialization or the app
+  module render. Relaunch the same install to upload the iOS crash report. Clear
+  app storage to repeat, then rebuild without the flag.
+
+`native/metro.config.cjs` adds Debug IDs while excluding React Native replay
+entrypoints from the JavaScript bundle. The Expo config plugin wires iOS dSYM
+and JavaScript source-map upload plus Android
+mapping/native-symbol and JavaScript source-map upload into release builds.
+Local builds automatically skip uploads when no `SENTRY_AUTH_TOKEN` exists;
+they are launch smoke only and never count as symbolication evidence.
+Create the Preview build with `npm --prefix native run build:preview`, trigger
+the guarded safe event on each platform, then confirm its release, distribution,
+Debug IDs, stack symbolication, embedded-update context, OS, and coarse device
+class in Sentry without copying its payload into public evidence.
+
+OpenJob ships native changes through store builds only. OTA remains disabled;
+the Sentry wiring does not add an update URL, runtime version, channel, signing
+metadata, discovery, download, or apply path. A future signed-OTA project must
+separately add and prove source-map handling under ADR 0012.
+
 ## Versioning and upgrades
 
 The root `package.json` is the user-facing version authority. Release

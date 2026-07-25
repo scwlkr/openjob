@@ -53,10 +53,10 @@ export type ProviderNativeModules = {
   };
   google: {
     configure(options: {
-      iosClientId: string;
+      iosClientId?: string;
       offlineAccess: false;
       scopes: never[];
-      webClientId: string;
+      webClientId?: string;
     }): void;
     errorCancelled: string;
     errorInProgress: string;
@@ -125,6 +125,12 @@ function defaultNativeModules(): ProviderNativeModules {
     platform,
     randomUuid: () => Crypto.randomUUID(),
   };
+}
+
+export async function clearNativeProviderSessionWithoutConfiguration() {
+  const google = defaultNativeModules().google;
+  google.configure({ offlineAccess: false, scopes: [] });
+  await google.signOut();
 }
 
 function errorCode(error: unknown) {

@@ -1,0 +1,2007 @@
+diff --git a/node_modules/@sentry/react-native/RNSentry.podspec b/node_modules/@sentry/react-native/RNSentry.podspec
+index 78fd549..c67dfa9 100644
+--- a/node_modules/@sentry/react-native/RNSentry.podspec
++++ b/node_modules/@sentry/react-native/RNSentry.podspec
+@@ -42,6 +42,7 @@ Pod::Spec.new do |s|
+   s.preserve_paths = '*.js'
+ 
+   s.source_files = 'ios/**/*.{h,m,mm}'
++  s.exclude_files = ['ios/RNSentryReplay*.{h,m,mm}', 'ios/Replay/**/*.{h,m,mm}']
+   s.public_header_files = 'ios/RNSentry.h'
+ 
+   s.compiler_flags = other_cflags
+diff --git a/node_modules/@sentry/react-native/android/build.gradle b/node_modules/@sentry/react-native/android/build.gradle
+index e6ecbf2..467d5df 100644
+--- a/node_modules/@sentry/react-native/android/build.gradle
++++ b/node_modules/@sentry/react-native/android/build.gradle
+@@ -43,6 +43,8 @@ android {
+ 
+     sourceSets {
+         main {
++            java.exclude '**/RNSentryReplayBreadcrumbConverter.java'
++            java.exclude '**/replay/**'
+             if (isNewArchitectureEnabled()) {
+                 java.srcDirs += ['src/newarch']
+             } else {
+@@ -53,7 +55,6 @@ android {
+ }
+ 
+ dependencies {
+-    compileOnly files('libs/replay-stubs.jar')
+     implementation 'com.facebook.react:react-native:+'
+     api 'io.sentry:sentry-android:8.31.0'
+ }
+diff --git a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
+index 11a4b40..3126302 100644
+--- a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
++++ b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
+@@ -6,11 +6,15 @@ import static io.sentry.vendor.Base64.NO_WRAP;
+ import static java.util.concurrent.TimeUnit.SECONDS;
+ 
+ import android.app.Activity;
++import android.app.Application;
+ import android.content.Context;
++import android.content.SharedPreferences;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
+ import android.content.res.AssetManager;
+ import android.net.Uri;
++import android.os.Bundle;
++import android.os.SystemClock;
+ import android.util.SparseIntArray;
+ import androidx.annotation.VisibleForTesting;
+ import androidx.core.app.FrameMetricsAggregator;
+@@ -31,23 +35,20 @@ import com.facebook.react.bridge.WritableNativeArray;
+ import com.facebook.react.bridge.WritableNativeMap;
+ import com.facebook.react.common.JavascriptException;
+ import io.sentry.Breadcrumb;
++import io.sentry.Hint;
+ import io.sentry.ILogger;
+ import io.sentry.IScope;
+ import io.sentry.ISentryExecutorService;
+ import io.sentry.ISerializer;
+-import io.sentry.Integration;
+-import io.sentry.ProfileLifecycle;
+ import io.sentry.ScopesAdapter;
+-import io.sentry.ScreenshotStrategyType;
+ import io.sentry.Sentry;
+ import io.sentry.SentryDate;
+ import io.sentry.SentryDateProvider;
++import io.sentry.SentryEnvelope;
+ import io.sentry.SentryEvent;
+ import io.sentry.SentryExecutorService;
+ import io.sentry.SentryLevel;
+ import io.sentry.SentryOptions;
+-import io.sentry.SentryReplayOptions;
+-import io.sentry.SentryReplayOptions.SentryReplayQuality;
+ import io.sentry.UncaughtExceptionHandlerIntegration;
+ import io.sentry.android.core.AndroidLogger;
+ import io.sentry.android.core.AndroidProfiler;
+@@ -56,7 +57,6 @@ import io.sentry.android.core.BuildConfig;
+ import io.sentry.android.core.BuildInfoProvider;
+ import io.sentry.android.core.CurrentActivityHolder;
+ import io.sentry.android.core.InternalSentrySdk;
+-import io.sentry.android.core.NdkIntegration;
+ import io.sentry.android.core.SentryAndroid;
+ import io.sentry.android.core.SentryAndroidDateProvider;
+ import io.sentry.android.core.SentryAndroidOptions;
+@@ -64,22 +64,25 @@ import io.sentry.android.core.ViewHierarchyEventProcessor;
+ import io.sentry.android.core.internal.debugmeta.AssetsDebugMetaLoader;
+ import io.sentry.android.core.internal.util.SentryFrameMetricsCollector;
+ import io.sentry.android.core.performance.AppStartMetrics;
++import io.sentry.protocol.DebugMeta;
+ import io.sentry.protocol.Geo;
++import io.sentry.protocol.DebugImage;
++import io.sentry.protocol.Mechanism;
+ import io.sentry.protocol.SdkVersion;
+-import io.sentry.protocol.SentryId;
++import io.sentry.protocol.SentryException;
+ import io.sentry.protocol.SentryPackage;
++import io.sentry.protocol.SentryStackFrame;
++import io.sentry.protocol.SentryStackTrace;
++import io.sentry.protocol.SentryThread;
+ import io.sentry.protocol.User;
+ import io.sentry.protocol.ViewHierarchy;
+-import io.sentry.react.replay.RNSentryReplayFragmentLifecycleTracer;
+-import io.sentry.react.replay.RNSentryReplayMask;
+-import io.sentry.react.replay.RNSentryReplayUnmask;
+ import io.sentry.util.DebugMetaPropertiesApplier;
+ import io.sentry.util.FileUtils;
+ import io.sentry.util.JsonSerializationUtils;
+-import io.sentry.util.LoadClass;
+ import io.sentry.vendor.Base64;
+ import java.io.BufferedInputStream;
+ import java.io.BufferedReader;
++import java.io.ByteArrayInputStream;
+ import java.io.ByteArrayOutputStream;
+ import java.io.File;
+ import java.io.FileNotFoundException;
+@@ -88,16 +91,19 @@ import java.io.IOException;
+ import java.io.InputStream;
+ import java.net.URI;
+ import java.net.URISyntaxException;
++import java.lang.reflect.Field;
+ import java.nio.charset.Charset;
+ import java.util.ArrayList;
++import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.Iterator;
+ import java.util.List;
+-import java.util.Locale;
+ import java.util.Map;
+ import java.util.Properties;
+ import java.util.Set;
+ import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicLong;
+ import java.util.regex.Pattern;
+ import org.jetbrains.annotations.NotNull;
+ import org.jetbrains.annotations.Nullable;
+@@ -111,6 +117,16 @@ public class RNSentryModuleImpl {
+   private static final BuildInfoProvider buildInfo = new BuildInfoProvider(logger);
+   private static final String modulesPath = "modules.json";
+   private static final Charset UTF_8 = Charset.forName("UTF-8"); // NOPMD - Allow using UTF-8
++  private static final String OPENJOB_DIAGNOSTICS_PREFERENCES =
++      "openjob.native.diagnostics";
++  private static final String OPENJOB_DIAGNOSTICS_ENABLED = "share_diagnostics_enabled";
++  private static final String OPENJOB_SENTRY_DSN = "dev.openjob.sentry.dsn";
++  private static final String OPENJOB_SENTRY_ENVIRONMENT = "dev.openjob.sentry.environment";
++  private static final AtomicBoolean openJobDiagnosticsDeliveryAllowed =
++      new AtomicBoolean(true);
++  private static final AtomicLong openJobJsFatalEnvelopeStoredAtMillis =
++      new AtomicLong(0L);
++  private static final long OPENJOB_JS_FATAL_WRAPPER_WINDOW_MILLIS = 10_000L;
+ 
+   private final ReactApplicationContext reactApplicationContext;
+   private final PackageInfo packageInfo;
+@@ -146,14 +162,58 @@ public class RNSentryModuleImpl {
+   private long maxTraceFileSize = 5 * 1024 * 1024;
+ 
+   private final @NotNull SentryDateProvider dateProvider;
+-  private final @NotNull LoadClass loadClass;
+ 
+   public RNSentryModuleImpl(ReactApplicationContext reactApplicationContext) {
+     packageInfo = getPackageInfo(reactApplicationContext);
+     this.reactApplicationContext = reactApplicationContext;
+     this.emitNewFrameEvent = createEmitNewFrameEvent();
+     this.dateProvider = new SentryAndroidDateProvider();
+-    this.loadClass = new LoadClass();
++  }
++
++  public static void initializeOpenJobDiagnostics(@NotNull Application application) {
++    openJobJsFatalEnvelopeStoredAtMillis.set(0L);
++    final SharedPreferences preferences =
++        application.getSharedPreferences(OPENJOB_DIAGNOSTICS_PREFERENCES, Context.MODE_PRIVATE);
++    if (!preferences.getBoolean(OPENJOB_DIAGNOSTICS_ENABLED, true)) {
++      openJobDiagnosticsDeliveryAllowed.set(false);
++      return;
++    }
++    openJobDiagnosticsDeliveryAllowed.set(true);
++
++    try {
++      final Bundle metadata =
++          application
++              .getPackageManager()
++              .getApplicationInfo(application.getPackageName(), PackageManager.GET_META_DATA)
++              .metaData;
++      final String dsn = metadata == null ? null : metadata.getString(OPENJOB_SENTRY_DSN);
++      if (dsn == null || dsn.isEmpty()) {
++        return;
++      }
++      final String environment = metadata.getString(OPENJOB_SENTRY_ENVIRONMENT);
++      SentryAndroid.init(
++          application,
++          options -> {
++            options.setDsn(dsn);
++            if (environment != null && !environment.isEmpty()) {
++              options.setEnvironment(environment);
++            }
++            options.setEnableAutoSessionTracking(false);
++            options.setAttachThreads(true);
++            options.setAttachScreenshot(false);
++            options.setAttachViewHierarchy(false);
++            options.setSendDefaultPii(false);
++            options.setEnableNdk(false);
++            options.setEnableScopeSync(false);
++            options.getLogs().setEnabled(false);
++            options.setSendClientReports(false);
++            options.setMaxBreadcrumbs(0);
++            configureOpenJobCrashOnlyOptions(application, options);
++          });
++      pruneOpenJobEventProcessors();
++    } catch (Throwable error) { // NOPMD - diagnostics must never block app bootstrap
++      logger.log(SentryLevel.ERROR, error, "OpenJob diagnostics bootstrap failed.");
++    }
+   }
+ 
+   private ReactApplicationContext getReactApplicationContext() {
+@@ -185,34 +245,34 @@ public class RNSentryModuleImpl {
+     }
+   }
+ 
+-  private void initFragmentReplayTracking() {
+-    final RNSentryReplayFragmentLifecycleTracer fragmentLifecycleTracer =
+-        new RNSentryReplayFragmentLifecycleTracer(logger);
+-
+-    final @Nullable Activity currentActivity = getCurrentActivity();
+-    if (!(currentActivity instanceof FragmentActivity)) {
+-      return;
+-    }
+-
+-    final @NotNull FragmentActivity fragmentActivity = (FragmentActivity) currentActivity;
+-    final @Nullable FragmentManager supportFragmentManager =
+-        fragmentActivity.getSupportFragmentManager();
+-    if (supportFragmentManager != null) {
+-      supportFragmentManager.registerFragmentLifecycleCallbacks(fragmentLifecycleTracer, true);
+-    }
+-  }
+-
+   public void initNativeReactNavigationNewFrameTracking(Promise promise) {
+     this.initFragmentInitialFrameTracking();
+   }
+ 
+   public void initNativeSdk(final ReadableMap rnOptions, Promise promise) {
+-    SentryAndroid.init(
+-        getApplicationContext(), options -> getSentryAndroidOptions(options, rnOptions, logger));
++    if (!Sentry.isEnabled()) {
++      SentryAndroid.init(
++          getApplicationContext(), options -> getSentryAndroidOptions(options, rnOptions, logger));
++    }
++    pruneOpenJobEventProcessors();
+ 
+     promise.resolve(true);
+   }
+ 
++  private static void pruneOpenJobEventProcessors() {
++    Sentry.getCurrentScopes()
++        .getOptions()
++        .getEventProcessors()
++        .removeIf(
++            processor -> {
++              final String name = processor.getClass().getSimpleName();
++              return name.equals("DefaultAndroidEventProcessor")
++                  || name.equals("PerformanceAndroidEventProcessor")
++                  || name.equals("ScreenshotEventProcessor")
++                  || name.equals("ViewHierarchyEventProcessor");
++            });
++  }
++
+   @TestOnly
+   protected Context getApplicationContext() {
+     final Context context = this.getReactApplicationContext().getApplicationContext();
+@@ -323,60 +383,15 @@ public class RNSentryModuleImpl {
+       }
+     }
+ 
+-    SentryReplayOptions replayOptions = getReplayOptions(rnOptions);
+-    options.setSessionReplay(replayOptions);
+-    // Check if the replay integration is available on the classpath. It's already
+-    // kept from R8
+-    // shrinking by sentry-android-core
+-    final boolean isReplayAvailable =
+-        loadClass.isClassAvailable("io.sentry.android.replay.ReplayIntegration", logger);
+-    if (isReplayEnabled(replayOptions) && isReplayAvailable) {
+-      options.getReplayController().setBreadcrumbConverter(new RNSentryReplayBreadcrumbConverter());
+-      initFragmentReplayTracking();
+-    }
+-
+-    // Configure Android UI Profiling
+-    configureAndroidProfiling(options, rnOptions);
+-
+-    // Exclude Dev Server and Sentry Dsn request from Breadcrumbs
+-    String dsn = getURLFromDSN(rnOptions.getString("dsn"));
+-    String devServerUrl = rnOptions.getString("devServerUrl");
+-    options.setBeforeBreadcrumb(
+-        (breadcrumb, hint) -> {
+-          Object urlObject = breadcrumb.getData("url");
+-          String url = urlObject instanceof String ? (String) urlObject : "";
+-          if ("http".equals(breadcrumb.getType())
+-              && ((dsn != null && url.startsWith(dsn))
+-                  || (devServerUrl != null && url.startsWith(devServerUrl)))) {
+-            return null;
+-          }
+-          return breadcrumb;
+-        });
+-
+-    // React native internally throws a JavascriptException.
+-    // we want to ignore it on the native side to avoid sending it twice.
+-    options.addIgnoredExceptionForType(JavascriptException.class);
++    configureOpenJobCrashOnlyOptions(getApplicationContext(), options);
+ 
+     trySetIgnoreErrors(options, rnOptions);
+ 
+-    options.setBeforeSend(
+-        (event, hint) -> {
+-          setEventOriginTag(event);
+-          addPackages(event, options.getSdkVersion());
+-
+-          return event;
+-        });
+-
+     if (rnOptions.hasKey("enableNativeCrashHandling")
+         && !rnOptions.getBoolean("enableNativeCrashHandling")) {
+-      final List<Integration> integrations = options.getIntegrations();
+-      for (final Integration integration : integrations) {
+-        if (integration instanceof UncaughtExceptionHandlerIntegration
+-            || integration instanceof AnrIntegration
+-            || integration instanceof NdkIntegration) {
+-          integrations.remove(integration);
+-        }
+-      }
++      options.getIntegrations().clear();
++      options.setEnableUncaughtExceptionHandler(false);
++      options.setAnrEnabled(false);
+     }
+     logger.log(
+         SentryLevel.INFO, String.format("Native Integrations '%s'", options.getIntegrations()));
+@@ -388,154 +403,244 @@ public class RNSentryModuleImpl {
+     }
+   }
+ 
+-  private boolean isReplayEnabled(SentryReplayOptions replayOptions) {
+-    return replayOptions.getSessionSampleRate() != null
+-        || replayOptions.getOnErrorSampleRate() != null;
+-  }
+-
+-  private SentryReplayOptions getReplayOptions(@NotNull ReadableMap rnOptions) {
+-    final SdkVersion replaySdkVersion =
+-        new SdkVersion(
+-            RNSentryVersion.REACT_NATIVE_SDK_NAME,
+-            RNSentryVersion.REACT_NATIVE_SDK_PACKAGE_VERSION);
+-    @NotNull
+-    final SentryReplayOptions androidReplayOptions =
+-        new SentryReplayOptions(false, replaySdkVersion);
+-
+-    if (!(rnOptions.hasKey("replaysSessionSampleRate")
+-        || rnOptions.hasKey("replaysOnErrorSampleRate"))) {
+-      return androidReplayOptions;
++  private static void configureOpenJobCrashOnlyOptions(
++      @NotNull Context context, @NotNull SentryAndroidOptions options) {
++    // OpenJob uses Sentry only for crashes and hangs. Disable native defaults that
++    // would otherwise install breadcrumbs, tracing, profiling, or broad context.
++    options.enableAllAutoBreadcrumbs(false);
++    options.setBeforeBreadcrumb((breadcrumb, hint) -> null);
++    final SharedPreferences preferences =
++        context.getSharedPreferences(OPENJOB_DIAGNOSTICS_PREFERENCES, Context.MODE_PRIVATE);
++    openJobDiagnosticsDeliveryAllowed.set(
++        preferences.getBoolean(OPENJOB_DIAGNOSTICS_ENABLED, true));
++    options.setTransportGate(
++        () ->
++            openJobDiagnosticsDeliveryAllowed.get()
++                && preferences.getBoolean(OPENJOB_DIAGNOSTICS_ENABLED, true));
++    options.setShutdownTimeoutMillis(0);
++    options.setFlushTimeoutMillis(0);
++    options.setEnableAutoActivityLifecycleTracing(false);
++    options.setEnableActivityLifecycleTracingAutoFinish(false);
++    options.setEnableFramesTracking(false);
++    options.setCollectAdditionalContext(false);
++    options.setCollectExternalStorageContext(false);
++    options.setEnablePerformanceV2(false);
++    options.setEnableUserInteractionTracing(false);
++    options.setEnableUserInteractionBreadcrumbs(false);
++    options.setEnableTimeToFullDisplayTracing(false);
++    options.setEnableScreenTracking(false);
++    options.setEnableAppStartProfiling(false);
++    options.setEnableAutoTraceIdGeneration(false);
++    options.setEnableRootCheck(false);
++    options.setEnableScopePersistence(false);
++    options.setSendModules(false);
++    options.setDistinctId(null);
++    options.setTracesSampleRate(0d);
++    options.setTracesSampler(null);
++    options.setTraceSampling(false);
++    options.setProfilesSampleRate(null);
++    options.setProfilesSampler(null);
++    options.setProfileSessionSampleRate(0d);
++    options.setStartProfilerOnAppStart(false);
++    options.setPropagateTraceparent(false);
++    options.setTracePropagationTargets(Collections.emptyList());
++    options.setEnableUncaughtExceptionHandler(true);
++    options.setAnrEnabled(true);
++    final Map<String, Object> runtime = openJobNativeRuntimeContext(context);
++    options.setRelease((String) runtime.get("runtime_version"));
++    final Object buildVersion = runtime.get("build_version");
++    if (buildVersion instanceof String) {
++      options.setDist((String) buildVersion);
+     }
+-
+-    androidReplayOptions.setSessionSampleRate(
+-        rnOptions.hasKey("replaysSessionSampleRate")
+-            ? rnOptions.getDouble("replaysSessionSampleRate")
+-            : null);
+-    androidReplayOptions.setOnErrorSampleRate(
+-        rnOptions.hasKey("replaysOnErrorSampleRate")
+-            ? rnOptions.getDouble("replaysOnErrorSampleRate")
+-            : null);
+-
+-    if (rnOptions.hasKey("replaysSessionQuality")) {
+-      final String qualityString = rnOptions.getString("replaysSessionQuality");
+-      final SentryReplayQuality quality = parseReplayQuality(qualityString);
+-      androidReplayOptions.setQuality(quality);
+-    }
+-
+-    if (!rnOptions.hasKey("mobileReplayOptions")) {
+-      return androidReplayOptions;
+-    }
+-    @Nullable final ReadableMap rnMobileReplayOptions = rnOptions.getMap("mobileReplayOptions");
+-    if (rnMobileReplayOptions == null) {
+-      return androidReplayOptions;
+-    }
+-
+-    androidReplayOptions.setMaskAllText(
+-        !rnMobileReplayOptions.hasKey("maskAllText")
+-            || rnMobileReplayOptions.getBoolean("maskAllText"));
+-    androidReplayOptions.setMaskAllImages(
+-        !rnMobileReplayOptions.hasKey("maskAllImages")
+-            || rnMobileReplayOptions.getBoolean("maskAllImages"));
+-
+-    final boolean redactVectors =
+-        !rnMobileReplayOptions.hasKey("maskAllVectors")
+-            || rnMobileReplayOptions.getBoolean("maskAllVectors");
+-    if (redactVectors) {
+-      androidReplayOptions.addMaskViewClass("com.horcrux.svg.SvgView"); // react-native-svg
++    options.setBeforeSend(
++        (event, hint) -> {
++          if (openJobIsReactNativeJavaScriptWrapper(event)
++              && openJobConsumeStoredJavaScriptFatal()) {
++            return null;
++          }
++          return openJobSanitizeNativeEvent(context, event);
++        });
++    options
++        .getIntegrations()
++        .removeIf(
++            integration -> {
++              final String name = integration.getClass().getSimpleName();
++              return !(integration instanceof UncaughtExceptionHandlerIntegration)
++                  && !(integration instanceof AnrIntegration)
++                  && !name.equals("AnrV2Integration")
++                  && !name.equals("SendCachedEnvelopeIntegration")
++                  && !name.equals("EnvelopeFileObserverIntegration");
++            });
++  }
++
++  private static void openJobSanitizeNativeStacktrace(
++      @Nullable SentryStackTrace stacktrace) {
++    if (stacktrace == null || stacktrace.getFrames() == null) {
++      return;
+     }
+-
+-    if (rnMobileReplayOptions.hasKey("screenshotStrategy")) {
+-      final String screenshotStrategyString = rnMobileReplayOptions.getString("screenshotStrategy");
+-      final ScreenshotStrategyType screenshotStrategy =
+-          parseScreenshotStrategy(screenshotStrategyString);
+-      androidReplayOptions.setScreenshotStrategy(screenshotStrategy);
++    for (final SentryStackFrame frame : stacktrace.getFrames()) {
++      frame.setFilename(null);
++      frame.setAbsPath(null);
++      frame.setPackage(null);
++      frame.setContextLine(null);
++      frame.setPreContext(null);
++      frame.setPostContext(null);
++      frame.setVars(null);
++      frame.setLock(null);
++      frame.setUnknown(null);
+     }
+-
+-    androidReplayOptions.setMaskViewContainerClass(RNSentryReplayMask.class.getName());
+-    androidReplayOptions.setUnmaskViewContainerClass(RNSentryReplayUnmask.class.getName());
+-
+-    return androidReplayOptions;
+   }
+ 
+-  private ScreenshotStrategyType parseScreenshotStrategy(@Nullable String strategyString) {
+-    if (strategyString == null) {
+-      return ScreenshotStrategyType.PIXEL_COPY;
++  private static boolean openJobIsReactNativeJavaScriptWrapper(
++      @NotNull SentryEvent event) {
++    if (event.getThrowable() instanceof JavascriptException) {
++      return true;
+     }
+-
+-    switch (strategyString.toLowerCase(Locale.ROOT)) {
+-      case "canvas":
+-        return ScreenshotStrategyType.CANVAS;
+-      default:
+-        return ScreenshotStrategyType.PIXEL_COPY;
++    if (event.getExceptions() == null) {
++      return false;
+     }
++    for (final SentryException exception : event.getExceptions()) {
++      final String type = exception.getType();
++      final String value = exception.getValue();
++      if ("JavascriptException".equals(type)
++          || (value != null && value.contains("ExceptionsManager.reportException"))) {
++        return true;
++      }
++    }
++    return false;
+   }
+ 
+-  private SentryReplayQuality parseReplayQuality(@Nullable String qualityString) {
+-    if (qualityString == null) {
+-      return SentryReplayQuality.MEDIUM;
++  private static boolean openJobConsumeStoredJavaScriptFatal() {
++    final long storedAt = openJobJsFatalEnvelopeStoredAtMillis.get();
++    if (storedAt == 0L) {
++      return false;
+     }
+-
+-    switch (qualityString.toLowerCase(Locale.ROOT)) {
+-      case "low":
+-        return SentryReplayQuality.LOW;
+-      case "medium":
+-        return SentryReplayQuality.MEDIUM;
+-      case "high":
+-        return SentryReplayQuality.HIGH;
+-      default:
+-        return SentryReplayQuality.MEDIUM;
++    final long age = SystemClock.elapsedRealtime() - storedAt;
++    if (age < 0L || age > OPENJOB_JS_FATAL_WRAPPER_WINDOW_MILLIS) {
++      openJobJsFatalEnvelopeStoredAtMillis.compareAndSet(storedAt, 0L);
++      return false;
+     }
+-  }
+-
+-  private void configureAndroidProfiling(
+-      @NotNull SentryAndroidOptions options, @NotNull ReadableMap rnOptions) {
+-    if (!rnOptions.hasKey("_experiments")) {
+-      return;
++    return openJobJsFatalEnvelopeStoredAtMillis.compareAndSet(storedAt, 0L);
++  }
++
++  private static @NotNull Map<String, Object> openJobNativeRuntimeContext(
++      @NotNull Context context) {
++    final Map<String, Object> runtime = new HashMap<>();
++    final PackageInfo packageInfo = getPackageInfo(context);
++    final String appVersion =
++        packageInfo != null && packageInfo.versionName != null
++            ? packageInfo.versionName
++            : "unknown";
++    @Nullable String buildVersion = null;
++    if (packageInfo != null) {
++      final long versionCode =
++          android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
++              ? packageInfo.getLongVersionCode()
++              : packageInfo.versionCode;
++      buildVersion = String.valueOf(versionCode);
++    }
++    final String runtimeVersion =
++        context.getPackageName()
++            + "@"
++            + appVersion
++            + (buildVersion == null ? "" : "+" + buildVersion);
++    runtime.put("app_version", appVersion);
++    if (buildVersion != null) {
++      runtime.put("build_version", buildVersion);
++    }
++    runtime.put("runtime_version", runtimeVersion);
++    runtime.put("update_source", "embedded");
++    return runtime;
++  }
++
++  private static SentryEvent openJobSanitizeNativeEvent(
++      @NotNull Context context, @NotNull SentryEvent event) {
++    final Object existingRuntime = event.getContexts().get("openjob");
++    event.setUser(null);
++    event.setRequest(null);
++    event.setBreadcrumbs(null);
++    event.setExtras(null);
++    event.setMessage(null);
++    event.setTransaction(null);
++    event.setFingerprints(null);
++    event.setServerName(null);
++    event.setLogger(null);
++    event.setModules(null);
++    event.setThrowable(null);
++    event.setUnknown(null);
++
++    final Map<String, String> tags = new HashMap<>();
++    tags.put("operation", "unhandled_exception");
++    event.setTags(tags);
++
++    for (final Map.Entry<String, Object> contextEntry :
++        new ArrayList<>(event.getContexts().entrySet())) {
++      event.getContexts().remove(contextEntry.getKey());
++    }
++    final Map<String, Object> runtime = openJobNativeRuntimeContext(context);
++    if (existingRuntime instanceof Map) {
++      final Map<?, ?> existingRuntimeMap = (Map<?, ?>) existingRuntime;
++      for (final String key :
++          new String[] {"app_version", "build_version", "runtime_version"}) {
++        final Object value = existingRuntimeMap.get(key);
++        if (value instanceof String
++            && ((String) value).matches("[A-Za-z0-9][A-Za-z0-9 ._+/\\-]{0,127}")) {
++          runtime.put(key, value);
++        }
++      }
++      final Object updateId = existingRuntimeMap.get("update_id");
++      if (updateId instanceof String
++          && ((String) updateId).matches("[0-9A-Fa-f][0-9A-Fa-f\\-]{7,63}")) {
++        runtime.put("update_id", updateId);
++      }
++      final Object updateSource = existingRuntimeMap.get("update_source");
++      if ("embedded".equals(updateSource) || "signed-ota".equals(updateSource)) {
++        runtime.put("update_source", updateSource);
++      }
+     }
+-
+-    @Nullable final ReadableMap experiments = rnOptions.getMap("_experiments");
+-    if (experiments == null || !experiments.hasKey("androidProfilingOptions")) {
+-      return;
++    final int smallestWidth =
++        context.getResources().getConfiguration().smallestScreenWidthDp;
++    runtime.put("device_class", smallestWidth >= 600 ? "tablet" : "phone");
++    runtime.put("os_name", "Android");
++    runtime.put("os_version", android.os.Build.VERSION.RELEASE);
++    event.getContexts().put("openjob", runtime);
++
++    if (event.getExceptions() != null) {
++      for (final SentryException exception : event.getExceptions()) {
++        exception.setValue("OpenJob native failure");
++        exception.setModule(null);
++        exception.setUnknown(null);
++        final Mechanism mechanism = exception.getMechanism();
++        if (mechanism != null) {
++          mechanism.setDescription(null);
++          mechanism.setData(null);
++          mechanism.setHelpLink(null);
++          mechanism.setMeta(null);
++          mechanism.setUnknown(null);
++        }
++        openJobSanitizeNativeStacktrace(exception.getStacktrace());
++      }
+     }
+-
+-    @Nullable
+-    final ReadableMap androidProfilingOptions = experiments.getMap("androidProfilingOptions");
+-    if (androidProfilingOptions == null) {
+-      return;
++    if (event.getThreads() != null) {
++      for (final SentryThread thread : event.getThreads()) {
++        thread.setName(null);
++        thread.setState(null);
++        thread.setHeldLocks(null);
++        thread.setUnknown(null);
++        openJobSanitizeNativeStacktrace(thread.getStacktrace());
++      }
+     }
+-
+-    // Set profile session sample rate
+-    if (androidProfilingOptions.hasKey("profileSessionSampleRate")) {
+-      final double profileSessionSampleRate =
+-          androidProfilingOptions.getDouble("profileSessionSampleRate");
+-      options.setProfileSessionSampleRate(profileSessionSampleRate);
+-      logger.log(
+-          SentryLevel.INFO,
+-          String.format(
+-              "Android UI Profiling profileSessionSampleRate set to: %.2f",
+-              profileSessionSampleRate));
+-    }
+-
+-    // Set profiling lifecycle mode
+-    if (androidProfilingOptions.hasKey("lifecycle")) {
+-      final String lifecycle = androidProfilingOptions.getString("lifecycle");
+-      if ("manual".equalsIgnoreCase(lifecycle)) {
+-        options.setProfileLifecycle(ProfileLifecycle.MANUAL);
+-        logger.log(SentryLevel.INFO, "Android UI Profile Lifecycle set to MANUAL");
+-      } else if ("trace".equalsIgnoreCase(lifecycle)) {
+-        options.setProfileLifecycle(ProfileLifecycle.TRACE);
+-        logger.log(SentryLevel.INFO, "Android UI Profile Lifecycle set to TRACE");
++    final DebugMeta debugMeta = event.getDebugMeta();
++    if (debugMeta != null && debugMeta.getImages() != null) {
++      debugMeta.setUnknown(null);
++      for (final DebugImage image : debugMeta.getImages()) {
++        image.setCodeFile(null);
++        image.setDebugFile(null);
++        image.setUnknown(null);
+       }
+     }
+ 
+-    // Set start on app start
+-    if (androidProfilingOptions.hasKey("startOnAppStart")) {
+-      final boolean startOnAppStart = androidProfilingOptions.getBoolean("startOnAppStart");
+-      options.setStartProfilerOnAppStart(startOnAppStart);
+-      logger.log(
+-          SentryLevel.INFO,
+-          String.format("Android UI Profiling startOnAppStart set to %b", startOnAppStart));
+-    }
++    return event;
+   }
+ 
+   public void crash() {
+@@ -670,33 +775,33 @@ public class RNSentryModuleImpl {
+     }
+   }
+ 
+-  public void captureReplay(boolean isHardCrash, Promise promise) {
+-    Sentry.getCurrentScopes().getOptions().getReplayController().captureReplay(isHardCrash);
+-    promise.resolve(getCurrentReplayId());
+-  }
+-
+-  public @Nullable String getCurrentReplayId() {
+-    final @Nullable IScope scope = InternalSentrySdk.getCurrentScope();
+-    if (scope == null) {
+-      return null;
+-    }
+-
+-    final @NotNull SentryId id = scope.getReplayId();
+-    if (id == SentryId.EMPTY_ID) {
+-      return null;
+-    }
+-    return id.toString();
+-  }
+-
+   public void captureEnvelope(String rawBytes, ReadableMap options, Promise promise) {
+     byte[] bytes = Base64.decode(rawBytes, Base64.DEFAULT);
+ 
+     try {
++      if (options.hasKey("hardCrashed") && options.getBoolean("hardCrashed")) {
++        openJobJsFatalEnvelopeStoredAtMillis.set(0L);
++        final SentryOptions sentryOptions = Sentry.getCurrentScopes().getOptions();
++        final SentryEnvelope envelope =
++            sentryOptions.getEnvelopeReader().read(new ByteArrayInputStream(bytes));
++        if (envelope == null) {
++          promise.resolve(false);
++          return;
++        }
++        final boolean stored =
++            sentryOptions.getEnvelopeDiskCache().storeEnvelope(envelope, new Hint());
++        if (stored) {
++          openJobJsFatalEnvelopeStoredAtMillis.set(SystemClock.elapsedRealtime());
++        }
++        promise.resolve(stored);
++        return;
++      }
+       InternalSentrySdk.captureEnvelope(
+-          bytes, !options.hasKey("hardCrashed") || !options.getBoolean("hardCrashed"));
++          bytes, true);
+     } catch (Throwable e) { // NOPMD - We don't want to crash in any case
+       logger.log(SentryLevel.ERROR, "Error while capturing envelope");
+       promise.resolve(false);
++      return;
+     }
+     promise.resolve(true);
+   }
+@@ -954,13 +1059,85 @@ public class RNSentryModuleImpl {
+   }
+ 
+   public void closeNativeSdk(Promise promise) {
++    openJobDiagnosticsDeliveryAllowed.set(false);
++    openJobJsFatalEnvelopeStoredAtMillis.set(0L);
++    final SharedPreferences preferences =
++        getApplicationContext()
++            .getSharedPreferences(OPENJOB_DIAGNOSTICS_PREFERENCES, Context.MODE_PRIVATE);
++    final boolean persisted =
++        preferences.edit().putBoolean(OPENJOB_DIAGNOSTICS_ENABLED, false).commit();
++    final @Nullable IScope currentScope = InternalSentrySdk.getCurrentScope();
++    @Nullable String cacheDirPath = null;
++    boolean purged = true;
++    if (currentScope != null) {
++      final SentryOptions options = currentScope.getOptions();
++      cacheDirPath = options.getCacheDirPath();
++      purged = purgeOpenJobDiagnostics(cacheDirPath);
++      currentScope.getClient().close(false);
++    }
+     Sentry.close();
+ 
+     disableNativeFramesTracking();
+ 
++    purged = purgeOpenJobDiagnostics(cacheDirPath) && purged;
++    if (!purged) {
++      promise.reject(
++          "OPENJOB_SENTRY_CACHE_PURGE_FAILED", "Failed to purge queued diagnostics.");
++      return;
++    }
++
++    if (!persisted) {
++      promise.reject(
++          "OPENJOB_SENTRY_PREFERENCE_FAILED",
++          "Failed to persist the native diagnostics preference.");
++      return;
++    }
++
+     promise.resolve(true);
+   }
+ 
++  public void setOpenJobDiagnosticsEnabled(boolean enabled, Promise promise) {
++    if (!enabled) {
++      openJobDiagnosticsDeliveryAllowed.set(false);
++    }
++    final boolean persisted =
++        getApplicationContext()
++            .getSharedPreferences(OPENJOB_DIAGNOSTICS_PREFERENCES, Context.MODE_PRIVATE)
++            .edit()
++            .putBoolean(OPENJOB_DIAGNOSTICS_ENABLED, enabled)
++            .commit();
++    if (enabled) {
++      openJobDiagnosticsDeliveryAllowed.set(persisted);
++    }
++    promise.resolve(persisted);
++  }
++
++  private boolean purgeOpenJobDiagnostics(@Nullable String cacheDirPath) {
++    boolean purged =
++        cacheDirPath == null || FileUtils.deleteRecursively(new File(cacheDirPath));
++    final File installation = new File(getApplicationContext().getFilesDir(), "INSTALLATION");
++    purged = (!installation.exists() || installation.delete()) && purged;
++    try {
++      final Class<?> installationClass =
++          Class.forName("io.sentry.android.core.Installation");
++      final Field deviceId = installationClass.getDeclaredField("deviceId");
++      deviceId.setAccessible(true);
++      deviceId.set(null, null);
++    } catch (ReflectiveOperationException | SecurityException error) {
++      logger.log(SentryLevel.ERROR, error, "Failed to clear the diagnostics installation cache.");
++      purged = false;
++    }
++    return purged;
++  }
++
++  public void getOpenJobDiagnosticsEnabled(Promise promise) {
++    final boolean enabled =
++        getApplicationContext()
++            .getSharedPreferences(OPENJOB_DIAGNOSTICS_PREFERENCES, Context.MODE_PRIVATE)
++            .getBoolean(OPENJOB_DIAGNOSTICS_ENABLED, true);
++    promise.resolve(enabled);
++  }
++
+   public void enableNativeFramesTracking() {
+     androidXAvailable = checkAndroidXAvailability();
+ 
+diff --git a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryPackage.java b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryPackage.java
+index 1af2fe8..d248466 100644
+--- a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryPackage.java
++++ b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryPackage.java
+@@ -8,10 +8,6 @@ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.module.model.ReactModuleInfo;
+ import com.facebook.react.module.model.ReactModuleInfoProvider;
+ import com.facebook.react.uimanager.ViewManager;
+-import io.sentry.react.replay.RNSentryReplayMaskManager;
+-import io.sentry.react.replay.RNSentryReplayMaskManagerImpl;
+-import io.sentry.react.replay.RNSentryReplayUnmaskManager;
+-import io.sentry.react.replay.RNSentryReplayUnmaskManagerImpl;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+@@ -25,18 +21,6 @@ public class RNSentryPackage extends TurboReactPackage {
+   public NativeModule getModule(String name, ReactApplicationContext reactContext) {
+     if (RNSentryModuleImpl.NAME.equals(name)) {
+       return new RNSentryModule(reactContext);
+-    } else if (isTurboModule) {
+-      return getFabricComponentNativeModule(name);
+-    } else {
+-      return null;
+-    }
+-  }
+-
+-  private NativeModule getFabricComponentNativeModule(String name) {
+-    if (RNSentryReplayMaskManagerImpl.REACT_CLASS.equals(name)) {
+-      return new RNSentryReplayMaskManager();
+-    } else if (RNSentryReplayUnmaskManagerImpl.REACT_CLASS.equals(name)) {
+-      return new RNSentryReplayUnmaskManager();
+     } else {
+       return null;
+     }
+@@ -57,30 +41,6 @@ public class RNSentryPackage extends TurboReactPackage {
+               false, // isCxxModule
+               isTurboModule // isTurboModule
+               ));
+-      if (isTurboModule) {
+-        moduleInfos.put(
+-            RNSentryReplayMaskManagerImpl.REACT_CLASS,
+-            new ReactModuleInfo(
+-                RNSentryReplayMaskManagerImpl.REACT_CLASS, // name
+-                RNSentryReplayMaskManagerImpl.REACT_CLASS, // className
+-                false, // canOverrideExistingModule
+-                false, // needsEagerInit
+-                false, // hasConstants, required in RN 0.65
+-                false, // isCxxModule
+-                true // isTurboModule
+-                ));
+-        moduleInfos.put(
+-            RNSentryReplayUnmaskManagerImpl.REACT_CLASS,
+-            new ReactModuleInfo(
+-                RNSentryReplayUnmaskManagerImpl.REACT_CLASS, // name
+-                RNSentryReplayUnmaskManagerImpl.REACT_CLASS, // className
+-                false, // canOverrideExistingModule
+-                false, // needsEagerInit
+-                false, // hasConstants, required in RN 0.65
+-                false, // isCxxModule
+-                true // isTurboModule
+-                ));
+-      }
+       return moduleInfos;
+     };
+   }
+@@ -88,9 +48,6 @@ public class RNSentryPackage extends TurboReactPackage {
+   @NonNull
+   @Override
+   public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
+-    return List.of(
+-        new RNSentryOnDrawReporterManager(reactContext),
+-        new RNSentryReplayMaskManager(),
+-        new RNSentryReplayUnmaskManager());
++    return List.of(new RNSentryOnDrawReporterManager(reactContext));
+   }
+ }
+diff --git a/node_modules/@sentry/react-native/android/src/newarch/java/io/sentry/react/RNSentryModule.java b/node_modules/@sentry/react-native/android/src/newarch/java/io/sentry/react/RNSentryModule.java
+index b928d2d..acb7d23 100644
+--- a/node_modules/@sentry/react-native/android/src/newarch/java/io/sentry/react/RNSentryModule.java
++++ b/node_modules/@sentry/react-native/android/src/newarch/java/io/sentry/react/RNSentryModule.java
+@@ -127,6 +127,16 @@ public class RNSentryModule extends NativeRNSentrySpec {
+     this.impl.closeNativeSdk(promise);
+   }
+ 
++  @Override
++  public void setOpenJobDiagnosticsEnabled(boolean enabled, Promise promise) {
++    this.impl.setOpenJobDiagnosticsEnabled(enabled, promise);
++  }
++
++  @Override
++  public void getOpenJobDiagnosticsEnabled(Promise promise) {
++    this.impl.getOpenJobDiagnosticsEnabled(promise);
++  }
++
+   @Override
+   public void enableNativeFramesTracking() {
+     this.impl.enableNativeFramesTracking();
+@@ -173,16 +183,6 @@ public class RNSentryModule extends NativeRNSentrySpec {
+     return null;
+   }
+ 
+-  @Override
+-  public void captureReplay(boolean isHardCrash, Promise promise) {
+-    this.impl.captureReplay(isHardCrash, promise);
+-  }
+-
+-  @Override
+-  public String getCurrentReplayId() {
+-    return this.impl.getCurrentReplayId();
+-  }
+-
+   @Override
+   public void crashedLastRun(Promise promise) {
+     this.impl.crashedLastRun(promise);
+diff --git a/node_modules/@sentry/react-native/android/src/oldarch/java/io/sentry/react/RNSentryModule.java b/node_modules/@sentry/react-native/android/src/oldarch/java/io/sentry/react/RNSentryModule.java
+index 0488e14..bc33ede 100644
+--- a/node_modules/@sentry/react-native/android/src/oldarch/java/io/sentry/react/RNSentryModule.java
++++ b/node_modules/@sentry/react-native/android/src/oldarch/java/io/sentry/react/RNSentryModule.java
+@@ -127,6 +127,16 @@ public class RNSentryModule extends ReactContextBaseJavaModule {
+     this.impl.closeNativeSdk(promise);
+   }
+ 
++  @ReactMethod
++  public void setOpenJobDiagnosticsEnabled(boolean enabled, Promise promise) {
++    this.impl.setOpenJobDiagnosticsEnabled(enabled, promise);
++  }
++
++  @ReactMethod
++  public void getOpenJobDiagnosticsEnabled(Promise promise) {
++    this.impl.getOpenJobDiagnosticsEnabled(promise);
++  }
++
+   @ReactMethod
+   public void enableNativeFramesTracking() {
+     this.impl.enableNativeFramesTracking();
+@@ -173,16 +183,6 @@ public class RNSentryModule extends ReactContextBaseJavaModule {
+     return null;
+   }
+ 
+-  @ReactMethod
+-  public void captureReplay(boolean isHardCrash, Promise promise) {
+-    this.impl.captureReplay(isHardCrash, promise);
+-  }
+-
+-  @ReactMethod(isBlockingSynchronousMethod = true)
+-  public String getCurrentReplayId() {
+-    return this.impl.getCurrentReplayId();
+-  }
+-
+   @ReactMethod
+   public void crashedLastRun(Promise promise) {
+     this.impl.crashedLastRun(promise);
+diff --git a/node_modules/@sentry/react-native/dist/js/NativeRNSentry.d.ts b/node_modules/@sentry/react-native/dist/js/NativeRNSentry.d.ts
+index 548bbeb..c13cab9 100644
+--- a/node_modules/@sentry/react-native/dist/js/NativeRNSentry.d.ts
++++ b/node_modules/@sentry/react-native/dist/js/NativeRNSentry.d.ts
+@@ -43,8 +43,6 @@ export interface Spec extends TurboModule {
+     fetchNativePackageName(): string | undefined | null;
+     fetchNativeStackFramesBy(instructionsAddr: number[]): NativeStackFrames | undefined | null;
+     initNativeReactNavigationNewFrameTracking(): Promise<void>;
+-    captureReplay(isHardCrash: boolean): Promise<string | undefined | null>;
+-    getCurrentReplayId(): string | undefined | null;
+     crashedLastRun(): Promise<boolean | undefined | null>;
+     getDataFromUri(uri: string): Promise<number[]>;
+     popTimeToDisplayFor(key: string): Promise<number | undefined | null>;
+diff --git a/node_modules/@sentry/react-native/dist/js/client.js b/node_modules/@sentry/react-native/dist/js/client.js
+index 6fea4ab..a819958 100644
+--- a/node_modules/@sentry/react-native/dist/js/client.js
++++ b/node_modules/@sentry/react-native/dist/js/client.js
+@@ -4,7 +4,6 @@ import { Alert } from 'react-native';
+ import { getDevServer } from './integrations/debugsymbolicatorutils';
+ import { defaultSdkInfo } from './integrations/sdkinfo';
+ import { getDefaultSidecarUrl } from './integrations/spotlight';
+-import { MOBILE_REPLAY_INTEGRATION_NAME } from './replay/mobilereplay';
+ import { createUserFeedbackEnvelope, items } from './utils/envelope';
+ import { ignoreRequireCycleLogs } from './utils/ignorerequirecyclelogs';
+ import { mergeOutcomes } from './utils/outcome';
+@@ -162,10 +161,7 @@ export class ReactNativeClient extends Client {
+      */
+     _initNativeSdk() {
+         var _a, _b;
+-        NATIVE.initNativeSdk(Object.assign(Object.assign({}, this._options), { defaultSidecarUrl: getDefaultSidecarUrl(), devServerUrl: ((_a = getDevServer()) === null || _a === void 0 ? void 0 : _a.url) || '', mobileReplayOptions: this._integrations[MOBILE_REPLAY_INTEGRATION_NAME] &&
+-                'options' in this._integrations[MOBILE_REPLAY_INTEGRATION_NAME]
+-                ? this._integrations[MOBILE_REPLAY_INTEGRATION_NAME].options
+-                : undefined, androidProfilingOptions: (_b = this._options._experiments) === null || _b === void 0 ? void 0 : _b.androidProfilingOptions }))
++        NATIVE.initNativeSdk(Object.assign(Object.assign({}, this._options), { defaultSidecarUrl: getDefaultSidecarUrl(), devServerUrl: ((_a = getDevServer()) === null || _a === void 0 ? void 0 : _a.url) || '', androidProfilingOptions: (_b = this._options._experiments) === null || _b === void 0 ? void 0 : _b.androidProfilingOptions }))
+             .then((result) => {
+             return result;
+         }, () => {
+diff --git a/node_modules/@sentry/react-native/dist/js/index.js b/node_modules/@sentry/react-native/dist/js/index.js
+index 7423d9e..dd6a08a 100644
+--- a/node_modules/@sentry/react-native/dist/js/index.js
++++ b/node_modules/@sentry/react-native/dist/js/index.js
+@@ -7,7 +7,6 @@ export { ReactNativeClient } from './client';
+ export { init, wrap, nativeCrash, flush, close, withScope, crashedLastRun } from './sdk';
+ export { TouchEventBoundary, withTouchEventBoundary } from './touchevents';
+ export { reactNativeTracingIntegration, getCurrentReactNativeTracingIntegration, getReactNativeTracingIntegration, reactNavigationIntegration, reactNativeNavigationIntegration, sentryTraceGesture, TimeToInitialDisplay, TimeToFullDisplay, startTimeToInitialDisplaySpan, startTimeToFullDisplaySpan, startIdleNavigationSpan, startIdleSpan, getDefaultIdleNavigationSpanOptions, createTimeToFullDisplay, createTimeToInitialDisplay, } from './tracing';
+-export { Mask, Unmask } from './replay/CustomMask';
+ export { FeedbackButton } from './feedback/FeedbackButton';
+ export { FeedbackWidget } from './feedback/FeedbackWidget';
+ export { showFeedbackWidget, showFeedbackButton, hideFeedbackButton } from './feedback/FeedbackWidgetManager';
+diff --git a/node_modules/@sentry/react-native/dist/js/integrations/default.js b/node_modules/@sentry/react-native/dist/js/integrations/default.js
+index 40d7de9..d08b938 100644
+--- a/node_modules/@sentry/react-native/dist/js/integrations/default.js
++++ b/node_modules/@sentry/react-native/dist/js/integrations/default.js
+@@ -2,7 +2,7 @@
+ import { browserSessionIntegration, consoleLoggingIntegration } from '@sentry/browser';
+ import { reactNativeTracingIntegration } from '../tracing';
+ import { notWeb } from '../utils/environment';
+-import { appRegistryIntegration, appStartIntegration, breadcrumbsIntegration, browserApiErrorsIntegration, browserGlobalHandlersIntegration, browserLinkedErrorsIntegration, createNativeFramesIntegrations, createReactNativeRewriteFrames, debugSymbolicatorIntegration, dedupeIntegration, deviceContextIntegration, eventOriginIntegration, expoContextIntegration, functionToStringIntegration, hermesProfilingIntegration, httpClientIntegration, httpContextIntegration, inboundFiltersIntegration, logEnricherIntegration, mobileReplayIntegration, modulesLoaderIntegration, nativeLinkedErrorsIntegration, nativeReleaseIntegration, primitiveTagIntegration, reactNativeErrorHandlersIntegration, reactNativeInfoIntegration, screenshotIntegration, sdkInfoIntegration, spotlightIntegration, stallTrackingIntegration, timeToDisplayIntegration, userInteractionIntegration, viewHierarchyIntegration, } from './exports';
++import { appRegistryIntegration, appStartIntegration, breadcrumbsIntegration, browserApiErrorsIntegration, browserGlobalHandlersIntegration, browserLinkedErrorsIntegration, createNativeFramesIntegrations, createReactNativeRewriteFrames, debugSymbolicatorIntegration, dedupeIntegration, deviceContextIntegration, eventOriginIntegration, expoContextIntegration, functionToStringIntegration, hermesProfilingIntegration, httpClientIntegration, httpContextIntegration, inboundFiltersIntegration, logEnricherIntegration, modulesLoaderIntegration, nativeLinkedErrorsIntegration, nativeReleaseIntegration, primitiveTagIntegration, reactNativeErrorHandlersIntegration, reactNativeInfoIntegration, screenshotIntegration, sdkInfoIntegration, spotlightIntegration, stallTrackingIntegration, timeToDisplayIntegration, userInteractionIntegration, viewHierarchyIntegration, } from './exports';
+ /**
+  * Returns the default ReactNative integrations based on the current environment.
+  *
+@@ -88,19 +88,6 @@ export function getDefaultIntegrations(options) {
+         const sidecarUrl = typeof options.spotlight === 'string' ? options.spotlight : undefined;
+         integrations.push(spotlightIntegration({ sidecarUrl }));
+     }
+-    const hasReplayOptions = typeof options.replaysOnErrorSampleRate === 'number' || typeof options.replaysSessionSampleRate === 'number';
+-    const hasExperimentsReplayOptions = (options._experiments && typeof options._experiments.replaysOnErrorSampleRate === 'number') ||
+-        (options._experiments && typeof options._experiments.replaysSessionSampleRate === 'number');
+-    if (!hasReplayOptions && hasExperimentsReplayOptions) {
+-        // Remove in the next major version (v7)
+-        options.replaysOnErrorSampleRate = (_a = options._experiments) === null || _a === void 0 ? void 0 : _a.replaysOnErrorSampleRate;
+-        options.replaysSessionSampleRate = (_b = options._experiments) === null || _b === void 0 ? void 0 : _b.replaysSessionSampleRate;
+-    }
+-    if ((hasReplayOptions || hasExperimentsReplayOptions) && notWeb()) {
+-        // We can't create and add browserReplayIntegration as it overrides the users supplied one
+-        // The browser replay integration works differently than the rest of default integrations
+-        integrations.push(mobileReplayIntegration());
+-    }
+     if (__DEV__ && notWeb()) {
+         integrations.push(debugSymbolicatorIntegration());
+     }
+diff --git a/node_modules/@sentry/react-native/dist/js/integrations/exports.js b/node_modules/@sentry/react-native/dist/js/integrations/exports.js
+index d0f69c4..a84461d 100644
+--- a/node_modules/@sentry/react-native/dist/js/integrations/exports.js
++++ b/node_modules/@sentry/react-native/dist/js/integrations/exports.js
+@@ -12,9 +12,7 @@ export { screenshotIntegration } from './screenshot';
+ export { viewHierarchyIntegration } from './viewhierarchy';
+ export { expoContextIntegration } from './expocontext';
+ export { spotlightIntegration } from './spotlight';
+-export { mobileReplayIntegration } from '../replay/mobilereplay';
+ export { feedbackIntegration } from '../feedback/integration';
+-export { browserReplayIntegration } from '../replay/browserReplay';
+ export { appStartIntegration } from '../tracing/integrations/appStart';
+ export { nativeFramesIntegration, createNativeFramesIntegrations } from '../tracing/integrations/nativeFrames';
+ export { stallTrackingIntegration } from '../tracing/integrations/stalltracking';
+diff --git a/node_modules/@sentry/react-native/dist/js/sdk.js b/node_modules/@sentry/react-native/dist/js/sdk.js
+index 43fbd66..f422944 100644
+--- a/node_modules/@sentry/react-native/dist/js/sdk.js
++++ b/node_modules/@sentry/react-native/dist/js/sdk.js
+@@ -171,6 +171,7 @@ export function close() {
+         try {
+             const client = getClient();
+             if (client) {
++                client.getOptions().enabled = false;
+                 yield client.close();
+             }
+         }
+diff --git a/node_modules/@sentry/react-native/dist/js/wrapper.d.ts b/node_modules/@sentry/react-native/dist/js/wrapper.d.ts
+index f1b2a14..8af504b 100644
+--- a/node_modules/@sentry/react-native/dist/js/wrapper.d.ts
++++ b/node_modules/@sentry/react-native/dist/js/wrapper.d.ts
+@@ -77,8 +77,6 @@ interface SentryNativeWrapper {
+      */
+     fetchNativeStackFramesBy(instructionsAddr: number[]): NativeStackFrames | null;
+     initNativeReactNavigationNewFrameTracking(): Promise<void>;
+-    captureReplay(isHardCrash: boolean): Promise<string | null>;
+-    getCurrentReplayId(): string | null;
+     crashedLastRun(): Promise<boolean | null>;
+     getNewScreenTimeToDisplay(): Promise<number | null | undefined>;
+     getDataFromUri(uri: string): Promise<Uint8Array | null>;
+diff --git a/node_modules/@sentry/react-native/dist/js/wrapper.js b/node_modules/@sentry/react-native/dist/js/wrapper.js
+index e3c7a86..75d9222 100644
+--- a/node_modules/@sentry/react-native/dist/js/wrapper.js
++++ b/node_modules/@sentry/react-native/dist/js/wrapper.js
+@@ -573,30 +573,6 @@ export const NATIVE = {
+             return RNSentry.initNativeReactNavigationNewFrameTracking();
+         });
+     },
+-    captureReplay(isHardCrash) {
+-        return __awaiter(this, void 0, void 0, function* () {
+-            if (!this.enableNative) {
+-                debug.warn(`[NATIVE] \`${this.captureReplay.name}\` is not available when native is disabled.`);
+-                return Promise.resolve(null);
+-            }
+-            if (!this._isModuleLoaded(RNSentry)) {
+-                debug.warn(`[NATIVE] \`${this.captureReplay.name}\` is not available when native is not available.`);
+-                return Promise.resolve(null);
+-            }
+-            return (yield RNSentry.captureReplay(isHardCrash)) || null;
+-        });
+-    },
+-    getCurrentReplayId() {
+-        if (!this.enableNative) {
+-            debug.warn(`[NATIVE] \`${this.getCurrentReplayId.name}\` is not available when native is disabled.`);
+-            return null;
+-        }
+-        if (!this._isModuleLoaded(RNSentry)) {
+-            debug.warn(`[NATIVE] \`${this.getCurrentReplayId.name}\` is not available when native is not available.`);
+-            return null;
+-        }
+-        return RNSentry.getCurrentReplayId() || null;
+-    },
+     crashedLastRun() {
+         return __awaiter(this, void 0, void 0, function* () {
+             if (!this.enableNative) {
+diff --git a/node_modules/@sentry/react-native/ios/RNSentry.h b/node_modules/@sentry/react-native/ios/RNSentry.h
+index 5b163ba..5e3b29a 100644
+--- a/node_modules/@sentry/react-native/ios/RNSentry.h
++++ b/node_modules/@sentry/react-native/ios/RNSentry.h
+@@ -20,6 +20,8 @@ typedef int (*SymbolicateCallbackType)(const void *, Dl_info *);
+ 
+ @interface RNSentry : RCTEventEmitter <RCTBridgeModule>
+ 
+++ (void)startOpenJobDiagnosticsIfEnabled;
++
+ - (NSMutableDictionary *)prepareOptions:(NSDictionary *)options;
+ 
+ - (void)setEventOriginTag:(SentryEvent *)event;
+diff --git a/node_modules/@sentry/react-native/ios/RNSentry.mm b/node_modules/@sentry/react-native/ios/RNSentry.mm
+index 3461af8..e5bf73e 100644
+--- a/node_modules/@sentry/react-native/ios/RNSentry.mm
++++ b/node_modules/@sentry/react-native/ios/RNSentry.mm
+@@ -24,9 +24,13 @@
+ #import <Sentry/SentryDebugMeta.h>
+ #import <Sentry/SentryEvent.h>
+ #import <Sentry/SentryException.h>
++#import <Sentry/SentryFrame.h>
+ #import <Sentry/SentryFormatter.h>
+ #import <Sentry/SentryGeo.h>
++#import <Sentry/SentryMechanism.h>
+ #import <Sentry/SentryScreenFrames.h>
++#import <Sentry/SentryStacktrace.h>
++#import <Sentry/SentryThread.h>
+ #import <Sentry/SentryUser.h>
+ 
+ // This guard prevents importing Hermes in JSC apps
+@@ -42,10 +46,6 @@
+ #import "RNSentryDependencyContainer.h"
+ #import "RNSentryEvents.h"
+ 
+-#if SENTRY_TARGET_REPLAY_SUPPORTED
+-#    import "RNSentryReplay.h"
+-#endif
+-
+ #if SENTRY_HAS_UIKIT
+ #    import "RNSentryFramesTrackerListener.h"
+ #    import "RNSentryRNSScreen.h"
+@@ -56,6 +56,132 @@
+ #import "SentrySDKWrapper.h"
+ 
+ static bool hasFetchedAppStart;
++static bool openJobDiagnosticsStarted;
++static NSString *const openJobDiagnosticsPreferenceKey = @"share_diagnostics_enabled";
++static NSString *const openJobDiagnosticsDSNKey = @"OpenJobSentryDSN";
++static NSString *const openJobDiagnosticsEnvironmentKey = @"OpenJobSentryEnvironment";
++static NSString *const openJobJsFatalEnvelopeStoredTag = @"openjob.js_fatal_envelope_stored";
++
++static NSDictionary<NSString *, id> *openJobNativeRuntimeContext(void)
++{
++    NSBundle *bundle = NSBundle.mainBundle;
++    NSString *applicationId = bundle.bundleIdentifier ?: @"unknown";
++    NSString *appVersion =
++        [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
++    NSString *buildVersion = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"];
++    NSString *runtimeVersion = [NSString stringWithFormat:@"%@@%@%@", applicationId, appVersion,
++        buildVersion.length > 0 ? [@"+" stringByAppendingString:buildVersion] : @""];
++    NSMutableDictionary<NSString *, id> *runtime = [@ {
++        @"app_version" : appVersion,
++        @"runtime_version" : runtimeVersion,
++        @"update_source" : @"embedded"
++    } mutableCopy];
++    if (buildVersion.length > 0) runtime[@"build_version"] = buildVersion;
++    return runtime;
++}
++
++static void openJobSanitizeNativeStacktrace(SentryStacktrace *_Nullable stacktrace)
++{
++    for (SentryFrame *frame in stacktrace.frames) {
++        frame.fileName = nil;
++        frame.package = nil;
++        frame.contextLine = nil;
++        frame.preContext = nil;
++        frame.postContext = nil;
++        frame.vars = nil;
++    }
++}
++
++static SentryEvent *openJobSanitizeNativeEvent(SentryEvent *event)
++{
++    NSDictionary<NSString *, id> *existingRuntime = nil;
++    id existingRuntimeValue = event.context[@"openjob"];
++    if ([existingRuntimeValue isKindOfClass:NSDictionary.class]) {
++        existingRuntime = existingRuntimeValue;
++    }
++    event.user = nil;
++    event.request = nil;
++    event.breadcrumbs = nil;
++    event.extra = nil;
++    event.message = nil;
++    event.transaction = nil;
++    event.fingerprint = nil;
++    event.serverName = nil;
++    event.logger = nil;
++    event.modules = nil;
++    event.error = nil;
++    event.tags = @{ @"operation" : @"unhandled_exception" };
++
++    NSMutableDictionary<NSString *, id> *runtime =
++        [openJobNativeRuntimeContext() mutableCopy];
++    NSCharacterSet *unsafeRuntimeCharacters = [[NSCharacterSet
++        characterSetWithCharactersInString:
++            @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ._+/-"] invertedSet];
++    for (NSString *key in @[ @"app_version", @"build_version", @"runtime_version" ]) {
++        id value = existingRuntime[key];
++        if ([value isKindOfClass:NSString.class] && [value length] > 0 && [value length] <= 128
++            && [value rangeOfCharacterFromSet:unsafeRuntimeCharacters].location == NSNotFound) {
++            runtime[key] = value;
++        }
++    }
++    id updateId = existingRuntime[@"update_id"];
++    NSCharacterSet *unsafeUpdateIdCharacters =
++        [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF-"] invertedSet];
++    if ([updateId isKindOfClass:NSString.class] && [updateId length] >= 8
++        && [updateId length] <= 64
++        && [updateId rangeOfCharacterFromSet:unsafeUpdateIdCharacters].location == NSNotFound) {
++        runtime[@"update_id"] = updateId;
++    }
++    id updateSource = existingRuntime[@"update_source"];
++    if ([updateSource isEqual:@"embedded"] || [updateSource isEqual:@"signed-ota"]) {
++        runtime[@"update_source"] = updateSource;
++    }
++#if SENTRY_HAS_UIKIT
++    NSString *deviceClass = @"unknown";
++    switch ([UIDevice currentDevice].userInterfaceIdiom) {
++    case UIUserInterfaceIdiomPhone:
++        deviceClass = @"phone";
++        break;
++    case UIUserInterfaceIdiomPad:
++        deviceClass = @"tablet";
++        break;
++    case UIUserInterfaceIdiomTV:
++        deviceClass = @"tv";
++        break;
++    default:
++        break;
++    }
++    runtime[@"device_class"] = deviceClass;
++    runtime[@"os_name"] = @"iOS";
++    runtime[@"os_version"] = [UIDevice currentDevice].systemVersion;
++#else
++    runtime[@"device_class"] = @"unknown";
++    runtime[@"os_name"] = @"unknown";
++    runtime[@"os_version"] = [NSProcessInfo processInfo].operatingSystemVersionString;
++#endif
++    event.context = @{ @"openjob" : runtime };
++
++    for (SentryException *exception in event.exceptions) {
++        exception.value = @"OpenJob native failure";
++        exception.module = nil;
++        exception.mechanism.desc = nil;
++        exception.mechanism.data = nil;
++        exception.mechanism.helpLink = nil;
++        exception.mechanism.meta = nil;
++        openJobSanitizeNativeStacktrace(exception.stacktrace);
++    }
++    for (SentryThread *thread in event.threads) {
++        thread.name = nil;
++        openJobSanitizeNativeStacktrace(thread.stacktrace);
++    }
++    openJobSanitizeNativeStacktrace(event.stacktrace);
++    for (SentryDebugMeta *debugMeta in event.debugMeta) {
++        debugMeta.name = nil;
++        debugMeta.codeFile = nil;
++    }
++
++    return event;
++}
+ 
+ @implementation RNSentry {
+     bool sentHybridSdkDidBecomeActive;
+@@ -75,6 +201,57 @@ + (BOOL)requiresMainQueueSetup
+     return YES;
+ }
+ 
+++ (void)startOpenJobDiagnosticsIfEnabled
++{
++    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++    id storedPreference = [defaults objectForKey:openJobDiagnosticsPreferenceKey];
++    if (storedPreference != nil && ![storedPreference boolValue]) {
++        return;
++    }
++
++    NSDictionary *info = NSBundle.mainBundle.infoDictionary;
++    NSString *dsn = info[openJobDiagnosticsDSNKey];
++    if (![dsn isKindOfClass:NSString.class] || dsn.length == 0) {
++        return;
++    }
++    NSString *environment = info[openJobDiagnosticsEnvironmentKey];
++    NSMutableDictionary *options = [@ {
++        @"attachScreenshot" : @NO,
++        @"attachThreads" : @YES,
++        @"attachViewHierarchy" : @NO,
++        @"dsn" : dsn,
++        @"enableAppHangTracking" : @YES,
++        @"enableAutoPerformanceTracing" : @NO,
++        @"enableAutoSessionTracking" : @NO,
++        @"enableCaptureFailedRequests" : @NO,
++        @"enableNativeCrashHandling" : @YES,
++        @"enableWatchdogTerminationTracking" : @YES,
++        @"maxBreadcrumbs" : @0,
++        @"sendClientReports" : @NO,
++        @"sendDefaultPii" : @NO,
++    } mutableCopy];
++    NSDictionary<NSString *, id> *runtime = openJobNativeRuntimeContext();
++    options[@"release"] = runtime[@"runtime_version"];
++    if (runtime[@"build_version"] != nil) options[@"dist"] = runtime[@"build_version"];
++    options[@"initialScope"] = ^SentryScope *(SentryScope *scope) {
++        [scope setContextValue:runtime forKey:@"openjob"];
++        return scope;
++    };
++    if ([environment isKindOfClass:NSString.class] && environment.length > 0) {
++        options[@"environment"] = environment;
++    }
++
++    RNSentry *bridge = [RNSentry new];
++    NSError *error = nil;
++    [SentrySDKWrapper setupWithDictionary:[bridge prepareOptions:options]
++                                    error:&error];
++    if (error == nil) {
++        openJobDiagnosticsStarted = true;
++    } else {
++        NSLog(@"OpenJob diagnostics bootstrap failed: %@", error.localizedDescription);
++    }
++}
++
+ - (instancetype)init
+ {
+     if (self = [super init]) {
+@@ -86,26 +263,30 @@ - (instancetype)init
+ - (NSMutableDictionary *)prepareOptions:(NSDictionary *)options
+ {
+     SentryBeforeSendEventCallback beforeSend = ^SentryEvent *(SentryEvent *event) {
+-        // We don't want to send an event after startup that came from a Unhandled JS Exception of
+-        // React Native because we sent it already before the app crashed.
+-        if (nil != event.exceptions.firstObject.type &&
++        BOOL reactNativeJavaScriptWrapper =
++            nil != event.exceptions.firstObject.type &&
+             [event.exceptions.firstObject.type rangeOfString:@"Unhandled JS Exception"].location
+-                != NSNotFound) {
+-            return nil;
+-        }
+-
+-        // With New Architecture, React Native wraps JS errors in C++ exceptions.
+-        // These exceptions are caught by the native crash handler and should be filtered out
+-        // since the JS error is already reported by the JS error handler.
+-        // The key indicator is "ExceptionsManager.reportException" in the exception value,
+-        // which is React Native's mechanism for reporting JS errors to the native layer.
+-        for (SentryException *exception in event.exceptions) {
+-            if (nil != exception.value &&
+-                [exception.value rangeOfString:@"ExceptionsManager.reportException"].location
+-                    != NSNotFound) {
+-                return nil;
++                != NSNotFound;
++        if (!reactNativeJavaScriptWrapper) {
++            for (SentryException *exception in event.exceptions) {
++                if (nil != exception.value &&
++                    [exception.value rangeOfString:@"ExceptionsManager.reportException"].location
++                        != NSNotFound) {
++                    reactNativeJavaScriptWrapper = YES;
++                    break;
++                }
+             }
+         }
++        // The crash-scope observer persists this timestamp into the matching crash
++        // report. Startup/store failures and stale markers retain native capture.
++        NSString *storedAtValue = event.tags[openJobJsFatalEnvelopeStoredTag];
++        NSTimeInterval storedAt = storedAtValue.doubleValue;
++        NSTimeInterval wrapperAt = event.timestamp.timeIntervalSince1970;
++        NSTimeInterval markerAge = wrapperAt - storedAt;
++        if (reactNativeJavaScriptWrapper && storedAtValue.length > 0 && storedAt > 0 &&
++            event.timestamp != nil && markerAge >= -1 && markerAge <= 10) {
++            return nil;
++        }
+ 
+         // Regex and Str are set when one of them has value so we only need to check one of them.
+         if (self->_ignoreErrorPatternsStr || self->_ignoreErrorPatternsRegex) {
+@@ -119,8 +300,7 @@ - (NSMutableDictionary *)prepareOptions:(NSDictionary *)options
+             }
+         }
+ 
+-        [self setEventOriginTag:event];
+-        return event;
++        return openJobSanitizeNativeEvent(event);
+     };
+ 
+     NSMutableDictionary *mutableOptions = [options mutableCopy];
+@@ -143,19 +323,15 @@ - (NSMutableDictionary *)prepareOptions:(NSDictionary *)options
+     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+ {
+     NSMutableDictionary *mutableOptions = [self prepareOptions:options];
+-#if SENTRY_TARGET_REPLAY_SUPPORTED
+-    BOOL isSessionReplayEnabled = [RNSentryReplay updateOptions:mutableOptions];
+-#else
+-    // Defaulting to false for unsupported targets
+-    BOOL isSessionReplayEnabled = NO;
+-#endif
+     NSError *error = nil;
+-    [SentrySDKWrapper setupWithDictionary:mutableOptions
+-                   isSessionReplayEnabled:isSessionReplayEnabled
+-                                    error:&error];
+-    if (error != nil) {
+-        reject(@"SentryReactNative", error.localizedDescription, error);
+-        return;
++    if (!openJobDiagnosticsStarted) {
++        [SentrySDKWrapper setupWithDictionary:mutableOptions
++                                        error:&error];
++        if (error != nil) {
++            reject(@"SentryReactNative", error.localizedDescription, error);
++            return;
++        }
++        openJobDiagnosticsStarted = true;
+     }
+ 
+ #if TARGET_OS_IPHONE || TARGET_OS_MACCATALYST
+@@ -176,10 +352,6 @@ - (NSMutableDictionary *)prepareOptions:(NSDictionary *)options
+         sentHybridSdkDidBecomeActive = true;
+     }
+ 
+-#if SENTRY_TARGET_REPLAY_SUPPORTED
+-    [RNSentryReplay postInit];
+-#endif
+-
+     resolve(@YES);
+ }
+ 
+@@ -545,16 +717,20 @@ - (void)stopObserving
+         return;
+     }
+ 
+-#if DEBUG
+-    [PrivateSentrySDKOnly captureEnvelope:envelope];
+-#else
+     if ([[options objectForKey:@"hardCrashed"] boolValue]) {
+-        // Storing to disk happens asynchronously with captureEnvelope
+-        [PrivateSentrySDKOnly storeEnvelope:envelope];
++        if (![SentrySDKWrapper storeOpenJobEnvelope:envelope]) {
++            reject(@"OPENJOB_SENTRY_ENVELOPE_STORE_FAILED",
++                @"Failed to durably store the fatal diagnostic envelope.", nil);
++            return;
++        }
++        [SentrySDKWrapper configureScope:^(SentryScope *_Nonnull scope) {
++            NSString *storedAt = [NSString
++                stringWithFormat:@"%.6f", NSDate.date.timeIntervalSince1970];
++            [scope setTagValue:storedAt forKey:openJobJsFatalEnvelopeStoredTag];
++        }];
+     } else {
+         [PrivateSentrySDKOnly captureEnvelope:envelope];
+     }
+-#endif
+     resolve(@YES);
+ }
+ 
+@@ -744,10 +920,44 @@ + (SentryUser *_Nullable)userFrom:(NSDictionary *)userKeys
+ RCT_EXPORT_METHOD(
+     closeNativeSdk : (RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+ {
+-    [SentrySDKWrapper close];
++    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++    [defaults setBool:NO forKey:openJobDiagnosticsPreferenceKey];
++    BOOL persisted = [defaults synchronize];
++    BOOL purged = [SentrySDKWrapper close];
++    openJobDiagnosticsStarted = false;
++    sentHybridSdkDidBecomeActive = false;
++    if (!purged) {
++        reject(@"OPENJOB_SENTRY_CACHE_PURGE_FAILED", @"Failed to purge queued diagnostics.", nil);
++        return;
++    }
++    if (!persisted) {
++        reject(@"OPENJOB_SENTRY_PREFERENCE_FAILED",
++            @"Failed to persist the native diagnostics preference.", nil);
++        return;
++    }
+     resolve(@YES);
+ }
+ 
++RCT_EXPORT_METHOD(setOpenJobDiagnosticsEnabled : (BOOL)enabled resolve : (
++    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
++{
++    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++    [defaults setBool:enabled forKey:openJobDiagnosticsPreferenceKey];
++    BOOL persisted = [defaults synchronize];
++    if (!enabled) {
++        [SentrySDKWrapper blockOpenJobDiagnosticsDelivery];
++    }
++    resolve(@(persisted));
++}
++
++RCT_EXPORT_METHOD(getOpenJobDiagnosticsEnabled : (RCTPromiseResolveBlock)resolve rejecter : (
++    RCTPromiseRejectBlock)reject)
++{
++    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++    id storedPreference = [defaults objectForKey:openJobDiagnosticsPreferenceKey];
++    resolve(@(storedPreference == nil || [storedPreference boolValue]));
++}
++
+ RCT_EXPORT_METHOD(disableNativeFramesTracking)
+ {
+     // Do nothing on iOS, this bridge method only has an effect on android.
+@@ -761,17 +971,6 @@ + (SentryUser *_Nullable)userFrom:(NSDictionary *)userKeys
+     // the 'tracesSampleRate' or 'tracesSampler' option.
+ }
+ 
+-RCT_EXPORT_METHOD(captureReplay : (BOOL)isHardCrash resolver : (
+-    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+-{
+-#if SENTRY_TARGET_REPLAY_SUPPORTED
+-    [PrivateSentrySDKOnly captureReplay];
+-    resolve([PrivateSentrySDKOnly getReplayId]);
+-#else
+-    resolve(nil);
+-#endif
+-}
+-
+ RCT_EXPORT_METHOD(getDataFromUri : (NSString *_Nonnull)uri resolve : (
+     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+ {
+@@ -799,15 +998,6 @@ + (SentryUser *_Nullable)userFrom:(NSDictionary *)userKeys
+ #endif
+ }
+ 
+-RCT_EXPORT_SYNCHRONOUS_TYPED_METHOD(NSString *, getCurrentReplayId)
+-{
+-#if SENTRY_TARGET_REPLAY_SUPPORTED
+-    return [PrivateSentrySDKOnly getReplayId];
+-#else
+-    return nil;
+-#endif
+-}
+-
+ static NSString *const enabledProfilingMessage = @"Enable Hermes to use Sentry Profiling.";
+ static SentryId *nativeProfileTraceId = nil;
+ static uint64_t nativeProfileStartTime = 0;
+diff --git a/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.h b/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.h
+index ec0501c..05fab2d 100644
+--- a/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.h
++++ b/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.h
+@@ -28,15 +28,6 @@ NS_ASSUME_NONNULL_BEGIN
+  */
+ + (void)setEnableLogs:(BOOL)enabled sentryOptions:(SentryOptions *)sentryOptions;
+ 
+-/**
+- * Sets the enableSessionReplayInUnreliableEnvironment experimental option on SentryOptions
+- * @param sentryOptions The SentryOptions instance to configure
+- * @param enabled Whether enableSessionReplayInUnreliableEnvironment from sentry Cocoa should be
+- * enabled
+- */
+-+ (void)setEnableSessionReplayInUnreliableEnvironment:(BOOL)enabled
+-                                        sentryOptions:(SentryOptions *)sentryOptions;
+-
+ @end
+ 
+ NS_ASSUME_NONNULL_END
+diff --git a/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.m b/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.m
+index 7e0974e..2e7db99 100644
+--- a/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.m
++++ b/node_modules/@sentry/react-native/ios/RNSentryExperimentalOptions.m
+@@ -27,13 +27,4 @@ + (void)setEnableLogs:(BOOL)enabled sentryOptions:(SentryOptions *)sentryOptions
+     sentryOptions.experimental.enableLogs = enabled;
+ }
+ 
+-+ (void)setEnableSessionReplayInUnreliableEnvironment:(BOOL)enabled
+-                                        sentryOptions:(SentryOptions *)sentryOptions
+-{
+-    if (sentryOptions == nil) {
+-        return;
+-    }
+-    sentryOptions.experimental.enableSessionReplayInUnreliableEnvironment = enabled;
+-}
+-
+ @end
+diff --git a/node_modules/@sentry/react-native/ios/SentrySDKWrapper.h b/node_modules/@sentry/react-native/ios/SentrySDKWrapper.h
+index ce6463d..d9ffb16 100644
+--- a/node_modules/@sentry/react-native/ios/SentrySDKWrapper.h
++++ b/node_modules/@sentry/react-native/ios/SentrySDKWrapper.h
+@@ -2,6 +2,7 @@
+ 
+ @class SentryOptions;
+ @class SentryScope;
++@class SentryEnvelope;
+ 
+ @interface SentrySDKWrapper : NSObject
+ 
+@@ -9,18 +10,22 @@
+ 
+ + (void)crash;
+ 
+-+ (void)close;
+++ (BOOL)close;
++
+++ (BOOL)purgeOpenJobDiagnosticsAtPath:(NSString *)cacheDirectoryPath;
++
+++ (void)blockOpenJobDiagnosticsDelivery;
++
+++ (BOOL)storeOpenJobEnvelope:(SentryEnvelope *)envelope;
+ 
+ + (BOOL)crashedLastRun;
+ 
+ + (void)startWithOptions:(SentryOptions *)options;
+ 
+ + (SentryOptions *)createOptionsWithDictionary:(NSDictionary *)options
+-                        isSessionReplayEnabled:(BOOL)isSessionReplayEnabled
+                                          error:(NSError **)errorPointer;
+ 
+ + (void)setupWithDictionary:(NSDictionary *)options
+-     isSessionReplayEnabled:(BOOL)isSessionReplayEnabled
+                       error:(NSError **)errorPointer;
+ 
+ + (BOOL)debug;
+diff --git a/node_modules/@sentry/react-native/ios/SentrySDKWrapper.m b/node_modules/@sentry/react-native/ios/SentrySDKWrapper.m
+index c11782d..8a86680 100644
+--- a/node_modules/@sentry/react-native/ios/SentrySDKWrapper.m
++++ b/node_modules/@sentry/react-native/ios/SentrySDKWrapper.m
+@@ -3,6 +3,48 @@
+ #import "RNSentryVersion.h"
+ @import Sentry;
+ 
++static NSString *const openJobDiagnosticsPreferenceKey = @"share_diagnostics_enabled";
++static NSURLSession *openJobSentryURLSession;
++
++@interface OpenJobSentryDispatchQueue : NSObject
++- (void)dispatchSync:(dispatch_block_t)block;
++@end
++
++@interface OpenJobSentryFileManager : NSObject
++- (nullable NSString *)storeEnvelope:(SentryEnvelope *)envelope;
++@end
++
++@interface SentrySDKWrapper ()
+++ (BOOL)drainOpenJobDiagnosticsTransport;
+++ (nullable id)openJobDiagnosticsClient;
++@end
++
++@interface OpenJobSentryURLProtocol : NSURLProtocol
++@end
++
++@implementation OpenJobSentryURLProtocol
++
+++ (BOOL)canInitWithRequest:(NSURLRequest *)request
++{
++    id storedPreference =
++        [[NSUserDefaults standardUserDefaults] objectForKey:openJobDiagnosticsPreferenceKey];
++    return storedPreference != nil && ![storedPreference boolValue];
++}
++
+++ (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request { return request; }
++
++- (void)startLoading
++{
++    NSError *error = [NSError errorWithDomain:NSURLErrorDomain
++                                         code:NSURLErrorCancelled
++                                     userInfo:nil];
++    [self.client URLProtocol:self didFailWithError:error];
++}
++
++- (void)stopLoading { }
++
++@end
++
+ @implementation SentrySDKWrapper
+ 
+ + (void)startWithOptions:(SentryOptions *)options
+@@ -15,9 +57,91 @@ + (void)crash
+     [SentrySDK crash];
+ }
+ 
+-+ (void)close
+++ (BOOL)close
+ {
++    NSString *cacheDirectoryPath = PrivateSentrySDKOnly.options.cacheDirectoryPath;
++    PrivateSentrySDKOnly.options.shutdownTimeInterval = 0;
++    PrivateSentrySDKOnly.options.beforeSend = ^SentryEvent *_Nullable(SentryEvent *event) {
++        return nil;
++    };
++    [self blockOpenJobDiagnosticsDelivery];
++
++    BOOL purged = [self purgeOpenJobDiagnosticsAtPath:cacheDirectoryPath];
++    BOOL drained = [self drainOpenJobDiagnosticsTransport];
+     [SentrySDK close];
++
++    return [self purgeOpenJobDiagnosticsAtPath:cacheDirectoryPath] && purged && drained;
++}
++
+++ (void)blockOpenJobDiagnosticsDelivery
++{
++    [openJobSentryURLSession invalidateAndCancel];
++    openJobSentryURLSession = nil;
++}
++
+++ (BOOL)drainOpenJobDiagnosticsTransport
++{
++    id client = [self openJobDiagnosticsClient];
++    if (client == nil) return YES;
++    @try {
++        id adapter = [client valueForKey:@"transportAdapter"];
++        NSArray *transports = [adapter valueForKey:@"transports"];
++        for (id transport in transports) {
++            id queue = [transport valueForKey:@"dispatchQueue"];
++            if (queue != nil && ![queue respondsToSelector:@selector(dispatchSync:)]) return NO;
++            [(OpenJobSentryDispatchQueue *)queue dispatchSync:^{ }];
++        }
++        return YES;
++    } @catch (__unused NSException *exception) {
++        return NO;
++    }
++}
++
+++ (nullable id)openJobDiagnosticsClient
++{
++    @try {
++        Class sdkInternal = NSClassFromString(@"SentrySDKInternal");
++        if (sdkInternal == nil || ![sdkInternal respondsToSelector:NSSelectorFromString(@"currentHub")]) {
++            return nil;
++        }
++        id hub = [sdkInternal valueForKey:@"currentHub"];
++        return [hub valueForKey:@"client"];
++    } @catch (__unused NSException *exception) {
++        return nil;
++    }
++}
++
+++ (BOOL)storeOpenJobEnvelope:(SentryEnvelope *)envelope
++{
++    @try {
++        id client = [self openJobDiagnosticsClient];
++        id fileManager = [client valueForKey:@"fileManager"];
++        if (fileManager == nil || ![fileManager respondsToSelector:@selector(storeEnvelope:)]) {
++            return NO;
++        }
++        NSString *path = [(OpenJobSentryFileManager *)fileManager storeEnvelope:envelope];
++        return path.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:path];
++    } @catch (__unused NSException *exception) {
++        return NO;
++    }
++}
++
+++ (BOOL)purgeOpenJobDiagnosticsAtPath:(NSString *)cacheDirectoryPath
++{
++    if (cacheDirectoryPath.length == 0) return YES;
++
++    NSFileManager *fileManager = [NSFileManager defaultManager];
++    NSArray<NSString *> *paths = @[
++        [cacheDirectoryPath stringByAppendingPathComponent:@"io.sentry"],
++        [cacheDirectoryPath stringByAppendingPathComponent:@"INSTALLATION"],
++        [cacheDirectoryPath stringByAppendingPathComponent:@"SentryCrash"]
++    ];
++    for (NSString *path in paths) {
++        if ([fileManager fileExistsAtPath:path] && ![fileManager removeItemAtPath:path error:nil]) {
++            return NO;
++        }
++    }
++    return YES;
+ }
+ 
+ + (BOOL)crashedLastRun
+@@ -31,30 +155,73 @@ + (void)configureScope:(void (^)(SentryScope *scope))callback
+ }
+ 
+ + (SentryOptions *)createOptionsWithDictionary:(NSDictionary *)options
+-                        isSessionReplayEnabled:(BOOL)isSessionReplayEnabled
+                                          error:(NSError *__autoreleasing *)errorPointer
+ {
+-    NSString *dsn = [self getURLFromDSN:[options valueForKey:@"dsn"]];
+     SentryOptions *sentryOptions = [SentryOptionsInternal initWithDict:options
+                                                       didFailWithError:errorPointer];
+     if (*errorPointer != nil) {
+         return nil;
+     }
+ 
+-    // Exclude Dev Server and Sentry Dsn request from Breadcrumbs
+-    NSString *devServerUrl = [options valueForKey:@"devServerUrl"];
++    // OpenJob uses Sentry only for crashes and hangs. Disable native defaults
++    // that would otherwise install breadcrumbs or broad tracing hooks.
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wdeprecated-declarations"
++    sentryOptions.integrations = @[
++        @"SentryCrashIntegration", @"SentryANRTrackingIntegration",
++        @"SentryWatchdogTerminationTrackingIntegration"
++    ];
++#pragma clang diagnostic pop
+     sentryOptions.beforeBreadcrumb
+         = ^SentryBreadcrumb *_Nullable(SentryBreadcrumb *_Nonnull breadcrumb)
+     {
+-        NSString *url = breadcrumb.data[@"url"] ?: @"";
+-
+-        if ([@"http" isEqualToString:breadcrumb.type]
+-            && ((dsn != nil && [url hasPrefix:dsn])
+-                || (devServerUrl != nil && [url hasPrefix:devServerUrl]))) {
+-            return nil;
+-        }
+-        return breadcrumb;
++        return nil;
+     };
++    sentryOptions.enableAutoBreadcrumbTracking = NO;
++    sentryOptions.enableNetworkBreadcrumbs = NO;
++    sentryOptions.enableAutoPerformanceTracing = NO;
++    sentryOptions.enablePerformanceV2 = NO;
++    sentryOptions.enableTimeToFullDisplayTracing = NO;
++    sentryOptions.enableUIViewControllerTracing = NO;
++    sentryOptions.enableUserInteractionTracing = NO;
++    sentryOptions.enablePreWarmedAppStartTracing = NO;
++    sentryOptions.enableNetworkTracking = NO;
++    sentryOptions.enableFileIOTracing = NO;
++    sentryOptions.enableCoreDataTracing = NO;
++    sentryOptions.enableSwizzling = NO;
++    sentryOptions.maxBreadcrumbs = 0;
++    sentryOptions.sendDefaultPii = NO;
++    sentryOptions.sendClientReports = NO;
++    sentryOptions.enableAutoSessionTracking = NO;
++    sentryOptions.enableCrashHandler = YES;
++    sentryOptions.enableAppHangTracking = YES;
++    sentryOptions.enableAppHangTrackingV2 = NO;
++    sentryOptions.enableReportNonFullyBlockingAppHangs = NO;
++    sentryOptions.enableCaptureFailedRequests = NO;
++    sentryOptions.enableMetricKit = NO;
++    sentryOptions.enableMetricKitRawPayload = NO;
++    sentryOptions.attachScreenshot = NO;
++    sentryOptions.attachViewHierarchy = NO;
++    sentryOptions.tracesSampleRate = nil;
++    sentryOptions.tracePropagationTargets = @[];
++    NSString *bundleIdentifier = NSBundle.mainBundle.bundleIdentifier ?: @"unknown";
++    NSString *appVersion =
++        [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
++    NSString *buildVersion =
++        [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"];
++    if (sentryOptions.releaseName.length == 0) {
++        sentryOptions.releaseName = [NSString stringWithFormat:@"%@@%@%@", bundleIdentifier,
++            appVersion, buildVersion.length > 0 ? [@"+" stringByAppendingString:buildVersion] : @""];
++    }
++    if (sentryOptions.dist.length == 0 && buildVersion.length > 0) {
++        sentryOptions.dist = buildVersion;
++    }
++    NSURLSessionConfiguration *sessionConfiguration =
++        [NSURLSessionConfiguration ephemeralSessionConfiguration];
++    sessionConfiguration.protocolClasses = @[ OpenJobSentryURLProtocol.class ];
++    openJobSentryURLSession =
++        [NSURLSession sessionWithConfiguration:sessionConfiguration];
++    sentryOptions.urlSession = openJobSentryURLSession;
+ 
+     if ([options valueForKey:@"enableNativeCrashHandling"] != nil) {
+         BOOL enableNativeCrashHandling = [options[@"enableNativeCrashHandling"] boolValue];
+@@ -108,10 +275,6 @@ + (SentryOptions *)createOptionsWithDictionary:(NSDictionary *)options
+                                                          sentryOptions:sentryOptions];
+     }
+ 
+-    if (isSessionReplayEnabled) {
+-        [RNSentryExperimentalOptions setEnableSessionReplayInUnreliableEnvironment:YES
+-                                                                     sentryOptions:sentryOptions];
+-    }
+     return sentryOptions;
+ }
+ 
+@@ -125,11 +288,9 @@ + (NSString *_Nullable)getURLFromDSN:(NSString *)dsn
+ }
+ 
+ + (void)setupWithDictionary:(NSDictionary *_Nonnull)options
+-     isSessionReplayEnabled:(BOOL)isSessionReplayEnabled
+                       error:(NSError *_Nonnull *_Nonnull)errorPointer
+ {
+     SentryOptions *sentryOptions = [self createOptionsWithDictionary:options
+-                                              isSessionReplayEnabled:isSessionReplayEnabled
+                                                                error:errorPointer];
+     if (!options) {
+         return;
+diff --git a/node_modules/@sentry/react-native/src/js/NativeRNSentry.ts b/node_modules/@sentry/react-native/src/js/NativeRNSentry.ts
+index afd8fba..505b165 100644
+--- a/node_modules/@sentry/react-native/src/js/NativeRNSentry.ts
++++ b/node_modules/@sentry/react-native/src/js/NativeRNSentry.ts
+@@ -28,6 +28,8 @@ export interface Spec extends TurboModule {
+   fetchNativeAppStart(): Promise<NativeAppStartResponse | null>;
+   fetchNativeFrames(): Promise<NativeFramesResponse | null>;
+   initNativeSdk(options: UnsafeObject): Promise<boolean>;
++  getOpenJobDiagnosticsEnabled(): Promise<boolean>;
++  setOpenJobDiagnosticsEnabled(enabled: boolean): Promise<boolean>;
+   setUser(defaultUserKeys: UnsafeObject | null, otherUserKeys: UnsafeObject | null): void;
+   setContext(key: string, value: UnsafeObject | null): void;
+   setExtra(key: string, value: string): void;
+@@ -47,8 +49,6 @@ export interface Spec extends TurboModule {
+   fetchNativePackageName(): string | undefined | null;
+   fetchNativeStackFramesBy(instructionsAddr: number[]): NativeStackFrames | undefined | null;
+   initNativeReactNavigationNewFrameTracking(): Promise<void>;
+-  captureReplay(isHardCrash: boolean): Promise<string | undefined | null>;
+-  getCurrentReplayId(): string | undefined | null;
+   crashedLastRun(): Promise<boolean | undefined | null>;
+   getDataFromUri(uri: string): Promise<number[]>;
+   popTimeToDisplayFor(key: string): Promise<number | undefined | null>;
+diff --git a/node_modules/@sentry/react-native/src/js/RNSentryReplayMaskNativeComponent.ts b/node_modules/@sentry/react-native/src/js/RNSentryReplayMaskNativeComponent.ts
+deleted file mode 100644
+index db3b868..0000000
+--- a/node_modules/@sentry/react-native/src/js/RNSentryReplayMaskNativeComponent.ts
++++ /dev/null
+@@ -1,10 +0,0 @@
+-import type { HostComponent, ViewProps } from 'react-native';
+-// The default export exists in the file but eslint doesn't see it
+-// eslint-disable-next-line import/default
+-import { codegenNativeComponent } from 'react-native';
+-
+-// If changed to type NativeProps = ViewProps, react native codegen will fail finding the NativeProps type
+-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+-export interface NativeProps extends ViewProps {}
+-
+-export default codegenNativeComponent<NativeProps>('RNSentryReplayMask') as HostComponent<NativeProps>;
+diff --git a/node_modules/@sentry/react-native/src/js/RNSentryReplayUnmaskNativeComponent.ts b/node_modules/@sentry/react-native/src/js/RNSentryReplayUnmaskNativeComponent.ts
+deleted file mode 100644
+index 46ba097..0000000
+--- a/node_modules/@sentry/react-native/src/js/RNSentryReplayUnmaskNativeComponent.ts
++++ /dev/null
+@@ -1,10 +0,0 @@
+-import type { HostComponent, ViewProps } from 'react-native';
+-// The default export exists in the file but eslint doesn't see it
+-// eslint-disable-next-line import/default
+-import { codegenNativeComponent } from 'react-native';
+-
+-// If changed to type NativeProps = ViewProps, react native codegen will fail finding the NativeProps type
+-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+-export interface NativeProps extends ViewProps {}
+-
+-export default codegenNativeComponent<NativeProps>('RNSentryReplayUnmask') as HostComponent<NativeProps>;
+diff --git a/node_modules/@sentry/react-native/ts3.8/dist/js/NativeRNSentry.d.ts b/node_modules/@sentry/react-native/ts3.8/dist/js/NativeRNSentry.d.ts
+index a7f283a..88abcf3 100644
+--- a/node_modules/@sentry/react-native/ts3.8/dist/js/NativeRNSentry.d.ts
++++ b/node_modules/@sentry/react-native/ts3.8/dist/js/NativeRNSentry.d.ts
+@@ -43,8 +43,6 @@ export interface Spec extends TurboModule {
+     fetchNativePackageName(): string | undefined | null;
+     fetchNativeStackFramesBy(instructionsAddr: number[]): NativeStackFrames | undefined | null;
+     initNativeReactNavigationNewFrameTracking(): Promise<void>;
+-    captureReplay(isHardCrash: boolean): Promise<string | undefined | null>;
+-    getCurrentReplayId(): string | undefined | null;
+     crashedLastRun(): Promise<boolean | undefined | null>;
+     getDataFromUri(uri: string): Promise<number[]>;
+     popTimeToDisplayFor(key: string): Promise<number | undefined | null>;
+diff --git a/node_modules/@sentry/react-native/ts3.8/dist/js/wrapper.d.ts b/node_modules/@sentry/react-native/ts3.8/dist/js/wrapper.d.ts
+index b24747a..3ffb08c 100644
+--- a/node_modules/@sentry/react-native/ts3.8/dist/js/wrapper.d.ts
++++ b/node_modules/@sentry/react-native/ts3.8/dist/js/wrapper.d.ts
+@@ -77,8 +77,6 @@ interface SentryNativeWrapper {
+      */
+     fetchNativeStackFramesBy(instructionsAddr: number[]): NativeStackFrames | null;
+     initNativeReactNavigationNewFrameTracking(): Promise<void>;
+-    captureReplay(isHardCrash: boolean): Promise<string | null>;
+-    getCurrentReplayId(): string | null;
+     crashedLastRun(): Promise<boolean | null>;
+     getNewScreenTimeToDisplay(): Promise<number | null | undefined>;
+     getDataFromUri(uri: string): Promise<Uint8Array | null>;

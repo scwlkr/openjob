@@ -10,7 +10,7 @@ const nativeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expo = join(nativeRoot, "node_modules", ".bin", "expo");
 const outputRoot = await mkdtemp(join(tmpdir(), "openjob-native-bundles-"));
 
-function exportBundle(platform, bundle, assets) {
+function exportBundle(platform, bundle, sourceMap, assets) {
   const result = spawnSync(
     expo,
     [
@@ -25,6 +25,8 @@ function exportBundle(platform, bundle, assets) {
       "true",
       "--bundle-output",
       bundle,
+      "--sourcemap-output",
+      sourceMap,
       "--assets-dest",
       assets,
       "--max-workers",
@@ -67,19 +69,50 @@ try {
   for (const platform of ["ios", "android"]) {
     const platformRoot = join(outputRoot, platform);
     const bundle = join(platformRoot, "main.jsbundle");
+    const sourceMap = join(platformRoot, "main.jsbundle.map");
     const assets = join(platformRoot, "assets");
-    exportBundle(platform, bundle, assets);
+    exportBundle(platform, bundle, sourceMap, assets);
 
-    const [bundleContents, bundleStats, assetFiles] = await Promise.all([
+    const [bundleContents, bundleStats, assetFiles, sourceMapContents] = await Promise.all([
       readFile(bundle),
       stat(bundle),
       collectFiles(assets),
+      readFile(sourceMap, "utf8"),
     ]);
     const text = bundleContents.toString("utf8");
     assert.ok(bundleStats.size > 100_000, `${platform} bundle is unexpectedly small`);
     assert.ok(assetFiles.length >= 4, `${platform} embedded assets are missing`);
     assert.match(text, /\/api\/v1/u);
     assert.doesNotMatch(text, /https:\/\/u\.expo\.dev/iu);
+    for (const replayMarker of [
+      "RNSentryReplayMask",
+      "RNSentryReplayUnmask",
+      "mobileReplayIntegration",
+      "browserReplayIntegration",
+      "captureReplay",
+      "SentrySessionReplay",
+    ]) {
+      assert.doesNotMatch(
+        text,
+        new RegExp(replayMarker, "u"),
+        `${platform} bundle contains disabled Sentry Session Replay code: ${replayMarker}`,
+      );
+    }
+    const sources = JSON.parse(sourceMapContents).sources;
+    assert.ok(Array.isArray(sources), `${platform} source map has no sources`);
+    const prohibitedSentrySources = sources.filter(
+      (source) =>
+        typeof source === "string" &&
+        /(?:@sentry|sentry-internal).*(?:feedback|profiling|replay|tracing)/iu.test(
+          source,
+        ),
+    );
+    assert.deepEqual(
+      prohibitedSentrySources,
+      [],
+      `${platform} bundle contains disabled Sentry feature modules`,
+    );
+    assert.doesNotMatch(text, /Crashlytics|PostHog/iu);
 
     evidence.push(
       `${platform} ${bundleStats.size} bytes sha256:${createHash("sha256")

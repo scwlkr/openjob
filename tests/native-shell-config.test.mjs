@@ -6,6 +6,10 @@ const rootPackageUrl = new URL("../package.json", import.meta.url);
 const nativePackageUrl = new URL("../native/package.json", import.meta.url);
 const easUrl = new URL("../native/eas.json", import.meta.url);
 const nativeReadmeUrl = new URL("../native/README.md", import.meta.url);
+const nativeRunLocalUrl = new URL(
+  "../native/scripts/run-local.mjs",
+  import.meta.url,
+);
 const nativeDomainCacheUrl = new URL(
   "../native/src/domain-cache.ts",
   import.meta.url,
@@ -144,6 +148,24 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
   }
 });
 
+test("native config rejects credential-bearing Sentry DSNs", async () => {
+  const { default: createAppConfig } = await import(
+    `../native/app.config.mjs?sentry-dsn=${Date.now()}`
+  );
+  const previousDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  try {
+    process.env.EXPO_PUBLIC_SENTRY_DSN =
+      "https://public:secret@example.ingest.sentry.io/1";
+    assert.throws(
+      () => createAppConfig({ config: {} }),
+      /valid HTTPS Sentry DSN/u,
+    );
+  } finally {
+    if (previousDsn === undefined) delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    else process.env.EXPO_PUBLIC_SENTRY_DSN = previousDsn;
+  }
+});
+
 test("native build profiles use repeatable store versioning without OTA channels", async () => {
   const eas = await readJson(easUrl);
 
@@ -216,6 +238,21 @@ test("native package exposes focused simulator, build, and repository-gate comma
   );
   assert.match(rootPackage.scripts.test, /npm run native:check/u);
   assert.equal(rootPackage.scripts.postinstall, "npm --prefix native ci");
+});
+
+test("local native builds skip account uploads only when no Sentry token exists", async () => {
+  const runner = await readFile(nativeRunLocalUrl, "utf8");
+
+  assert.match(runner, /!childEnvironment\.SENTRY_AUTH_TOKEN/u);
+  assert.match(
+    runner,
+    /childEnvironment\.SENTRY_DISABLE_AUTO_UPLOAD === undefined/u,
+  );
+  assert.match(
+    runner,
+    /childEnvironment\.SENTRY_DISABLE_AUTO_UPLOAD = "true"/u,
+  );
+  assert.doesNotMatch(runner, /SENTRY_ALLOW_FAILURE/u);
 });
 
 test("native runbook documents both-runtime launch, builds, versioning, and offline proof", async () => {

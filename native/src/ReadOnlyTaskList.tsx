@@ -33,7 +33,10 @@ import {
   ProviderSignInError,
 } from "./auth/coordinator";
 import { OpenJobBrandmark } from "./brand-marks";
-import { useAppLifecycle } from "./device-state";
+import {
+  useAppLifecycle,
+  useDeviceRecoverySignals,
+} from "./device-state";
 import type {
   NativeCachedTaskList,
   NativeGroup,
@@ -788,6 +791,7 @@ export function ReadOnlyTaskList({
   const statusRef = useRef<TaskStatus>("open");
   const validatorRef = useRef<string | null>(null);
   const freshAtRef = useRef<string | null>(null);
+  const handledConnectivityRestored = useRef(0);
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [groups, setGroups] = useState<NativeGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
@@ -807,6 +811,22 @@ export function ReadOnlyTaskList({
   );
   const [removingTaskIds, setRemovingTaskIds] = useState<Set<string>>(
     () => new Set(),
+  );
+
+  const releaseTransientState = useCallback(() => {
+    pendingChange.current = null;
+    gestureActive.current = false;
+    momentumActive.current = false;
+    if (changedTimer.current) clearTimeout(changedTimer.current);
+    changedTimer.current = null;
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setChangedTaskIds(new Set());
+    setRemovingTaskIds(new Set());
+    if (snapshotRef.current) setSnapshot(snapshotRef.current);
+  }, []);
+  const { connectivityRestored } = useDeviceRecoverySignals(
+    releaseTransientState,
   );
 
   const clearSelection = useCallback(() => {
@@ -1091,6 +1111,10 @@ export function ReadOnlyTaskList({
     ) {
       return;
     }
+    if (connectivityRestored !== handledConnectivityRestored.current) {
+      handledConnectivityRestored.current = connectivityRestored;
+      unchangedCount.current = 0;
+    }
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
@@ -1106,7 +1130,16 @@ export function ReadOnlyTaskList({
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [appState, cacheLoaded, isFocused, runRefresh, selectedGroup, sessionReady, showChooser]);
+  }, [
+    appState,
+    cacheLoaded,
+    connectivityRestored,
+    isFocused,
+    runRefresh,
+    selectedGroup,
+    sessionReady,
+    showChooser,
+  ]);
 
   const selectGroup = useCallback(
     (group: NativeGroup) => {

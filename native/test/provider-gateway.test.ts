@@ -1,4 +1,6 @@
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
+  clearNativeProviderSessionWithoutConfiguration,
   createProviderGateway,
   type ProviderNativeModules,
 } from "../src/auth/provider-gateway";
@@ -86,6 +88,20 @@ function nativeModules(
 
 test("constructs the iOS gateway without an Android Apple native module", () => {
   expect(() => createProviderGateway(config)).not.toThrow();
+});
+
+test("configures the native Google client before bootstrap cleanup", async () => {
+  await clearNativeProviderSessionWithoutConfiguration();
+
+  expect(GoogleSignin.configure).toHaveBeenCalledWith({
+    offlineAccess: false,
+    scopes: [],
+  });
+  expect(
+    (GoogleSignin.configure as jest.Mock).mock.invocationCallOrder[0],
+  ).toBeLessThan(
+    (GoogleSignin.signOut as jest.Mock).mock.invocationCallOrder[0]!,
+  );
 });
 
 test("hands Google system UI output to Firebase without profile or email data", async () => {

@@ -1,4 +1,7 @@
-import type { OpenJobRuntimeConfig } from "../runtime-config";
+import {
+  readNativeApplicationId,
+  type OpenJobRuntimeConfig,
+} from "../runtime-config";
 import {
   createSqlCipherTaskListCache,
   purgeLocalDomainCache,
@@ -7,8 +10,64 @@ import {
 import { NativeAuthCoordinator } from "./coordinator";
 import { createFirebaseAuthClient } from "./firebase-rest";
 import { createNativeOpenJobApi } from "./openjob-api";
-import { createProviderGateway } from "./provider-gateway";
+import {
+  clearNativeProviderSessionWithoutConfiguration,
+  createProviderGateway,
+} from "./provider-gateway";
 import { createSecureSessionStore } from "./session-store";
+
+const fallbackLocalIdentities = {
+  "dev.openjob.app": "production",
+  "dev.openjob.app.dev": "development",
+  "dev.openjob.app.preview": "preview",
+} as const;
+
+export async function purgeNativeAuthStateWithoutRuntimeConfig() {
+  const applicationId = readNativeApplicationId();
+  const environment = applicationId
+    ? fallbackLocalIdentities[
+        applicationId as keyof typeof fallbackLocalIdentities
+      ]
+    : undefined;
+  if (!applicationId || !environment) {
+    throw new Error("OpenJob could not identify its local credential boundary.");
+  }
+
+  const keychainService = `${applicationId}.auth`;
+  const store = createSecureSessionStore({
+    allowQaPassword: environment === "preview",
+    keychainService,
+    storageKey: `openjob.native.auth.${environment}.v1`,
+  });
+  const domainCache = createSqlCipherTaskListCache({
+    databaseName: `openjob-${environment}-task-list-v1.db`,
+    keyStorageKey: `openjob.native.cache.${environment}.v1`,
+    keychainService: `${keychainService}.cache`,
+  });
+
+  let marked = false;
+  try {
+    await store.markCleanupPending();
+    marked = true;
+  } catch {
+    // The actual cleanup still runs if neither marker store is writable.
+  }
+  const cleanup = await Promise.allSettled([
+    clearNativeProviderSessionWithoutConfiguration(),
+    domainCache.purge(),
+    store.clear(),
+  ]);
+  const failures = cleanup.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      "OpenJob could not fully clear local authentication state.",
+    );
+  }
+  if (marked) await store.clearCleanupPending();
+}
 
 export function createNativeAuthController(config: OpenJobRuntimeConfig) {
   const api = createNativeOpenJobApi({ apiBaseUrl: config.apiBaseUrl });

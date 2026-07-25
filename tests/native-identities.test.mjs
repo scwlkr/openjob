@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import test from "node:test";
 
 const identitiesUrl = new URL("../config/native-identities.json", import.meta.url);
@@ -9,6 +10,80 @@ const documentationUrl = new URL(
 );
 const easUrl = new URL("../native/eas.json", import.meta.url);
 const firebaseUrl = new URL("../firebase.json", import.meta.url);
+const metroConfigUrl = new URL("../native/metro.config.cjs", import.meta.url);
+const nativeReadmeUrl = new URL("../native/README.md", import.meta.url);
+
+const expectedAppleAppPrivacy = {
+  NSPrivacyCollectedDataTypes: [
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+    {
+      NSPrivacyCollectedDataType:
+        "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+      NSPrivacyCollectedDataTypeLinked: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+      NSPrivacyCollectedDataTypeTracking: false,
+    },
+  ],
+  NSPrivacyTracking: false,
+  NSPrivacyTrackingDomains: [],
+};
 
 async function readIdentities() {
   return JSON.parse(await readFile(identitiesUrl, "utf8"));
@@ -587,6 +662,211 @@ test("Expo config resolves the public identity for each build environment", asyn
       process.env.GOOGLE_SERVICE_INFO_PLIST = previousIosConfig;
     }
   }
+});
+
+test("native diagnostics build is guarded and whole-app privacy-declared", async () => {
+  const { default: createAppConfig } = await import(
+    `../native/app.config.mjs?diagnostics-test=${Date.now()}`
+  );
+  const environmentNames = [
+    "EXPO_PUBLIC_SENTRY_DSN",
+    "OPENJOB_DIAGNOSTICS_STARTUP_CRASH_VERIFICATION",
+    "OPENJOB_DIAGNOSTICS_VERIFICATION",
+    "OPENJOB_NATIVE_ENV",
+    "SENTRY_AUTH_TOKEN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+  ];
+  const previous = Object.fromEntries(
+    environmentNames.map((name) => [name, process.env[name]]),
+  );
+  const fixtureDsn = "https://public-fixture@diagnostics.invalid/40";
+  const fixtureToken = "fixture-auth-token-must-not-be-serialized";
+
+  try {
+    Object.assign(process.env, {
+      EXPO_PUBLIC_SENTRY_DSN: fixtureDsn,
+      OPENJOB_DIAGNOSTICS_STARTUP_CRASH_VERIFICATION: "1",
+      OPENJOB_DIAGNOSTICS_VERIFICATION: "1",
+      OPENJOB_NATIVE_ENV: "preview",
+      SENTRY_AUTH_TOKEN: fixtureToken,
+      SENTRY_ORG: "openjob-fixture",
+      SENTRY_PROJECT: "openjob-native-fixture",
+    });
+    const preview = createAppConfig({ config: {} });
+    const sentryPlugin = preview.plugins.find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === "@sentry/react-native/expo",
+    );
+    assert.ok(
+      preview.plugins.includes("./plugins/with-sentry-android-privacy.cjs"),
+    );
+
+    assert.deepEqual(sentryPlugin, [
+      "@sentry/react-native/expo",
+      {
+        experimental_android: {
+          autoUploadNativeSymbols: true,
+          autoUploadProguardMapping: true,
+          dexguardEnabled: false,
+          enableAndroidGradlePlugin: true,
+          includeNativeSources: false,
+          includeProguardMapping: true,
+          includeSourceContext: false,
+          uploadNativeSymbols: true,
+        },
+        organization: "openjob-fixture",
+        project: "openjob-native-fixture",
+        url: "https://sentry.io/",
+      },
+    ]);
+    assert.equal(preview.extra.openjob.diagnosticsDsn, fixtureDsn);
+    assert.equal(
+      preview.extra.openjob.diagnosticsStartupCrashVerificationEnabled,
+      true,
+    );
+    assert.equal(preview.extra.openjob.diagnosticsVerificationEnabled, true);
+    assert.deepEqual(
+      preview.ios.privacyManifests,
+      expectedAppleAppPrivacy,
+    );
+    assert.doesNotMatch(JSON.stringify(preview), new RegExp(fixtureToken, "u"));
+
+    process.env.OPENJOB_NATIVE_ENV = "production";
+    assert.equal(
+      createAppConfig({ config: {} }).extra.openjob
+        .diagnosticsVerificationEnabled,
+      false,
+    );
+    assert.equal(
+      createAppConfig({ config: {} }).extra.openjob
+        .diagnosticsStartupCrashVerificationEnabled,
+      false,
+    );
+
+    delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    process.env.OPENJOB_NATIVE_ENV = "preview";
+    const missingDsn = createAppConfig({ config: {} });
+    assert.equal(missingDsn.extra.openjob.diagnosticsDsn, "");
+    assert.equal(
+      missingDsn.extra.openjob.diagnosticsVerificationEnabled,
+      false,
+    );
+    assert.equal(
+      missingDsn.extra.openjob.diagnosticsStartupCrashVerificationEnabled,
+      false,
+    );
+
+    process.env.EXPO_PUBLIC_SENTRY_DSN = "not-a-sentry-dsn";
+    assert.throws(
+      () => createAppConfig({ config: {} }),
+      /EXPO_PUBLIC_SENTRY_DSN must be a valid HTTPS Sentry DSN/u,
+    );
+
+    process.env.EXPO_PUBLIC_SENTRY_DSN = fixtureDsn;
+    process.env.SENTRY_ORG = "openjob\nauth.token=unsafe";
+    assert.throws(
+      () => createAppConfig({ config: {} }),
+      /SENTRY_ORG must be a valid Sentry slug/u,
+    );
+
+    process.env.SENTRY_ORG = "openjob-fixture";
+    delete process.env.SENTRY_PROJECT;
+    assert.throws(
+      () => createAppConfig({ config: {} }),
+      /SENTRY_ORG and SENTRY_PROJECT must be set together/u,
+    );
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("Metro emits Sentry Debug IDs while excluding replay code", async () => {
+  const require = createRequire(import.meta.url);
+  const source = await readFile(metroConfigUrl, "utf8");
+  const metro = require(metroConfigUrl.pathname);
+
+  assert.match(source, /getSentryExpoConfig/u);
+  assert.match(source, /includeWebReplay:\s*false/u);
+  assert.match(source, /enableSourceContextInDevelopment:\s*false/u);
+  assert.equal(typeof metro.serializer.customSerializer, "function");
+  assert.deepEqual(
+    metro.resolver.resolveRequest({}, "@sentry-internal/replay", "ios"),
+    { type: "empty" },
+  );
+  assert.doesNotMatch(source, /SENTRY_AUTH_TOKEN|EXPO_PUBLIC_SENTRY_DSN/u);
+});
+
+test("native documentation separates app, SDK, and optional diagnostics declarations", async () => {
+  const documentation = await readFile(nativeReadmeUrl, "utf8");
+
+  for (const appleType of [
+    "Name",
+    "Email Address",
+    "User ID",
+    "Other User Content",
+    "Product Interaction",
+  ]) {
+    assert.match(
+      documentation,
+      new RegExp(`\\| ${appleType} \\| Yes \\| No \\| Required`, "u"),
+    );
+  }
+  for (const appleType of [
+    "Crash Data",
+    "Performance Data",
+    "Other Diagnostic Data",
+  ]) {
+    assert.match(
+      documentation,
+      new RegExp(
+        `\\| ${appleType} \\| No \\| No \\| Optional Share diagnostics`,
+        "u",
+      ),
+    );
+  }
+  for (const playType of [
+    "Name",
+    "Email address",
+    "User IDs",
+    "Other user-generated content",
+    "App interactions",
+  ]) {
+    assert.match(
+      documentation,
+      new RegExp(`\\| ${playType} \\| Collected, required, not shared;`, "u"),
+    );
+  }
+  assert.match(
+    documentation,
+    /\| Crash logs \| Collected, optional, not shared;[\s\S]*\| Diagnostics \| Collected, optional, not shared;/u,
+  );
+  assert.match(
+    documentation,
+    /provider, Firebase, OpenJob API, and Sentry behavior/iu,
+  );
+  assert.match(
+    documentation,
+    /Device or other IDs\s*\|\s*Pending final merged-manifest/iu,
+  );
+  for (const dataType of [
+    "Phone Number",
+    "Coarse Location",
+    "Other Data Types",
+    "Device ID",
+    "Other Usage Data",
+  ]) {
+    assert.match(documentation, new RegExp(dataType, "u"));
+  }
+  assert.match(documentation, /not OpenJob product analytics/u);
+  assert.match(documentation, /Do not infer the Android declaration/u);
+  assert.match(documentation, /Play SDK Index/u);
+  assert.match(documentation, /SENTRY_AUTH_TOKEN[\s\S]*Sensitive/iu);
+  assert.match(documentation, /EXPO_PUBLIC_SENTRY_DSN/iu);
+  assert.match(documentation, /store builds only/iu);
+  assert.match(documentation, /OTA remains disabled/iu);
 });
 
 test("free distribution policy disables OTA delivery", async () => {

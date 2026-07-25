@@ -186,10 +186,12 @@ function ActionButton({
 
 function AuthScaffold({
   children,
+  diagnosticsSetting,
   message,
   title,
 }: {
   children: ReactNode;
+  diagnosticsSetting?: ReactNode;
   message?: string | null;
   title: string;
 }) {
@@ -229,6 +231,7 @@ function AuthScaffold({
             </Text>
           ) : null}
           <View style={styles.actions}>{children}</View>
+          {diagnosticsSetting}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -333,10 +336,12 @@ function UsernameClaimForm({
 
 export function NativeAuthGate({
   controller,
+  diagnosticsSetting,
   renderSignedIn,
   runtimeConfig,
 }: {
   controller?: NativeAuthController;
+  diagnosticsSetting?: ReactNode;
   renderSignedIn: (props: SignedInViewProps) => ReactNode;
   runtimeConfig: OpenJobRuntimeConfig;
 }) {
@@ -443,7 +448,10 @@ export function NativeAuthGate({
 
   if (state.kind === "restoring") {
     return (
-      <AuthScaffold title="Restoring your sign-in">
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        title="Restoring your sign-in"
+      >
         <ActivityIndicator accessibilityLabel="Restoring sign-in" />
       </AuthScaffold>
     );
@@ -452,6 +460,7 @@ export function NativeAuthGate({
   if (state.kind === "offline") {
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message="OpenJob is offline. Nothing changed."
         title="Reconnect to OpenJob"
       >
@@ -474,6 +483,7 @@ export function NativeAuthGate({
     const offline = state.reason === "offline";
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message={
           offline
             ? "OpenJob is offline. Your protected sign-in is still on this device."
@@ -499,6 +509,7 @@ export function NativeAuthGate({
   if (state.kind === "cleanup-retry") {
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message="OpenJob could not finish removing saved data. Retry before signing in again."
         title="Finish signing out"
       >
@@ -516,6 +527,7 @@ export function NativeAuthGate({
     const qaPassword = state.provider === "qa-password";
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message={
           message ??
           (qaPassword
@@ -558,6 +570,7 @@ export function NativeAuthGate({
       : state.user.userId;
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message={
           message ??
           `Keep ${target}'s User ID, Username, Groups, and Tasks. Add ${methodName(state.newProvider)} only as another way to sign in.`
@@ -596,7 +609,10 @@ export function NativeAuthGate({
           : "google"
         : null;
     return (
-      <AuthScaffold title="Claim your Username">
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        title="Claim your Username"
+      >
         <Text style={[styles.onboardingText, { color: palette.muted }]}>
           Members will use it to recognize you and assign work. You choose it
           once.
@@ -657,6 +673,7 @@ export function NativeAuthGate({
 
     return (
       <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
         message="A linked method opens this same User. Email addresses never merge Users."
         title="Sign-in Methods"
       >
@@ -714,6 +731,7 @@ export function NativeAuthGate({
 
   return (
     <AuthScaffold
+      diagnosticsSetting={diagnosticsSetting}
       message={message}
       title="Sign in to your shared Task Lists"
     >

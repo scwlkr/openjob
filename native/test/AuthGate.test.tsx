@@ -27,6 +27,9 @@ const runtimeConfig: OpenJobRuntimeConfig = {
   appleRedirectUri:
     "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
   appleServiceId: "dev.openjob.auth.nonprod",
+  diagnosticsDsn: null,
+  diagnosticsStartupCrashVerificationEnabled: false,
+  diagnosticsVerificationEnabled: false,
   environment: "preview",
   environmentBadge: "Preview",
   firebaseApiKey: "public-key",

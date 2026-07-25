@@ -24,6 +24,12 @@ const childEnvironment = {
   ...process.env,
   OPENJOB_NATIVE_ENV: environment,
 };
+if (
+  !childEnvironment.SENTRY_AUTH_TOKEN &&
+  childEnvironment.SENTRY_DISABLE_AUTO_UPLOAD === undefined
+) {
+  childEnvironment.SENTRY_DISABLE_AUTO_UPLOAD = "true";
+}
 
 function run(args) {
   const result = spawnSync(expo, args, {
