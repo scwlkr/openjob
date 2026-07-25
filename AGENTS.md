@@ -18,6 +18,10 @@ Use the canonical five-label triage vocabulary. See `docs/agents/triage-labels.m
 
 OpenJob uses a single-context root glossary and root ADR directory. See `docs/agents/domain.md`.
 
+## Authentication
+
+- When Touch ID-backed access may be needed, consolidate authentication at the start and try to use one in-memory unlock for the task so work can continue if the owner steps away. Never persist session tokens or secrets merely to avoid another prompt.
+
 ## git 
 
 - commit frequently and ensure git is synced
