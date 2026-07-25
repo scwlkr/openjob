@@ -228,9 +228,16 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   const taskList = contract.paths["/api/v1/groups/{groupId}/tasks"].get;
   assert.deepEqual(
     taskList.parameters.map(({ name }) => name),
-    ["status", "assignee", "cursor", "limit"],
+    ["status", "assignee", "cursor", "limit", "If-None-Match"],
   );
   assert.equal(taskList.parameters[0].schema.default, "open");
+  assert.equal(taskList.parameters[4].in, "header");
+  assert.equal(taskList.parameters[4].required, false);
+  assert.equal(taskList.responses["304"].headers.ETag.required, true);
+  assert.equal(
+    contract.components.responses.TaskCollectionResponse.headers.ETag.required,
+    true,
+  );
   assert.match(taskList.description, /taskId ascending/);
   const taskItem = contract.paths["/api/v1/groups/{groupId}/tasks/{taskId}"];
   const taskState =
