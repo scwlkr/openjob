@@ -404,6 +404,10 @@ export function NativeAuthGate({
       try {
         cached = await auth.restoreCachedSession();
         if (mounted && cached) setState(cached);
+      } catch {
+        cached = null;
+      }
+      try {
         const result = await auth.restore();
         if (!mounted) return;
         if (cached && result.kind === "restore-retry") {

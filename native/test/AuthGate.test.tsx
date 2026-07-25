@@ -345,6 +345,21 @@ test("restores either linked provider before rendering the signed-in surface", a
   expect(screen.queryByText("Continue with Google")).not.toBeOnTheScreen();
 });
 
+test("continues network-first restoration when unreadable cached state cannot be cleaned", async () => {
+  const auth = controller({
+    restore: jest.fn(async () => signedIn),
+    restoreCachedSession: jest.fn(async () => {
+      throw new Error("cache purge failed");
+    }),
+  });
+
+  await renderGate(auth);
+
+  expect(await screen.findByText("Signed in as walker")).toBeOnTheScreen();
+  expect(auth.restoreCachedSession).toHaveBeenCalledTimes(1);
+  expect(auth.restore).toHaveBeenCalledTimes(1);
+});
+
 test("requires an explicit create choice for an unknown credential", async () => {
   const auth = controller({
     signIn: jest.fn(async () => ({

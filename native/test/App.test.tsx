@@ -185,6 +185,7 @@ function cachedTaskList(
 
 beforeEach(async () => {
   jest.restoreAllMocks();
+  AppState.currentState = "active";
   await AsyncStorage.clear();
 });
 
@@ -895,8 +896,9 @@ test("advances cached freshness on 304 without replacing the rendered Task", asy
   );
 });
 
-test("stops Task List polling in background and checks immediately on foreground", async () => {
+test("stops Task List polling outside active state and checks immediately on foreground", async () => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
+  AppState.currentState = "unknown";
   jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => {
     appStateListener = listener;
     return { remove: jest.fn() };
@@ -912,12 +914,27 @@ test("stops Task List polling in background and checks immediately on foreground
     syncTaskList,
   });
   const rendered = await renderNativeApp(previewConfig, controller);
+  expect(await screen.findByText("Cached Task")).toBeOnTheScreen();
+  expect(syncTaskList).not.toHaveBeenCalled();
+  await act(() => appStateListener?.("active"));
   expect(await screen.findByText(/Fresh · Last checked/iu)).toBeOnTheScreen();
 
   await act(() => appStateListener?.("background"));
   const callsWhileVisible = syncTaskList.mock.calls.length;
   jest.useFakeTimers();
   try {
+    await act(async () => {
+      jest.advanceTimersByTime(120_000);
+      await Promise.resolve();
+    });
+    expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible);
+
+    await act(async () => {
+      appStateListener?.("unknown");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(syncTaskList).toHaveBeenCalledTimes(callsWhileVisible);
     await act(async () => {
       jest.advanceTimersByTime(120_000);
       await Promise.resolve();

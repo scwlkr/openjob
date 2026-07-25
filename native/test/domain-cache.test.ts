@@ -271,6 +271,27 @@ test("creates exactly 32 random key bytes with device-only SecureStore options",
   );
 });
 
+test("rotates a valid SecureStore key when its installation cache directory is gone", async () => {
+  const priorInstallationKey = "ff".repeat(32);
+  const harness = createHarness({
+    directoryExists: false,
+    secureValues: {
+      "openjob.native.cache.preview.v1": priorInstallationKey,
+    },
+  });
+
+  await expect(harness.cache.load("user_one")).resolves.toBeNull();
+  expect(harness.openDatabaseAsync).not.toHaveBeenCalled();
+  await harness.cache.save(cacheEntry());
+
+  expect(harness.secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+  expect(harness.randomBytes).toHaveBeenCalledWith(32);
+  expect(harness.sql[0]).toBe(
+    'PRAGMA key = "x\'000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\'"',
+  );
+  expect(harness.sql[0]).not.toContain(priorInstallationKey);
+});
+
 test("atomically replaces the singleton row when a different owner saves", async () => {
   const harness = createHarness();
   await harness.cache.save(cacheEntry("user_one", "grp_one"));

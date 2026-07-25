@@ -346,8 +346,14 @@ export function createSqlCipherTaskListCache(
 
   async function keyForSave() {
     const stored = await readStoredKey();
-    if (stored !== null && ENCRYPTION_KEY.test(stored)) return stored;
-    await purge();
+    if (
+      stored !== null &&
+      ENCRYPTION_KEY.test(stored) &&
+      directory.exists
+    ) {
+      return stored;
+    }
+    if (stored !== null || directory.exists) await purge();
     return createKey();
   }
 
@@ -395,7 +401,11 @@ export function createSqlCipherTaskListCache(
           await purge();
           return null;
         }
-        if (key === null || !ENCRYPTION_KEY.test(key)) {
+        if (
+          key === null ||
+          !ENCRYPTION_KEY.test(key) ||
+          !directory.exists
+        ) {
           await purge();
           return null;
         }

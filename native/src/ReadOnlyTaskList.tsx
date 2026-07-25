@@ -1087,8 +1087,7 @@ export function ReadOnlyTaskList({
       !selectedGroup ||
       showChooser ||
       !isFocused ||
-      appState === "background" ||
-      appState === "inactive"
+      appState !== "active"
     ) {
       return;
     }
