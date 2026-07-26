@@ -44,5 +44,15 @@
         "credentialsSource": "remote"
       }
     }
+  },
+  "submit": {
+    "preview": {
+      "android": {
+        "track": "internal"
+      },
+      "ios": {
+        "ascAppId": "6793947679"
+      }
+    }
   }
 }
