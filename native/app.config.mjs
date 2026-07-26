@@ -224,6 +224,7 @@ export default function createAppConfig({ config = {} } = {}) {
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
       infoPlist: {
         ...config.ios?.infoPlist,
+        ITSAppUsesNonExemptEncryption: false,
         OpenJobSentryDSN: diagnosticsDsn ?? "",
         OpenJobSentryEnvironment: environment,
       },

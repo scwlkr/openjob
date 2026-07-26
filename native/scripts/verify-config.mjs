@@ -148,6 +148,7 @@ function assertPublicConfig(config, environment) {
   assert.equal(config.userInterfaceStyle, "automatic");
   assert.equal(config.ios.supportsTablet, true);
   assert.deepEqual(config.ios.privacyManifests, appleAppPrivacy);
+  assert.equal(config.ios.infoPlist.ITSAppUsesNonExemptEncryption, false);
   assert.equal(config.ios.infoPlist.OpenJobSentryDSN, sentryFixture.dsn);
   assert.equal(config.ios.infoPlist.OpenJobSentryEnvironment, environment);
   assert.equal(config.extra.openjob.diagnosticsDsn, sentryFixture.dsn);
