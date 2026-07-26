@@ -32,14 +32,6 @@ const expectedAppleAppPrivacy = {
       NSPrivacyCollectedDataTypeTracking: false,
     },
     {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
       NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
       NSPrivacyCollectedDataTypeLinked: true,
       NSPrivacyCollectedDataTypePurposes: [
@@ -806,7 +798,6 @@ test("native documentation separates app, SDK, and optional diagnostics declarat
     "Name",
     "Email Address",
     "User ID",
-    "Other User Content",
     "Product Interaction",
   ]) {
     assert.match(
@@ -831,7 +822,6 @@ test("native documentation separates app, SDK, and optional diagnostics declarat
     "Name",
     "Email address",
     "User IDs",
-    "Other user-generated content",
     "App interactions",
   ]) {
     assert.match(
@@ -839,6 +829,10 @@ test("native documentation separates app, SDK, and optional diagnostics declarat
       new RegExp(`\\| ${playType} \\| Collected, required, not shared;`, "u"),
     );
   }
+  assert.match(
+    documentation,
+    /\| Other user-generated content \| Not collected \|/u,
+  );
   assert.match(
     documentation,
     /\| Crash logs \| Collected, optional, not shared;[\s\S]*\| Diagnostics \| Collected, optional, not shared;/u,

@@ -90,6 +90,10 @@ function isEntityTag(value: string | null): value is string {
   );
 }
 
+function isSameEntityTag(left: string, right: string) {
+  return left.replace(/^W\//u, "") === right.replace(/^W\//u, "");
+}
+
 function invalidTaskListValidator() {
   return new OpenJobApiError(
     502,
@@ -300,7 +304,10 @@ export function createNativeOpenJobApi({
     });
     if (revalidationResponse.status === 304) {
       const validator = revalidationResponse.headers.get("etag");
-      if (!isEntityTag(validator) || validator !== firstPage.validator) {
+      if (
+        !isEntityTag(validator) ||
+        !isSameEntityTag(validator, firstPage.validator)
+      ) {
         throw invalidTaskListValidator();
       }
       return {

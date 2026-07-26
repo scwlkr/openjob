@@ -288,6 +288,42 @@ test("sends If-None-Match on the first Task List request and accepts an empty 30
   );
 });
 
+test("accepts equivalent weak and strong validators during Task List revalidation", async () => {
+  const fetchImplementation = jest
+    .fn()
+    .mockResolvedValueOnce(
+      jsonResponse(
+        { data: [task], nextCursor: null },
+        200,
+        { etag: 'W/"task-list-v1"' },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(null, {
+        headers: { etag: '"task-list-v1"' },
+        status: 304,
+      }),
+    );
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation,
+  });
+
+  await expect(api.listTasks("token", "grp_one")).resolves.toEqual({
+    kind: "changed",
+    tasks: [task],
+    validator: '"task-list-v1"',
+  });
+  expect(fetchImplementation).toHaveBeenLastCalledWith(
+    "https://preview.example/api/v1/groups/grp_one/tasks?status=all&limit=500",
+    expect.objectContaining({
+      headers: expect.objectContaining({
+        "if-none-match": 'W/"task-list-v1"',
+      }),
+    }),
+  );
+});
+
 test.each([
   ["missing", undefined],
   ["malformed", "task-list-v1"],
