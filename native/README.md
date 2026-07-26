@@ -208,6 +208,8 @@ allows it. Disabling gates delivery, writes that launch-time switch, cancels and
 closes Sentry, and purges its queued envelopes and installation cache. The UI
 reads this native preference as its single source of truth. The binary does not
 include `expo-application`, Play Install Referrer, or its Android-ID accessor.
+The generated Android release manifest also removes the unused overlay and
+legacy external-storage permissions contributed by upstream libraries.
 
 The generated Apple app privacy manifest declares the data collected by
 OpenJob-owned code:

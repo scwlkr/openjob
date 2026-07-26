@@ -25,6 +25,11 @@ const sentryFixture = {
   organization: "openjob-config-fixture",
   project: "openjob-native-config-fixture",
 };
+const androidBlockedPermissions = [
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.SYSTEM_ALERT_WINDOW",
+  "android.permission.WRITE_EXTERNAL_STORAGE",
+];
 const appleAppPrivacy = {
   NSPrivacyCollectedDataTypes: [
     {
@@ -151,6 +156,7 @@ function assertPublicConfig(config, environment) {
   assert.equal(config.ios.infoPlist.ITSAppUsesNonExemptEncryption, false);
   assert.equal(config.ios.infoPlist.OpenJobSentryDSN, sentryFixture.dsn);
   assert.equal(config.ios.infoPlist.OpenJobSentryEnvironment, environment);
+  assert.deepEqual(config.android.blockedPermissions, androidBlockedPermissions);
   assert.equal(config.extra.openjob.diagnosticsDsn, sentryFixture.dsn);
   assert.equal(
     config.extra.openjob.diagnosticsStartupCrashVerificationEnabled,
@@ -308,6 +314,16 @@ for (const environment of environments) {
       ),
       `${environment} Android identity was not generated`,
     );
+    for (const permission of androidBlockedPermissions) {
+      assert.match(
+        android,
+        new RegExp(
+          `uses-permission[^>]{0,240}android:name="${permission.replaceAll(".", "\\.")}"[^>]{0,240}tools:node="remove"`,
+          "u",
+        ),
+        `${environment} Android did not block ${permission}`,
+      );
+    }
     assert.ok(
       ios.includes(
         identities.environments[environment].ios.googleReversedClientId,

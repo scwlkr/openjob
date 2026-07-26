@@ -16,6 +16,11 @@ const environmentBadges = {
   preview: "Preview",
   production: null,
 };
+const androidBlockedPermissions = [
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.SYSTEM_ALERT_WINDOW",
+  "android.permission.WRITE_EXTERNAL_STORAGE",
+];
 const sentrySlugPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 const appleAppPrivacy = {
   NSPrivacyCollectedDataTypes: [
@@ -239,6 +244,12 @@ export default function createAppConfig({ config = {} } = {}) {
         foregroundImage: "../public/icon-maskable-512.png",
         monochromeImage: "../public/icon-maskable-512.png",
       },
+      blockedPermissions: [
+        ...new Set([
+          ...androidBlockedPermissions,
+          ...(config.android?.blockedPermissions ?? []),
+        ]),
+      ],
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
       package: identity.android.applicationId,
     },
