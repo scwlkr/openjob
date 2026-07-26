@@ -29,6 +29,24 @@ test("applies the native Sentry pre-transport allowlist on iOS and Android", () 
     join(nativeRoot, "node_modules/@sentry/react-native/android/build.gradle"),
     "utf8",
   );
+  const nativeSpec = readFileSync(
+    join(nativeRoot, "node_modules/@sentry/react-native/src/js/NativeRNSentry.ts"),
+    "utf8",
+  );
+  const androidOldArch = readFileSync(
+    join(
+      nativeRoot,
+      "node_modules/@sentry/react-native/android/src/oldarch/java/io/sentry/react/RNSentryModule.java",
+    ),
+    "utf8",
+  );
+  const androidNewArch = readFileSync(
+    join(
+      nativeRoot,
+      "node_modules/@sentry/react-native/android/src/newarch/java/io/sentry/react/RNSentryModule.java",
+    ),
+    "utf8",
+  );
 
   for (const source of [ios, android]) {
     expect(source).toContain("openJobSanitizeNativeEvent");
@@ -65,6 +83,14 @@ test("applies the native Sentry pre-transport allowlist on iOS and Android", () 
   expect(android).toContain("openJobNativeRuntimeContext");
   expect(android).toContain('options.setRelease((String) runtime.get("runtime_version"))');
   expect(android).toContain("options.setDist((String) buildVersion)");
+  expect(nativeSpec).toContain("fetchNativeRelease(): Promise<NativeReleaseResponse>");
+  expect(android).toContain("public void fetchNativeRelease(Promise promise)");
+  expect(android).toContain('release.putString("build", String.valueOf(packageInfo.versionCode))');
+  for (const architecture of [androidOldArch, androidNewArch]) {
+    expect(architecture).toContain("this.impl.fetchNativeRelease(promise)");
+  }
+  expect(ios).toContain("fetchNativeRelease : (RCTPromiseResolveBlock)resolve");
+  expect(ios).toContain('@"build" : infoDict[@"CFBundleVersion"]');
   expect(android).not.toContain("event.getContexts().clear()");
   expect(android).toContain("options.enableAllAutoBreadcrumbs(false)");
   expect(android).toContain("options.setEnableAutoActivityLifecycleTracing(false)");

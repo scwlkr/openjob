@@ -12,14 +12,13 @@ jest.mock("expo-constants", () => ({
       sdkVersion: "57.0.0",
       version: "0.3.3",
     },
-    platform: { ios: { buildNumber: "42" } },
   },
 }));
 
 jest.mock("expo-updates", () => ({
   isEmbeddedLaunch: false,
   isEnabled: false,
-  runtimeVersion: null,
+  runtimeVersion: "",
   updateId: "forbidden-while-updates-disabled",
 }));
 
@@ -27,6 +26,11 @@ const mockNativeBridge = {
   captureEnvelope: jest.fn(async () => true),
   closeNativeSdk: jest.fn(async () => undefined),
   crash: jest.fn(),
+  fetchNativeRelease: jest.fn(async () => ({
+    build: "42",
+    id: "dev.openjob.app.preview",
+    version: "0.3.3",
+  })),
   getOpenJobDiagnosticsEnabled: jest.fn(async () => true),
   initNativeSdk: jest.fn(async () => true),
   setOpenJobDiagnosticsEnabled: jest.fn(async () => true),
@@ -662,8 +666,21 @@ test("bounds fatal storage waiting and lets the first fatal own termination", as
   }
 });
 
-test("writes only allowlisted runtime values into the native crash scope", async () => {
+test("reads the installed release for allowlisted runtime context", async () => {
   const runtime = await readDiagnosticRuntimeContext();
+
+  expect(runtime).toEqual({
+    applicationId: "dev.openjob.app.preview",
+    appVersion: "0.3.3",
+    buildVersion: "42",
+    deviceClass: "tablet",
+    osName: "iOS",
+    osVersion: "18.5",
+    runtimeVersion: "dev.openjob.app.preview@0.3.3+42",
+    updateId: null,
+    updateSource: "embedded",
+  });
+  expect(mockNativeBridge.fetchNativeRelease).toHaveBeenCalledTimes(1);
 
   sentryNativeDiagnosticsSdk.setRuntimeContext(runtime);
 
@@ -676,6 +693,21 @@ test("writes only allowlisted runtime values into the native crash scope", async
     runtime_version: runtime.runtimeVersion,
     update_source: "embedded",
   });
+});
+
+test("ignores stale Updates runtime metadata for an embedded launch", async () => {
+  const updates = Updates as unknown as Record<string, unknown>;
+  const original = updates.runtimeVersion;
+  try {
+    updates.runtimeVersion = "stale-ota-runtime";
+    await expect(readDiagnosticRuntimeContext()).resolves.toMatchObject({
+      runtimeVersion: "dev.openjob.app.preview@0.3.3+42",
+      updateId: null,
+      updateSource: "embedded",
+    });
+  } finally {
+    updates.runtimeVersion = original;
+  }
 });
 
 test("persists the launch-time native diagnostics preference", async () => {

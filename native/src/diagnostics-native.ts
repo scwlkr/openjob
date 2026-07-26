@@ -16,10 +16,6 @@ import {
   type NativeDiagnosticsSdk,
   type NativeDiagnosticsSdkOptions,
 } from "./diagnostics";
-import {
-  readNativeApplicationId,
-  readNativeBinaryVersion,
-} from "./runtime-config";
 
 type NativeSentryBridge = TurboModule & {
   captureEnvelope(
@@ -28,6 +24,11 @@ type NativeSentryBridge = TurboModule & {
   ): Promise<boolean>;
   closeNativeSdk(): Promise<void>;
   crash(): void;
+  fetchNativeRelease(): Promise<{
+    build: string;
+    id: string;
+    version: string;
+  }>;
   initNativeSdk(options: Record<string, unknown>): Promise<boolean>;
   getOpenJobDiagnosticsEnabled(): Promise<boolean>;
   setOpenJobDiagnosticsEnabled(enabled: boolean): Promise<boolean>;
@@ -365,8 +366,15 @@ function deviceClass(
 
 export async function readDiagnosticRuntimeContext(): Promise<DiagnosticRuntimeContext> {
   const otaLaunch = Updates.isEnabled && !Updates.isEmbeddedLaunch;
-  const applicationId = readNativeApplicationId() ?? "unknown";
-  const { appVersion, buildVersion } = readNativeBinaryVersion();
+  const nativeRelease = await sentryBridge().fetchNativeRelease();
+  const applicationId = nativeRelease.id;
+  const appVersion = nativeRelease.version;
+  const buildVersion = nativeRelease.build;
+  const embeddedRuntimeVersion = `${applicationId}@${appVersion}${buildVersion ? `+${buildVersion}` : ""}`;
+  const otaRuntimeVersion =
+    otaLaunch && typeof Updates.runtimeVersion === "string"
+      ? Updates.runtimeVersion.trim()
+      : "";
   return {
     applicationId,
     appVersion,
@@ -379,9 +387,7 @@ export async function readDiagnosticRuntimeContext(): Promise<DiagnosticRuntimeC
           ? "Android"
           : "unknown",
     osVersion: Device.osVersion ?? String(Platform.Version),
-    runtimeVersion:
-      Updates.runtimeVersion ??
-      `${applicationId}@${appVersion}${buildVersion ? `+${buildVersion}` : ""}`,
+    runtimeVersion: otaRuntimeVersion || embeddedRuntimeVersion,
     updateId: otaLaunch ? Updates.updateId : null,
     updateSource: otaLaunch ? "signed-ota" : "embedded",
   };
