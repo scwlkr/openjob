@@ -49,14 +49,6 @@ const appleAppPrivacy = {
       NSPrivacyCollectedDataTypeTracking: false,
     },
     {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
       NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
       NSPrivacyCollectedDataTypeLinked: true,
       NSPrivacyCollectedDataTypePurposes: [
@@ -502,7 +494,6 @@ for (const environment of environments) {
     for (const { dataType, linked } of [
       { dataType: "NSPrivacyCollectedDataTypeName", linked: true },
       { dataType: "NSPrivacyCollectedDataTypeEmailAddress", linked: true },
-      { dataType: "NSPrivacyCollectedDataTypeOtherUserContent", linked: true },
       { dataType: "NSPrivacyCollectedDataTypeUserID", linked: true },
       { dataType: "NSPrivacyCollectedDataTypeProductInteraction", linked: true },
       { dataType: "NSPrivacyCollectedDataTypeCrashData", linked: false },
@@ -521,6 +512,11 @@ for (const environment of environments) {
         `${environment} iOS privacy manifest did not declare ${dataType} with the expected linkage and no tracking`,
       );
     }
+    assert.doesNotMatch(
+      ios,
+      /NSPrivacyCollectedDataTypeOtherUserContent/u,
+      `${environment} iOS privacy manifest incorrectly declares downloaded-only Task or Group content as collected`,
+    );
     assert.match(
       ios,
       /NSPrivacyCollectedDataTypePurposeAppFunctionality/u,

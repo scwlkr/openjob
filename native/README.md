@@ -219,7 +219,6 @@ OpenJob-owned code:
 | Name | Yes | No | Required account data | App Functionality |
 | Email Address | Yes | No | Required account data | App Functionality |
 | User ID | Yes | No | Required account data | App Functionality |
-| Other User Content | Yes | No | Required Group/Task data | App Functionality |
 | Product Interaction | Yes | No | Required authenticated operations | App Functionality |
 | Crash Data | No | No | Optional Share diagnostics | App Functionality |
 | Performance Data | No | No | Optional Share diagnostics | App Functionality |
@@ -235,6 +234,11 @@ Analytics. Those Analytics purposes are GoogleSignIn's bundled declaration,
 not OpenJob product analytics. The app manifest does not duplicate those SDK
 rows because Xcode aggregates them from the SDK's own manifest.
 
+Task text and Group names are downloaded for the read-only experience and
+remain on-device; OpenJob-owned native code never transmits them off-device.
+They are therefore not collected under the Apple or Play definitions and must
+not be declared as Other User Content.
+
 The Play Data Safety form must likewise separate required account/app data from
 optional Sentry data. Firebase and Sentry act as service providers; ordinary
 provider authentication is User-initiated. None of these rows is sold or used
@@ -245,7 +249,7 @@ for advertising or cross-app tracking.
 | Name | Collected, required, not shared; App functionality and Account management |
 | Email address | Collected, required, not shared; App functionality and Account management |
 | User IDs | Collected, required, not shared; App functionality and Account management |
-| Other user-generated content | Collected, required, not shared; App functionality |
+| Other user-generated content | Not collected |
 | App interactions | Collected, required, not shared; App functionality |
 | Crash logs | Collected, optional, not shared; App functionality and Analytics |
 | Diagnostics | Collected, optional, not shared; App functionality and Analytics |

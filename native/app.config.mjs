@@ -41,14 +41,6 @@ const appleAppPrivacy = {
       NSPrivacyCollectedDataTypeTracking: false,
     },
     {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
       NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
       NSPrivacyCollectedDataTypeLinked: true,
       NSPrivacyCollectedDataTypePurposes: [
