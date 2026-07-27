@@ -253,18 +253,17 @@ for advertising or cross-app tracking.
 | App interactions | Collected, required, not shared; App functionality |
 | Crash logs | Collected, optional, not shared; App functionality and Analytics |
 | Diagnostics | Collected, optional, not shared; App functionality and Analytics |
-| Device or other IDs | Pending final merged-manifest, Play SDK Index, and traffic inspection |
+| Device or other IDs | Not collected; no advertising, Firebase installation, Play Install Referrer, Sentry installation, or other persistent app/device identifier is sent |
 
 Do not infer the Android declaration from an iOS SDK privacy manifest. Reconcile
 the Play table against the exact release dependency report, Play SDK Index, and
 captured on-device traffic before submission, including provider-auth data that
 is sent only after a User starts that journey.
 
-Do not submit either store declaration until captured iOS and Android Preview
-traffic confirms that provider, Firebase, OpenJob API, and Sentry behavior plus
-the built SDK inventory match these rows. Reconcile the generated
-`PrivacyInfo.xcprivacy`, Play SDK Index, and final binary after every relevant
-SDK upgrade.
+Signed iOS and Android Preview traffic plus the built SDK inventories confirm
+that provider, Firebase REST, OpenJob API, and Sentry behavior match these rows.
+Reconcile the generated `PrivacyInfo.xcprivacy`, Play SDK Index, captured
+traffic, and final binary again after every relevant SDK upgrade.
 
 Sentry build configuration comes only from the matching EAS environment:
 
