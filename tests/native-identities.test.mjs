@@ -844,12 +844,13 @@ test("native documentation separates app, SDK, and optional diagnostics declarat
   );
   assert.match(
     documentation,
-    /provider, Firebase, OpenJob API, and Sentry behavior/iu,
+    /provider, Firebase REST, OpenJob API, and Sentry behavior/iu,
   );
   assert.match(
     documentation,
-    /Device or other IDs\s*\|\s*Pending final merged-manifest/iu,
+    /Device or other IDs\s*\|\s*Not collected;/iu,
   );
+  assert.doesNotMatch(documentation, /Pending final merged-manifest/iu);
   for (const dataType of [
     "Phone Number",
     "Coarse Location",
