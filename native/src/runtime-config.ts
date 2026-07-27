@@ -92,9 +92,34 @@ function normalizeDiagnosticsDsn(value: unknown): string | null {
   throw new Error("OpenJob native configuration is incomplete.");
 }
 
+function normalizeQaPasswordTenantId(
+  value: unknown,
+  environment: unknown,
+): string | null | undefined {
+  if (environment === "preview") {
+    return typeof value === "string" && TENANT_ID_PATTERN.test(value)
+      ? value
+      : undefined;
+  }
+  if (
+    value === null ||
+    (typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0)
+  ) {
+    return null;
+  }
+  return undefined;
+}
+
 export function readRuntimeConfig(): OpenJobRuntimeConfig {
   const openjob = Constants.expoConfig?.extra?.openjob;
   const diagnosticsDsn = normalizeDiagnosticsDsn(openjob?.diagnosticsDsn);
+  const qaPasswordTenantId = normalizeQaPasswordTenantId(
+    openjob?.qaPasswordTenantId,
+    openjob?.environment,
+  );
   if (
     !openjob ||
     openjob.apiBasePath !== "/api/v1" ||
@@ -114,13 +139,7 @@ export function readRuntimeConfig(): OpenJobRuntimeConfig {
     typeof openjob.googleIosClientId !== "string" ||
     typeof openjob.googleWebClientId !== "string" ||
     typeof openjob.keychainService !== "string" ||
-    !(
-      (openjob.environment === "preview" &&
-        typeof openjob.qaPasswordTenantId === "string" &&
-        TENANT_ID_PATTERN.test(openjob.qaPasswordTenantId)) ||
-      (openjob.environment !== "preview" &&
-        openjob.qaPasswordTenantId === null)
-    ) ||
+    qaPasswordTenantId === undefined ||
     typeof openjob.sessionStorageKey !== "string" ||
     typeof openjob.releaseVersion !== "string"
   ) {
@@ -156,7 +175,7 @@ export function readRuntimeConfig(): OpenJobRuntimeConfig {
     googleIosClientId: openjob.googleIosClientId,
     googleWebClientId: openjob.googleWebClientId,
     keychainService: openjob.keychainService,
-    qaPasswordTenantId: openjob.qaPasswordTenantId,
+    qaPasswordTenantId,
     releaseVersion: openjob.releaseVersion,
     sessionStorageKey: openjob.sessionStorageKey,
   };

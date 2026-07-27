@@ -109,6 +109,29 @@ test("accepts the exact Preview QA tenant and rejects it in every other environm
   }
 });
 
+test("normalizes Expo's serialized null QA tenant outside Preview", () => {
+  const openjob = Constants.expoConfig?.extra?.openjob as Record<
+    string,
+    unknown
+  >;
+  const original = { ...openjob };
+
+  try {
+    Object.assign(openjob, {
+      environment: "development",
+      environmentBadge: "Development",
+      qaPasswordTenantId: {},
+    });
+    expect(readRuntimeConfig()).toMatchObject({
+      environment: "development",
+      qaPasswordTenantId: null,
+    });
+  } finally {
+    for (const key of Object.keys(openjob)) delete openjob[key];
+    Object.assign(openjob, original);
+  }
+});
+
 test("rejects a Sentry DSN containing a password or query credentials", () => {
   const openjob = Constants.expoConfig?.extra?.openjob as Record<
     string,
