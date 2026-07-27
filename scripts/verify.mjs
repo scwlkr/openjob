@@ -23,6 +23,12 @@ const RISK_CATEGORIES = new Set([
 const GATES = [
   { id: "typecheck", command: ["npm", "run", "typecheck"] },
   { id: "lint", command: ["npm", "run", "lint"] },
+  {
+    id: "repository-suite",
+    command: ["npm", "run", "test:deterministic"],
+    cacheable: true,
+    inputs: "repository",
+  },
   { id: "web-integration", command: ["npm", "run", "test:browser"] },
   { id: "api-integration", command: ["npm", "run", "test:api"] },
   { id: "openapi-contract", command: ["npm", "run", "openapi:check"] },
@@ -40,12 +46,6 @@ const GATES = [
   {
     id: "verification-process-tests",
     command: ["npm", "run", "test:verification"],
-  },
-  {
-    id: "repository-suite",
-    command: ["npm", "run", "test:deterministic"],
-    cacheable: true,
-    inputs: "repository",
   },
   { id: "secret-check", command: ["npm", "run", "secret:check"] },
   {
@@ -85,6 +85,16 @@ const EVIDENCE_GATES = new Set([
   "android-emulator-journey",
   "ios-physical-journey",
   "android-physical-journey",
+]);
+const REPOSITORY_SUITE_COVERAGE = new Set([
+  "web-integration",
+  "api-integration",
+  "cli-integration",
+  "cli-generated-types",
+  "native-typecheck",
+  "native-lint",
+  "native-automated",
+  "verification-process-tests",
 ]);
 const HARDWARE_NATIVE_INPUTS = new Set([
   "native/src/auth/provider-gateway.ts",
@@ -329,6 +339,7 @@ function isNativeBundleInput(file) {
 
 function isHardwareRiskInput(file) {
   if (HARDWARE_NATIVE_INPUTS.has(file)) return true;
+  if (["native/App.tsx", "native/index.ts"].includes(file)) return true;
   return file.startsWith("native/src/") && !VIRTUAL_NATIVE_INPUTS.has(file);
 }
 
@@ -514,19 +525,27 @@ function gatePlan(categories, requestedMode, effectiveMode) {
     selected.add("ios-physical-journey");
     selected.add("android-physical-journey");
   }
+  if (selected.has("repository-suite")) {
+    for (const id of REPOSITORY_SUITE_COVERAGE) selected.add(id);
+  }
   const escalated = requestedMode !== effectiveMode;
-  return GATES.map((gate) => ({
-    ...gate,
-    outcome: selected.has(gate.id) ? "selected" : "skipped",
-    reason: selected.has(gate.id)
-      ? `${gate.id} is required by the ${effectiveMode} impact policy`
-      : "the changed inputs do not affect this gate",
-    selection: selected.has(gate.id)
-      ? escalated
-        ? "escalated"
-        : "selected"
-      : "skipped",
-  }));
+  return GATES.map((gate) => {
+    const coveredByRepository =
+      selected.has("repository-suite") && REPOSITORY_SUITE_COVERAGE.has(gate.id);
+    return {
+      ...gate,
+      ...(coveredByRepository ? { coveredBy: "repository-suite" } : {}),
+      outcome: selected.has(gate.id) ? "selected" : "skipped",
+      reason: selected.has(gate.id)
+        ? `${gate.id} is required by the ${effectiveMode} impact policy`
+        : "the changed inputs do not affect this gate",
+      selection: selected.has(gate.id)
+        ? escalated
+          ? "escalated"
+          : "selected"
+        : "skipped",
+    };
+  });
 }
 
 function matchesInputs(file, inputSet) {
@@ -629,6 +648,18 @@ async function execute(plan, root, evidence, cache) {
   let priorFailure = false;
   for (const gate of plan) {
     if (gate.outcome === "skipped") continue;
+    if (gate.coveredBy) {
+      const coveringGate = plan.find((candidate) => candidate.id === gate.coveredBy);
+      if (["passed", "reused"].includes(coveringGate?.outcome)) {
+        gate.outcome = coveringGate.outcome;
+        gate.reason = `${gate.id} is covered by the complete repository-suite command`;
+        if (coveringGate.fingerprint) gate.fingerprint = coveringGate.fingerprint;
+      } else {
+        gate.outcome = "skipped";
+        gate.reason = `${gate.coveredBy} did not produce reusable passing proof`;
+      }
+      continue;
+    }
     if (priorFailure) {
       gate.outcome = "skipped";
       gate.reason = "a prior selected gate failed";

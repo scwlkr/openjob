@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -333,6 +334,33 @@ test("focused hardware-risk inputs require coequal physical evidence", async () 
   assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
 });
 
+test("native app entry points fail closed to hardware-risk scope", async (context) => {
+  for (const path of ["native/App.tsx", "native/index.ts"]) {
+    await context.test(path, async () => {
+      const fixture = await createVerificationFixture();
+      await addChangedFile(fixture, path);
+      git(fixture.root, ["add", path]);
+      git(fixture.root, ["commit", "-m", "Change native entry point"]);
+      syncFixtureMain(fixture);
+
+      const result = await runVerification(fixture, [
+        "focused",
+        "--base",
+        "HEAD^",
+        "--cache",
+        `${fixture.root}-cache.json`,
+        ...FOCUSED_EVIDENCE,
+        ...PHYSICAL_EVIDENCE,
+      ]);
+
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      const report = JSON.parse(result.stdout);
+      assert.ok(report.categories.includes("hardware-risk"));
+      assert.equal(report.effectiveMode, "release-candidate");
+    });
+  }
+});
+
 test("merge reuses native generation and bundles only for an exact input and tool fingerprint", async () => {
   const fixture = await createVerificationFixture();
   await addChangedFile(
@@ -598,7 +626,23 @@ test("release-candidate mode requires clean synchronized main and only produces 
     cleanReport.gates.find((gate) => gate.id === "candidate-handoff").outcome,
     "passed",
   );
+  for (const id of [
+    "web-integration",
+    "api-integration",
+    "cli-integration",
+    "cli-generated-types",
+    "native-typecheck",
+    "native-lint",
+    "native-automated",
+    "verification-process-tests",
+  ]) {
+    const gate = cleanReport.gates.find((candidate) => candidate.id === id);
+    assert.equal(gate.outcome, "passed", id);
+    assert.equal(gate.coveredBy, "repository-suite", id);
+  }
   const cleanCommands = await readFile(fixture.commandLog, "utf8");
+  assert.match(cleanCommands, /npm run test:deterministic/u);
+  assert.doesNotMatch(cleanCommands, /npm --prefix native run (?:lint|typecheck)/u);
   assert.doesNotMatch(cleanCommands, /(?:eas|xcrun|adb|gh) /u);
 
   await writeFile(fixture.commandLog, "");
@@ -663,6 +707,7 @@ test("malformed input and partial failures fail closed before later gates", asyn
   assert.equal(unsafeCache.status, 1);
   assert.equal(JSON.parse(unsafeCache.stdout).error.code, "unsafe_cache_path");
   assert.equal(await readFile(packagePath, "utf8"), '{"private":true}\n');
+  await rm(packagePath);
 
   await writeFile(fixture.commandLog, "");
   const partial = await runVerification(
