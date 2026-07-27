@@ -144,9 +144,10 @@ function ShellScreen({
   signedInUser,
   taskListController,
 }: ShellProps) {
-  const { width } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   const { palette } = useOpenJobTheme();
   const compactHeader = width < 520;
+  const largeTextHeader = compactHeader && fontScale >= 1.2;
 
   return (
     <SafeAreaView
@@ -166,34 +167,43 @@ function ShellScreen({
           style={[
             styles.topBarActions,
             compactHeader && styles.topBarActionsCompact,
+            largeTextHeader && styles.topBarActionsLargeText,
           ]}
           testID="openjob-top-bar-actions"
         >
           {runtimeConfig.environmentBadge ? (
             <BuildBadge label={runtimeConfig.environmentBadge} />
           ) : null}
-          {signedInUser.onManageSignInMethods ? (
+          <View
+            style={[
+              styles.topBarButtons,
+              largeTextHeader && styles.topBarButtonsLargeText,
+            ]}
+            testID="openjob-top-bar-buttons"
+          >
+            {signedInUser.onManageSignInMethods ? (
+              <IconButton
+                accessibilityLabel="Manage Sign-in Methods"
+                icon="link"
+                onPress={signedInUser.onManageSignInMethods}
+              />
+            ) : null}
             <IconButton
-              accessibilityLabel="Manage Sign-in Methods"
-              icon="link"
-              onPress={signedInUser.onManageSignInMethods}
+              accessibilityLabel="Switch User"
+              icon="repeat"
+              onPress={signedInUser.onSwitchUser}
             />
-          ) : null}
-          <IconButton
-            accessibilityLabel="Switch User"
-            icon="repeat"
-            onPress={signedInUser.onSwitchUser}
-          />
-          <IconButton
-            accessibilityLabel="Sign out"
-            icon="log-out"
-            onPress={signedInUser.onSignOut}
-          />
-          <IconButton
-            accessibilityLabel="Open appearance settings"
-            icon="sliders"
-            onPress={() => navigation.push("Appearance")}
-          />
+            <IconButton
+              accessibilityLabel="Sign out"
+              icon="log-out"
+              onPress={signedInUser.onSignOut}
+            />
+            <IconButton
+              accessibilityLabel="Open appearance settings"
+              icon="sliders"
+              onPress={() => navigation.push("Appearance")}
+            />
+          </View>
         </View>
       </View>
       <ReadOnlyTaskList
@@ -705,6 +715,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   topBarActionsCompact: {
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    width: "100%",
+  },
+  topBarActionsLargeText: {
+    alignItems: "flex-start",
+    flexDirection: "column",
+    flexWrap: "nowrap",
+    justifyContent: "flex-start",
+  },
+  topBarButtons: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  topBarButtonsLargeText: {
     flexWrap: "wrap",
     justifyContent: "flex-end",
     width: "100%",

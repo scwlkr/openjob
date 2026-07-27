@@ -545,7 +545,7 @@ test("wraps every User action inside a narrow phone header", async () => {
   const original = Dimensions.get("window");
   await act(() => {
     Dimensions.set({
-      window: { ...original, height: 700, width: 320 },
+      window: { ...original, fontScale: 1, height: 700, width: 320 },
     });
   });
   let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
@@ -557,6 +557,42 @@ test("wraps every User action inside a narrow phone header", async () => {
       flexDirection: "column",
     });
     expect(screen.getByTestId("openjob-top-bar-actions")).toHaveStyle({
+      flexWrap: "wrap",
+      width: "100%",
+    });
+    for (const label of [
+      "Manage Sign-in Methods",
+      "Switch User",
+      "Sign out",
+      "Open appearance settings",
+    ]) {
+      expect(screen.getByRole("button", { name: label })).toBeOnTheScreen();
+    }
+  } finally {
+    await rendered?.unmount();
+    await act(() => {
+      Dimensions.set({ window: original });
+    });
+  }
+});
+
+test("keeps every User action visible below the Preview badge at large text", async () => {
+  const original = Dimensions.get("window");
+  await act(() => {
+    Dimensions.set({
+      window: { ...original, fontScale: 1.35, height: 700, width: 320 },
+    });
+  });
+  let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
+
+  try {
+    rendered = await renderNativeApp(previewConfig);
+
+    expect(await screen.findByTestId("openjob-top-bar-actions")).toHaveStyle({
+      alignItems: "flex-start",
+      flexDirection: "column",
+    });
+    expect(screen.getByTestId("openjob-top-bar-buttons")).toHaveStyle({
       flexWrap: "wrap",
       width: "100%",
     });
