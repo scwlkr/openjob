@@ -343,7 +343,7 @@ async function synchronizedVersion(root) {
 }
 
 function verifiedResult(result, source) {
-  assertSafeCandidateData(result);
+  assertNoAuthenticationMaterial(result);
   if (
     !result ||
     result.schemaVersion !== 1 ||
@@ -381,21 +381,42 @@ function verifiedResult(result, source) {
   }
   const normalized = structuredClone(result);
   if (normalized.cache) delete normalized.cache.path;
+  for (const item of [
+    ...normalized.gates,
+    ...normalized.externalActions,
+    ...(normalized.nativeDevelopmentClient ? [normalized.nativeDevelopmentClient] : []),
+  ]) {
+    if (typeof item.reason === "string") {
+      item.reason = "redacted nonessential verification text";
+    }
+  }
+  assertSafeCandidateData(normalized);
   return normalized;
 }
 
-function assertSafeCandidateData(value, path = "verification") {
+function containsAuthenticationMaterial(value) {
+  return (
+    /\bBearer\s+[A-Za-z0-9._~-]+/iu.test(value) ||
+    /-----BEGIN [A-Z ]+PRIVATE KEY-----/u.test(value) ||
+    /[?&](?:access_?token|refresh_?token|key|secret)=/iu.test(value)
+  );
+}
+
+function containsForbiddenCandidateText(value) {
+  return (
+    containsAuthenticationMaterial(value) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu.test(value) ||
+    /\b(?:task|group)\s*(?:content|description|title|name)\s*[:=]/iu.test(value)
+  );
+}
+
+function assertNoAuthenticationMaterial(value, path = "input") {
   if (Array.isArray(value)) {
-    value.forEach((item, index) => assertSafeCandidateData(item, `${path}[${index}]`));
+    value.forEach((item, index) => assertNoAuthenticationMaterial(item, `${path}[${index}]`));
     return;
   }
   if (!value || typeof value !== "object") {
-    if (
-      typeof value === "string" &&
-      (/\bBearer\s+[A-Za-z0-9._~-]+/iu.test(value) ||
-        /-----BEGIN [A-Z ]+PRIVATE KEY-----/u.test(value) ||
-        /[?&](?:access_?token|refresh_?token|key|secret)=/iu.test(value))
-    ) {
+    if (typeof value === "string" && containsAuthenticationMaterial(value)) {
       fail("unsafe_candidate_data", `Authentication material is forbidden at ${path}.`);
     }
     return;
@@ -403,17 +424,63 @@ function assertSafeCandidateData(value, path = "verification") {
   for (const [key, item] of Object.entries(value)) {
     const normalized = key.replaceAll(/[-_]/gu, "").toLowerCase();
     if (
-      /^(?:password|secret|accesstoken|refreshtoken|idtoken|authorization|cookie|privatekey|taskcontent|groupcontent|personaldata|email|username)$/u.test(
+      /^(?:password|passphrase|secret|clientsecret|apikey|secretkey|accesstoken|refreshtoken|idtoken|authorization|cookie|credential|credentials|privatekey|sessiontoken|jwt)$/u.test(
         normalized,
       )
     ) {
       fail(
         "unsafe_candidate_data",
-        `Credentials, personal data, Task content, and Group content are forbidden at ${path}.${key}.`,
+        `Credentials and authentication material are forbidden at ${path}.${key}.`,
+      );
+    }
+    assertNoAuthenticationMaterial(item, `${path}.${key}`);
+  }
+}
+
+function assertSafeCandidateData(value, path = "candidateRecord") {
+  assertNoAuthenticationMaterial(value, path);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertSafeCandidateData(item, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    if (typeof value === "string" && containsForbiddenCandidateText(value)) {
+      fail(
+        "unsafe_candidate_data",
+        `Personal data, Task content, and Group content are forbidden at ${path}.`,
+      );
+    }
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = key.replaceAll(/[-_]/gu, "").toLowerCase();
+    if (
+      /^(?:taskcontent|taskdescription|tasktitle|groupcontent|groupdescription|grouptitle|personaldata|email|phone|address|username|firstname|lastname|fullname)$/u.test(
+        normalized,
+      )
+    ) {
+      fail(
+        "unsafe_candidate_data",
+        `Personal data, Task content, and Group content are forbidden at ${path}.${key}.`,
       );
     }
     assertSafeCandidateData(item, `${path}.${key}`);
   }
+}
+
+function candidateIdentityInputs(candidate) {
+  return {
+    sourceRevision: candidate.sourceRevision,
+    version: candidate.version,
+    environment: candidate.environment,
+    dependencyLocks: candidate.dependencyLocks,
+    native: candidate.native,
+    permissionsFingerprint: candidate.permissionsFingerprint,
+    signing: candidate.signing,
+    toolVersions: candidate.toolVersions,
+    releasePrivacyInventoryFingerprint: candidate.releasePrivacyInventoryFingerprint,
+    selectedInputFingerprints: candidate.selectedInputFingerprints,
+  };
 }
 
 function platformState(platform, identity, sourceRevision, inputFingerprint, version) {
@@ -502,6 +569,13 @@ function easProfileMetadata(profile, profileFingerprint) {
 }
 
 async function atomicWrite(path, value) {
+  assertSafeCandidateData(value);
+  if (value?.candidate && !validRecord(value)) {
+    fail(
+      "invalid_candidate_transition",
+      "The coordinator refused to persist an impossible or non-monotonic candidate state.",
+    );
+  }
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -595,7 +669,18 @@ function validRecord(record) {
     !Array.isArray(record.events) ||
     !record.releaseProof ||
     !Array.isArray(record.releaseProof.evidence) ||
-    !Array.isArray(record.releaseProof.privacyDiscrepancies)
+    !Array.isArray(record.releaseProof.privacyDiscrepancies) ||
+    !Array.isArray(record.releaseProof.limitations)
+  ) {
+    return false;
+  }
+  const expectedIdentityFingerprint = fingerprint(candidateIdentityInputs(record.candidate));
+  const expectedCandidateId =
+    `openjob-${record.candidate.version}-${expectedIdentityFingerprint.slice("sha256:".length, "sha256:".length + 16)}`;
+  if (
+    record.candidate.identityFingerprint !== expectedIdentityFingerprint ||
+    record.candidate.id !== expectedCandidateId ||
+    record.verification.fingerprint !== fingerprint(record.verification.result)
   ) {
     return false;
   }
@@ -603,10 +688,22 @@ function validRecord(record) {
   const storeStates = new Set(["pending", "failed", "succeeded"]);
   for (const platformName of ["ios", "android"]) {
     const platform = record.platforms[platformName];
+    const candidateApplicationId = platformName === "ios"
+      ? record.candidate.native?.ios?.bundleId
+      : record.candidate.native?.android?.applicationId;
+    const candidateStoreId = platformName === "ios"
+      ? record.candidate.native?.ios?.storeAppId
+      : record.candidate.native?.android?.storeAppId;
     if (
       platform.identity?.sourceRevision !== record.candidate.sourceRevision ||
       platform.identity?.inputFingerprint !== record.candidate.identityFingerprint ||
       platform.identity?.version !== record.candidate.version ||
+      platform.identity?.buildProfile !== record.candidate.native?.buildProfile ||
+      platform.identity?.applicationId !== candidateApplicationId ||
+      platform.store?.appId !== candidateStoreId ||
+      !safeIdentifier(platform.identity?.buildProfile) ||
+      !safeIdentifier(candidateApplicationId) ||
+      !safeIdentifier(candidateStoreId) ||
       !workflowStates.has(platform.build?.state) ||
       !workflowStates.has(platform.submission?.state) ||
       !storeStates.has(platform.processing?.state) ||
@@ -618,27 +715,164 @@ function validRecord(record) {
     ) {
       return false;
     }
-    if (platform.build.state === "succeeded") {
+    const buildStarted = platform.build.state !== "pending";
+    const buildSucceeded = platform.build.state === "succeeded";
+    if (buildSucceeded) {
       if (
         !platform.artifact ||
         platform.artifact.sourceRevision !== record.candidate.sourceRevision ||
         platform.artifact.inputFingerprint !== record.candidate.identityFingerprint ||
         platform.artifact.version !== record.candidate.version ||
         platform.artifact.buildNumber !== platform.identity.buildNumber ||
-        typeof platform.artifact.id !== "string" ||
-        typeof platform.artifact.easBuildId !== "string" ||
+        !safeIdentifier(platform.artifact.id) ||
+        !safeIdentifier(platform.artifact.easBuildId) ||
+        !safeIdentifier(platform.identity.buildNumber) ||
+        !safeTimestamp(platform.build.succeededAt) ||
+        platform.build.failure !== null ||
         !/^sha256:[a-f0-9]{64}$/u.test(platform.artifact.checksum)
       ) {
         return false;
       }
     }
-    if (platform.submission.state === "succeeded" && !platform.submission.id) {
+    if (
+      (buildStarted && !safeIdentifier(platform.build.requestKey)) ||
+      (!buildStarted &&
+        (platform.build.requestKey !== null ||
+          platform.build.failure !== null ||
+          platform.artifact !== null ||
+          platform.identity.buildNumber !== null)) ||
+      (!buildSucceeded && platform.artifact !== null) ||
+      (!buildSucceeded && platform.build.succeededAt !== undefined) ||
+      (platform.build.state === "failed" && !validFailure(platform.build.failure)) ||
+      (platform.build.state === "requested" && platform.build.failure !== null)
+    ) {
+      return false;
+    }
+    const buildComplete = buildSucceeded && Boolean(platform.artifact);
+    const submissionStarted = platform.submission.state !== "pending";
+    const submissionComplete = platform.submission.state === "succeeded";
+    const storeStarted =
+      platform.processing.state !== "pending" || platform.availability.state !== "pending";
+    const proofStarted = platform.physicalProof.state !== "pending";
+    const proofComplete = platform.physicalProof.state === "succeeded";
+    const promotionStarted = platform.promotion.state !== "pending";
+    const promotionComplete = platform.promotion.state === "succeeded";
+    if (
+      (submissionStarted && !buildComplete) ||
+      (submissionStarted && !safeIdentifier(platform.submission.requestKey)) ||
+      (!submissionStarted &&
+        (platform.submission.requestKey !== null ||
+          platform.submission.failure !== null ||
+          platform.submission.id !== undefined ||
+          platform.store.buildId !== null)) ||
+      (platform.submission.state === "failed" &&
+        !validFailure(platform.submission.failure)) ||
+      (platform.submission.state === "requested" &&
+        platform.submission.failure !== null) ||
+      (submissionComplete &&
+        (!safeIdentifier(platform.submission.id) ||
+          !safeIdentifier(platform.store.buildId) ||
+          !safeTimestamp(platform.submission.succeededAt) ||
+          platform.submission.failure !== null)) ||
+      (!submissionComplete &&
+        (platform.submission.id !== undefined ||
+          platform.submission.succeededAt !== undefined ||
+          platform.store.buildId !== null)) ||
+      (buildSucceeded && platform.evidence.length < 1) ||
+      (submissionComplete && platform.evidence.length < 2) ||
+      (storeStarted && !submissionComplete) ||
+      ([platform.processing, platform.availability].some(
+        (state) => state.state === "failed" && !validFailure(state.failure),
+      )) ||
+      ([platform.processing, platform.availability].some(
+        (state) => state.state === "succeeded" &&
+          (state.failure !== null || !safeTimestamp(state.checkedAt)),
+      )) ||
+      (platform.availability.state === "succeeded" &&
+        platform.processing.state !== "succeeded") ||
+      (proofStarted && platform.availability.state !== "succeeded") ||
+      (proofStarted && !safeIdentifier(platform.physicalProof.requestKey)) ||
+      (platform.physicalProof.state === "failed" &&
+        !validFailure(platform.physicalProof.failure)) ||
+      (platform.physicalProof.state === "requested" &&
+        platform.physicalProof.failure !== null) ||
+      (proofComplete &&
+        (platform.physicalProof.failure !== null ||
+          !safeTimestamp(platform.physicalProof.succeededAt) ||
+          !safeEvidenceReferences(platform.physicalProof.evidence))) ||
+      (!proofComplete && platform.physicalProof.evidence.length > 0) ||
+      (!proofComplete && platform.physicalProof.succeededAt !== undefined) ||
+      (promotionStarted && !safeIdentifier(platform.promotion.requestKey)) ||
+      (platform.promotion.state === "failed" &&
+        !validFailure(platform.promotion.failure)) ||
+      (platform.promotion.state === "requested" &&
+        platform.promotion.failure !== null) ||
+      (promotionComplete &&
+        (!safeIdentifier(platform.promotion.id) ||
+          platform.promotion.failure !== null ||
+          !safeTimestamp(platform.promotion.succeededAt))) ||
+      (!promotionComplete &&
+        (platform.promotion.id !== undefined ||
+          platform.promotion.succeededAt !== undefined)) ||
+      !platform.evidence.every(safeEvidenceReference)
+    ) {
       return false;
     }
   }
-  return ["missing", "requested", "failed", "blocked", "succeeded"].includes(
+  const releaseProofStates = new Set([
+    "missing",
+    "requested",
+    "failed",
+    "blocked",
+    "succeeded",
+  ]);
+  if (!releaseProofStates.has(record.releaseProof.state)) return false;
+  const bothPhysicallyProven = ["ios", "android"].every(
+    (platform) => record.platforms[platform].physicalProof.state === "succeeded",
+  );
+  if (record.releaseProof.state !== "missing" && !bothPhysicallyProven) return false;
+  const releaseProofStarted = record.releaseProof.state !== "missing";
+  const releaseProofComplete = ["blocked", "succeeded"].includes(
     record.releaseProof.state,
   );
+  const unresolvedPrivacy = record.releaseProof.privacyDiscrepancies.some(
+    (item) => item.state !== "resolved",
+  );
+  const unapprovedLimitations = record.releaseProof.limitations.some(
+    (item) => !item.approved,
+  );
+  if (
+    !validReviewItems(record.releaseProof.privacyDiscrepancies, "discrepancy") ||
+    !validReviewItems(record.releaseProof.limitations, "limitation") ||
+    (releaseProofStarted && !safeIdentifier(record.releaseProof.requestKey)) ||
+    (record.releaseProof.state === "failed" &&
+      !validFailure(record.releaseProof.failure)) ||
+    (record.releaseProof.state === "requested" &&
+      record.releaseProof.failure !== null) ||
+    (releaseProofComplete &&
+      (record.releaseProof.failure !== null ||
+        !safeEvidenceReferences(record.releaseProof.evidence))) ||
+    (record.releaseProof.state === "blocked" &&
+      (!safeTimestamp(record.releaseProof.blockedAt) ||
+        (!unresolvedPrivacy && !unapprovedLimitations))) ||
+    (record.releaseProof.state === "succeeded" &&
+      (!safeTimestamp(record.releaseProof.succeededAt) ||
+        unresolvedPrivacy ||
+        unapprovedLimitations)) ||
+    (record.releaseProof.state !== "succeeded" &&
+      record.releaseProof.succeededAt !== undefined) ||
+    (record.releaseProof.state !== "blocked" &&
+      record.releaseProof.blockedAt !== undefined)
+  ) {
+    return false;
+  }
+  const promotionStates = ["ios", "android"].map(
+    (platform) => record.platforms[platform].promotion.state,
+  );
+  const promotionStarted = promotionStates.some((state) => state !== "pending");
+  if (promotionStates[0] !== promotionStates[1]) return false;
+  if (promotionStarted && record.releaseProof.state !== "succeeded") return false;
+  return true;
 }
 
 async function readRecord(path) {
@@ -776,10 +1010,18 @@ function executeExternal(executor, request, root) {
       rate_limited: "The external service rate-limited the request; resume the same step later.",
       service_unavailable: "The external service is unavailable; resume the same step later.",
     };
+    const resumableCodes = new Set([
+      "authentication_expired",
+      "network_timeout",
+      "processing_delayed",
+      "rate_limited",
+      "service_unavailable",
+    ]);
     return {
       status: "failed",
       failure: {
-        classification: response.failure?.classification === "terminal"
+        classification: !resumableCodes.has(code) &&
+          response.failure?.classification === "terminal"
           ? "terminal"
           : "resumable",
         code,
@@ -796,10 +1038,40 @@ function validBuildResponse(response, record) {
     response.sourceRevision === record.candidate.sourceRevision &&
       response.inputFingerprint === record.candidate.identityFingerprint &&
       response.version === record.candidate.version &&
-      typeof response.buildNumber === "string" &&
-      typeof response.easBuildId === "string" &&
-      typeof response.artifact?.id === "string" &&
+      safeIdentifier(response.buildNumber) &&
+      safeIdentifier(response.easBuildId) &&
+      safeIdentifier(response.artifact?.id) &&
       /^sha256:[a-f0-9]{64}$/u.test(response.artifact?.checksum)
+  );
+}
+
+function safeIdentifier(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 120 &&
+    /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u.test(value) &&
+    !containsForbiddenCandidateText(value)
+  );
+}
+
+function safeTimestamp(value) {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function validFailure(failure) {
+  return Boolean(
+    failure &&
+    ["resumable", "terminal"].includes(failure.classification) &&
+    safeIdentifier(failure.code) &&
+    safeIdentifier(failure.service) &&
+    typeof failure.message === "string" &&
+    failure.message.length > 0 &&
+    failure.message.length <= 240 &&
+    !containsForbiddenCandidateText(failure.message)
   );
 }
 
@@ -820,8 +1092,10 @@ function safeEvidenceReference(reference) {
     return false;
   }
   let parsed;
+  let decoded;
   try {
     parsed = new URL(reference);
+    decoded = decodeURIComponent(reference);
   } catch {
     return false;
   }
@@ -829,7 +1103,8 @@ function safeEvidenceReference(reference) {
     ["https:", "local:", "executor:"].includes(parsed.protocol) &&
     !parsed.username &&
     !parsed.password &&
-    !parsed.search
+    !parsed.search &&
+    !containsForbiddenCandidateText(decoded)
   );
 }
 
@@ -1081,8 +1356,8 @@ async function executeSubmit(parsed, root) {
     const valid =
       response.status === "succeeded" &&
       matchesCandidateResponse(response, record) &&
-      typeof response.submissionId === "string" &&
-      typeof response.storeBuildId === "string";
+      safeIdentifier(response.submissionId) &&
+      safeIdentifier(response.storeBuildId);
     if (!valid) {
       const failure = response.status === "succeeded"
         ? {
@@ -1442,7 +1717,7 @@ async function executePhysicalProof(parsed, root) {
 function validReviewItems(items, kind) {
   if (!Array.isArray(items)) return false;
   return items.every((item) => {
-    if (!item || typeof item.id !== "string" || item.id.length > 120) return false;
+    if (!item || !safeIdentifier(item.id)) return false;
     if (item.evidence && !safeEvidenceReference(item.evidence)) return false;
     if (kind === "discrepancy") return ["resolved", "unresolved"].includes(item.state);
     return typeof item.approved === "boolean";
@@ -1512,6 +1787,8 @@ async function executeReleaseProof(parsed, root) {
     record.releaseProof.state = "requested";
     record.releaseProof.requestKey = requestKey;
     record.releaseProof.failure = null;
+    delete record.releaseProof.blockedAt;
+    delete record.releaseProof.succeededAt;
     record.releaseProof.requestedAt ??= now;
     record.updatedAt = now;
     await atomicWrite(recordPath, record);
@@ -1557,22 +1834,36 @@ async function executeReleaseProof(parsed, root) {
       (item) => item.state !== "resolved",
     );
     const unapproved = response.limitations.some((item) => !item.approved);
-    record.releaseProof.state = unresolved || unapproved ? "blocked" : "succeeded";
+    const blocked = unresolved || unapproved;
+    record.releaseProof.state = blocked ? "blocked" : "succeeded";
     record.releaseProof.failure = null;
     record.releaseProof.evidence = response.evidenceReferences;
     record.releaseProof.privacyDiscrepancies = response.privacyDiscrepancies;
     record.releaseProof.limitations = response.limitations;
-    record.releaseProof.succeededAt = completedAt;
+    if (blocked) {
+      record.releaseProof.blockedAt = completedAt;
+      delete record.releaseProof.succeededAt;
+    } else {
+      record.releaseProof.succeededAt = completedAt;
+      delete record.releaseProof.blockedAt;
+    }
     record.updatedAt = completedAt;
-    record.events.push({ at: completedAt, type: "release-proof-succeeded", issue: 41 });
+    record.events.push({
+      at: completedAt,
+      type: blocked ? "release-proof-blocked" : "release-proof-succeeded",
+      issue: 41,
+    });
     await atomicWrite(recordPath, record);
     return {
       schemaVersion: 1,
-      status: "succeeded",
+      status: blocked ? "blocked" : "succeeded",
       candidateId: record.candidate.id,
       action: "release-proof",
       platform: "all",
       issue: 41,
+      reason: blocked
+        ? "#41 Release Proof remains blocked by privacy discrepancies or unapproved limitations."
+        : "#41 Release Proof is complete for this candidate.",
       externalActionRan: true,
     };
   });
@@ -1649,7 +1940,7 @@ async function executePromotion(parsed, root) {
       response.status === "succeeded" &&
       matchesCandidateResponse(response, record) &&
       ["ios", "android"].every(
-        (platform) => typeof response.platforms?.[platform]?.promotionId === "string",
+        (platform) => safeIdentifier(response.platforms?.[platform]?.promotionId),
       );
     if (!valid) {
       const failure = response.status === "succeeded"
@@ -1720,11 +2011,12 @@ async function invalidate(parsed, root) {
   const recordPath = resolve(root, parsed.record);
   return withRecordLock(recordPath, async () => {
     const record = await readRecord(recordPath);
+    const reasonFingerprint = fingerprint(parsed.reason);
     if (record.invalidation) {
-      if (record.invalidation.reason !== parsed.reason) {
+      if (record.invalidation.reasonFingerprint !== reasonFingerprint) {
         fail(
           "already_invalidated",
-          `Release Candidate ${record.candidate.id} was already invalidated: ${record.invalidation.reason}.`,
+          `Release Candidate ${record.candidate.id} was already invalidated for another operator reason.`,
         );
       }
       return {
@@ -1739,20 +2031,21 @@ async function invalidate(parsed, root) {
     record.invalidation = {
       at: now,
       code: "operator_invalidated",
-      reason: parsed.reason,
+      reason: "operator invalidated candidate",
+      reasonFingerprint,
     };
     record.updatedAt = now;
     record.events.push({
       at: now,
       type: "candidate-invalidated",
-      reason: parsed.reason,
+      reason: "operator invalidated candidate",
     });
     await atomicWrite(recordPath, record);
     return {
       schemaVersion: 1,
       status: "invalidated",
       candidateId: record.candidate.id,
-      reason: parsed.reason,
+      reason: "operator invalidated candidate",
       externalActionRan: false,
     };
   });
@@ -1820,10 +2113,14 @@ async function prepare(parsed, root) {
   const verification = verifiedResult(verificationSource, source);
   const environmentIdentity = nativeIdentities.environments?.[parsed.environment];
   const buildProfile = environmentIdentity?.eas?.buildProfile;
+  const appleStoreAppId = nativeIdentities.apple?.appStoreConnect?.[parsed.environment]?.appId;
+  const googleStoreAppId = nativeIdentities.googlePlay?.apps?.[parsed.environment]?.appId;
   if (
     !environmentIdentity ||
     !buildProfile ||
     !eas.build?.[buildProfile] ||
+    !safeIdentifier(appleStoreAppId) ||
+    !safeIdentifier(googleStoreAppId) ||
     environmentIdentity.ios?.bundleId !== nativeIdentities.apple?.distributionSigning?.[parsed.environment]?.bundleId ||
     environmentIdentity.android?.applicationId !== nativeIdentities.googlePlay?.apps?.[parsed.environment]?.applicationId
   ) {
@@ -1839,7 +2136,8 @@ async function prepare(parsed, root) {
   const easProfile = eas.build[buildProfile];
   const iosSigning = nativeIdentities.apple.distributionSigning[parsed.environment];
   const androidSigning = environmentIdentity.android.signing;
-  const input = {
+  const permissionsFingerprint = fingerprint(privacy.permissions);
+  const candidateIdentityInputs = {
     sourceRevision: source.revision,
     version,
     environment: parsed.environment,
@@ -1856,14 +2154,14 @@ async function prepare(parsed, root) {
       expo: nativeIdentities.expo,
       ios: {
         bundleId: environmentIdentity.ios.bundleId,
-        storeAppId: nativeIdentities.apple.appStoreConnect?.[parsed.environment]?.appId,
+        storeAppId: appleStoreAppId,
       },
       android: {
         applicationId: environmentIdentity.android.applicationId,
-        storeAppId: nativeIdentities.googlePlay.apps?.[parsed.environment]?.appId,
+        storeAppId: googleStoreAppId,
       },
     },
-    permissions: privacy.permissions,
+    permissionsFingerprint,
     signing: {
       appleTeamId: nativeIdentities.apple.teamId,
       ios: iosSigningMetadata(iosSigning),
@@ -1878,7 +2176,7 @@ async function prepare(parsed, root) {
     releasePrivacyInventoryFingerprint,
     selectedInputFingerprints,
   };
-  const identityFingerprint = fingerprint(input);
+  const identityFingerprint = fingerprint(candidateIdentityInputs);
   const candidateId = `openjob-${version}-${identityFingerprint.slice("sha256:".length, "sha256:".length + 16)}`;
   const recordPath = resolve(root, parsed.record);
   const prior = await existingRecord(recordPath);
@@ -1901,8 +2199,8 @@ async function prepare(parsed, root) {
     buildProfile,
     ios: environmentIdentity.ios,
     android: environmentIdentity.android,
-    appleAppId: nativeIdentities.apple.appStoreConnect?.[parsed.environment]?.appId ?? null,
-    googleAppId: nativeIdentities.googlePlay.apps?.[parsed.environment]?.appId ?? null,
+    appleAppId: appleStoreAppId,
+    googleAppId: googleStoreAppId,
   };
   const record = {
     schemaVersion: 1,
@@ -1913,11 +2211,11 @@ async function prepare(parsed, root) {
       defaultBranch: source.branch,
       version,
       environment: parsed.environment,
-      dependencyLocks: input.dependencyLocks,
-      native: input.native,
-      permissionsFingerprint: fingerprint(privacy.permissions),
-      signing: input.signing,
-      toolVersions: input.toolVersions,
+      dependencyLocks: candidateIdentityInputs.dependencyLocks,
+      native: candidateIdentityInputs.native,
+      permissionsFingerprint,
+      signing: candidateIdentityInputs.signing,
+      toolVersions: candidateIdentityInputs.toolVersions,
       releasePrivacyInventoryFingerprint,
       selectedInputFingerprints,
     },
@@ -1934,7 +2232,7 @@ async function prepare(parsed, root) {
       state: "missing",
       evidence: [],
       privacyDiscrepancies: [],
-      approvedLimitations: [],
+      limitations: [],
     },
     invalidation: null,
     events: [{ at: now, type: "candidate-prepared", reason: "immutable inputs frozen" }],
@@ -1965,8 +2263,11 @@ async function main() {
   }
   else report = await executePromotion(parsed, root);
   process.stdout.write(`${JSON.stringify(report)}\n`);
+  const executionSummary = report.externalActionRan
+    ? "the configured external executor ran"
+    : "no external action ran";
   process.stderr.write(
-    `${report.status.toUpperCase()} ${report.candidateId} — no external action ran.\n`,
+    `${report.status.toUpperCase()} ${report.candidateId} — ${executionSummary}.\n`,
   );
 }
 

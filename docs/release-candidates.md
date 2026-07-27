@@ -54,6 +54,15 @@ npm run release:candidate -- execute \
   --record .openjob/release-candidates/0.3.4.json \
   --action build --platform ios --executor /secure/path/executor.mjs \
   --confirm '<confirmationToken>'
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action build --platform android --executor /secure/path/executor.mjs
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action build --platform android --executor /secure/path/executor.mjs \
+  --confirm '<android-build-confirmationToken>'
 ```
 
 Repeat for Android, then preview and confirm submission of each recorded
@@ -66,7 +75,17 @@ npm run release:candidate -- execute \
 
 npm run release:candidate -- execute \
   --record .openjob/release-candidates/0.3.4.json \
+  --action submit --platform ios --executor /secure/path/executor.mjs \
+  --confirm '<ios-submission-confirmationToken>'
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
   --action submit --platform android --executor /secure/path/executor.mjs
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action submit --platform android --executor /secure/path/executor.mjs \
+  --confirm '<android-submission-confirmationToken>'
 ```
 
 The coordinator writes the stable request key before calling the executor.
@@ -97,6 +116,11 @@ remain unchanged.
 npm run release:candidate -- resume \
   --record .openjob/release-candidates/0.3.4.json \
   --platform ios --executor /secure/path/executor.mjs
+
+npm run release:candidate -- resume \
+  --record .openjob/release-candidates/0.3.4.json \
+  --platform ios --executor /secure/path/executor.mjs \
+  --confirm '<resume-confirmationToken>'
 ```
 
 Authentication renewal, rate limits, service recovery, store metadata
@@ -116,7 +140,26 @@ npm run release:candidate -- execute \
 
 npm run release:candidate -- execute \
   --record .openjob/release-candidates/0.3.4.json \
+  --action physical-proof --platform ios --executor /secure/path/executor.mjs \
+  --confirm '<ios-physical-proof-confirmationToken>'
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action physical-proof --platform android --executor /secure/path/executor.mjs
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action physical-proof --platform android --executor /secure/path/executor.mjs \
+  --confirm '<android-physical-proof-confirmationToken>'
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
   --action release-proof --platform all --executor /secure/path/executor.mjs
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action release-proof --platform all --executor /secure/path/executor.mjs \
+  --confirm '<release-proof-confirmationToken>'
 ```
 
 #41 is the sole live Release Proof gate. Missing platform proof, a stale input,
@@ -128,6 +171,11 @@ single platform:
 npm run release:candidate -- execute \
   --record .openjob/release-candidates/0.3.4.json \
   --action promote --platform all --executor /secure/path/executor.mjs
+
+npm run release:candidate -- execute \
+  --record .openjob/release-candidates/0.3.4.json \
+  --action promote --platform all --executor /secure/path/executor.mjs \
+  --confirm '<coequal-promotion-confirmationToken>'
 ```
 
 ## Invalidate and hand off

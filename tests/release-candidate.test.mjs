@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -203,6 +203,7 @@ async function createCandidateFixture() {
       "native/package.json:react-native": "0.84.0",
     },
     cache: { path: join(root, ".openjob", "verification-cache.json"), state: "loaded" },
+    nativeDevelopmentClient: { action: "reuse", reason: "native inputs unchanged" },
     gates: [
       "typecheck",
       "lint",
@@ -241,7 +242,9 @@ async function createCandidateFixture() {
       'state[operation] = (state[operation] ?? 0) + 1;',
       'await writeFile(process.env.OPENJOB_CANDIDATE_EXECUTOR_STATE, `${JSON.stringify(state)}\\n`);',
       'if (process.env.OPENJOB_CANDIDATE_FAIL_ONCE === operation && state[operation] === 1) {',
-      '  process.stdout.write(`${JSON.stringify({ schemaVersion: 1, status: "failed", failure: { classification: "resumable", code: "network_timeout", message: "temporary network timeout" } })}\\n`);',
+      '  const code = process.env.OPENJOB_CANDIDATE_FAILURE_CODE ?? "network_timeout";',
+      '  const classification = process.env.OPENJOB_CANDIDATE_FAILURE_CLASSIFICATION ?? "resumable";',
+      '  process.stdout.write(`${JSON.stringify({ schemaVersion: 1, status: "failed", failure: { classification, code, message: "safe fake provider failure" } })}\\n`);',
       '  process.exit(0);',
       '}',
       'const buildNumber = request.platform === "ios" ? "42" : "314";',
@@ -265,6 +268,12 @@ async function createCandidateFixture() {
       '};',
       'if (request.action === "submit") response = { schemaVersion: 1, status: "succeeded", ...identity, submissionId: `submission-${request.platform}-1`, storeBuildId: `store-${request.platform}-${buildNumber}` };',
       'if (request.action === "status") response = { schemaVersion: 1, status: "succeeded", ...identity, storeBuildId: `store-${request.platform}-${buildNumber}`, processing: "succeeded", availability: "succeeded" };',
+      'if (process.env.OPENJOB_CANDIDATE_PENDING_ONCE === operation) {',
+      '  const pendingKey = `${operation}:pending`;',
+      '  state[pendingKey] = (state[pendingKey] ?? 0) + 1;',
+      '  await writeFile(process.env.OPENJOB_CANDIDATE_EXECUTOR_STATE, `${JSON.stringify(state)}\\n`);',
+      '  if (state[pendingKey] === 1) { response.processing = "pending"; response.availability = "pending"; }',
+      '}',
       'if (request.action === "physical-proof") response = { schemaVersion: 1, status: "succeeded", ...identity, artifactId: request.artifact.id, evidenceReferences: [`https://github.com/scwlkr/openjob/issues/41#${request.platform}-physical`] };',
       'if (request.action === "release-proof") response = { schemaVersion: 1, status: "succeeded", ...identity, issue: 41, evidenceReferences: ["https://github.com/scwlkr/openjob/issues/41#release-proof"], privacyDiscrepancies: [], limitations: [] };',
       'if (request.action === "promote") response = { schemaVersion: 1, status: "succeeded", ...identity, platforms: { ios: { promotionId: "promotion-ios-1" }, android: { promotionId: "promotion-android-1" } } };',
@@ -273,6 +282,7 @@ async function createCandidateFixture() {
       '  response.privacyDiscrepancies = [{ id: "sdk-traffic", state: "unresolved", evidence: "https://github.com/scwlkr/openjob/issues/40#traffic" }];',
       '  response.limitations = [{ id: "android-review-delay", approved: false, evidence: "https://github.com/scwlkr/openjob/issues/41#limitation" }];',
       '}',
+      'if (process.env.OPENJOB_CANDIDATE_UNSAFE_ID === operation && response.artifact) response.artifact.id = "person@example.test";',
       'process.stdout.write(`${JSON.stringify(response)}\\n`);',
       "",
     ].join("\n"),
@@ -322,7 +332,13 @@ test("prepare freezes one synced candidate identity and reuses it unchanged", as
     "package-lock.json",
   ]);
   assert.equal(record.verification.result.status, "passed");
-  assert.equal(record.verification.result.cache.path, undefined);
+  assert.deepEqual(record.verification.result.changedFiles, []);
+  assert.deepEqual(record.verification.result.cache, { state: "loaded" });
+  assert.equal(record.verification.result.nativeDevelopmentClient.action, "reuse");
+  assert.equal(
+    record.verification.result.gates[0].reason,
+    "redacted nonessential verification text",
+  );
   assert.equal(record.platforms.ios.build.state, "pending");
   assert.equal(record.platforms.android.build.state, "pending");
   assert.equal(record.releaseProof.issue, 41);
@@ -392,6 +408,27 @@ test("prepare rejects dirty, unsynced, version-mismatched, or unverified source"
     assert.equal(result.status, 1);
     assert.equal(result.report.error.code, "verification_not_eligible");
   });
+
+  await context.test("missing store identifier", async () => {
+    const fixture = await createCandidateFixture();
+    const identitiesPath = join(fixture.root, "config", "native-identities.json");
+    const identities = JSON.parse(await readFile(identitiesPath, "utf8"));
+    delete identities.apple.appStoreConnect.production.appId;
+    await writeJson(identitiesPath, identities);
+    git(fixture.root, ["add", "config/native-identities.json"]);
+    git(fixture.root, ["commit", "-m", "Remove store identifier"]);
+    git(fixture.root, ["push", "origin", "main"]);
+    const verification = JSON.parse(await readFile(fixture.verificationPath, "utf8"));
+    verification.headRevision = git(fixture.root, ["rev-parse", "HEAD"]);
+    await writeJson(fixture.verificationPath, verification);
+    const result = await runCandidate(fixture.root, [
+      "prepare", "--record", fixture.recordPath,
+      "--verification-result", fixture.verificationPath,
+      "--environment", "production",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(result.report.error.code, "native_identity_mismatch");
+  });
 });
 
 test("build is previewed, explicitly confirmed once, and then reused", async () => {
@@ -442,6 +479,8 @@ test("build is previewed, explicitly confirmed once, and then reused", async () 
   );
   assert.equal(executed.status, 0, executed.stderr);
   assert.equal(executed.report.status, "succeeded");
+  assert.match(executed.stderr, /configured external executor ran/u);
+  assert.doesNotMatch(executed.stderr, /no external action ran/u);
   const record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
   assert.equal(record.platforms.ios.build.state, "succeeded");
   assert.equal(record.platforms.ios.identity.buildNumber, "42");
@@ -461,6 +500,16 @@ test("build is previewed, explicitly confirmed once, and then reused", async () 
   assert.equal(repeated.report.status, "reused");
   assert.match(repeated.report.reason, /successful Candidate Artifact/u);
   assert.equal((await readFile(fixture.executorLog, "utf8")).trim().split("\n").length, 1);
+  const rewound = structuredClone(record);
+  rewound.platforms.ios.build.state = "pending";
+  rewound.platforms.ios.build.requestKey = null;
+  await writeJson(fixture.recordPath, rewound);
+  const rejectedRewind = await runCandidate(fixture.root, [
+    "inspect", "--record", fixture.recordPath,
+  ]);
+  assert.equal(rejectedRewind.status, 1);
+  assert.equal(rejectedRewind.report.error.code, "corrupted_candidate_record");
+  await writeJson(fixture.recordPath, record);
   const staleLock = `${fixture.recordPath}.lock`;
   await mkdir(staleLock);
   await writeJson(join(staleLock, "owner.json"), {
@@ -579,6 +628,12 @@ test("resumable EAS, Apple, and Google failures reuse stable platform request ke
     "--environment", "production",
   ], environment);
 
+  const failureCodes = {
+    "build:ios": "authentication_expired",
+    "submit:ios": "rate_limited",
+    "build:android": "service_unavailable",
+    "submit:android": "network_timeout",
+  };
   for (const platform of ["ios", "android"]) {
     for (const action of ["build", "submit"]) {
       const arguments_ = [
@@ -591,10 +646,15 @@ test("resumable EAS, Apple, and Google failures reuse stable platform request ke
       const failed = await runCandidate(
         fixture.root,
         [...arguments_, "--confirm", preview.report.confirmationToken],
-        { ...environment, OPENJOB_CANDIDATE_FAIL_ONCE: `${action}:${platform}` },
+        {
+          ...environment,
+          OPENJOB_CANDIDATE_FAIL_ONCE: `${action}:${platform}`,
+          OPENJOB_CANDIDATE_FAILURE_CODE: failureCodes[`${action}:${platform}`],
+          OPENJOB_CANDIDATE_FAILURE_CLASSIFICATION: "terminal",
+        },
       );
       assert.equal(failed.status, 1);
-      assert.equal(failed.report.error.code, "network_timeout");
+      assert.equal(failed.report.error.code, failureCodes[`${action}:${platform}`]);
       let record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
       const stateName = action === "build" ? "build" : "submission";
       assert.equal(record.platforms[platform][stateName].state, "failed");
@@ -674,7 +734,9 @@ test("inspect, invalidate, and handoff preserve one durable non-external record"
   assert.equal(invalidated.status, 0, invalidated.stderr);
   assert.equal(invalidated.report.status, "invalidated");
   const record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
-  assert.equal(record.invalidation.reason, "native signing identity rotated");
+  assert.equal(record.invalidation.reason, "operator invalidated candidate");
+  assert.match(record.invalidation.reasonFingerprint, /^sha256:[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(record), /native signing identity rotated/u);
   assert.equal(record.platforms.ios.build.state, "pending");
   assert.equal(record.platforms.android.build.state, "pending");
 
@@ -775,6 +837,11 @@ test("coequal promotion refuses incomplete Release Proof and advances both platf
     { ...environment, OPENJOB_CANDIDATE_RELEASE_BLOCKERS: "1" },
   );
   assert.equal(blockedProofResult.status, 0, blockedProofResult.stderr);
+  assert.equal(blockedProofResult.report.status, "blocked");
+  failedRecord = JSON.parse(await readFile(fixture.recordPath, "utf8"));
+  assert.equal(failedRecord.releaseProof.succeededAt, undefined);
+  assert.match(failedRecord.releaseProof.blockedAt, /^\d{4}-/u);
+  assert.equal(failedRecord.events.at(-1).type, "release-proof-blocked");
 
   const privacyRefused = await runCandidate(fixture.root, promotion, environment);
   assert.equal(privacyRefused.status, 1);
@@ -807,6 +874,24 @@ test("coequal promotion refuses incomplete Release Proof and advances both platf
   assert.equal(record.releaseProof.state, "succeeded");
   assert.equal(record.platforms.ios.promotion.state, "succeeded");
   assert.equal(record.platforms.android.promotion.state, "succeeded");
+  const rewoundPromotion = structuredClone(record);
+  for (const platform of ["ios", "android"]) {
+    rewoundPromotion.platforms[platform].promotion.state = "requested";
+  }
+  await writeJson(fixture.recordPath, rewoundPromotion);
+  const duplicatePromotion = await runCandidate(fixture.root, [
+    "inspect", "--record", fixture.recordPath,
+  ]);
+  assert.equal(duplicatePromotion.status, 1);
+  assert.equal(duplicatePromotion.report.error.code, "corrupted_candidate_record");
+  await writeJson(fixture.recordPath, record);
+  record.platforms.ios.physicalProof.evidence = [];
+  await writeJson(fixture.recordPath, record);
+  const fabricatedProof = await runCandidate(fixture.root, [
+    "inspect", "--record", fixture.recordPath,
+  ]);
+  assert.equal(fabricatedProof.status, 1);
+  assert.equal(fabricatedProof.report.error.code, "corrupted_candidate_record");
 });
 
 test("a mismatched platform artifact blocks both without discarding the valid platform", async () => {
@@ -958,6 +1043,41 @@ test("corrupted state and authentication material fail closed", async () => {
     "corrupted_candidate_record",
   );
 
+  const semanticCorrupt = await createCandidateFixture();
+  await runCandidate(semanticCorrupt.root, [
+    "prepare", "--record", semanticCorrupt.recordPath,
+    "--verification-result", semanticCorrupt.verificationPath,
+    "--environment", "production",
+  ]);
+  const semanticallyCorruptedRecord = JSON.parse(
+    await readFile(semanticCorrupt.recordPath, "utf8"),
+  );
+  semanticallyCorruptedRecord.candidate.native.ios.bundleId = "dev.example.tampered";
+  await writeJson(semanticCorrupt.recordPath, semanticallyCorruptedRecord);
+  const semanticInspection = await runCandidate(semanticCorrupt.root, [
+    "inspect", "--record", semanticCorrupt.recordPath,
+  ]);
+  assert.equal(semanticInspection.status, 1);
+  assert.equal(semanticInspection.report.error.code, "corrupted_candidate_record");
+
+  const impossible = await createCandidateFixture();
+  await runCandidate(impossible.root, [
+    "prepare", "--record", impossible.recordPath,
+    "--verification-result", impossible.verificationPath,
+    "--environment", "production",
+  ]);
+  const impossibleRecord = JSON.parse(await readFile(impossible.recordPath, "utf8"));
+  impossibleRecord.platforms.ios.submission = {
+    state: "succeeded",
+    id: "submission-without-build",
+  };
+  await writeJson(impossible.recordPath, impossibleRecord);
+  const impossibleInspection = await runCandidate(impossible.root, [
+    "inspect", "--record", impossible.recordPath,
+  ]);
+  assert.equal(impossibleInspection.status, 1);
+  assert.equal(impossibleInspection.report.error.code, "corrupted_candidate_record");
+
   const unsafe = await createCandidateFixture();
   const verification = JSON.parse(await readFile(unsafe.verificationPath, "utf8"));
   verification.gates[0].accessToken = "must-never-enter-candidate-state";
@@ -970,6 +1090,81 @@ test("corrupted state and authentication material fail closed", async () => {
   assert.equal(prepared.status, 1);
   assert.equal(prepared.report.error.code, "unsafe_candidate_data");
   await assert.rejects(readFile(unsafe.recordPath, "utf8"), { code: "ENOENT" });
+
+  const redacted = await createCandidateFixture();
+  const personalVerification = JSON.parse(
+    await readFile(redacted.verificationPath, "utf8"),
+  );
+  personalVerification.gates[0].reason =
+    "Task content: private assignment for person@example.test in Group content: private team";
+  personalVerification.gates[1].reason = "Call Alice Walker at 312-555-0142";
+  await writeJson(redacted.verificationPath, personalVerification);
+  const redactedPreparation = await runCandidate(redacted.root, [
+    "prepare", "--record", redacted.recordPath,
+    "--verification-result", redacted.verificationPath,
+    "--environment", "production",
+  ]);
+  assert.equal(redactedPreparation.status, 0, redactedPreparation.stderr);
+  const durableSource = await readFile(redacted.recordPath, "utf8");
+  assert.doesNotMatch(
+    durableSource,
+    /person@example\.test|private assignment|private team|Alice Walker|312-555-0142/u,
+  );
+  assert.match(durableSource, /redacted nonessential verification text/u);
+});
+
+test("unsafe executor identifiers never enter durable state", async () => {
+  const fixture = await createCandidateFixture();
+  const environment = {
+    OPENJOB_CANDIDATE_EXECUTOR_LOG: fixture.executorLog,
+    OPENJOB_CANDIDATE_EXECUTOR_STATE: fixture.executorState,
+    OPENJOB_CANDIDATE_UNSAFE_ID: "build:ios",
+  };
+  await runCandidate(fixture.root, [
+    "prepare", "--record", fixture.recordPath,
+    "--verification-result", fixture.verificationPath,
+    "--environment", "production",
+  ], environment);
+  const build = [
+    "execute", "--record", fixture.recordPath,
+    "--action", "build", "--platform", "ios",
+    "--executor", fixture.executorPath,
+  ];
+  const preview = await runCandidate(fixture.root, build, environment);
+  const executed = await runCandidate(
+    fixture.root,
+    [...build, "--confirm", preview.report.confirmationToken],
+    environment,
+  );
+  assert.equal(executed.status, 1);
+  assert.equal(executed.report.error.code, "artifact_identity_mismatch");
+  assert.doesNotMatch(await readFile(fixture.recordPath, "utf8"), /person@example\.test/u);
+});
+
+test("the durable record hands off unchanged through a local fake Git remote", async () => {
+  const fixture = await createCandidateFixture();
+  const prepared = await runCandidate(fixture.root, [
+    "prepare", "--record", fixture.recordPath,
+    "--verification-result", fixture.verificationPath,
+    "--environment", "production",
+  ]);
+  assert.equal(prepared.status, 0, prepared.stderr);
+  const transferredRoot = await mkdtemp(join(tmpdir(), "openjob-candidate-transfer-"));
+  git(dirname(transferredRoot), ["clone", fixture.remote, transferredRoot]);
+  const transferredRecord = join(transferredRoot, ".openjob", "candidate.json");
+  await mkdir(dirname(transferredRecord), { recursive: true });
+  await cp(fixture.recordPath, transferredRecord);
+
+  const handedOff = await runCandidate(transferredRoot, [
+    "handoff", "--record", transferredRecord,
+  ]);
+  assert.equal(handedOff.status, 0, handedOff.stderr);
+  assert.equal(handedOff.report.candidateId, prepared.report.candidateId);
+  assert.equal(handedOff.report.status, "blocked");
+  assert.equal(
+    await readFile(transferredRecord, "utf8"),
+    await readFile(fixture.recordPath, "utf8"),
+  );
 });
 
 test("resume targets failed store processing and evidence collection without rebuilding", async () => {
@@ -1001,8 +1196,13 @@ test("resume targets failed store processing and evidence collection without reb
   const failedStatus = await runCandidate(fixture.root, [
     "status", "--record", fixture.recordPath,
     "--platform", "ios", "--executor", fixture.executorPath,
-  ], { ...environment, OPENJOB_CANDIDATE_FAIL_ONCE: "status:ios" });
+  ], {
+    ...environment,
+    OPENJOB_CANDIDATE_FAIL_ONCE: "status:ios",
+    OPENJOB_CANDIDATE_FAILURE_CODE: "processing_delayed",
+  });
   assert.equal(failedStatus.status, 1);
+  assert.equal(failedStatus.report.error.code, "processing_delayed");
   let record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
   assert.equal(record.platforms.ios.processing.state, "failed");
   assert.equal(record.platforms.ios.processing.failure.classification, "resumable");
@@ -1010,9 +1210,16 @@ test("resume targets failed store processing and evidence collection without reb
   const resumedStatus = await runCandidate(fixture.root, [
     "resume", "--record", fixture.recordPath,
     "--platform", "ios", "--executor", fixture.executorPath,
-  ], environment);
+  ], { ...environment, OPENJOB_CANDIDATE_PENDING_ONCE: "status:ios" });
   assert.equal(resumedStatus.status, 0, resumedStatus.stderr);
   assert.equal(resumedStatus.report.action, "status");
+  assert.equal(resumedStatus.report.status, "pending");
+  const finishedStatus = await runCandidate(fixture.root, [
+    "resume", "--record", fixture.recordPath,
+    "--platform", "ios", "--executor", fixture.executorPath,
+  ], { ...environment, OPENJOB_CANDIDATE_PENDING_ONCE: "status:ios" });
+  assert.equal(finishedStatus.status, 0, finishedStatus.stderr);
+  assert.equal(finishedStatus.report.status, "succeeded");
   record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
   assert.equal(record.platforms.ios.availability.state, "succeeded");
 
