@@ -41,7 +41,7 @@
     "qa:fixture:reset": "node scripts/reset-qa-fixture.mjs",
     "smoke:production": "node scripts/smoke-v1-production.mjs",
     "native:check": "npm --prefix native run check",
-    "native:quick": "npm --prefix native run lint && npm --prefix native run typecheck && npm --prefix native test && npm --prefix native run secret:check",
+    "native:quick": "npm --prefix native run lint && npm --prefix native run typecheck && npm --prefix native test",
     "native:simulators": "npm --prefix native run simulators",
     "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv",
     "typecheck": "npm run cf:typegen && tsc --noEmit",

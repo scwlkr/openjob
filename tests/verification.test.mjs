@@ -15,6 +15,12 @@ const VERIFY_SCRIPT = new URL("../scripts/verify.mjs", import.meta.url).pathname
 const REAL_GIT = execFileSync("/usr/bin/which", ["git"], {
   encoding: "utf8",
 }).trim();
+const FOCUSED_EVIDENCE = [
+  "--evidence",
+  "ios-simulator-journey=local://issue-44/ios",
+  "--evidence",
+  "android-emulator-journey=local://issue-44/android",
+];
 
 function git(cwd, args) {
   return execFileSync(REAL_GIT, args, { cwd, encoding: "utf8" }).trim();
@@ -140,6 +146,7 @@ test("focused web changes run only the affected public seam with type and lint",
     "HEAD",
     "--cache",
     `${fixture.root}-cache.json`,
+    ...FOCUSED_EVIDENCE,
   ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -154,7 +161,13 @@ test("focused web changes run only the affected public seam with type and lint",
     report.gates
       .filter((gate) => gate.outcome === "passed")
       .map((gate) => gate.id),
-    ["typecheck", "lint", "web-integration"],
+    [
+      "typecheck",
+      "lint",
+      "web-integration",
+      "ios-simulator-journey",
+      "android-emulator-journey",
+    ],
   );
   assert.match(result.stderr, /PASSED selected web-integration/u);
 
@@ -195,6 +208,7 @@ test("focused impact policy selects API and CLI seams while documentation stays 
         "HEAD",
         "--cache",
         `${fixture.root}-cache.json`,
+        ...FOCUSED_EVIDENCE,
       ]);
 
       assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -204,6 +218,12 @@ test("focused impact policy selects API and CLI seams while documentation stays 
       assert.match(commands, /npm run typecheck/u);
       assert.match(commands, /npm run lint/u);
       for (const pattern of item.commandPatterns) assert.match(commands, pattern);
+      for (const id of ["ios-simulator-journey", "android-emulator-journey"]) {
+        assert.equal(
+          report.gates.find((gate) => gate.id === id).outcome,
+          "passed",
+        );
+      }
       if (item.category === "documentation") {
         assert.doesNotMatch(commands, /test:(?:api|browser|cli)|native|bundle/u);
       }
@@ -247,10 +267,7 @@ test("focused native behavior requires both virtual-runtime journeys and reuses 
 
   const proved = await runVerification(fixture, [
     ...arguments_,
-    "--evidence",
-    "ios-simulator-journey=local://issue-44/ios",
-    "--evidence",
-    "android-emulator-journey=local://issue-44/android",
+    ...FOCUSED_EVIDENCE,
   ]);
   assert.equal(proved.status, 0, proved.stderr || proved.stdout);
   const report = JSON.parse(proved.stdout);
@@ -267,6 +284,13 @@ test("focused native behavior requires both virtual-runtime journeys and reuses 
 
 test("merge reuses native generation and bundles only for an exact input and tool fingerprint", async () => {
   const fixture = await createVerificationFixture();
+  await addChangedFile(
+    fixture,
+    "native/scripts/verify-config.mjs",
+    "export const verifierVersion = 1;\n",
+  );
+  git(fixture.root, ["add", "native/scripts/verify-config.mjs"]);
+  git(fixture.root, ["commit", "-m", "Add native config verifier"]);
   await addChangedFile(
     fixture,
     "native/package.json",
@@ -336,6 +360,23 @@ test("merge reuses native generation and bundles only for an exact input and too
   assert.match(changedInputCommands, /bundle:verify/u);
 
   await writeFile(fixture.commandLog, "");
+  await writeFile(
+    join(fixture.root, "native", "scripts", "verify-config.mjs"),
+    "export const verifierVersion = 2;\n",
+  );
+  const changedVerifier = await runVerification(fixture, arguments_);
+  assert.equal(changedVerifier.status, 0, changedVerifier.stderr || changedVerifier.stdout);
+  const changedVerifierReport = JSON.parse(changedVerifier.stdout);
+  assert.equal(
+    changedVerifierReport.gates.find(
+      (candidate) => candidate.id === "native-clean-generation",
+    ).outcome,
+    "passed",
+  );
+  const changedVerifierCommands = await readFile(fixture.commandLog, "utf8");
+  assert.match(changedVerifierCommands, /config:verify/u);
+
+  await writeFile(fixture.commandLog, "");
   await writeFile(cache, "{not-json\n");
   const changedTool = await runVerification(fixture, arguments_, {
     OPENJOB_FAKE_NPM_VERSION: "10.9.1",
@@ -378,18 +419,23 @@ test("unknown, generated, and release-risk inputs escalate without external side
     await context.test(category, async () => {
       const fixture = await createVerificationFixture();
       await addChangedFile(fixture, path);
+      git(fixture.root, ["add", path]);
+      git(fixture.root, ["commit", "-m", `Add ${category} input`]);
+      syncFixtureMain(fixture);
       const result = await runVerification(fixture, [
         "focused",
         "--base",
-        "HEAD",
+        "HEAD^",
         "--cache",
         `${fixture.root}-cache.json`,
+        ...FOCUSED_EVIDENCE,
       ]);
 
       assert.equal(result.status, 0, result.stderr || result.stdout);
       const report = JSON.parse(result.stdout);
       assert.equal(report.requestedMode, "focused");
       assert.equal(report.effectiveMode, "release-candidate");
+      assert.equal(report.sourceState.defaultBranchParity, "0 0");
       assert.ok(report.categories.includes(category), report.categories.join(", "));
       assert.equal(
         report.gates.find((gate) => gate.id === "repository-suite").selection,
@@ -417,6 +463,48 @@ test("unknown, generated, and release-risk inputs escalate without external side
       assert.doesNotMatch(commands, /build:(?:preview|production)|submit|promot/u);
     });
   }
+});
+
+test("escalated release-candidate scope rejects dirty source before gates", async () => {
+  const fixture = await createVerificationFixture();
+  await addChangedFile(fixture, "security/policy.ts");
+
+  const result = await runVerification(fixture, [
+    "focused",
+    "--base",
+    "HEAD",
+    "--cache",
+    `${fixture.root}-cache.json`,
+    ...FOCUSED_EVIDENCE,
+  ]);
+
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).error.code, "release_source_not_clean");
+  const commands = await readFile(fixture.commandLog, "utf8");
+  assert.doesNotMatch(commands, /npm run/u);
+});
+
+test("OpenAPI inputs select generated CLI type validation", async () => {
+  const fixture = await createVerificationFixture();
+  await addChangedFile(fixture, "openapi/openapi.yaml");
+
+  const result = await runVerification(fixture, [
+    "merge",
+    "--base",
+    "HEAD",
+    "--cache",
+    `${fixture.root}-cache.json`,
+  ]);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.ok(report.categories.includes("api-contract"));
+  assert.equal(
+    report.gates.find((gate) => gate.id === "cli-generated-types").outcome,
+    "passed",
+  );
+  const commands = await readFile(fixture.commandLog, "utf8");
+  assert.match(commands, /npm run cli:types:check/u);
 });
 
 test("release-candidate mode requires clean synchronized main and only produces a handoff", async () => {
@@ -546,6 +634,7 @@ test("verification-tooling changes use focused proof and preserve compatibility 
   );
   assert.equal(packageMetadata.scripts["native:check"], "npm --prefix native run check");
   assert.match(packageMetadata.scripts["native:quick"], /native run typecheck/u);
+  assert.doesNotMatch(packageMetadata.scripts["native:quick"], /secret:check/u);
   assert.match(packageMetadata.scripts["test:deterministic"], /native:quick/u);
   assert.doesNotMatch(packageMetadata.scripts.test, /native:check/u);
 
@@ -557,10 +646,7 @@ test("verification-tooling changes use focused proof and preserve compatibility 
     "HEAD",
     "--cache",
     `${fixture.root}-cache.json`,
-    "--evidence",
-    "ios-simulator-journey=local://issue-44/ios",
-    "--evidence",
-    "android-emulator-journey=local://issue-44/android",
+    ...FOCUSED_EVIDENCE,
   ]);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);

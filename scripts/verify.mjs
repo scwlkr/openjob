@@ -251,6 +251,38 @@ function releaseSourceState(root) {
   return { branch, defaultBranchParity: parity };
 }
 
+function isNativeConfigurationInput(file) {
+  return (
+    file === "native/app.config.mjs" ||
+    file === "native/eas.json" ||
+    file === "native/metro.config.cjs" ||
+    file === "native/package.json" ||
+    file === "native/package-lock.json" ||
+    file.startsWith("native/plugins/") ||
+    file.startsWith("native/patches/") ||
+    file === "config/native-identities.json" ||
+    /^public\/(?:apple-touch-icon|favicon|icon-|og\.)/u.test(file)
+  );
+}
+
+function isNativeGenerationInput(file) {
+  return (
+    isNativeConfigurationInput(file) ||
+    file === "package.json" ||
+    file === "native/scripts/verify-config.mjs"
+  );
+}
+
+function isNativeBundleInput(file) {
+  return (
+    isNativeGenerationInput(file) ||
+    file === "native/App.tsx" ||
+    file === "native/index.ts" ||
+    file.startsWith("native/src/") ||
+    file === "native/scripts/verify-embedded-bundles.mjs"
+  );
+}
+
 function classify(files) {
   const categories = new Set();
   for (const file of files) {
@@ -300,6 +332,10 @@ function classify(files) {
       categories.add("api");
       matched = true;
     }
+    if (file.startsWith("openapi/")) {
+      categories.add("api-contract");
+      matched = true;
+    }
     if (file.startsWith("cli/") || file.startsWith("tests/cli")) {
       categories.add("cli");
       matched = true;
@@ -317,17 +353,7 @@ function classify(files) {
       categories.add("native-behavior");
       matched = true;
     }
-    if (
-      file === "native/app.config.mjs" ||
-      file === "native/eas.json" ||
-      file === "native/metro.config.cjs" ||
-      file === "native/package.json" ||
-      file === "native/package-lock.json" ||
-      file.startsWith("native/plugins/") ||
-      file.startsWith("native/patches/") ||
-      file === "config/native-identities.json" ||
-      /^public\/(?:apple-touch-icon|favicon|icon-|og\.)/u.test(file)
-    ) {
+    if (isNativeConfigurationInput(file)) {
       categories.add("native-configuration");
       matched = true;
     }
@@ -380,6 +406,10 @@ function classify(files) {
 
 function gatePlan(categories, requestedMode, effectiveMode) {
   const selected = new Set(["typecheck", "lint"]);
+  if (requestedMode === "focused") {
+    selected.add("ios-simulator-journey");
+    selected.add("android-emulator-journey");
+  }
   if (effectiveMode === "release-candidate") {
     for (const id of [
       "repository-suite",
@@ -399,43 +429,28 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       selected.add("api-integration");
       selected.add("openapi-contract");
     }
+    if (categories.includes("api-contract")) selected.add("cli-generated-types");
     if (categories.includes("cli")) {
       selected.add("cli-integration");
       selected.add("cli-generated-types");
     }
     if (categories.includes("native-behavior")) {
       selected.add("native-automated");
-      if (requestedMode === "focused") {
-        selected.add("ios-simulator-journey");
-        selected.add("android-emulator-journey");
-      }
     }
     if (categories.includes("native-configuration")) {
       selected.add("native-automated");
       selected.add("native-clean-generation");
       selected.add("ios-embedded-bundle");
       selected.add("android-embedded-bundle");
-      if (requestedMode === "focused") {
-        selected.add("ios-simulator-journey");
-        selected.add("android-emulator-journey");
-      }
     }
     if (categories.includes("repository-tooling")) {
       selected.add("repository-suite");
-      if (requestedMode === "focused") {
-        selected.add("ios-simulator-journey");
-        selected.add("android-emulator-journey");
-      }
     }
     if (categories.includes("verification-tooling")) {
       if (!selected.has("repository-suite")) selected.add("verification-process-tests");
       selected.add("native-clean-generation");
       selected.add("ios-embedded-bundle");
       selected.add("android-embedded-bundle");
-      if (requestedMode === "focused") {
-        selected.add("ios-simulator-journey");
-        selected.add("android-emulator-journey");
-      }
     }
   }
   const escalated = requestedMode !== effectiveMode;
@@ -454,26 +469,8 @@ function gatePlan(categories, requestedMode, effectiveMode) {
 }
 
 function matchesInputs(file, inputSet) {
-  const generation =
-    file === "native/app.config.mjs" ||
-    file === "native/eas.json" ||
-    file === "native/metro.config.cjs" ||
-    file === "native/package.json" ||
-    file === "native/package-lock.json" ||
-    file.startsWith("native/plugins/") ||
-    file.startsWith("native/patches/") ||
-    file === "config/native-identities.json" ||
-    /^public\/(?:apple-touch-icon|favicon|icon-|og\.)/u.test(file);
-  if (inputSet === "native-generation") return generation;
-  if (inputSet === "native-bundle") {
-    return (
-      generation ||
-      file === "native/App.tsx" ||
-      file === "native/index.ts" ||
-      file.startsWith("native/src/") ||
-      file.startsWith("native/scripts/verify-embedded-bundles.mjs")
-    );
-  }
+  if (inputSet === "native-generation") return isNativeGenerationInput(file);
+  if (inputSet === "native-bundle") return isNativeBundleInput(file);
   if (inputSet === "repository") return true;
   return false;
 }
@@ -639,8 +636,6 @@ async function main() {
   }
   const baseRevision = baseResult.stdout.trim();
   const headRevision = gitOutput(root, ["rev-parse", "HEAD"]);
-  const sourceState =
-    parsed.mode === "release-candidate" ? releaseSourceState(root) : undefined;
   const files = changedFiles(root, baseRevision);
   const categories = classify(files);
   const effectiveMode =
@@ -648,6 +643,8 @@ async function main() {
     categories.some((category) => RISK_CATEGORIES.has(category))
       ? "release-candidate"
       : parsed.mode;
+  const sourceState =
+    effectiveMode === "release-candidate" ? releaseSourceState(root) : undefined;
   const gates = gatePlan(categories, parsed.mode, effectiveMode);
   const [cache, versions] = await Promise.all([
     readCache(cachePath),
@@ -684,7 +681,8 @@ async function main() {
         action: "rebuild",
         reason: "native generation inputs changed",
       }
-    : categories.includes("native-behavior") ||
+    : parsed.mode === "focused" ||
+        categories.includes("native-behavior") ||
         categories.includes("verification-tooling") ||
         categories.includes("repository-tooling")
     ? {

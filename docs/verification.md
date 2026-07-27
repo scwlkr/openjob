@@ -19,8 +19,8 @@ than skipping proof.
 
 - `focused` is the ordinary Feature Proof used to close one feature issue. It
   runs type and lint checks, affected public tests, and the issue's written iOS
-  Simulator and Android Emulator journey when native or verification behavior
-  can be affected.
+  Simulator and Android Emulator journey. Existing development clients are
+  reused whenever native generation inputs are unchanged.
 - `merge` runs affected public integration seams. Clean native generation,
   embedded bundle export, or the broader repository suite runs only when its
   declared inputs changed or no trustworthy matching result exists.
@@ -33,7 +33,9 @@ than skipping proof.
 
 Security, signing, distribution, permission, accessibility, privacy, release,
 or store-compliance changes visibly escalate a requested focused or merge run
-to release-candidate scope. Unknown files do the same.
+to release-candidate scope. Unknown files do the same. Escalated runs have the
+same clean, synchronized `main` source requirement as an explicitly requested
+release-candidate run.
 
 ## Virtual-runtime evidence
 
