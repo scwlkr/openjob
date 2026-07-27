@@ -32,10 +32,10 @@ index e6ecbf2..467d5df 100644
      api 'io.sentry:sentry-android:8.31.0'
  }
 diff --git a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
-index 11a4b40..3126302 100644
+index 11a4b40..4e46874 100644
 --- a/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
 +++ b/node_modules/@sentry/react-native/android/src/main/java/io/sentry/react/RNSentryModuleImpl.java
-@@ -6,11 +6,15 @@ import static io.sentry.vendor.Base64.NO_WRAP;
+@@ -6,11 +6,17 @@ import static io.sentry.vendor.Base64.NO_WRAP;
  import static java.util.concurrent.TimeUnit.SECONDS;
  
  import android.app.Activity;
@@ -47,11 +47,13 @@ index 11a4b40..3126302 100644
  import android.content.res.AssetManager;
  import android.net.Uri;
 +import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
 +import android.os.SystemClock;
  import android.util.SparseIntArray;
  import androidx.annotation.VisibleForTesting;
  import androidx.core.app.FrameMetricsAggregator;
-@@ -31,23 +35,20 @@ import com.facebook.react.bridge.WritableNativeArray;
+@@ -31,23 +37,20 @@ import com.facebook.react.bridge.WritableNativeArray;
  import com.facebook.react.bridge.WritableNativeMap;
  import com.facebook.react.common.JavascriptException;
  import io.sentry.Breadcrumb;
@@ -77,7 +79,7 @@ index 11a4b40..3126302 100644
  import io.sentry.UncaughtExceptionHandlerIntegration;
  import io.sentry.android.core.AndroidLogger;
  import io.sentry.android.core.AndroidProfiler;
-@@ -56,7 +57,6 @@ import io.sentry.android.core.BuildConfig;
+@@ -56,7 +59,6 @@ import io.sentry.android.core.BuildConfig;
  import io.sentry.android.core.BuildInfoProvider;
  import io.sentry.android.core.CurrentActivityHolder;
  import io.sentry.android.core.InternalSentrySdk;
@@ -85,7 +87,7 @@ index 11a4b40..3126302 100644
  import io.sentry.android.core.SentryAndroid;
  import io.sentry.android.core.SentryAndroidDateProvider;
  import io.sentry.android.core.SentryAndroidOptions;
-@@ -64,22 +64,25 @@ import io.sentry.android.core.ViewHierarchyEventProcessor;
+@@ -64,22 +66,25 @@ import io.sentry.android.core.ViewHierarchyEventProcessor;
  import io.sentry.android.core.internal.debugmeta.AssetsDebugMetaLoader;
  import io.sentry.android.core.internal.util.SentryFrameMetricsCollector;
  import io.sentry.android.core.performance.AppStartMetrics;
@@ -116,7 +118,7 @@ index 11a4b40..3126302 100644
  import java.io.ByteArrayOutputStream;
  import java.io.File;
  import java.io.FileNotFoundException;
-@@ -88,16 +91,19 @@ import java.io.IOException;
+@@ -88,16 +93,19 @@ import java.io.IOException;
  import java.io.InputStream;
  import java.net.URI;
  import java.net.URISyntaxException;
@@ -137,7 +139,7 @@ index 11a4b40..3126302 100644
  import java.util.regex.Pattern;
  import org.jetbrains.annotations.NotNull;
  import org.jetbrains.annotations.Nullable;
-@@ -111,6 +117,16 @@ public class RNSentryModuleImpl {
+@@ -111,6 +119,16 @@ public class RNSentryModuleImpl {
    private static final BuildInfoProvider buildInfo = new BuildInfoProvider(logger);
    private static final String modulesPath = "modules.json";
    private static final Charset UTF_8 = Charset.forName("UTF-8"); // NOPMD - Allow using UTF-8
@@ -154,7 +156,7 @@ index 11a4b40..3126302 100644
  
    private final ReactApplicationContext reactApplicationContext;
    private final PackageInfo packageInfo;
-@@ -146,14 +162,58 @@ public class RNSentryModuleImpl {
+@@ -146,14 +164,58 @@ public class RNSentryModuleImpl {
    private long maxTraceFileSize = 5 * 1024 * 1024;
  
    private final @NotNull SentryDateProvider dateProvider;
@@ -215,7 +217,7 @@ index 11a4b40..3126302 100644
    }
  
    private ReactApplicationContext getReactApplicationContext() {
-@@ -185,34 +245,34 @@ public class RNSentryModuleImpl {
+@@ -185,34 +247,34 @@ public class RNSentryModuleImpl {
      }
    }
  
@@ -269,7 +271,7 @@ index 11a4b40..3126302 100644
    @TestOnly
    protected Context getApplicationContext() {
      final Context context = this.getReactApplicationContext().getApplicationContext();
-@@ -323,60 +383,15 @@ public class RNSentryModuleImpl {
+@@ -323,60 +385,15 @@ public class RNSentryModuleImpl {
        }
      }
  
@@ -334,7 +336,7 @@ index 11a4b40..3126302 100644
      }
      logger.log(
          SentryLevel.INFO, String.format("Native Integrations '%s'", options.getIntegrations()));
-@@ -388,154 +403,244 @@ public class RNSentryModuleImpl {
+@@ -388,156 +405,249 @@ public class RNSentryModuleImpl {
      }
    }
  
@@ -370,7 +372,7 @@ index 11a4b40..3126302 100644
 +            openJobDiagnosticsDeliveryAllowed.get()
 +                && preferences.getBoolean(OPENJOB_DIAGNOSTICS_ENABLED, true));
 +    options.setShutdownTimeoutMillis(0);
-+    options.setFlushTimeoutMillis(0);
++    options.setFlushTimeoutMillis(2_000);
 +    options.setEnableAutoActivityLifecycleTracing(false);
 +    options.setEnableActivityLifecycleTracingAutoFinish(false);
 +    options.setEnableFramesTracking(false);
@@ -710,7 +712,13 @@ index 11a4b40..3126302 100644
    }
  
    public void crash() {
-@@ -670,33 +775,33 @@ public class RNSentryModuleImpl {
+-    throw new RuntimeException("TEST - Sentry Client Crash (only works in release mode)");
++    new Handler(Looper.getMainLooper()).post(
++        () -> {
++          throw new RuntimeException("OpenJob native failure");
++        });
+   }
+@@ -670,33 +780,33 @@ public class RNSentryModuleImpl {
      }
    }
  
@@ -763,7 +771,7 @@ index 11a4b40..3126302 100644
      }
      promise.resolve(true);
    }
-@@ -954,13 +1059,85 @@ public class RNSentryModuleImpl {
+@@ -954,13 +1064,86 @@ public class RNSentryModuleImpl {
    }
  
    public void closeNativeSdk(Promise promise) {
@@ -781,6 +789,7 @@ index 11a4b40..3126302 100644
 +      final SentryOptions options = currentScope.getOptions();
 +      cacheDirPath = options.getCacheDirPath();
 +      purged = purgeOpenJobDiagnostics(cacheDirPath);
++      options.setFlushTimeoutMillis(0);
 +      currentScope.getClient().close(false);
 +    }
      Sentry.close();

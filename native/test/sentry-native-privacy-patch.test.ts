@@ -110,13 +110,24 @@ test("applies the native Sentry pre-transport allowlist on iOS and Android", () 
   expect(android).toContain("options.setTransportGate(");
   expect(android).toContain("openJobDiagnosticsDeliveryAllowed.set(false)");
   expect(android).toContain("options.setShutdownTimeoutMillis(0)");
-  expect(android).toContain("options.setFlushTimeoutMillis(0)");
+  expect(android).toContain("options.setFlushTimeoutMillis(2_000)");
   expect(android).not.toContain(
     "options.addIgnoredExceptionForType(JavascriptException.class)",
   );
   expect(android).toContain("openJobIsReactNativeJavaScriptWrapper(event)");
   expect(android).toContain("openJobConsumeStoredJavaScriptFatal()");
   expect(android).toContain("OPENJOB_JS_FATAL_WRAPPER_WINDOW_MILLIS");
+  const androidCrash = android.slice(
+    android.indexOf("public void crash()"),
+    android.indexOf("public void addListener"),
+  );
+  expect(androidCrash).toContain("new Handler(Looper.getMainLooper()).post");
+  expect(androidCrash).toContain(
+    'throw new RuntimeException("OpenJob native failure")',
+  );
+  expect(androidCrash).not.toContain(
+    'throw new RuntimeException("TEST - Sentry Client Crash (only works in release mode)")',
+  );
   expect(android).toContain("currentScope.getClient().close(false)");
   expect(android).toMatch(
     /promise\.resolve\(false\);\s+return;\s+\}\s+promise\.resolve\(true\);/u,
@@ -165,6 +176,9 @@ test("applies the native Sentry pre-transport allowlist on iOS and Android", () 
   expect(iosWrapper).toContain("storeOpenJobEnvelope");
 
   const androidClose = android.slice(android.indexOf("public void closeNativeSdk"));
+  expect(androidClose).toContain("options.setFlushTimeoutMillis(0)");
+  expect(androidClose.indexOf("options.setFlushTimeoutMillis(0)"))
+    .toBeLessThan(androidClose.indexOf("currentScope.getClient().close(false)"));
   expect(androidClose.indexOf("openJobDiagnosticsDeliveryAllowed.set(false)"))
     .toBeLessThan(
       androidClose.indexOf("putBoolean(OPENJOB_DIAGNOSTICS_ENABLED, false)"),
@@ -207,6 +221,7 @@ test("applies the native Sentry pre-transport allowlist on iOS and Android", () 
     "OPENJOB_JS_FATAL_WRAPPER_WINDOW_MILLIS",
     "openJobIsReactNativeJavaScriptWrapper",
     "openJobNativeRuntimeContext",
+    "new Handler(Looper.getMainLooper()).post",
     "options.setTransportGate(",
     "purgeOpenJobDiagnosticsAtPath",
     "setOpenJobDiagnosticsEnabled",
