@@ -152,11 +152,15 @@ retained, and update URL/signing metadata is absent:
 ```sh
 npm --prefix native run config:verify
 npm --prefix native run bundle:verify
+npm --prefix native run bundle:verify -- ios
+npm --prefix native run bundle:verify -- android
 ```
 
 `bundle:verify` produces independent minified iOS and Android embedded bundles
 with all Geist/icon assets, verifies their hashes, and deletes its temporary
-output. For an installed release smoke:
+output. With no platform argument it verifies both; the impact-aware workflow
+uses the platform arguments so a reusable result stays independent. For an
+installed release smoke:
 
 ```sh
 npm --prefix native run ios:release

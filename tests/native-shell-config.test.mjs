@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -8,6 +9,10 @@ const easUrl = new URL("../native/eas.json", import.meta.url);
 const nativeReadmeUrl = new URL("../native/README.md", import.meta.url);
 const nativeRunLocalUrl = new URL(
   "../native/scripts/run-local.mjs",
+  import.meta.url,
+);
+const nativeBundleVerificationUrl = new URL(
+  "../native/scripts/verify-embedded-bundles.mjs",
   import.meta.url,
 );
 const nativeDomainCacheUrl = new URL(
@@ -236,8 +241,24 @@ test("native package exposes focused simulator, build, and repository-gate comma
     rootPackage.scripts["native:simulators"],
     "npm --prefix native run simulators",
   );
-  assert.match(rootPackage.scripts.test, /npm run native:check/u);
+  assert.match(rootPackage.scripts["native:quick"], /native run typecheck/u);
+  assert.match(rootPackage.scripts["test:deterministic"], /npm run native:quick/u);
+  assert.doesNotMatch(rootPackage.scripts.test, /npm run native:check/u);
+  assert.equal(rootPackage.scripts.verify, "node scripts/verify.mjs");
   assert.equal(rootPackage.scripts.postinstall, "npm --prefix native ci");
+});
+
+test("embedded bundle verification rejects unknown platforms before exporting", () => {
+  const result = spawnSync(process.execPath, [nativeBundleVerificationUrl.pathname, "windows"], {
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.match(
+    result.stderr,
+    /Usage: verify-embedded-bundles\.mjs \[ios\|android\]/u,
+  );
 });
 
 test("local native builds skip account uploads only when no Sentry token exists", async () => {

@@ -8,6 +8,17 @@ import { fileURLToPath } from "node:url";
 
 const nativeRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expo = join(nativeRoot, "node_modules", ".bin", "expo");
+const requestedPlatforms = process.argv.slice(2);
+if (
+  requestedPlatforms.length > 1 ||
+  (requestedPlatforms.length === 1 &&
+    !["ios", "android"].includes(requestedPlatforms[0]))
+) {
+  throw new Error("Usage: verify-embedded-bundles.mjs [ios|android]");
+}
+const platforms = requestedPlatforms.length === 0
+  ? ["ios", "android"]
+  : requestedPlatforms;
 const outputRoot = await mkdtemp(join(tmpdir(), "openjob-native-bundles-"));
 
 function exportBundle(platform, bundle, sourceMap, assets) {
@@ -66,7 +77,7 @@ async function collectFiles(directory) {
 
 try {
   const evidence = [];
-  for (const platform of ["ios", "android"]) {
+  for (const platform of platforms) {
     const platformRoot = join(outputRoot, platform);
     const bundle = join(platformRoot, "main.jsbundle");
     const sourceMap = join(platformRoot, "main.jsbundle.map");

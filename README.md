@@ -57,6 +57,10 @@ Run `npm run cli:types` after changing `openapi/openapi.yaml`, and use
 
 ## Releases
 
+Use the [impact-aware verification modes](docs/verification.md) for focused
+Feature Proof, merge proof, and release-candidate gate selection. The verifier
+does not build, upload, submit, or promote native Candidate Artifacts.
+
 The root package version is authoritative for the web app, hosted API contract,
 CLI package, Git tag, and GitHub release. Curate `CHANGELOG.md`, then prepare and
 publish a release from a clean, synchronized `main`:

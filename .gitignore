@@ -16,6 +16,7 @@
 /output/
 /native/coverage/
 /native/.artifacts/
+/.openjob/
 
 # next.js
 /.next/
