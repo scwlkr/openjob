@@ -174,100 +174,19 @@ rotate, background/foreground, and relaunch once more.
 
 ## Privacy and diagnostics
 
-The privacy inventory covers the whole native app. Google or Apple sign-in and
-Firebase session exchange send provider account claims and credentials for
-authentication. Authenticated `/api/v1` calls send the Firebase bearer token,
-OpenJob User and Group identifiers, a claimed Username, and the operation needed
-to create or link an account or read the selected Group's Members and Tasks.
-Those account and app-functionality flows are required for the relevant journey,
-encrypted in transit, linked to the OpenJob account, and not controlled by the
-Share diagnostics setting. OpenJob does not use them for advertising or
-cross-app tracking.
+`config/release-privacy-inventory.json` is the only authored privacy and store
+declaration authority. Its schema, generated native configuration, Play Data
+Safety preparation, required URLs, permissions, processors, and submission
+checklist are reviewed in
+[`docs/generated/release-privacy.md`](../docs/generated/release-privacy.md).
+Run `npm run privacy:check` before submission preparation; edit the inventory
+and run `npm run privacy:generate` when behavior changes.
 
-Sentry is the only app-level crash and hang processor. Native hang integrations
-cover UI/main-thread hangs, while a foreground-only local heartbeat reports a
-confirmed, recovered JavaScript event-loop stall after five seconds without
-adding tracing. It uses monotonic timing, ignores suspended time, and rate-limits
-reports. A permanent JavaScript lock cannot report itself, and the recovered
-event's stack identifies the detector callback rather than the blocked work.
-OpenJob sends crashes, hangs, safe operation names and timing,
-app/build/runtime version, OS version, and coarse device class. The client strips Task text, Group names and IDs,
-Usernames, email, provider and authentication material, request bodies,
-identifier-bearing URLs, screenshots, view hierarchies, and permanent
-installation identity before transport. Session Replay, user identity,
-automatic breadcrumbs, broad tracing, profiling, product analytics, and ad or
-device tracking are disabled. These Sentry rows are optional because every User
-can disable Share diagnostics without losing account or Task List access.
-
-The pinned Sentry core binaries still contain dormant replay, profiling, and
-tracing implementation even though OpenJob removes their integrations and never
-initializes those features. That inventory does not satisfy a literal
-"no such code ships" policy; a release with that policy needs a crash-only SDK
-fork or an amended binary criterion.
-
-Share diagnostics defaults on and is stored only in native preferences. Android
-SharedPreferences and iOS NSUserDefaults are read before React Native starts, so
-native crash/hang capture begins during bootstrap only when the persisted switch
-allows it. Disabling gates delivery, writes that launch-time switch, cancels and
-closes Sentry, and purges its queued envelopes and installation cache. The UI
-reads this native preference as its single source of truth. The binary does not
-include `expo-application`, Play Install Referrer, or its Android-ID accessor.
-The generated Android release manifest also removes the unused overlay and
-legacy external-storage permissions contributed by upstream libraries.
-
-The generated Apple app privacy manifest declares the data collected by
-OpenJob-owned code:
-
-| Apple data type | Linked | Tracking | Collection | Purpose |
-| --- | --- | --- | --- | --- |
-| Name | Yes | No | Required account data | App Functionality |
-| Email Address | Yes | No | Required account data | App Functionality |
-| User ID | Yes | No | Required account data | App Functionality |
-| Product Interaction | Yes | No | Required authenticated operations | App Functionality |
-| Crash Data | No | No | Optional Share diagnostics | App Functionality |
-| Performance Data | No | No | Optional Share diagnostics | App Functionality |
-| Other Diagnostic Data | No | No | Optional Share diagnostics | App Functionality |
-
-Third-party manifests remain separate in the signed app. Xcode's archive
-privacy report must merge the table above with every bundled SDK manifest
-before the App Store Connect Nutrition Label is submitted. In the pinned
-GoogleSignIn SDK, that report additionally includes linked Phone Number and
-Coarse Location for App Functionality; linked Other Data Types and User ID for
-App Functionality and Analytics; and linked Device ID and Other Usage Data for
-Analytics. Those Analytics purposes are GoogleSignIn's bundled declaration,
-not OpenJob product analytics. The app manifest does not duplicate those SDK
-rows because Xcode aggregates them from the SDK's own manifest.
-
-Task text and Group names are downloaded for the read-only experience and
-remain on-device; OpenJob-owned native code never transmits them off-device.
-They are therefore not collected under the Apple or Play definitions and must
-not be declared as Other User Content.
-
-The Play Data Safety form must likewise separate required account/app data from
-optional Sentry data. Firebase and Sentry act as service providers; ordinary
-provider authentication is User-initiated. None of these rows is sold or used
-for advertising or cross-app tracking.
-
-| Play data type | Declaration |
-| --- | --- |
-| Name | Collected, required, not shared; App functionality and Account management |
-| Email address | Collected, required, not shared; App functionality and Account management |
-| User IDs | Collected, required, not shared; App functionality and Account management |
-| Other user-generated content | Not collected |
-| App interactions | Collected, required, not shared; App functionality |
-| Crash logs | Collected, optional, not shared; App functionality and Analytics |
-| Diagnostics | Collected, optional, not shared; App functionality and Analytics |
-| Device or other IDs | Not collected; no advertising, Firebase installation, Play Install Referrer, Sentry installation, or other persistent app/device identifier is sent |
-
-Do not infer the Android declaration from an iOS SDK privacy manifest. Reconcile
-the Play table against the exact release dependency report, Play SDK Index, and
-captured on-device traffic before submission, including provider-auth data that
-is sent only after a User starts that journey.
-
-Signed iOS and Android Preview traffic plus the built SDK inventories confirm
-that provider, Firebase REST, OpenJob API, and Sentry behavior match these rows.
-Reconcile the generated `PrivacyInfo.xcprivacy`, Play SDK Index, captured
-traffic, and final binary again after every relevant SDK upgrade.
+ADR 0013 defines the diagnostics behavior. Runtime and transport tests retain
+the allowlist, scrubbing, opt-out, queue purge, and disabled-surveillance proof.
+Exact dependency inventories, bundled SDK declarations, Play SDK Index entries,
+and captured candidate traffic remain additive reconciliation evidence for #40
+and #41; they cannot silently change the inventory.
 
 Sentry build configuration comes only from the matching EAS environment:
 

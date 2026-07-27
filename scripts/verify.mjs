@@ -48,6 +48,7 @@ const GATES = [
     command: ["npm", "run", "test:verification"],
   },
   { id: "secret-check", command: ["npm", "run", "secret:check"] },
+  { id: "release-privacy", command: ["npm", "run", "privacy:check"] },
   {
     id: "native-clean-generation",
     command: ["npm", "--prefix", "native", "run", "config:verify"],
@@ -95,6 +96,7 @@ const REPOSITORY_SUITE_COVERAGE = new Set([
   "native-lint",
   "native-automated",
   "verification-process-tests",
+  "release-privacy",
 ]);
 const HARDWARE_NATIVE_INPUTS = new Set([
   "native/src/auth/provider-gateway.ts",
@@ -315,6 +317,9 @@ function isNativeConfigurationInput(file) {
     file.startsWith("native/plugins/") ||
     file.startsWith("native/patches/") ||
     file === "config/native-identities.json" ||
+    file === "config/release-privacy-inventory.json" ||
+    file === "config/release-privacy-inventory.schema.json" ||
+    file === "config/generated/native-privacy.json" ||
     /^public\/(?:apple-touch-icon|favicon|icon-|og\.)/u.test(file)
   );
 }
@@ -323,7 +328,8 @@ function isNativeGenerationInput(file) {
   return (
     isNativeConfigurationInput(file) ||
     file === "package.json" ||
-    file === "native/scripts/verify-config.mjs"
+    file === "native/scripts/verify-config.mjs" ||
+    file === "scripts/release-privacy.mjs"
   );
 }
 
@@ -343,6 +349,22 @@ function isHardwareRiskInput(file) {
   return file.startsWith("native/src/") && !VIRTUAL_NATIVE_INPUTS.has(file);
 }
 
+function isReleasePrivacyInput(file) {
+  return (
+    file === "config/release-privacy-inventory.json" ||
+    file === "config/release-privacy-inventory.schema.json" ||
+    file === "config/generated/native-privacy.json" ||
+    file === "config/generated/play-data-safety.json" ||
+    file === "docs/generated/release-privacy.md" ||
+    file === "scripts/release-privacy.mjs" ||
+    file === "tests/release-privacy.test.mjs" ||
+    file === "native/app.config.mjs" ||
+    file === "native/package.json" ||
+    file === "native/package-lock.json" ||
+    file.startsWith("native/plugins/")
+  );
+}
+
 function classify(files) {
   const categories = new Set();
   for (const file of files) {
@@ -351,11 +373,26 @@ function classify(files) {
       file === "scripts/verify.mjs" ||
       file === "tests/verification.test.mjs" ||
       file === "tests/native-shell-config.test.mjs" ||
+      file === "tests/release-privacy.test.mjs" ||
       file === "docs/verification.md" ||
+      file === "scripts/release-privacy.mjs" ||
       file === "native/scripts/verify-config.mjs" ||
       file === "native/scripts/verify-embedded-bundles.mjs"
     ) {
       categories.add("verification-tooling");
+      matched = true;
+    }
+    if (isReleasePrivacyInput(file)) {
+      categories.add("privacy");
+      categories.add("store-compliance");
+      matched = true;
+    }
+    if (
+      file === "config/generated/native-privacy.json" ||
+      file === "config/generated/play-data-safety.json" ||
+      file === "docs/generated/release-privacy.md"
+    ) {
+      categories.add("generated-output");
       matched = true;
     }
     if (
@@ -479,6 +516,7 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       "repository-suite",
       "openapi-contract",
       "secret-check",
+      "release-privacy",
       "native-clean-generation",
       "ios-embedded-bundle",
       "android-embedded-bundle",
@@ -538,7 +576,9 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       outcome: selected.has(gate.id) ? "selected" : "skipped",
       reason: selected.has(gate.id)
         ? `${gate.id} is required by the ${effectiveMode} impact policy`
-        : "the changed inputs do not affect this gate",
+        : gate.id === "release-privacy"
+          ? "the Release Privacy Inventory, permissions, processors, configuration, and projections are unaffected"
+          : "the changed inputs do not affect this gate",
       selection: selected.has(gate.id)
         ? escalated
           ? "escalated"

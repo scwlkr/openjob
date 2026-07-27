@@ -25,80 +25,23 @@ const sentryFixture = {
   organization: "openjob-config-fixture",
   project: "openjob-native-config-fixture",
 };
-const androidBlockedPermissions = [
-  "android.permission.READ_EXTERNAL_STORAGE",
-  "android.permission.SYSTEM_ALERT_WINDOW",
-  "android.permission.WRITE_EXTERNAL_STORAGE",
-];
-const appleAppPrivacy = {
-  NSPrivacyCollectedDataTypes: [
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType:
-        "NSPrivacyCollectedDataTypeOtherDiagnosticData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-  ],
-  NSPrivacyTracking: false,
-  NSPrivacyTrackingDomains: [],
-};
 const identities = JSON.parse(
   await readFile(
     join(repositoryRoot, "config", "native-identities.json"),
     "utf8",
   ),
 );
+const releasePrivacy = JSON.parse(
+  await readFile(
+    join(repositoryRoot, "config", "generated", "native-privacy.json"),
+    "utf8",
+  ),
+);
+const androidBlockedPermissions =
+  releasePrivacy.nativeConfiguration.android.blockedPermissions;
+const androidPermissions =
+  releasePrivacy.nativeConfiguration.android.permissions;
+const appleAppPrivacy = releasePrivacy.applePrivacyManifest;
 
 function runExpo(
   args,
@@ -149,6 +92,7 @@ function assertPublicConfig(config, environment) {
   assert.equal(config.ios.infoPlist.OpenJobSentryDSN, sentryFixture.dsn);
   assert.equal(config.ios.infoPlist.OpenJobSentryEnvironment, environment);
   assert.deepEqual(config.android.blockedPermissions, androidBlockedPermissions);
+  assert.deepEqual(config.android.permissions, androidPermissions);
   assert.equal(config.extra.openjob.diagnosticsDsn, sentryFixture.dsn);
   assert.equal(
     config.extra.openjob.diagnosticsStartupCrashVerificationEnabled,
@@ -157,6 +101,22 @@ function assertPublicConfig(config, environment) {
   assert.equal(
     config.extra.openjob.diagnosticsVerificationEnabled,
     environment === "preview",
+  );
+  assert.deepEqual(
+    config.extra.openjob.releasePrivacy,
+    {
+      inventoryFingerprint: releasePrivacy.metadata.inventoryFingerprint,
+      inventorySchemaVersion: releasePrivacy.metadata.inventorySchemaVersion,
+      inventoryVersion: releasePrivacy.metadata.inventoryVersion,
+    },
+  );
+  const secureStorePlugin = config.plugins.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-secure-store",
+  );
+  assert.equal(
+    secureStorePlugin[1].faceIDPermission,
+    releasePrivacy.nativeConfiguration.plugins["expo-secure-store"]
+      .faceIDPermission,
   );
   const sentryPlugin = config.plugins.find(
     (plugin) => Array.isArray(plugin) && plugin[0] === "@sentry/react-native/expo",
@@ -197,6 +157,7 @@ async function copyProject(targetRoot) {
   const targetNative = join(targetRoot, "native");
   await Promise.all([
     mkdir(join(targetRoot, "config"), { recursive: true }),
+    mkdir(join(targetRoot, "config", "generated"), { recursive: true }),
     mkdir(join(targetRoot, "public"), { recursive: true }),
     mkdir(targetNative, { recursive: true }),
   ]);
@@ -205,6 +166,10 @@ async function copyProject(targetRoot) {
     cp(
       join(repositoryRoot, "config", "native-identities.json"),
       join(targetRoot, "config", "native-identities.json"),
+    ),
+    cp(
+      join(repositoryRoot, "config", "generated", "native-privacy.json"),
+      join(targetRoot, "config", "generated", "native-privacy.json"),
     ),
     cp(
       join(repositoryRoot, "public", "icon-512.png"),
@@ -314,6 +279,16 @@ for (const environment of environments) {
           "u",
         ),
         `${environment} Android did not block ${permission}`,
+      );
+    }
+    for (const permission of androidPermissions) {
+      assert.match(
+        android,
+        new RegExp(
+          `uses-permission[^>]{0,240}android:name="${permission.replaceAll(".", "\\.")}"`,
+          "u",
+        ),
+        `${environment} Android did not require ${permission}`,
       );
     }
     assert.ok(

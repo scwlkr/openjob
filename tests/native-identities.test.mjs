@@ -12,70 +12,14 @@ const easUrl = new URL("../native/eas.json", import.meta.url);
 const firebaseUrl = new URL("../firebase.json", import.meta.url);
 const metroConfigUrl = new URL("../native/metro.config.cjs", import.meta.url);
 const nativeReadmeUrl = new URL("../native/README.md", import.meta.url);
-
-const expectedAppleAppPrivacy = {
-  NSPrivacyCollectedDataTypes: [
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType:
-        "NSPrivacyCollectedDataTypeOtherDiagnosticData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-  ],
-  NSPrivacyTracking: false,
-  NSPrivacyTrackingDomains: [],
-};
+const nativePrivacyUrl = new URL(
+  "../config/generated/native-privacy.json",
+  import.meta.url,
+);
+const releasePrivacyDocumentationUrl = new URL(
+  "../docs/generated/release-privacy.md",
+  import.meta.url,
+);
 
 async function readIdentities() {
   return JSON.parse(await readFile(identitiesUrl, "utf8"));
@@ -665,6 +609,7 @@ test("native diagnostics build is guarded and whole-app privacy-declared", async
   const { default: createAppConfig } = await import(
     `../native/app.config.mjs?diagnostics-test=${Date.now()}`
   );
+  const nativePrivacy = JSON.parse(await readFile(nativePrivacyUrl, "utf8"));
   const environmentNames = [
     "EXPO_PUBLIC_SENTRY_DSN",
     "OPENJOB_DIAGNOSTICS_STARTUP_CRASH_VERIFICATION",
@@ -724,7 +669,7 @@ test("native diagnostics build is guarded and whole-app privacy-declared", async
     assert.equal(preview.extra.openjob.diagnosticsVerificationEnabled, true);
     assert.deepEqual(
       preview.ios.privacyManifests,
-      expectedAppleAppPrivacy,
+      nativePrivacy.applePrivacyManifest,
     );
     assert.doesNotMatch(JSON.stringify(preview), new RegExp(fixtureToken, "u"));
 
@@ -796,61 +741,53 @@ test("Metro emits Sentry Debug IDs while excluding replay code", async () => {
   assert.doesNotMatch(source, /SENTRY_AUTH_TOKEN|EXPO_PUBLIC_SENTRY_DSN/u);
 });
 
-test("native documentation separates app, SDK, and optional diagnostics declarations", async () => {
-  const documentation = await readFile(nativeReadmeUrl, "utf8");
+test("generated documentation separates app, SDK, and optional diagnostics declarations", async () => {
+  const [nativeDocumentation, releasePrivacyDocumentation] = await Promise.all([
+    readFile(nativeReadmeUrl, "utf8"),
+    readFile(releasePrivacyDocumentationUrl, "utf8"),
+  ]);
 
-  for (const appleType of [
-    "Name",
-    "Email Address",
-    "User ID",
-    "Product Interaction",
-  ]) {
-    assert.match(
-      documentation,
-      new RegExp(`\\| ${appleType} \\| Yes \\| No \\| Required`, "u"),
-    );
-  }
-  for (const appleType of [
-    "Crash Data",
-    "Performance Data",
-    "Other Diagnostic Data",
-  ]) {
-    assert.match(
-      documentation,
-      new RegExp(
-        `\\| ${appleType} \\| No \\| No \\| Optional Share diagnostics`,
-        "u",
-      ),
-    );
-  }
-  for (const playType of [
+  for (const dataType of [
     "Name",
     "Email address",
-    "User IDs",
-    "App interactions",
+    "User ID",
+    "Product interaction",
   ]) {
     assert.match(
-      documentation,
-      new RegExp(`\\| ${playType} \\| Collected, required, not shared;`, "u"),
+      releasePrivacyDocumentation,
+      new RegExp(`\\| ${dataType} \\| required \\|`, "u"),
+    );
+  }
+  for (const dataType of [
+    "Crash data",
+    "Performance data",
+    "Other diagnostic data",
+  ]) {
+    assert.match(
+      releasePrivacyDocumentation,
+      new RegExp(`\\| ${dataType} \\| optional \\| share-diagnostics-enabled`, "u"),
     );
   }
   assert.match(
-    documentation,
-    /\| Other user-generated content \| Not collected \|/u,
+    releasePrivacyDocumentation,
+    /Downloaded Task or Group content \| not-collected \| downloaded-only/u,
   );
   assert.match(
-    documentation,
-    /\| Crash logs \| Collected, optional, not shared;[\s\S]*\| Diagnostics \| Collected, optional, not shared;/u,
+    releasePrivacyDocumentation,
+    /App info and performance > Crash logs[\s\S]*App info and performance > Diagnostics/u,
   );
   assert.match(
-    documentation,
-    /provider, Firebase REST, OpenJob API, and Sentry behavior/iu,
+    releasePrivacyDocumentation,
+    /OpenJob-owned behavior separately from third-party declarations/iu,
   );
   assert.match(
-    documentation,
-    /Device or other IDs\s*\|\s*Not collected;/iu,
+    releasePrivacyDocumentation,
+    /Device or other IDs \| not-collected \| never-transmitted/iu,
   );
-  assert.doesNotMatch(documentation, /Pending final merged-manifest/iu);
+  assert.match(
+    releasePrivacyDocumentation,
+    /not ready for store submission/iu,
+  );
   for (const dataType of [
     "Phone Number",
     "Coarse Location",
@@ -858,15 +795,15 @@ test("native documentation separates app, SDK, and optional diagnostics declarat
     "Device ID",
     "Other Usage Data",
   ]) {
-    assert.match(documentation, new RegExp(dataType, "u"));
+    assert.match(releasePrivacyDocumentation, new RegExp(dataType, "u"));
   }
-  assert.match(documentation, /not OpenJob product analytics/u);
-  assert.match(documentation, /Do not infer the Android declaration/u);
-  assert.match(documentation, /Play SDK Index/u);
-  assert.match(documentation, /SENTRY_AUTH_TOKEN[\s\S]*Sensitive/iu);
-  assert.match(documentation, /EXPO_PUBLIC_SENTRY_DSN/iu);
-  assert.match(documentation, /store builds only/iu);
-  assert.match(documentation, /OTA remains disabled/iu);
+  assert.match(releasePrivacyDocumentation, /Play SDK Index/u);
+  assert.match(nativeDocumentation, /only authored privacy/iu);
+  assert.match(nativeDocumentation, /docs\/generated\/release-privacy\.md/u);
+  assert.match(nativeDocumentation, /SENTRY_AUTH_TOKEN[\s\S]*Sensitive/iu);
+  assert.match(nativeDocumentation, /EXPO_PUBLIC_SENTRY_DSN/iu);
+  assert.match(nativeDocumentation, /store builds only/iu);
+  assert.match(nativeDocumentation, /OTA remains disabled/iu);
 });
 
 test("free distribution policy disables OTA delivery", async () => {

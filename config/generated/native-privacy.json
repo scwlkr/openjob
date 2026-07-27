@@ -1,0 +1,197 @@
+{
+  "metadata": {
+    "generatedFrom": "config/release-privacy-inventory.json",
+    "inventoryFingerprint": "sha256:447e81661588d23ef8e91d1a89e1e40f5a86e248506fcb7d6d3ccbdd15195967",
+    "inventorySchemaVersion": "1.0.0",
+    "inventoryVersion": "0.3.3"
+  },
+  "dataPracticeIds": [
+    "name",
+    "email-address",
+    "user-id",
+    "product-interaction",
+    "crash-data",
+    "performance-data",
+    "other-diagnostic-data"
+  ],
+  "applePrivacyManifest": {
+    "NSPrivacyCollectedDataTypes": [
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+        "NSPrivacyCollectedDataTypeLinked": true,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+        "NSPrivacyCollectedDataTypeLinked": true,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+        "NSPrivacyCollectedDataTypeLinked": true,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+        "NSPrivacyCollectedDataTypeLinked": true,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+        "NSPrivacyCollectedDataTypeLinked": false,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
+        "NSPrivacyCollectedDataTypeLinked": false,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      },
+      {
+        "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+        "NSPrivacyCollectedDataTypeLinked": false,
+        "NSPrivacyCollectedDataTypePurposes": [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+        ],
+        "NSPrivacyCollectedDataTypeTracking": false
+      }
+    ],
+    "NSPrivacyTracking": false,
+    "NSPrivacyTrackingDomains": []
+  },
+  "nativeConfiguration": {
+    "android": {
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "permissions": [
+        "android.permission.INTERNET"
+      ]
+    },
+    "ios": {
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      },
+      "usesAppleSignIn": true
+    },
+    "plugins": {
+      "expo-secure-store": {
+        "faceIDPermission": false
+      }
+    }
+  },
+  "permissions": [
+    {
+      "id": "ios-apple-sign-in-entitlement",
+      "displayName": "Sign in with Apple entitlement",
+      "platform": "ios",
+      "disposition": "required",
+      "processorIds": [
+        "apple-signin"
+      ],
+      "nativeConfiguration": {
+        "kind": "ios-entitlement",
+        "key": "com.apple.developer.applesignin",
+        "value": [
+          "Default"
+        ]
+      }
+    },
+    {
+      "id": "ios-uses-apple-sign-in",
+      "displayName": "Expo Sign in with Apple capability",
+      "platform": "ios",
+      "disposition": "required",
+      "processorIds": [
+        "apple-signin"
+      ],
+      "nativeConfiguration": {
+        "kind": "expo-boolean",
+        "key": "usesAppleSignIn",
+        "value": true
+      }
+    },
+    {
+      "id": "ios-face-id-description",
+      "displayName": "Face ID usage description",
+      "platform": "ios",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "expo-plugin-boolean",
+        "plugin": "expo-secure-store",
+        "key": "faceIDPermission",
+        "value": false
+      }
+    },
+    {
+      "id": "android-internet",
+      "displayName": "Android network access",
+      "platform": "android",
+      "disposition": "required",
+      "processorIds": [
+        "openjob-api",
+        "firebase-auth",
+        "sentry"
+      ],
+      "nativeConfiguration": {
+        "kind": "android-required-permission",
+        "value": "android.permission.INTERNET"
+      }
+    },
+    {
+      "id": "android-read-external-storage",
+      "displayName": "Legacy external storage read",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.READ_EXTERNAL_STORAGE"
+      }
+    },
+    {
+      "id": "android-system-alert-window",
+      "displayName": "Draw over other apps",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.SYSTEM_ALERT_WINDOW"
+      }
+    },
+    {
+      "id": "android-write-external-storage",
+      "displayName": "Legacy external storage write",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.WRITE_EXTERNAL_STORAGE"
+      }
+    }
+  ]
+}

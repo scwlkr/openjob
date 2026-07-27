@@ -372,8 +372,8 @@ test("merge reuses native generation and bundles only for an exact input and too
   git(fixture.root, ["commit", "-m", "Add native config verifier"]);
   await addChangedFile(
     fixture,
-    "native/package.json",
-    '{"name":"@openjob/native","version":"1.0.0"}\n',
+    "native/metro.config.cjs",
+    "module.exports = { version: 1 };\n",
   );
   const cache = `${fixture.root}-cache.json`;
   const arguments_ = ["merge", "--base", "HEAD", "--cache", cache];
@@ -435,8 +435,8 @@ test("merge reuses native generation and bundles only for an exact input and too
 
   await writeFile(fixture.commandLog, "");
   await writeFile(
-    join(fixture.root, "native", "package.json"),
-    '{"name":"@openjob/native","version":"1.0.1"}\n',
+    join(fixture.root, "native", "metro.config.cjs"),
+    "module.exports = { version: 2 };\n",
   );
   const changedInput = await runVerification(fixture, arguments_);
   assert.equal(changedInput.status, 0, changedInput.stderr || changedInput.stdout);
@@ -559,6 +559,69 @@ test("unknown, generated, and release-risk inputs escalate without external side
       assert.doesNotMatch(commands, /build:(?:preview|production)|submit|promot/u);
     });
   }
+});
+
+test("release privacy inputs select the inventory gate while unaffected inputs explain the skip", async (context) => {
+  for (const path of [
+    "config/release-privacy-inventory.json",
+    "native/app.config.mjs",
+    "native/package.json",
+    "config/generated/play-data-safety.json",
+    "scripts/release-privacy.mjs",
+  ]) {
+    await context.test(path, async () => {
+      const fixture = await createVerificationFixture();
+      await addChangedFile(
+        fixture,
+        path,
+        path === "native/package.json"
+          ? '{"name":"@openjob/native","version":"1.0.0"}\n'
+          : "changed\n",
+      );
+      git(fixture.root, ["add", path]);
+      git(fixture.root, ["commit", "-m", "Change release privacy input"]);
+      syncFixtureMain(fixture);
+
+      const result = await runVerification(fixture, [
+        "focused",
+        "--base",
+        "HEAD^",
+        "--cache",
+        `${fixture.root}-cache.json`,
+        ...FOCUSED_EVIDENCE,
+      ]);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      const report = JSON.parse(result.stdout);
+      const gate = report.gates.find(({ id }) => id === "release-privacy");
+      assert.equal(report.effectiveMode, "release-candidate");
+      assert.equal(gate.selection, "escalated");
+      assert.equal(gate.outcome, "passed");
+      assert.equal(gate.coveredBy, "repository-suite");
+      assert.match(gate.reason, /covered.*repository-suite/iu);
+      const commands = await readFile(fixture.commandLog, "utf8");
+      assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
+    });
+  }
+
+  const unaffectedFixture = await createVerificationFixture();
+  await addChangedFile(unaffectedFixture, "docs/example.md");
+  const unaffected = await runVerification(unaffectedFixture, [
+    "focused",
+    "--base",
+    "HEAD",
+    "--cache",
+    `${unaffectedFixture.root}-cache.json`,
+    ...FOCUSED_EVIDENCE,
+  ]);
+  assert.equal(unaffected.status, 0, unaffected.stderr || unaffected.stdout);
+  const skippedGate = JSON.parse(unaffected.stdout).gates.find(
+    ({ id }) => id === "release-privacy",
+  );
+  assert.equal(skippedGate.outcome, "skipped");
+  assert.match(
+    skippedGate.reason,
+    /inventory, permissions, processors, configuration, and projections are unaffected/iu,
+  );
 });
 
 test("escalated release-candidate scope rejects dirty source before gates", async () => {

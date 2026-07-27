@@ -1,0 +1,543 @@
+{
+  "metadata": {
+    "generatedFrom": "config/release-privacy-inventory.json",
+    "inventoryFingerprint": "sha256:447e81661588d23ef8e91d1a89e1e40f5a86e248506fcb7d6d3ccbdd15195967",
+    "inventorySchemaVersion": "1.0.0",
+    "inventoryVersion": "0.3.3"
+  },
+  "submissionReady": false,
+  "security": {
+    "encryptedInTransit": true
+  },
+  "publicUrls": {
+    "privacyPolicy": {
+      "displayName": "Privacy policy",
+      "requiredBeforeSubmission": true,
+      "status": "planned",
+      "url": "https://openjob.dev/privacy",
+      "implementationIssue": 40
+    },
+    "accountDeletion": {
+      "displayName": "Account deletion request",
+      "requiredBeforeSubmission": true,
+      "status": "planned",
+      "url": "https://openjob.dev/account-deletion",
+      "implementationIssue": 42
+    },
+    "support": {
+      "displayName": "Public support",
+      "requiredBeforeSubmission": true,
+      "status": "live",
+      "url": "https://openjob.dev"
+    }
+  },
+  "accountDeletion": {
+    "requiredByStore": true,
+    "status": "pending",
+    "publicUrlId": "accountDeletion",
+    "implementationIssue": 42,
+    "inAppAvailable": false,
+    "publicRequestAvailable": false,
+    "url": "https://openjob.dev/account-deletion",
+    "urlStatus": "planned"
+  },
+  "dataPractices": [
+    {
+      "id": "name",
+      "displayName": "Name",
+      "authority": "openjob",
+      "dataType": "Personal info > Name",
+      "collection": "required",
+      "collected": true,
+      "collectionCondition": "account-creation-or-sign-in",
+      "shared": false,
+      "sold": false,
+      "linked": true,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Account management"
+      ],
+      "processorIds": [
+        "openjob-api",
+        "firebase-auth",
+        "apple-signin",
+        "google-signin"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "email-address",
+      "displayName": "Email address",
+      "authority": "openjob",
+      "dataType": "Personal info > Email address",
+      "collection": "required",
+      "collected": true,
+      "collectionCondition": "account-creation-or-sign-in",
+      "shared": false,
+      "sold": false,
+      "linked": true,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Account management"
+      ],
+      "processorIds": [
+        "openjob-api",
+        "firebase-auth",
+        "apple-signin",
+        "google-signin"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "user-id",
+      "displayName": "User ID",
+      "authority": "openjob",
+      "dataType": "Personal info > User IDs",
+      "collection": "required",
+      "collected": true,
+      "collectionCondition": "account-creation-or-sign-in",
+      "shared": false,
+      "sold": false,
+      "linked": true,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Account management"
+      ],
+      "processorIds": [
+        "openjob-api",
+        "firebase-auth"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "product-interaction",
+      "displayName": "Product interaction",
+      "authority": "openjob",
+      "dataType": "App activity > App interactions",
+      "collection": "required",
+      "collected": true,
+      "collectionCondition": "authenticated-app-functionality",
+      "shared": false,
+      "sold": false,
+      "linked": true,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality"
+      ],
+      "processorIds": [
+        "openjob-api"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "crash-data",
+      "displayName": "Crash data",
+      "authority": "openjob",
+      "dataType": "App info and performance > Crash logs",
+      "collection": "optional",
+      "collected": true,
+      "collectionCondition": "share-diagnostics-enabled",
+      "shared": false,
+      "sold": false,
+      "linked": false,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Analytics"
+      ],
+      "processorIds": [
+        "sentry"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "performance-data",
+      "displayName": "Performance data",
+      "authority": "openjob",
+      "dataType": "App info and performance > Diagnostics",
+      "collection": "optional",
+      "collected": true,
+      "collectionCondition": "share-diagnostics-enabled",
+      "shared": false,
+      "sold": false,
+      "linked": false,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Analytics"
+      ],
+      "processorIds": [
+        "sentry"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "other-diagnostic-data",
+      "displayName": "Other diagnostic data",
+      "authority": "openjob",
+      "dataType": "App info and performance > Diagnostics",
+      "collection": "optional",
+      "collected": true,
+      "collectionCondition": "share-diagnostics-enabled",
+      "shared": false,
+      "sold": false,
+      "linked": false,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [
+        "App functionality",
+        "Analytics"
+      ],
+      "processorIds": [
+        "sentry"
+      ],
+      "permissionIds": []
+    },
+    {
+      "id": "downloaded-task-group-content",
+      "displayName": "Downloaded Task or Group content",
+      "authority": "openjob",
+      "dataType": "Messages > Other user-generated content",
+      "collection": "not-collected",
+      "collected": false,
+      "collectionCondition": "downloaded-only",
+      "shared": false,
+      "sold": false,
+      "linked": false,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [],
+      "processorIds": [],
+      "permissionIds": []
+    },
+    {
+      "id": "device-or-other-ids",
+      "displayName": "Device or other IDs",
+      "authority": "openjob",
+      "dataType": "Device or other IDs > Device or other IDs",
+      "collection": "not-collected",
+      "collected": false,
+      "collectionCondition": "never-transmitted",
+      "shared": false,
+      "sold": false,
+      "linked": false,
+      "tracking": false,
+      "encryptedInTransit": true,
+      "purposes": [],
+      "processorIds": [],
+      "permissionIds": []
+    }
+  ],
+  "processors": [
+    {
+      "id": "openjob-api",
+      "displayName": "OpenJob API",
+      "authority": "openjob",
+      "owner": "OpenJob",
+      "role": "app-service",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": []
+    },
+    {
+      "id": "firebase-auth",
+      "displayName": "Firebase Authentication and Identity Platform",
+      "authority": "third-party",
+      "owner": "Google",
+      "role": "authentication",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": []
+    },
+    {
+      "id": "apple-signin",
+      "displayName": "Sign in with Apple",
+      "authority": "third-party",
+      "owner": "Apple",
+      "role": "authentication",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": [
+        "@invertase/react-native-apple-authentication"
+      ]
+    },
+    {
+      "id": "google-signin",
+      "displayName": "Google Sign-In",
+      "authority": "third-party",
+      "owner": "Google",
+      "role": "authentication",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": [
+        "@react-native-google-signin/google-signin"
+      ]
+    },
+    {
+      "id": "sentry",
+      "displayName": "Sentry",
+      "authority": "third-party",
+      "owner": "Functional Software, Inc.",
+      "role": "diagnostics",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": [
+        "@sentry/react-native"
+      ]
+    },
+    {
+      "id": "apple-os-quality",
+      "displayName": "Apple operating-system quality reports",
+      "authority": "third-party",
+      "owner": "Apple",
+      "role": "operating-system-quality",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": []
+    },
+    {
+      "id": "google-play-quality",
+      "displayName": "Google Play and Android quality reports",
+      "authority": "third-party",
+      "owner": "Google",
+      "role": "operating-system-quality",
+      "candidateReconciliationRequired": true,
+      "nativeDependencyPackages": []
+    }
+  ],
+  "permissions": [
+    {
+      "id": "ios-apple-sign-in-entitlement",
+      "displayName": "Sign in with Apple entitlement",
+      "platform": "ios",
+      "disposition": "required",
+      "processorIds": [
+        "apple-signin"
+      ],
+      "nativeConfiguration": {
+        "kind": "ios-entitlement",
+        "key": "com.apple.developer.applesignin",
+        "value": [
+          "Default"
+        ]
+      }
+    },
+    {
+      "id": "ios-uses-apple-sign-in",
+      "displayName": "Expo Sign in with Apple capability",
+      "platform": "ios",
+      "disposition": "required",
+      "processorIds": [
+        "apple-signin"
+      ],
+      "nativeConfiguration": {
+        "kind": "expo-boolean",
+        "key": "usesAppleSignIn",
+        "value": true
+      }
+    },
+    {
+      "id": "ios-face-id-description",
+      "displayName": "Face ID usage description",
+      "platform": "ios",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "expo-plugin-boolean",
+        "plugin": "expo-secure-store",
+        "key": "faceIDPermission",
+        "value": false
+      }
+    },
+    {
+      "id": "android-internet",
+      "displayName": "Android network access",
+      "platform": "android",
+      "disposition": "required",
+      "processorIds": [
+        "openjob-api",
+        "firebase-auth",
+        "sentry"
+      ],
+      "nativeConfiguration": {
+        "kind": "android-required-permission",
+        "value": "android.permission.INTERNET"
+      }
+    },
+    {
+      "id": "android-read-external-storage",
+      "displayName": "Legacy external storage read",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.READ_EXTERNAL_STORAGE"
+      }
+    },
+    {
+      "id": "android-system-alert-window",
+      "displayName": "Draw over other apps",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.SYSTEM_ALERT_WINDOW"
+      }
+    },
+    {
+      "id": "android-write-external-storage",
+      "displayName": "Legacy external storage write",
+      "platform": "android",
+      "disposition": "blocked",
+      "processorIds": [],
+      "nativeConfiguration": {
+        "kind": "android-blocked-permission",
+        "value": "android.permission.WRITE_EXTERNAL_STORAGE"
+      }
+    }
+  ],
+  "thirdPartyEvidence": [
+    {
+      "id": "google-signin-apple-sdk-manifest",
+      "displayName": "GoogleSignIn Apple SDK privacy manifest",
+      "processorId": "google-signin",
+      "platform": "ios",
+      "sourceType": "sdk-manifest",
+      "claims": [
+        "Linked Phone Number and Coarse Location for App Functionality",
+        "Linked Other Data Types and User ID for App Functionality and Analytics",
+        "Linked Device ID and Other Usage Data for Analytics"
+      ],
+      "representsOpenJobBehavior": false,
+      "candidateReconciliationRequired": true
+    },
+    {
+      "id": "apple-operating-system-quality",
+      "displayName": "Apple operating-system quality declarations",
+      "processorId": "apple-os-quality",
+      "platform": "ios",
+      "sourceType": "operating-system-report",
+      "claims": [
+        "Independent operating-system safety signals are not OpenJob app-level diagnostics"
+      ],
+      "representsOpenJobBehavior": false,
+      "candidateReconciliationRequired": true
+    },
+    {
+      "id": "google-play-sdk-index",
+      "displayName": "Google Play SDK Index declarations",
+      "processorId": "google-play-quality",
+      "platform": "android",
+      "sourceType": "sdk-index",
+      "claims": [
+        "SDK Index findings remain candidate evidence and do not define OpenJob behavior"
+      ],
+      "representsOpenJobBehavior": false,
+      "candidateReconciliationRequired": true
+    }
+  ],
+  "evidencePolicy": {
+    "canAddDiscrepancy": true,
+    "canRewriteInventory": false,
+    "inputs": [
+      {
+        "id": "exact-dependency-inventories",
+        "displayName": "Exact signed iOS and Android dependency inventories",
+        "sourceType": "exact-dependency-inventory",
+        "candidateScoped": true
+      },
+      {
+        "id": "bundled-sdk-manifests",
+        "displayName": "Bundled SDK privacy manifests",
+        "sourceType": "sdk-manifest",
+        "candidateScoped": true
+      },
+      {
+        "id": "play-sdk-index",
+        "displayName": "Play SDK Index entries",
+        "sourceType": "sdk-index",
+        "candidateScoped": true
+      },
+      {
+        "id": "captured-provider-api-sentry-traffic",
+        "displayName": "Captured provider, API, and Sentry traffic",
+        "sourceType": "captured-traffic",
+        "candidateScoped": true
+      }
+    ],
+    "prohibitedContent": [
+      {
+        "id": "credentials",
+        "displayName": "credentials"
+      },
+      {
+        "id": "authentication-material",
+        "displayName": "authentication material"
+      },
+      {
+        "id": "personal-data",
+        "displayName": "personal data"
+      },
+      {
+        "id": "task-content",
+        "displayName": "Task content"
+      },
+      {
+        "id": "group-content",
+        "displayName": "Group content"
+      }
+    ]
+  },
+  "submissionChecklist": [
+    {
+      "id": "match-generated-projections",
+      "platforms": [
+        "apple",
+        "play"
+      ],
+      "description": "Match store answers to the generated projections and record this inventory fingerprint.",
+      "blockingCondition": "Any generated projection is stale or manually diverged."
+    },
+    {
+      "id": "verify-public-urls",
+      "platforms": [
+        "apple",
+        "play"
+      ],
+      "description": "Verify every required public URL is live at its exact inventory URL.",
+      "blockingCondition": "A required URL is planned, absent, redirected incorrectly, or unavailable."
+    },
+    {
+      "id": "verify-account-deletion",
+      "platforms": [
+        "apple",
+        "play"
+      ],
+      "description": "Verify the implemented in-app and public account-deletion behavior from issue #42.",
+      "blockingCondition": "Account deletion remains pending or differs from the inventory."
+    },
+    {
+      "id": "reconcile-candidate-evidence",
+      "platforms": [
+        "apple",
+        "play"
+      ],
+      "description": "Reconcile exact dependencies, SDK declarations, and captured traffic against the immutable candidate.",
+      "blockingCondition": "Any evidence discrepancy is unexplained."
+    },
+    {
+      "id": "save-without-premature-claims",
+      "platforms": [
+        "apple",
+        "play"
+      ],
+      "description": "Save or submit answers only through the authenticated store surface after all blockers clear.",
+      "blockingCondition": "The candidate, traffic, deletion, URL, or declaration proof is incomplete."
+    }
+  ]
+}

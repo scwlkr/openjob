@@ -6,6 +6,15 @@ const identities = JSON.parse(
 const rootPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
+const releasePrivacy = JSON.parse(
+  readFileSync(
+    new URL(
+      "../config/generated/native-privacy.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
 const names = {
   development: "OpenJob Dev",
   preview: "OpenJob Preview",
@@ -16,75 +25,7 @@ const environmentBadges = {
   preview: "Preview",
   production: null,
 };
-const androidBlockedPermissions = [
-  "android.permission.READ_EXTERNAL_STORAGE",
-  "android.permission.SYSTEM_ALERT_WINDOW",
-  "android.permission.WRITE_EXTERNAL_STORAGE",
-];
 const sentrySlugPattern = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
-const appleAppPrivacy = {
-  NSPrivacyCollectedDataTypes: [
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
-      NSPrivacyCollectedDataTypeLinked: true,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-    {
-      NSPrivacyCollectedDataType:
-        "NSPrivacyCollectedDataTypeOtherDiagnosticData",
-      NSPrivacyCollectedDataTypeLinked: false,
-      NSPrivacyCollectedDataTypePurposes: [
-        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
-      ],
-      NSPrivacyCollectedDataTypeTracking: false,
-    },
-  ],
-  NSPrivacyTracking: false,
-  NSPrivacyTrackingDomains: [],
-};
 
 function optionalEnvironmentValue(name) {
   const value = process.env[name]?.trim();
@@ -150,7 +91,64 @@ function sentryPluginOptions() {
   };
 }
 
+function assertInventoryControlledConfiguration(config) {
+  const declaredAndroidPermissions = new Set(
+    releasePrivacy.nativeConfiguration.android.permissions,
+  );
+  const declaredAndroidBlockedPermissions = new Set(
+    releasePrivacy.nativeConfiguration.android.blockedPermissions,
+  );
+  const declaredIosEntitlements =
+    releasePrivacy.nativeConfiguration.ios.entitlements;
+
+  for (const permission of config.android?.permissions ?? []) {
+    if (!declaredAndroidPermissions.has(permission)) {
+      throw new Error(
+        `${permission} is not declared by the Release Privacy Inventory.`,
+      );
+    }
+  }
+  for (const permission of config.android?.blockedPermissions ?? []) {
+    if (!declaredAndroidBlockedPermissions.has(permission)) {
+      throw new Error(
+        `${permission} is not declared by the Release Privacy Inventory.`,
+      );
+    }
+  }
+  for (const [key, value] of Object.entries(config.ios?.entitlements ?? {})) {
+    if (!Object.hasOwn(declaredIosEntitlements, key)) {
+      throw new Error(
+        `${key} is not declared by the Release Privacy Inventory.`,
+      );
+    }
+    if (JSON.stringify(value) !== JSON.stringify(declaredIosEntitlements[key])) {
+      throw new Error(
+        `${key} manually diverges from the Release Privacy Inventory.`,
+      );
+    }
+  }
+  if (
+    config.ios?.privacyManifests &&
+    JSON.stringify(config.ios.privacyManifests) !==
+      JSON.stringify(releasePrivacy.applePrivacyManifest)
+  ) {
+    throw new Error(
+      "The authored Apple privacy manifest manually diverges from the Release Privacy Inventory.",
+    );
+  }
+  if (
+    config.ios?.usesAppleSignIn !== undefined &&
+    config.ios.usesAppleSignIn !==
+      releasePrivacy.nativeConfiguration.ios.usesAppleSignIn
+  ) {
+    throw new Error(
+      "usesAppleSignIn manually diverges from the Release Privacy Inventory.",
+    );
+  }
+}
+
 export default function createAppConfig({ config = {} } = {}) {
+  assertInventoryControlledConfiguration(config);
   const environment = process.env.OPENJOB_NATIVE_ENV ?? "development";
   const identity = identities.environments[environment];
   if (!identity) {
@@ -185,7 +183,9 @@ export default function createAppConfig({ config = {} } = {}) {
         "expo-secure-store",
         {
           configureAndroidBackup: true,
-          faceIDPermission: false,
+          faceIDPermission:
+            releasePrivacy.nativeConfiguration.plugins["expo-secure-store"]
+              .faceIDPermission,
         },
       ],
       ["expo-sqlite", { useSQLCipher: true }],
@@ -216,7 +216,7 @@ export default function createAppConfig({ config = {} } = {}) {
       bundleIdentifier: identity.ios.bundleId,
       entitlements: {
         ...config.ios?.entitlements,
-        "com.apple.developer.applesignin": ["Default"],
+        ...releasePrivacy.nativeConfiguration.ios.entitlements,
       },
       googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
       infoPlist: {
@@ -225,9 +225,10 @@ export default function createAppConfig({ config = {} } = {}) {
         OpenJobSentryDSN: diagnosticsDsn ?? "",
         OpenJobSentryEnvironment: environment,
       },
-      privacyManifests: appleAppPrivacy,
+      privacyManifests: releasePrivacy.applePrivacyManifest,
       supportsTablet: true,
-      usesAppleSignIn: true,
+      usesAppleSignIn:
+        releasePrivacy.nativeConfiguration.ios.usesAppleSignIn,
     },
     android: {
       ...config.android,
@@ -238,8 +239,14 @@ export default function createAppConfig({ config = {} } = {}) {
       },
       blockedPermissions: [
         ...new Set([
-          ...androidBlockedPermissions,
+          ...releasePrivacy.nativeConfiguration.android.blockedPermissions,
           ...(config.android?.blockedPermissions ?? []),
+        ]),
+      ],
+      permissions: [
+        ...new Set([
+          ...releasePrivacy.nativeConfiguration.android.permissions,
+          ...(config.android?.permissions ?? []),
         ]),
       ],
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
@@ -279,6 +286,13 @@ export default function createAppConfig({ config = {} } = {}) {
           environment === "preview"
             ? identity.firebase.qaPasswordTenantId
             : null,
+        releasePrivacy: {
+          inventoryFingerprint:
+            releasePrivacy.metadata.inventoryFingerprint,
+          inventorySchemaVersion:
+            releasePrivacy.metadata.inventorySchemaVersion,
+          inventoryVersion: releasePrivacy.metadata.inventoryVersion,
+        },
         releaseVersion: rootPackage.version,
         sessionStorageKey: `openjob.native.auth.${environment}.v1`,
       },

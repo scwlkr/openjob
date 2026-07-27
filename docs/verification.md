@@ -37,6 +37,14 @@ to release-candidate scope. Unknown files do the same. Escalated runs have the
 same clean, synchronized `main` source requirement as an explicitly requested
 release-candidate run.
 
+The `release-privacy` gate runs `npm run privacy:check`. The impact policy
+selects it when the Release Privacy Inventory, its schema or generator, native
+permissions, native processor dependencies, native configuration, or a
+generated privacy/store projection changes. When those inputs are unaffected,
+the result skips the gate with that explicit reason. The check validates the
+inventory and rejects missing, stale, or manually diverged projections before
+submission preparation.
+
 Hardware-specific native inputs also escalate and require written physical
 iPhone and Android evidence. The policy names the existing OS-backed provider,
 secure-storage, lifecycle/network, diagnostics, and encrypted-cache modules;

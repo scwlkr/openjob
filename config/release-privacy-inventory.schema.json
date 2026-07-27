@@ -1,0 +1,427 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openjob.dev/schemas/release-privacy-inventory-v1.json",
+  "title": "OpenJob Release Privacy Inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "inventoryVersion",
+    "authority",
+    "publicUrls",
+    "accountDeletion",
+    "security",
+    "processors",
+    "permissions",
+    "dataPractices",
+    "thirdPartyEvidence",
+    "evidencePolicy",
+    "submissionChecklist"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./release-privacy-inventory.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "inventoryVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "scope", "semanticBaseline"],
+      "properties": {
+        "owner": { "const": "OpenJob" },
+        "scope": { "const": "release-privacy-and-store-preparation" },
+        "semanticBaseline": { "const": "issue-40-approved-native-behavior" }
+      }
+    },
+    "publicUrls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privacyPolicy", "accountDeletion", "support"],
+      "properties": {
+        "privacyPolicy": { "$ref": "#/definitions/publicUrl" },
+        "accountDeletion": { "$ref": "#/definitions/publicUrl" },
+        "support": { "$ref": "#/definitions/publicUrl" }
+      }
+    },
+    "accountDeletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requiredByStore",
+        "status",
+        "publicUrlId",
+        "implementationIssue",
+        "inAppAvailable",
+        "publicRequestAvailable"
+      ],
+      "properties": {
+        "requiredByStore": { "const": true },
+        "status": { "enum": ["pending", "implemented"] },
+        "publicUrlId": { "const": "accountDeletion" },
+        "implementationIssue": { "type": "integer", "minimum": 1 },
+        "inAppAvailable": { "type": "boolean" },
+        "publicRequestAvailable": { "type": "boolean" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encryptedInTransit"],
+      "properties": {
+        "encryptedInTransit": { "const": true }
+      }
+    },
+    "processors": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/processor" }
+    },
+    "permissions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/permission" }
+    },
+    "dataPractices": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/dataPractice" }
+    },
+    "thirdPartyEvidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/thirdPartyEvidence" }
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canAddDiscrepancy",
+        "canRewriteInventory",
+        "inputs",
+        "prohibitedContent"
+      ],
+      "properties": {
+        "canAddDiscrepancy": { "const": true },
+        "canRewriteInventory": { "const": false },
+        "inputs": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/definitions/evidenceInput" }
+        },
+        "prohibitedContent": {
+          "type": "array",
+          "minItems": 5,
+          "items": { "$ref": "#/definitions/prohibitedContent" }
+        }
+      }
+    },
+    "submissionChecklist": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/checklistItem" }
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "publicUrl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName", "requiredBeforeSubmission", "status", "url"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1 },
+        "requiredBeforeSubmission": { "const": true },
+        "status": { "enum": ["live", "planned"] },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "implementationIssue": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "processor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "authority",
+        "owner",
+        "role",
+        "candidateReconciliationRequired",
+        "nativeDependencyPackages"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "authority": { "enum": ["openjob", "third-party"] },
+        "owner": { "type": "string", "minLength": 1 },
+        "role": {
+          "enum": [
+            "app-service",
+            "authentication",
+            "diagnostics",
+            "operating-system-quality"
+          ]
+        },
+        "candidateReconciliationRequired": { "type": "boolean" },
+        "nativeDependencyPackages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nativeConfiguration": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "key", "value"],
+          "properties": {
+            "kind": { "const": "ios-entitlement" },
+            "key": { "type": "string", "minLength": 1 },
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "key", "value"],
+          "properties": {
+            "kind": { "enum": ["expo-boolean", "expo-plugin-boolean"] },
+            "key": { "type": "string", "minLength": 1 },
+            "value": { "type": "boolean" },
+            "plugin": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {
+              "enum": [
+                "android-required-permission",
+                "android-blocked-permission"
+              ]
+            },
+            "value": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "platform",
+        "disposition",
+        "processorIds",
+        "nativeConfiguration"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "platform": { "enum": ["ios", "android"] },
+        "disposition": { "enum": ["required", "blocked"] },
+        "processorIds": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/identifier" }
+        },
+        "nativeConfiguration": { "$ref": "#/definitions/nativeConfiguration" }
+      }
+    },
+    "appleMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collected", "purposes"],
+      "properties": {
+        "collected": { "type": "boolean" },
+        "dataType": {
+          "enum": [
+            "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeUserID",
+            "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeCrashData",
+            "NSPrivacyCollectedDataTypePerformanceData",
+            "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+            "NSPrivacyCollectedDataTypeCustomerSupport",
+            "NSPrivacyCollectedDataTypeOtherUserContent",
+            "NSPrivacyCollectedDataTypeDeviceID"
+          ]
+        },
+        "purposes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+              "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          }
+        }
+      }
+    },
+    "playMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collected", "dataType", "purposes"],
+      "properties": {
+        "collected": { "type": "boolean" },
+        "dataType": {
+          "enum": [
+            "Personal info > Name",
+            "Personal info > Email address",
+            "Personal info > User IDs",
+            "Personal info > Other info",
+            "App activity > App interactions",
+            "App info and performance > Crash logs",
+            "App info and performance > Diagnostics",
+            "Messages > Other user-generated content",
+            "Device or other IDs > Device or other IDs"
+          ]
+        },
+        "purposes": {
+          "type": "array",
+          "items": {
+            "enum": ["App functionality", "Account management", "Analytics"]
+          }
+        }
+      }
+    },
+    "dataPractice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "authority",
+        "displayName",
+        "collection",
+        "collectionCondition",
+        "linked",
+        "tracking",
+        "shared",
+        "sold",
+        "encryptedInTransit",
+        "processorIds",
+        "permissionIds",
+        "apple",
+        "play"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "authority": { "const": "openjob" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "collection": { "enum": ["required", "optional", "not-collected"] },
+        "collectionCondition": {
+          "enum": [
+            "account-creation-or-sign-in",
+            "authenticated-app-functionality",
+            "share-diagnostics-enabled",
+            "downloaded-only",
+            "never-transmitted"
+          ]
+        },
+        "linked": { "type": "boolean" },
+        "tracking": { "type": "boolean" },
+        "shared": { "type": "boolean" },
+        "sold": { "type": "boolean" },
+        "encryptedInTransit": { "type": "boolean" },
+        "processorIds": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/identifier" }
+        },
+        "permissionIds": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/identifier" }
+        },
+        "apple": { "$ref": "#/definitions/appleMapping" },
+        "play": { "$ref": "#/definitions/playMapping" }
+      }
+    },
+    "thirdPartyEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "processorId",
+        "platform",
+        "sourceType",
+        "claims",
+        "representsOpenJobBehavior",
+        "candidateReconciliationRequired"
+      ],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "processorId": { "$ref": "#/definitions/identifier" },
+        "platform": { "enum": ["ios", "android", "both"] },
+        "sourceType": {
+          "enum": ["sdk-manifest", "sdk-index", "operating-system-report"]
+        },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "representsOpenJobBehavior": { "const": false },
+        "candidateReconciliationRequired": { "const": true }
+      }
+    },
+    "evidenceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "displayName", "sourceType", "candidateScoped"],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "sourceType": {
+          "enum": [
+            "exact-dependency-inventory",
+            "sdk-manifest",
+            "sdk-index",
+            "captured-traffic"
+          ]
+        },
+        "candidateScoped": { "const": true }
+      }
+    },
+    "prohibitedContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "checklistItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "platforms", "description", "blockingCondition"],
+      "properties": {
+        "id": { "$ref": "#/definitions/identifier" },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["apple", "play"] }
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "blockingCondition": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

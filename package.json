@@ -26,6 +26,8 @@
     "deploy:raw": "vinext deploy",
     "firebase:deploy:rules": "npx -y firebase-tools@latest deploy --only firestore --project openjob-dev",
     "openapi:check": "node scripts/validate-openapi.mjs",
+    "privacy:generate": "node scripts/release-privacy.mjs generate",
+    "privacy:check": "node scripts/release-privacy.mjs check",
     "verify": "node scripts/verify.mjs",
     "test:api": "node --test tests/v1-*.test.mjs tests/firestore.test.mjs tests/openapi-contract.test.mjs tests/task-push-dispatcher.test.mjs tests/web-push.test.mjs tests/notification-service-worker.test.mjs",
     "test:cli": "node --test tests/cli*.test.mjs",

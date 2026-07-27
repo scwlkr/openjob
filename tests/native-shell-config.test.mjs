@@ -74,8 +74,20 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
       assert.equal(config.newArchEnabled, true);
       assert.equal(config.ios.supportsTablet, true);
       assert.equal(config.ios.usesAppleSignIn, true);
+      assert.equal(
+        config.ios.privacyManifests.NSPrivacyCollectedDataTypes.length,
+        7,
+      );
       assert.equal(config.ios.bundleIdentifier, identity.bundleIdentifier);
       assert.equal(config.android.package, identity.applicationId);
+      assert.deepEqual(config.android.permissions, [
+        "android.permission.INTERNET",
+      ]);
+      assert.deepEqual(config.android.blockedPermissions, [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+      ]);
       assert.equal(config.extra.openjob.apiBasePath, "/api/v1");
       assert.equal(config.extra.openjob.apiBaseUrl, identity.apiBaseUrl);
       assert.match(config.extra.openjob.firebaseApiKey, /^AIza/u);
@@ -111,6 +123,14 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
         assert.equal(config.extra.openjob.environmentBadge, identity.badge);
       }
       assert.equal(config.extra.openjob.releaseVersion, rootPackage.version);
+      assert.match(
+        config.extra.openjob.releasePrivacy.inventoryFingerprint,
+        /^sha256:[a-f0-9]{64}$/u,
+      );
+      assert.equal(
+        config.extra.openjob.releasePrivacy.inventorySchemaVersion,
+        "1.0.0",
+      );
       assert.deepEqual(config.updates, {
         checkAutomatically: "NEVER",
         enabled: false,
@@ -150,6 +170,35 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
   } finally {
     if (previousEnvironment === undefined) delete process.env.OPENJOB_NATIVE_ENV;
     else process.env.OPENJOB_NATIVE_ENV = previousEnvironment;
+  }
+});
+
+test("native config rejects permissions and privacy manifests absent from the inventory", async () => {
+  const { default: createAppConfig } = await import(
+    `../native/app.config.mjs?privacy-inventory=${Date.now()}`
+  );
+  for (const config of [
+    { android: { permissions: ["android.permission.CAMERA"] } },
+    {
+      android: {
+        blockedPermissions: ["android.permission.ACCESS_FINE_LOCATION"],
+      },
+    },
+    { ios: { entitlements: { "com.apple.developer.healthkit": true } } },
+    {
+      ios: {
+        privacyManifests: {
+          NSPrivacyCollectedDataTypes: [],
+          NSPrivacyTracking: false,
+          NSPrivacyTrackingDomains: [],
+        },
+      },
+    },
+  ]) {
+    assert.throws(
+      () => createAppConfig({ config }),
+      /not declared by the Release Privacy Inventory|manually diverges/iu,
+    );
   }
 });
 
