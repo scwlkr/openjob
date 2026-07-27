@@ -1,0 +1,5 @@
+# Drive release privacy from one inventory
+
+OpenJob will maintain one machine-readable Release Privacy Inventory as the authority for app configuration, Apple privacy manifests, Play Data Safety preparation, permissions, user-facing documentation, verification, and submission checklists. Generated outputs must identify their inventory version or fingerprint and fail verification when they drift; prose, store forms, SDK manifests, and captured traffic remain evidence or projections rather than competing sources of truth.
+
+The inventory records OpenJob-owned behavior and known third-party processors separately, including data types, purposes, requirement or optionality, linkage, tracking, permissions, collection conditions, and platform-specific disclosures. Release-candidate verification still reconciles the exact signed binaries, dependency inventories, and observed traffic against it before submission; machine-readable authority reduces duplication but does not replace real artifact proof.

@@ -83,3 +83,29 @@ _Avoid_: Ban
 **Ban**:
 A Group-scoped restriction that removes a Member and prevents that User from rejoining until an Admin lifts it.
 _Avoid_: Kick, global block
+
+## Release language
+
+**Feature Proof**:
+Evidence that one change satisfies its issue contract before that issue closes. It is scoped to the behavior and platforms the change can affect.
+_Avoid_: Release Proof, final release testing
+
+**Release Candidate**:
+One immutable OpenJob source revision and its release inputs selected for coordinated iOS and Android acceptance. Changing any source or release input creates a different Release Candidate.
+_Avoid_: Latest main, branch, build
+
+**Candidate Artifact**:
+A signed, store-shaped iOS or Android build derived from one Release Candidate and retained for submission, retry, and promotion without rebuilding unchanged source.
+_Avoid_: Release Candidate, local build
+
+**Release Proof**:
+The single coordinated acceptance record showing that the exact Release Candidate and both Candidate Artifacts satisfy OpenJob's distribution, upgrade, offline, accessibility, privacy, and device gates.
+_Avoid_: Feature Proof, smoke test
+
+**Verification Mode**:
+One of OpenJob's explicit proof scopes: focused for one change, merge for integration, or release-candidate for one immutable Release Candidate.
+_Avoid_: Full test, QA pass
+
+**Release Privacy Inventory**:
+OpenJob's authoritative declaration of data use, purposes, optionality, linkage, tracking, processors, permissions, and store disclosures for a release.
+_Avoid_: Privacy policy, store form, SDK manifest

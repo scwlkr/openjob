@@ -1,19 +1,9 @@
 # Require cross-platform native release evidence
 
-A native slice may merge after its automated suite and focused iOS Simulator
-and Android Emulator checks pass, but it is not complete until the existing
-Google-backed `@scwlkr` User in the Owner role and permanent `@qa-two` pass the
-written real-world journey through TestFlight and Play
-Internal Testing on physical iPhone and Android devices. No dedicated Google
-test account or `@qa-one` User is required. A failure on either coequal
-platform blocks promotion on both. Each candidate records concise evidence
-rather than relying on remembered manual testing.
+OpenJob separates Feature Proof from Release Proof through three explicit Verification Modes. Focused mode proves one issue with affected automated tests, type and lint checks, and the written journey on both iOS Simulator and Android Emulator; it adds physical-device proof only when hardware-specific behavior changed. Merge mode proves the integrated change at affected public seams without automatically repeating clean native prebuilds, bundle exports, complete suites, cloud builds, store uploads, or manual matrices when their inputs are unchanged. Security, signing, distribution, permissions, accessibility, or store-compliance work may require release-candidate mode before its feature issue can close when the risk warrants it.
 
-Public release candidates additionally verify clean installation and upgrade,
-poor-network and offline recovery, background and foreground transitions, Push
-Notification routing, VoiceOver and TalkBack, system text scaling, light and
-dark appearances, and adaptive phone, tablet, and foldable layouts. The matrix
-uses emulators or managed device testing where necessary, but always retains
-the physical iPhone and Android gate. QA Two's Preview-only password path is
-fixture evidence only; #37 separately requires real Google and Apple product
-acceptance.
+Release-candidate mode runs the complete deterministic suite, clean generated-configuration and embedded-bundle proof, distribution, upgrade, offline and poor-network recovery, lifecycle, privacy, accessibility, and adaptive-layout matrix once for one immutable Release Candidate. Issue #41 is the unified checkpoint for that Release Proof. The existing Google-backed `@scwlkr` User in the Owner role and permanent Preview-only `@qa-two` complete the store-shaped fixture journey; QA Two is fixture evidence and never replaces separate real Google or Apple product acceptance.
+
+Each platform produces one Candidate Artifact from the same synced source revision and recorded release inputs. The candidate record retains source identity, version and build numbers, input fingerprint, artifact and store build identifiers, checksums, verification results, and independent Apple and Google submission states. A store or network failure resumes from the successful Candidate Artifact; it does not authorize rebuilding unchanged source. A source, dependency, native configuration, signing, permission, or Release Privacy Inventory change invalidates the candidate and requires a new one.
+
+iOS and Android remain coequal release gates. A failure or unapproved limitation on either platform blocks promotion of both, while successful evidence and artifacts remain reusable. Release Proof always retains physical iPhone and Android gates; emulators or managed devices may cover additional OS versions, tablets, foldables, and window sizes.
