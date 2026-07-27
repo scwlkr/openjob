@@ -902,8 +902,9 @@ async function executeBuild(parsed, root) {
       };
     }
     const now = new Date().toISOString();
-    const requestKey =
-      platform.build.requestKey ?? `${record.candidate.id}:${parsed.platform}:build`;
+    const resumingRequest = Boolean(platform.build.requestKey);
+    const requestKey = platform.build.requestKey ??
+      `${record.candidate.id}:${parsed.platform}:build`;
     platform.build = {
       state: "requested",
       requestKey,
@@ -913,14 +914,14 @@ async function executeBuild(parsed, root) {
     record.updatedAt = now;
     record.events.push({
       at: now,
-      type: "build-requested",
+      type: resumingRequest ? "build-reconciliation-requested" : "build-requested",
       platform: parsed.platform,
       requestKey,
     });
     await atomicWrite(recordPath, record);
     const response = executeExternal(resolve(root, parsed.executor), {
       schemaVersion: 1,
-      action: "build",
+      action: resumingRequest ? "resume-build" : "build",
       platform: parsed.platform,
       requestKey,
       candidate: executorCandidate(record),

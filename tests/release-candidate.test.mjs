@@ -251,7 +251,7 @@ async function createCandidateFixture() {
       '  version: request.candidate.version,',
       '};',
       'let response;',
-      'if (request.action === "build") response = {',
+      'if (["build", "resume-build"].includes(request.action)) response = {',
       '  schemaVersion: 1,',
       '  status: "succeeded",',
       '  ...identity,',
@@ -625,6 +625,17 @@ test("resumable EAS, Apple, and Google failures reuse stable platform request ke
       assert.equal(record.platforms[platform][stateName].state, "succeeded");
       assert.equal(record.platforms[platform][stateName].requestKey, requestKey);
     }
+  }
+  const calls = (await readFile(fixture.executorLog, "utf8")).trim().split("\n");
+  for (const platform of ["ios", "android"]) {
+    assert.equal(
+      calls.filter((entry) => entry.startsWith(`build:${platform}:`)).length,
+      1,
+    );
+    assert.equal(
+      calls.filter((entry) => entry.startsWith(`resume-build:${platform}:`)).length,
+      1,
+    );
   }
 });
 

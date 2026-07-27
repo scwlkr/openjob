@@ -74,6 +74,10 @@ Successful builds and submissions are never requested again. Apple and Google
 progress independently, while source or declared release-input drift
 invalidates the candidate before another external action.
 
+After an uncertain EAS failure, the coordinator sends `resume-build` with the
+original request key. The executor must reconcile or continue that request; it
+must not create another build. Only the first attempt receives action `build`.
+
 ## Status and resume
 
 Status polling is read-only at the provider boundary and needs no confirmation:
