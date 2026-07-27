@@ -112,11 +112,16 @@ test("public Google support metadata never exposes the owner login", async () =>
   );
   assert.match(documentation, /openjob-support@googlegroups\.com/u);
   assert.match(documentation, /history\s+privacy\s+scrub/iu);
-  assert.match(documentation, /GitHub Support ticket `#4599940`/u);
   assert.match(
     documentation,
-    /old\s+web\s+and\s+API\s+views\s+return\s+HTTP\s+404/iu,
+    /GitHub Support ticket `#4599940` was resolved on `2026-07-27`/u,
   );
+  assert.match(
+    documentation,
+    /HTTP\s+404\s+for\s+both\s+old\s+web\s+commit\s+views\s+and\s+both\s+raw\s+Git\s+commit-object\s+API\s+views/iu,
+  );
+  assert.match(documentation, /No commit found for SHA/u);
+  assert.doesNotMatch(documentation, /ticket `#4599940` remains open/iu);
   assert.doesNotMatch(documentation, /owner explicitly approves/iu);
   assert.doesNotMatch(documentation, /OAuth support address.*eligible/isu);
   assert.doesNotMatch(JSON.stringify(firebase), /@gmail\.com/iu);
