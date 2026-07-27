@@ -61,6 +61,11 @@ Use the [impact-aware verification modes](docs/verification.md) for focused
 Feature Proof, merge proof, and release-candidate gate selection. The verifier
 does not build, upload, submit, or promote native Candidate Artifacts.
 
+The [durable candidate coordinator](docs/release-candidates.md) freezes one
+verified source identity, records independent iOS and Android progress, and
+previews every external build, submission, evidence, or coequal promotion step
+before exact confirmation. Its record is the handoff consumed by #41.
+
 The root package version is authoritative for the web app, hosted API contract,
 CLI package, Git tag, and GitHub release. Curate `CHANGELOG.md`, then prepare and
 publish a release from a clean, synchronized `main`:

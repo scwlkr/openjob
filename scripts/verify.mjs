@@ -376,6 +376,9 @@ function classify(files) {
       file === "tests/release-privacy.test.mjs" ||
       file === "docs/verification.md" ||
       file === "scripts/release-privacy.mjs" ||
+      file === "scripts/release-candidate.mjs" ||
+      file === "tests/release-candidate.test.mjs" ||
+      file === "docs/release-candidates.md" ||
       file === "native/scripts/verify-config.mjs" ||
       file === "native/scripts/verify-embedded-bundles.mjs"
     ) {
@@ -473,6 +476,9 @@ function classify(files) {
       file === "native/eas.json" ||
       file === "config/native-identities.json" ||
       file === "scripts/release.mjs" ||
+      file === "scripts/release-candidate.mjs" ||
+      file === "tests/release-candidate.test.mjs" ||
+      file === "docs/release-candidates.md" ||
       file.startsWith("native/trust/") ||
       file === "docs/native-trust-and-distribution.md"
     ) {
