@@ -16,6 +16,7 @@ const RISK_CATEGORIES = new Set([
   "distribution",
   "permissions",
   "accessibility",
+  "hardware-risk",
   "privacy",
   "store-compliance",
 ]);
@@ -27,6 +28,14 @@ const GATES = [
   { id: "openapi-contract", command: ["npm", "run", "openapi:check"] },
   { id: "cli-integration", command: ["npm", "run", "test:cli"] },
   { id: "cli-generated-types", command: ["npm", "run", "cli:types:check"] },
+  {
+    id: "native-typecheck",
+    command: ["npm", "--prefix", "native", "run", "typecheck"],
+  },
+  {
+    id: "native-lint",
+    command: ["npm", "--prefix", "native", "run", "lint"],
+  },
   { id: "native-automated", command: ["npm", "--prefix", "native", "test"] },
   {
     id: "verification-process-tests",
@@ -67,8 +76,43 @@ const GATES = [
   },
   { id: "ios-simulator-journey", kind: "evidence" },
   { id: "android-emulator-journey", kind: "evidence" },
+  { id: "ios-physical-journey", kind: "evidence" },
+  { id: "android-physical-journey", kind: "evidence" },
   { id: "candidate-handoff", kind: "internal" },
 ];
+const EVIDENCE_GATES = new Set([
+  "ios-simulator-journey",
+  "android-emulator-journey",
+  "ios-physical-journey",
+  "android-physical-journey",
+]);
+const HARDWARE_NATIVE_INPUTS = new Set([
+  "native/src/auth/provider-gateway.ts",
+  "native/src/auth/session-store.ts",
+  "native/src/device-state.ts",
+  "native/src/diagnostics-native.ts",
+  "native/src/domain-cache.ts",
+]);
+const VIRTUAL_NATIVE_INPUTS = new Set([
+  "native/src/OpenJobShell.tsx",
+  "native/src/PrivacyCurtain.tsx",
+  "native/src/ReadOnlyTaskList.tsx",
+  "native/src/appearance-keyboard.ts",
+  "native/src/auth/AuthGate.tsx",
+  "native/src/auth/coordinator.ts",
+  "native/src/auth/dependencies.ts",
+  "native/src/auth/firebase-rest.ts",
+  "native/src/auth/openjob-api.ts",
+  "native/src/brand-marks.tsx",
+  "native/src/diagnostics.ts",
+  "native/src/runtime-config.ts",
+  "native/src/startup.ts",
+  "native/src/storage.ts",
+  "native/src/task-list-contracts.ts",
+  "native/src/task-list-freshness.ts",
+  "native/src/theme.tsx",
+  "native/src/use-control-interaction.ts",
+]);
 
 class VerificationError extends Error {
   constructor(code, message, exitCode = 1) {
@@ -118,7 +162,7 @@ function parseArguments(arguments_) {
       const gate = value.slice(0, separator);
       const reference = value.slice(separator + 1);
       if (
-        !["ios-simulator-journey", "android-emulator-journey"].includes(gate) ||
+        !EVIDENCE_GATES.has(gate) ||
         reference.length > 240 ||
         !/^[a-zA-Z0-9][a-zA-Z0-9._:/#-]*$/u.test(reference)
       ) {
@@ -283,6 +327,11 @@ function isNativeBundleInput(file) {
   );
 }
 
+function isHardwareRiskInput(file) {
+  if (HARDWARE_NATIVE_INPUTS.has(file)) return true;
+  return file.startsWith("native/src/") && !VIRTUAL_NATIVE_INPUTS.has(file);
+}
+
 function classify(files) {
   const categories = new Set();
   for (const file of files) {
@@ -351,6 +400,10 @@ function classify(files) {
       file.startsWith("native/test/")
     ) {
       categories.add("native-behavior");
+      matched = true;
+    }
+    if (isHardwareRiskInput(file)) {
+      categories.add("hardware-risk");
       matched = true;
     }
     if (isNativeConfigurationInput(file)) {
@@ -435,9 +488,13 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       selected.add("cli-generated-types");
     }
     if (categories.includes("native-behavior")) {
+      selected.add("native-typecheck");
+      selected.add("native-lint");
       selected.add("native-automated");
     }
     if (categories.includes("native-configuration")) {
+      selected.add("native-typecheck");
+      selected.add("native-lint");
       selected.add("native-automated");
       selected.add("native-clean-generation");
       selected.add("ios-embedded-bundle");
@@ -452,6 +509,10 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       selected.add("ios-embedded-bundle");
       selected.add("android-embedded-bundle");
     }
+  }
+  if (categories.includes("hardware-risk")) {
+    selected.add("ios-physical-journey");
+    selected.add("android-physical-journey");
   }
   const escalated = requestedMode !== effectiveMode;
   return GATES.map((gate) => ({
@@ -534,7 +595,15 @@ async function changeFingerprint(root, baseRevision, headRevision, files) {
 async function readCache(path) {
   try {
     const value = JSON.parse(await readFile(path, "utf8"));
-    if (value.schemaVersion !== 1 || typeof value.results !== "object") {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      value.schemaVersion !== 1 ||
+      !value.results ||
+      typeof value.results !== "object" ||
+      Array.isArray(value.results)
+    ) {
       return { state: "invalid", value: { schemaVersion: 1, results: {} } };
     }
     return { state: "loaded", value };

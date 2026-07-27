@@ -21,6 +21,12 @@ const FOCUSED_EVIDENCE = [
   "--evidence",
   "android-emulator-journey=local://issue-44/android",
 ];
+const PHYSICAL_EVIDENCE = [
+  "--evidence",
+  "ios-physical-journey=local://issue-44/ios-physical",
+  "--evidence",
+  "android-physical-journey=local://issue-44/android-physical",
+];
 
 function git(cwd, args) {
   return execFileSync(REAL_GIT, args, { cwd, encoding: "utf8" }).trim();
@@ -234,7 +240,7 @@ test("focused impact policy selects API and CLI seams while documentation stays 
 
 test("focused native behavior requires both virtual-runtime journeys and reuses development clients", async () => {
   const fixture = await createVerificationFixture();
-  await addChangedFile(fixture, "native/src/example.ts");
+  await addChangedFile(fixture, "native/src/OpenJobShell.tsx");
   const arguments_ = [
     "focused",
     "--base",
@@ -277,8 +283,53 @@ test("focused native behavior requires both virtual-runtime journeys and reuses 
     assert.match(gate.evidence, /^local:\/\/issue-44\//u);
   }
   const commands = await readFile(fixture.commandLog, "utf8");
+  assert.match(commands, /npm --prefix native run typecheck/u);
+  assert.match(commands, /npm --prefix native run lint/u);
   assert.match(commands, /npm --prefix native test/u);
   assert.doesNotMatch(commands, /prebuild|config:verify|bundle:verify/u);
+  assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
+});
+
+test("focused hardware-risk inputs require coequal physical evidence", async () => {
+  const fixture = await createVerificationFixture();
+  await addChangedFile(
+    fixture,
+    "native/src/domain-cache.ts",
+    'import * as SecureStore from "expo-secure-store";\n',
+  );
+  git(fixture.root, ["add", "native/src/domain-cache.ts"]);
+  git(fixture.root, ["commit", "-m", "Change hardware-backed cache"]);
+  syncFixtureMain(fixture);
+  const arguments_ = [
+    "focused",
+    "--base",
+    "HEAD^",
+    "--cache",
+    `${fixture.root}-cache.json`,
+    ...FOCUSED_EVIDENCE,
+  ];
+
+  const missingPhysical = await runVerification(fixture, arguments_);
+  assert.equal(missingPhysical.status, 1);
+  const missingReport = JSON.parse(missingPhysical.stdout);
+  assert.ok(missingReport.categories.includes("hardware-risk"));
+  assert.equal(missingReport.effectiveMode, "release-candidate");
+  assert.equal(
+    missingReport.gates.find((gate) => gate.id === "ios-physical-journey")
+      .outcome,
+    "failed",
+  );
+
+  const proved = await runVerification(fixture, [
+    ...arguments_,
+    ...PHYSICAL_EVIDENCE,
+  ]);
+  assert.equal(proved.status, 0, proved.stderr || proved.stdout);
+  const report = JSON.parse(proved.stdout);
+  for (const id of ["ios-physical-journey", "android-physical-journey"]) {
+    assert.equal(report.gates.find((gate) => gate.id === id).outcome, "passed");
+  }
+  const commands = await readFile(fixture.commandLog, "utf8");
   assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
 });
 
@@ -336,6 +387,23 @@ test("merge reuses native generation and bundles only for an exact input and too
   const reusedCommands = await readFile(fixture.commandLog, "utf8");
   assert.match(reusedCommands, /npm --prefix native test/u);
   assert.doesNotMatch(reusedCommands, /config:verify|bundle:verify/u);
+
+  await writeFile(fixture.commandLog, "");
+  await writeFile(cache, '{"schemaVersion":1,"results":null}\n');
+  const malformedCache = await runVerification(fixture, arguments_);
+  assert.equal(malformedCache.status, 0, malformedCache.stderr || malformedCache.stdout);
+  const malformedCacheReport = JSON.parse(malformedCache.stdout);
+  assert.equal(malformedCacheReport.cache.state, "invalid");
+  for (const id of [
+    "native-clean-generation",
+    "ios-embedded-bundle",
+    "android-embedded-bundle",
+  ]) {
+    assert.equal(
+      malformedCacheReport.gates.find((candidate) => candidate.id === id).outcome,
+      "passed",
+    );
+  }
 
   await writeFile(fixture.commandLog, "");
   await writeFile(
@@ -694,6 +762,7 @@ test("operator documentation separates Feature Proof, merge proof, and #41 Relea
   assert.match(guide, /JSON.*stdout/isu);
   assert.match(guide, /summary.*stderr/isu);
   assert.match(guide, /--evidence ios-simulator-journey=/u);
+  assert.match(guide, /hardware-specific.*physical/isu);
   assert.match(guide, /full.*fingerprint/isu);
   assert.match(guide, /EAS build|Apple upload/u);
   assert.match(guide, /never.*upload|does not.*upload/iu);
@@ -709,7 +778,7 @@ test("merge mode composes affected public seams and native asset proof without j
     writeFile(join(fixture.root, "app", "page.tsx"), "export default 'after';\n"),
     addChangedFile(fixture, "server/example.ts"),
     addChangedFile(fixture, "cli/example.mjs"),
-    addChangedFile(fixture, "native/src/example.ts"),
+    addChangedFile(fixture, "native/src/OpenJobShell.tsx"),
     addChangedFile(fixture, "public/icon-example.png", "fixture-image\n"),
   ]);
   const result = await runVerification(fixture, [

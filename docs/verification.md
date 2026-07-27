@@ -37,6 +37,21 @@ to release-candidate scope. Unknown files do the same. Escalated runs have the
 same clean, synchronized `main` source requirement as an explicitly requested
 release-candidate run.
 
+Hardware-specific native inputs also escalate and require written physical
+iPhone and Android evidence. The policy names the existing OS-backed provider,
+secure-storage, lifecycle/network, diagnostics, and encrypted-cache modules;
+an unrecognized new `native/src/` module fails closed as hardware risk. This is
+the narrow immediate physical proof required by the affected feature, not the
+complete #41 Release Proof matrix.
+
+```sh
+npm run verify -- focused --base origin/main \
+  --evidence ios-simulator-journey=local://issue/ios-simulator \
+  --evidence android-emulator-journey=local://issue/android-emulator \
+  --evidence ios-physical-journey=local://issue/ios-physical \
+  --evidence android-physical-journey=local://issue/android-physical
+```
+
 ## Virtual-runtime evidence
 
 When the plan selects the virtual journeys, start the existing development
