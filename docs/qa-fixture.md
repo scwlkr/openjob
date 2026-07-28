@@ -126,12 +126,12 @@ matches `@scwlkr` and that 1Password-bound User ID exactly. A mismatch leaves
 the existing Preview credential unchanged. The profile's Keychain account
 contains only a short SHA-256-derived suffix, never the raw User ID.
 
-Issue #34 establishes native trust, #36 supplies the native clients, and #37
-owns product authentication acceptance. The internal QA password path removes
+Issues #34, #36, and #37 established native trust, the native clients, and
+product authentication Feature Proof. The internal QA password path removes
 the need for any dedicated Google test account or a second consumer-provider
-account from this two-User fixture, but #37 must remain open until real
-returning Google and Apple credentials plus its physical-device and
-accessibility criteria are proven.
+account from this two-User fixture. Any exact-candidate physical-device,
+accessibility, or repeated real-provider acceptance is deferred solely to #41
+Release Proof.
 
 ## Reset
 
