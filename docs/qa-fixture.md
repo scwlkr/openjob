@@ -20,6 +20,21 @@ unexpected non-QA membership or identity mismatch aborts the reset before
 writing. A User, Group, fixture, or installation identity mismatch also fails
 closed.
 
+## Routine testing lanes
+
+Use two persistent Preview sessions for routine multi-User testing:
+
+- Keep the physical phone signed in as Google-backed `@scwlkr`.
+- Keep the simulator or emulator signed in as Preview-only `@qa-two`.
+- Install app updates without clearing app state. Reset the fixture data rather
+  than signing out, revoking access, or switching Google or Apple accounts.
+- Enter real Google or Apple provider UI only when authentication, provider
+  configuration, or signing changes, and once on the exact release candidate.
+
+Real-provider checkpoints remain manual acceptance work on the required
+platforms. The persistent `@qa-two` session speeds up ordinary multi-User
+testing but never counts as Google or Apple evidence.
+
 ## Access
 
 Keep credentials, MFA/recovery material, Firebase UIDs, and stable OpenJob User
