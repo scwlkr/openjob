@@ -28,6 +28,7 @@ declare const __OPENJOB_FIREBASE_CONFIG__: {
 declare const __OPENJOB_QA_PASSWORD_AUTH__: {
   tenantId: string;
 } | null;
+declare const __OPENJOB_APPLE_SERVICE_ID__: string;
 
 const firebaseConfig = __OPENJOB_FIREBASE_CONFIG__;
 const qaPasswordAuth = __OPENJOB_QA_PASSWORD_AUTH__;
@@ -225,6 +226,14 @@ export function createFirebaseAuth(): OpenJobAuth {
             );
           }
           const session = await sessionFor(result.user);
+          const providerCredential =
+            method === "google"
+              ? GoogleAuthProvider.credentialFromResult(result)
+              : OAuthProvider.credentialFromResult(result);
+          const providerAccessToken = providerCredential?.accessToken;
+          if (!providerAccessToken) {
+            throw new Error("The provider did not return revocation proof.");
+          }
           if (session.signInMethod !== method) {
             throw new Error(
               "Firebase returned a different Sign-in Method.",
@@ -235,6 +244,18 @@ export function createFirebaseAuth(): OpenJobAuth {
           const proof: AuthCredentialProof = {
             signInMethod: method,
             getIdToken: session.getIdToken,
+            async getRevocationProof() {
+              return method === "apple"
+                ? {
+                    clientId: __OPENJOB_APPLE_SERVICE_ID__,
+                    kind: "access_token" as const,
+                    value: providerAccessToken,
+                  }
+                : {
+                    kind: "access_token" as const,
+                    value: providerAccessToken,
+                  };
+            },
             async dispose() {
               if (disposed) return;
               await enqueueSecondaryOperation(async () => {

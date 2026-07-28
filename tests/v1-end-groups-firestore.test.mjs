@@ -42,6 +42,7 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
     clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",
     privateKey,
   };
+  let groupStore;
   const harness = createV1TestHarness({
     initialNow: NOW,
     createWorker(controls) {
@@ -53,6 +54,7 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => queuedGroupUuids.shift() ?? uuid(nextGroupUuid++),
       });
+      groupStore = groups;
       const tasks = createFirestoreTaskStore(config, firestore.fetch, {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => uuid(nextTaskUuid++),
@@ -132,7 +134,15 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
     return invite;
   }
 
-  return { claim, createGroup, firestore, harness, join, request };
+  return {
+    claim,
+    createGroup,
+    firestore,
+    groupStore,
+    harness,
+    join,
+    request,
+  };
 }
 
 async function runOrderedCommitRace(firestore, firstRequest, secondRequest) {
@@ -501,4 +511,164 @@ test("an ended Group ID remains reserved when generation collides", async (t) =>
   );
   assert.equal(replacement.groupId, `grp_${secondUuid.replaceAll("-", "")}`);
   assert.notEqual(replacement.groupId, endedGroup.groupId);
+});
+
+test("Account deletion atomically removes a shared Member, their Tasks, and their attribution", async (t) => {
+  const { claim, createGroup, groupStore, harness, join, request } =
+    await createEndGroupsHarness(["shane", "eli", "maya"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  const maya = await claim("maya");
+  const group = await createGroup("Deletion Team");
+  await join("eli", group.groupId);
+  await join("maya", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+
+  const createdByDeletingUser = await request("shane", {
+    body: { text: "Delete with creator", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(createdByDeletingUser.status, 201);
+  const openAssignment = await request("eli", {
+    body: { text: "Open shared work", assigneeUsername: "shane" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const doneAssignment = await request("eli", {
+    body: { text: "Completed shared work", assigneeUsername: "shane" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const unaffected = await request("eli", {
+    body: { text: "Keep shared work", assigneeUsername: "maya" },
+    method: "POST",
+    path: tasksPath,
+  });
+  for (const response of [openAssignment, doneAssignment, unaffected]) {
+    assert.equal(response.status, 201);
+  }
+  const doneTask = (await doneAssignment.json()).data;
+  const completed = await request("eli", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${doneTask.taskId}/state`,
+  });
+  assert.equal(completed.status, 200);
+
+  assert.deepEqual(
+    await groupStore.removeUserForDeletion(shane.userId, group.groupId),
+    { kind: "removed", promotedUserId: eli.userId },
+  );
+  const members = await request("eli", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}/members`,
+  });
+  assert.deepEqual(
+    (await members.json()).data.map(({ role, userId }) => ({ role, userId })),
+    [
+      { role: "admin", userId: eli.userId },
+      { role: "member", userId: maya.userId },
+    ],
+  );
+  const tasks = await request("eli", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  const remaining = (await tasks.json()).data;
+  assert.equal(remaining.length, 3);
+  assert.deepEqual(
+    remaining.find(({ text }) => text === "Open shared work").assignee,
+    { state: "unassigned" },
+  );
+  assert.deepEqual(
+    remaining.find(({ text }) => text === "Completed shared work").assignee,
+    { state: "deleted" },
+  );
+  assert.deepEqual(
+    remaining.find(({ text }) => text === "Keep shared work").assignee,
+    { state: "assigned", userId: maya.userId, username: "maya" },
+  );
+});
+
+test("Account deletion Ends a sole-Member Group and is idempotent", async (t) => {
+  const { claim, createGroup, groupStore, harness, request } =
+    await createEndGroupsHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  await claim("eli");
+  const group = await createGroup("Sole deletion");
+  const task = await request("shane", {
+    body: { text: "Remove all content", assigneeUsername: "shane" },
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/tasks`,
+  });
+  assert.equal(task.status, 201);
+
+  assert.deepEqual(
+    await groupStore.removeUserForDeletion(shane.userId, group.groupId),
+    { kind: "ended" },
+  );
+  assert.deepEqual(
+    await groupStore.removeUserForDeletion(shane.userId, group.groupId),
+    { kind: "not_found" },
+  );
+  const concealed = await request("shane", {
+    method: "GET",
+    path: `/api/v1/groups/${group.groupId}`,
+  });
+  assert.equal(concealed.status, 404);
+});
+
+test("Account deletion removes content and attribution left in former Groups", async (t) => {
+  const { claim, createGroup, groupStore, harness, join, request } =
+    await createEndGroupsHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("Former membership");
+  await join("eli", group.groupId);
+  const tasksPath = `/api/v1/groups/${group.groupId}/tasks`;
+  const creatorTask = await request("shane", {
+    body: { text: "Former creator", assigneeUsername: "eli" },
+    method: "POST",
+    path: tasksPath,
+  });
+  assert.equal(creatorTask.status, 201);
+  const attributed = await request("eli", {
+    body: { text: "Former assignee", assigneeUsername: "shane" },
+    method: "POST",
+    path: tasksPath,
+  });
+  const attributedTask = (await attributed.json()).data;
+  await request("eli", {
+    body: { state: "done" },
+    method: "PUT",
+    path: `${tasksPath}/${attributedTask.taskId}/state`,
+  });
+  await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
+  });
+  const kicked = await request("eli", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${shane.userId}/actions/kick`,
+  });
+  assert.equal(kicked.status, 204);
+
+  assert.equal(await groupStore.removeDetachedUserData(shane.userId), 1);
+  assert.equal(await groupStore.removeDetachedUserData(shane.userId), 0);
+  const tasks = await request("eli", {
+    method: "GET",
+    path: `${tasksPath}?status=all`,
+  });
+  assert.deepEqual((await tasks.json()).data, [
+    {
+      ...attributedTask,
+      assignee: { state: "deleted" },
+      completedAt: "2026-07-16T12:00:00.000Z",
+      state: "done",
+    },
+  ]);
 });

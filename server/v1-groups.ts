@@ -1,6 +1,7 @@
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
   defaultRequestId,
+  accountDeletionPendingResponse,
   errorResponse,
   internalErrorResponse,
   isRateLimitError,
@@ -57,6 +58,7 @@ export type OpenJobInviteLink = {
 };
 
 export type GroupUser = {
+  deletionPending?: true;
   userId: string;
   username: string | null;
 };
@@ -191,6 +193,15 @@ export type GroupStore = {
       }
     | { kind: "not_found" }
   >;
+  removeUserForDeletion(
+    userId: string,
+    groupId: GroupId,
+  ): Promise<
+    | { kind: "ended" }
+    | { kind: "removed"; promotedUserId: string | null }
+    | { kind: "not_found" }
+  >;
+  removeDetachedUserData(userId: string): Promise<number>;
   promote(
     actorUserId: string,
     groupId: GroupId,
@@ -588,6 +599,9 @@ export function createV1GroupsApi({
 
         const user = await users.resolve(identity);
         if (!user) return signInMethodUnrecognizedResponse(requestId);
+        if (user.deletionPending) {
+          return accountDeletionPendingResponse(requestId);
+        }
         const url = new URL(request.url);
 
         if (url.pathname === "/api/v1/groups") {

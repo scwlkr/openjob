@@ -6,6 +6,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Added
 
+- Policy-compliant User deletion on web, iOS, and Android with public request access, provider revocation, bounded encrypted retries, and shared-data cleanup.
+
 ### Changed
 
 ### Fixed

@@ -7,6 +7,7 @@ import {
 import { ProviderSignInError } from "../src/auth/coordinator";
 
 const config = {
+  appleIosClientId: "dev.openjob.app.preview",
   appleRedirectUri:
     "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
   appleServiceId: "dev.openjob.auth.nonprod",
@@ -40,13 +41,17 @@ function nativeModules(
       onCredentialRevoked: jest.fn(() => () => undefined),
       responseTypeAll: "ALL",
       scopeAll: "ALL",
-      signIn: jest.fn(async () => ({ idToken: "apple-android-id" })),
+      signIn: jest.fn(async () => ({
+        authorizationCode: "apple-android-code",
+        idToken: "apple-android-id",
+      })),
     },
     appleIos: {
       errorCancelled: "1001",
       isSupported: true,
       operationLogin: 1,
       performRequest: jest.fn(async () => ({
+        authorizationCode: "apple-ios-code",
         identityToken: "apple-ios-id",
       })),
     },
@@ -56,6 +61,7 @@ function nativeModules(
       errorInProgress: "GOOGLE_IN_PROGRESS",
       errorPlayServices: "GOOGLE_PLAY_SERVICES",
       hasPlayServices: jest.fn(async () => true),
+      getTokens: jest.fn(async () => ({ accessToken: "google-access" })),
       signIn: jest.fn(async () => ({
         idToken: "google-id",
         kind: "success" as const,
@@ -111,6 +117,7 @@ test("hands Google system UI output to Firebase without profile or email data", 
   await expect(gateway.signIn("google")).resolves.toEqual({
     idToken: "google-id",
     provider: "google",
+    revocation: { kind: "access_token", value: "google-access" },
   });
   expect(native.google.configure).toHaveBeenCalledWith({
     iosClientId: "ios-client.apps.googleusercontent.com",
@@ -129,6 +136,11 @@ test("uses native Apple authorization on iOS with a raw replay nonce", async () 
     idToken: "apple-ios-id",
     nonce: "raw-nonce",
     provider: "apple",
+    revocation: {
+      clientId: "dev.openjob.app.preview",
+      kind: "authorization_code",
+      value: "apple-ios-code",
+    },
   });
   expect(native.appleIos.performRequest).toHaveBeenCalledWith({
     nonce: "raw-nonce",
@@ -170,6 +182,11 @@ test("uses the registered Apple Service ID and exact HTTPS return URL on Android
     idToken: "apple-android-id",
     nonce: "raw-nonce",
     provider: "apple",
+    revocation: {
+      clientId: "dev.openjob.auth.nonprod",
+      kind: "authorization_code",
+      value: "apple-android-code",
+    },
   });
   expect(native.appleAndroid.configure).toHaveBeenCalledWith({
     clientId: "dev.openjob.auth.nonprod",

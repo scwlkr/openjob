@@ -142,6 +142,50 @@ export function createFirestoreNotificationSubscriptionStore(
   }
 
   return Object.freeze({
+    async removeAllForUser(userId: string) {
+      const indexes: FirestoreDocument[] = [];
+      let pageToken: string | null = null;
+      do {
+        const parameters = new URLSearchParams({
+          pageSize: "500",
+          orderBy: "__name__",
+        });
+        if (pageToken !== null) parameters.set("pageToken", pageToken);
+        const response = await firestore.request(
+          `v1NotificationSubscriptionUsers/${userId}/installations?${parameters}`,
+        );
+        const page = (await response.json()) as {
+          documents?: FirestoreDocument[];
+          nextPageToken?: string;
+        };
+        indexes.push(...(page.documents ?? []));
+        pageToken = page.nextPageToken ?? null;
+      } while (pageToken !== null);
+      const subscriptions = await Promise.all(
+        indexes.map((index) => {
+          const installationId = index.fields?.installationId?.stringValue;
+          return installationId ? read(installationId) : Promise.resolve(null);
+        }),
+      );
+      if (indexes.length === 0) return 0;
+      await commit([
+        ...subscriptions
+          .filter(
+            (subscription): subscription is PersistedNotificationSubscription =>
+              subscription !== null && subscription.userId === userId,
+          )
+          .map((subscription) => ({
+            delete: firestore.documentName(subscription.path),
+            currentDocument: { updateTime: subscription.updateTime },
+          })),
+        ...indexes.map((index) => ({
+          delete: index.name,
+          currentDocument: { updateTime: index.updateTime },
+        })),
+      ]);
+      return indexes.length;
+    },
+
     async get(installationId: string) {
       const subscription = await read(installationId);
       return subscription ? stored(subscription) : null;

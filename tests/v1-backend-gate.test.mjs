@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirestoreGroupStore } from "../db/groups.ts";
+import { createFirestoreAccountDeletionJobStore } from "../db/account-deletions.ts";
 import { createFirestoreNotificationSubscriptionStore } from "../db/notification-subscriptions.ts";
 import { createFirestoreTaskStore } from "../db/v1-tasks.ts";
 import { createFirestoreUserStore } from "../db/users.ts";
@@ -8,6 +9,7 @@ import { runV1AcceptanceScenario } from "../scripts/v1-acceptance-scenario.mjs";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
 import { createV1GroupsApi } from "../server/v1-groups.ts";
+import { createV1AccountDeletionApi } from "../server/v1-account-deletion.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
 import { createV1NotificationSubscriptionsApi } from "../server/v1-notification-subscriptions.ts";
 import { createV1TasksApi } from "../server/v1-tasks.ts";
@@ -62,7 +64,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   };
   firestore.documents.set(legacyTaskName, structuredClone(legacyTask));
 
-  const identities = ["initialAdmin", "memberUser"];
+  const identities = ["initialAdmin", "memberUser", "deletionUser"];
   const tokens = new Map(
     await Promise.all(
       identities.map(async (name) => [
@@ -103,6 +105,12 @@ test("the complete hosted backend preserves existing Groups during its two-ident
         createFirestoreNotificationSubscriptionStore(config, firestore.fetch, {
           now: () => Date.parse(controls.clock.now()),
         });
+      const accountDeletionJobs = createFirestoreAccountDeletionJobStore(
+        config,
+        Buffer.alloc(32, 9).toString("base64url"),
+        firestore.fetch,
+        { now: () => Date.parse(controls.clock.now()) },
+      );
       const verifyIdToken = createFirebaseIdTokenVerifier({
         fetchImplementation: authority.fetch,
         now: () => Date.parse(controls.clock.now()),
@@ -122,9 +130,27 @@ test("the complete hosted backend preserves existing Groups during its two-ident
         users,
         verifyIdToken,
       });
+      const accountDeletionApi = createV1AccountDeletionApi({
+        groups,
+        jobs: accountDeletionJobs,
+        notifications: notificationSubscriptions,
+        now: () => Date.parse(controls.clock.now()),
+        providers: {
+          assertReady() {},
+          async deleteFirebaseUser() {},
+          async revokeAuthorization() {},
+          async revokeFirebaseSessions() {},
+        },
+        users,
+        verifyCredentialToken: verifyIdToken.verifyToken,
+        verifyIdToken,
+      });
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname === "/api/v1/me/deletion") {
+            return accountDeletionApi.fetch(request);
+          }
           if (pathname.startsWith("/api/v1/me/notification-subscriptions/")) {
             return notificationSubscriptionsApi.fetch(request);
           }
@@ -146,6 +172,8 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   const contract = await validateOpenApiContract();
   const coverage = new Map();
   const secretMaterial = [...tokens.values(), linkCredentialToken, privateKey];
+  const deletionRevocationProof = "backend-delete-provider-proof";
+  secretMaterial.push(deletionRevocationProof);
   const capabilityMaterial = [
     "https://push.example.test/subscriptions/backend-acceptance-capability",
     "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
@@ -311,6 +339,40 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       (await groupsAfterFailure.json()).data.map(({ groupId }) => groupId),
       [baselineGroup.groupId],
     );
+
+    const deletionUserResponse = await request({
+      actor: "deletionUser",
+      body: { confirmation: "create" },
+      method: "POST",
+      path: "/api/v1/me",
+    });
+    assert.equal(deletionUserResponse.status, 201);
+    const invalidDeletion = await request({
+      actor: "deletionUser",
+      body: { confirmation: "delete", credentials: [] },
+      method: "POST",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(invalidDeletion.status, 400);
+    await validate(invalidDeletion, "/api/v1/me/deletion", "post");
+    const completedDeletion = await request({
+      actor: "deletionUser",
+      body: {
+        confirmation: "delete",
+        credentials: [{
+          credentialToken: tokens.get("deletionUser"),
+          provider: "google",
+          revocation: {
+            kind: "access_token",
+            value: deletionRevocationProof,
+          },
+        }],
+      },
+      method: "POST",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(completedDeletion.status, 200);
+    await validate(completedDeletion, "/api/v1/me/deletion", "post");
   } finally {
     Object.assign(console, originalConsole);
   }

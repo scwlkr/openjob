@@ -40,7 +40,7 @@ function sameAssignee(
   if (previous.state !== next.state) {
     return false;
   }
-  if (previous.state === "unassigned" || next.state === "unassigned") {
+  if (previous.state !== "assigned" || next.state !== "assigned") {
     return true;
   }
   return (

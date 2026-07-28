@@ -3,11 +3,11 @@
 # Release Privacy and Store Preparation
 
 - Inventory schema version: `1.0.0`
-- Inventory version: `0.3.3`
-- Inventory fingerprint: `sha256:447e81661588d23ef8e91d1a89e1e40f5a86e248506fcb7d6d3ccbdd15195967`
+- Inventory version: `0.3.4`
+- Inventory fingerprint: `sha256:e365251eef2129c650690949ed57ace0f4945160cc388aac02c30f4ba53fd943`
 - Generated from: `config/release-privacy-inventory.json`
 
-Preparation status: **not ready for store submission**. Planned URLs and issue #42 account deletion must be completed and then reconciled against one immutable candidate.
+Preparation status: **not ready for store submission**. Inventory prerequisites are ready; the exact immutable candidate still requires reconciliation and store proof.
 
 This document projects OpenJob-owned behavior separately from third-party declarations. SDK or operating-system claims are evidence, not OpenJob product behavior.
 
@@ -55,11 +55,13 @@ Required account and app-functionality rows are independent of Share diagnostics
 
 | ID | Public resource | URL | Status | Required before submission |
 | --- | --- | --- | --- | --- |
-| `privacyPolicy` | Privacy policy | https://openjob.dev/privacy | planned | Yes |
-| `accountDeletion` | Account deletion request | https://openjob.dev/account-deletion | planned | Yes |
+| `privacyPolicy` | Privacy policy | https://openjob.dev/privacy | live | Yes |
+| `accountDeletion` | Account deletion request | https://openjob.dev/account-deletion | live | Yes |
 | `support` | Public support | https://openjob.dev | live | Yes |
 
-Store account deletion is required and currently `pending` on issue #42. In-app path available: No. Public request path available: No. Do not save or submit a completed deletion claim until both paths and the public URL are live and proven.
+Store account deletion is required and currently `implemented` on issue #42. In-app path available: Yes. Public request path available: Yes. Do not save or submit a completed deletion claim until both paths and the public URL are live and proven.
+
+Implemented deletion policy: access ends immediate; retries are bounded to 7 days in a minimal-encrypted-retry-job; retention after completion is none. Sole-Member Groups end; shared membership is remove; final Admin replacement uses longest-tenured-stable-tie-break. Creator Tasks delete; open assignments become unassigned; completed assignments use a deleted-user-marker-without-identity. Linked providers revoke-before-completion.
 
 ## Third-party declaration evidence
 

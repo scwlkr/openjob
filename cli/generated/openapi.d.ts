@@ -72,6 +72,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Permanently delete the current User and associated data
+         * @description Starts one idempotent deletion after explicit irreversible confirmation
+         *     and fresh authentication of every linked Sign-in Method. OpenJob access
+         *     ends atomically when the encrypted retry job is created. A completed
+         *     response means provider authorizations, Firebase identities, User and
+         *     Username indexes, notifications, Group access, User-created Tasks, and
+         *     personal attribution were removed. A pending response means access has
+         *     ended but provider or infrastructure cleanup will retry for no more than
+         *     seven calendar days. Credential and revocation values are never logged,
+         *     returned, or retained after completion.
+         */
+        post: operations["deleteCurrentUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/username": {
         parameters: {
             query?: never;
@@ -760,6 +788,44 @@ export interface components {
              */
             expectedTargetUserId: components["schemas"]["UserId"];
         };
+        AccountDeletionRevocationProof: {
+            /** @constant */
+            kind: "access_token";
+            value: string;
+        } | {
+            clientId: string;
+            /** @enum {unknown} */
+            kind: "access_token" | "authorization_code";
+            value: string;
+        };
+        AccountDeletionCredentialInput: {
+            credentialToken: string;
+            /** @enum {unknown} */
+            provider: "apple" | "google";
+            revocation: components["schemas"]["AccountDeletionRevocationProof"];
+        };
+        DeleteCurrentUserInput: {
+            /** @constant */
+            confirmation: "delete";
+            credentials: components["schemas"]["AccountDeletionCredentialInput"][];
+        };
+        AccountDeletionCompleted: {
+            completedAt: components["schemas"]["Timestamp"];
+            /** @constant */
+            status: "completed";
+        };
+        AccountDeletionPending: {
+            deadline: components["schemas"]["Timestamp"];
+            requestedAt: components["schemas"]["Timestamp"];
+            /** @constant */
+            status: "pending";
+        };
+        AccountDeletionCompletedEnvelope: {
+            data: components["schemas"]["AccountDeletionCompleted"];
+        };
+        AccountDeletionPendingEnvelope: {
+            data: components["schemas"]["AccountDeletionPending"];
+        };
         PushSubscriptionKeysInput: {
             p256dh: string;
             auth: string;
@@ -792,11 +858,19 @@ export interface components {
              */
             state: "unassigned";
         };
+        DeletedAssignee: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            state: "deleted";
+        };
         /**
          * @description Assigned preserves canonical User identity and human attribution.
          *     Unassigned is a state caused only by forced Member removal, never a User.
+         *     Deleted marks a completed Task whose former assignee identity was erased.
          */
-        Assignee: components["schemas"]["AssignedAssignee"] | components["schemas"]["UnassignedAssignee"];
+        Assignee: components["schemas"]["AssignedAssignee"] | components["schemas"]["UnassignedAssignee"] | components["schemas"]["DeletedAssignee"];
         Group: {
             groupId: components["schemas"]["GroupId"];
             name: components["schemas"]["GroupName"];
@@ -865,7 +939,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "invalid_request" | "authentication_required" | "fresh_authentication_required" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -896,6 +970,12 @@ export interface components {
             error?: {
                 /** @enum {unknown} */
                 code?: "authentication_required" | "fresh_authentication_required";
+            };
+        };
+        AccountDeletionUnavailableErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @constant */
+                code?: "account_deletion_unavailable";
             };
         };
         SignInMethodUnrecognizedErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
@@ -1167,6 +1247,59 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["SignInMethodCollectionEnvelope"];
+            };
+        };
+        /** @description Account deletion completed and no retry state remains. */
+        AccountDeletionCompletedResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": {
+                 *         "completedAt": "2026-07-28T12:00:00Z",
+                 *         "status": "completed"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionCompletedEnvelope"];
+            };
+        };
+        /** @description Access ended and deletion is retrying within seven days. */
+        AccountDeletionPendingResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": {
+                 *         "deadline": "2026-08-04T12:00:00Z",
+                 *         "requestedAt": "2026-07-28T12:00:00Z",
+                 *         "status": "pending"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionPendingEnvelope"];
+            };
+        };
+        /** @description Provider cleanup is not ready, so deletion did not start. */
+        AccountDeletionUnavailableResponse: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "account_deletion_unavailable",
+                 *         "message": "Account deletion is temporarily unavailable.",
+                 *         "requestId": "req_delete_unavailable"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionUnavailableErrorEnvelope"];
             };
         };
         /** @description One Group in a single-resource success envelope. */
@@ -1970,6 +2103,27 @@ export interface components {
                 "application/json": components["schemas"]["LinkSignInMethodInput"];
             };
         };
+        /** @description Explicit irreversible confirmation plus fresh proof for every linked provider. */
+        DeleteCurrentUserRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "confirmation": "delete",
+                 *       "credentials": [
+                 *         {
+                 *           "credentialToken": "fresh-firebase-id-token",
+                 *           "provider": "google",
+                 *           "revocation": {
+                 *             "kind": "access_token",
+                 *             "value": "fresh-provider-access-token"
+                 *           }
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["DeleteCurrentUserInput"];
+            };
+        };
         /** @description Immutable Username claim. */
         ClaimUsernameRequest: {
             content: {
@@ -2135,6 +2289,25 @@ export interface operations {
             409: components["responses"]["LinkSignInMethodConflictResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    deleteCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["DeleteCurrentUserRequest"];
+        responses: {
+            200: components["responses"]["AccountDeletionCompletedResponse"];
+            202: components["responses"]["AccountDeletionPendingResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["LinkAuthenticationErrorResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            503: components["responses"]["AccountDeletionUnavailableResponse"];
         };
     };
     claimUsername: {

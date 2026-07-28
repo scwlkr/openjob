@@ -87,6 +87,18 @@ export function createOpenJobApi(): OpenJobApi {
       return response.data;
     },
 
+    async deleteUser(token, credentials) {
+      const response = await request<{
+        data:
+          | { completedAt: string; status: "completed" }
+          | { deadline: string; requestedAt: string; status: "pending" };
+      }>("/api/v1/me/deletion", token, {
+        body: JSON.stringify({ confirmation: "delete", credentials }),
+        method: "POST",
+      });
+      return response.data;
+    },
+
     async listSignInMethods(token) {
       const response = await request<{ data: SignInMethod[] }>(
         "/api/v1/me/sign-in-methods",

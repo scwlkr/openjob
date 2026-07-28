@@ -6,6 +6,7 @@ import {
   webFirebaseConfigFor,
 } from "./config/web-firebase-config.mjs";
 import packageMetadata from "./package.json" with { type: "json" };
+import nativeIdentities from "./config/native-identities.json" with { type: "json" };
 
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
@@ -30,10 +31,14 @@ export default defineConfig(async () => {
   const qaPasswordTenantId = qaPasswordTenantIdFor(
     process.env.CLOUDFLARE_ENV,
   );
+  const appleServiceId = nativeIdentities.apple.signInServices[
+    process.env.CLOUDFLARE_ENV === "preview" ? "nonproduction" : "production"
+  ].serviceId;
 
   return {
     define: {
       __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfig),
+      __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(appleServiceId),
       __OPENJOB_GIT_COMMIT__: JSON.stringify(gitCommit),
       __OPENJOB_QA_PASSWORD_AUTH__: JSON.stringify(
         qaPasswordTenantId ? { tenantId: qaPasswordTenantId } : null,

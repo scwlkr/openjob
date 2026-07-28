@@ -18,7 +18,8 @@ export type NativeTask = {
   text: string;
   assignee:
     | { state: "assigned"; userId: string; username: string }
-    | { state: "unassigned" };
+    | { state: "unassigned" }
+    | { state: "deleted" };
   priority: "high" | "normal" | "low";
   dueDate: string | null;
   state: "open" | "done";

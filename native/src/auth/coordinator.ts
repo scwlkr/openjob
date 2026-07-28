@@ -21,6 +21,9 @@ export type ProviderCredential = {
   idToken: string;
   nonce?: string;
   provider: SignInMethod;
+  revocation?:
+    | { kind: "access_token"; value: string }
+    | { clientId: string; kind: "authorization_code"; value: string };
 };
 
 export type FirebaseAccessSession = {
@@ -78,6 +81,8 @@ export type AuthFlowResult =
       kind: "signed-out";
       reason?:
         | "cancelled"
+        | "deleted"
+        | "deletion-pending"
         | "expired"
         | "interrupted"
         | "revoked"
@@ -118,6 +123,14 @@ export type NativeAuthDependencies = {
   clearProviderSession(): Promise<void>;
   clearStoredSession(): Promise<void>;
   createUser(idToken: string): Promise<OpenJobUser>;
+  deleteUser(
+    idToken: string,
+    credentials: {
+      credentialToken: string;
+      provider: SignInMethod;
+      revocation: NonNullable<ProviderCredential["revocation"]>;
+    }[],
+  ): Promise<{ status: "completed" | "pending" }>;
   exchangeProviderCredential(
     credential: ProviderCredential,
   ): Promise<FirebaseSession>;
@@ -670,6 +683,46 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     return (await this.removePrivateData())
       ? { kind: "signed-out" }
       : { kind: "cleanup-retry" };
+  }
+
+  async deleteUser(): Promise<AuthFlowResult> {
+    const epoch = this.operationEpoch;
+    const active = await this.currentSession(epoch);
+    const methods = this.activeResult?.methods;
+    if (!methods || methods.length === 0) {
+      throw new Error("Linked Sign-in Methods are required for deletion.");
+    }
+    const credentials = [];
+    for (const provider of methods) {
+      const providerCredential = await this.withOperationLock("provider", () =>
+        this.dependencies.signInWithProvider(provider),
+      );
+      this.assertCurrentOperation(epoch);
+      const proof = await this.dependencies.exchangeProviderCredential(
+        providerCredential,
+      );
+      this.assertCurrentOperation(epoch);
+      if (!providerCredential.revocation) {
+        throw new ProviderSignInError("unavailable");
+      }
+      credentials.push({
+        credentialToken: proof.idToken,
+        provider,
+        revocation: providerCredential.revocation,
+      });
+    }
+    const deletion = await this.dependencies.deleteUser(
+      active.idToken,
+      credentials,
+    );
+    this.assertCurrentOperation(epoch);
+    const removed = await this.removePrivateData();
+    if (!removed) return { kind: "cleanup-retry" };
+    return {
+      kind: "signed-out",
+      reason:
+        deletion.status === "completed" ? "deleted" : "deletion-pending",
+    };
   }
 
   async revokeSession(): Promise<AuthFlowResult> {

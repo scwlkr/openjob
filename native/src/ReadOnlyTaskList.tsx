@@ -404,7 +404,9 @@ function taskAccessibilityLabel(task: NativeTask) {
   const assignee =
     task.assignee.state === "assigned"
       ? `Assigned to @${task.assignee.username}.`
-      : "Unassigned.";
+      : task.assignee.state === "deleted"
+        ? "Previously assigned to a deleted User."
+        : "Unassigned.";
   const due = dueDescription(task);
   const dueLabel = due
     ? `${due.overdue ? "Overdue, due" : "Due"} ${due.display}.`
@@ -477,7 +479,9 @@ const TaskRow = memo(function TaskRow({
           <Text style={[styles.taskMetaText, { color: palette.muted }]}>
             {task.assignee.state === "assigned"
               ? `@${task.assignee.username}`
-              : "Unassigned"}
+              : task.assignee.state === "deleted"
+                ? "Deleted User"
+                : "Unassigned"}
           </Text>
           {due ? (
             <Text

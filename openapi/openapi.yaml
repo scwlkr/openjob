@@ -134,6 +134,43 @@ paths:
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
 
+  /api/v1/me/deletion:
+    post:
+      tags: [Identity]
+      summary: Permanently delete the current User and associated data
+      description: |
+        Starts one idempotent deletion after explicit irreversible confirmation
+        and fresh authentication of every linked Sign-in Method. OpenJob access
+        ends atomically when the encrypted retry job is created. A completed
+        response means provider authorizations, Firebase identities, User and
+        Username indexes, notifications, Group access, User-created Tasks, and
+        personal attribution were removed. A pending response means access has
+        ended but provider or infrastructure cleanup will retry for no more than
+        seven calendar days. Credential and revocation values are never logged,
+        returned, or retained after completion.
+      operationId: deleteCurrentUser
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/DeleteCurrentUserRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AccountDeletionCompletedResponse"
+        "202":
+          $ref: "#/components/responses/AccountDeletionPendingResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/LinkAuthenticationErrorResponse"
+        "409":
+          $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        "503":
+          $ref: "#/components/responses/AccountDeletionUnavailableResponse"
+
   /api/v1/me/username:
     put:
       tags: [Identity]
@@ -1060,6 +1097,21 @@ components:
             confirmation: link
             credentialToken: fresh-firebase-id-token
             expectedTargetUserId: user_maya
+    DeleteCurrentUserRequest:
+      description: Explicit irreversible confirmation plus fresh proof for every linked provider.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DeleteCurrentUserInput"
+          example:
+            confirmation: delete
+            credentials:
+              - credentialToken: fresh-firebase-id-token
+                provider: google
+                revocation:
+                  kind: access_token
+                  value: fresh-provider-access-token
     ClaimUsernameRequest:
       description: Immutable Username claim.
       required: true
@@ -1176,6 +1228,38 @@ components:
             $ref: "#/components/schemas/SignInMethodCollectionEnvelope"
           example:
             data: [apple, google]
+    AccountDeletionCompletedResponse:
+      description: Account deletion completed and no retry state remains.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionCompletedEnvelope"
+          example:
+            data:
+              completedAt: "2026-07-28T12:00:00Z"
+              status: completed
+    AccountDeletionPendingResponse:
+      description: Access ended and deletion is retrying within seven days.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionPendingEnvelope"
+          example:
+            data:
+              deadline: "2026-08-04T12:00:00Z"
+              requestedAt: "2026-07-28T12:00:00Z"
+              status: pending
+    AccountDeletionUnavailableResponse:
+      description: Provider cleanup is not ready, so deletion did not start.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionUnavailableErrorEnvelope"
+          example:
+            error:
+              code: account_deletion_unavailable
+              message: Account deletion is temporarily unavailable.
+              requestId: req_delete_unavailable
     GroupResponse:
       description: One Group in a single-resource success envelope.
       content:
@@ -1776,6 +1860,96 @@ components:
           description: |
             User ID displayed during explicit confirmation. The atomic link is
             rejected if the resolved surviving User changed before commit.
+    AccountDeletionRevocationProof:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, value]
+          properties:
+            kind:
+              const: access_token
+            value:
+              type: string
+              minLength: 1
+              maxLength: 8192
+              writeOnly: true
+        - type: object
+          additionalProperties: false
+          required: [clientId, kind, value]
+          properties:
+            clientId:
+              type: string
+              minLength: 1
+              maxLength: 256
+            kind:
+              enum: [access_token, authorization_code]
+            value:
+              type: string
+              minLength: 1
+              maxLength: 8192
+              writeOnly: true
+    AccountDeletionCredentialInput:
+      type: object
+      additionalProperties: false
+      required: [credentialToken, provider, revocation]
+      properties:
+        credentialToken:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+        provider:
+          enum: [apple, google]
+        revocation:
+          $ref: "#/components/schemas/AccountDeletionRevocationProof"
+    DeleteCurrentUserInput:
+      type: object
+      additionalProperties: false
+      required: [confirmation, credentials]
+      properties:
+        confirmation:
+          const: delete
+        credentials:
+          type: array
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/AccountDeletionCredentialInput"
+    AccountDeletionCompleted:
+      type: object
+      additionalProperties: false
+      required: [completedAt, status]
+      properties:
+        completedAt:
+          $ref: "#/components/schemas/Timestamp"
+        status:
+          const: completed
+    AccountDeletionPending:
+      type: object
+      additionalProperties: false
+      required: [deadline, requestedAt, status]
+      properties:
+        deadline:
+          $ref: "#/components/schemas/Timestamp"
+        requestedAt:
+          $ref: "#/components/schemas/Timestamp"
+        status:
+          const: pending
+    AccountDeletionCompletedEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AccountDeletionCompleted"
+    AccountDeletionPendingEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AccountDeletionPending"
 
     PushSubscriptionKeysInput:
       type: object
@@ -1839,18 +2013,28 @@ components:
       properties:
         state:
           const: unassigned
+    DeletedAssignee:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          const: deleted
     Assignee:
       description: |
         Assigned preserves canonical User identity and human attribution.
         Unassigned is a state caused only by forced Member removal, never a User.
+        Deleted marks a completed Task whose former assignee identity was erased.
       oneOf:
         - $ref: "#/components/schemas/AssignedAssignee"
         - $ref: "#/components/schemas/UnassignedAssignee"
+        - $ref: "#/components/schemas/DeletedAssignee"
       discriminator:
         propertyName: state
         mapping:
           assigned: "#/components/schemas/AssignedAssignee"
           unassigned: "#/components/schemas/UnassignedAssignee"
+          deleted: "#/components/schemas/DeletedAssignee"
 
     Group:
       type: object
@@ -2009,6 +2193,8 @@ components:
         - invalid_request
         - authentication_required
         - fresh_authentication_required
+        - account_deletion_pending
+        - account_deletion_unavailable
         - sign_in_method_unrecognized
         - sign_in_method_conflict
         - link_target_changed
@@ -2089,6 +2275,14 @@ components:
               properties:
                 code:
                   enum: [authentication_required, fresh_authentication_required]
+    AccountDeletionUnavailableErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: account_deletion_unavailable
     SignInMethodUnrecognizedErrorEnvelope:
       allOf:
         - $ref: "#/components/schemas/ErrorEnvelope"

@@ -11,6 +11,7 @@
   },
   "vars": {
     "FIREBASE_PROJECT_ID": "openjob-dev",
+    "APPLE_ACCOUNT_DELETION_CLIENT_IDS": "dev.openjob.app,dev.openjob.auth",
     "GOOGLE_OAUTH_CLIENT_ID": "1015996869029-7rsl506o6gc6sg9d7l5kl6ant3q1t4cb.apps.googleusercontent.com",
     "OPENJOB_RUNTIME_TIER": "production"
   },
@@ -20,6 +21,7 @@
       "routes": [],
       "vars": {
         "FIREBASE_PROJECT_ID": "openjob-nonprod",
+        "APPLE_ACCOUNT_DELETION_CLIENT_IDS": "dev.openjob.app.preview,dev.openjob.auth.nonprod",
         "GOOGLE_OAUTH_CLIENT_ID": "550998178053-t47ol37o4hu6e8gte63r79oj52vn4u94.apps.googleusercontent.com",
         "OPENJOB_QA_PASSWORD_TENANT_ID": "OpenJob-QA-Two-mvz9m",
         "OPENJOB_RUNTIME_TIER": "preview"
@@ -30,5 +32,8 @@
   "routes": [
     { "pattern": "openjob.dev", "custom_domain": true }
   ],
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
   "observability": { "enabled": true }
 }

@@ -96,6 +96,10 @@ function authController(
     claimUsername: jest.fn(async () => signedIn),
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
+    deleteUser: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "deleted" as const,
+    })),
     listGroups: jest.fn(async () => []),
     loadCachedTaskList: jest.fn(async () => null),
     purgeCachedTaskList: jest.fn(async () => undefined),

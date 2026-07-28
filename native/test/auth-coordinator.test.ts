@@ -56,6 +56,7 @@ function createDependencies(
     clearProviderSession: jest.fn(async () => undefined),
     clearStoredSession: jest.fn(async () => undefined),
     createUser: jest.fn(async () => user),
+    deleteUser: jest.fn(async () => ({ status: "completed" as const })),
     exchangeProviderCredential: jest.fn(async (credential) =>
       credential.provider === "google" ? googleSession : appleSession,
     ),
@@ -1510,4 +1511,66 @@ test("serializes a provider prompt before revocation cleanup", async () => {
     "provider-finish",
     "provider-clear",
   ]);
+});
+
+test("deletes a User only after fresh proof for every linked method and purges local data", async () => {
+  const dependencies = createDependencies({
+    listSignInMethods: jest.fn(async () => ["google" as const, "apple" as const]),
+    signInWithProvider: jest.fn(async (provider: "apple" | "google") => ({
+      idToken: `${provider}-provider-token`,
+      provider,
+      revocation:
+        provider === "google"
+          ? { kind: "access_token" as const, value: "google-access" }
+          : {
+              clientId: "dev.openjob.app",
+              kind: "authorization_code" as const,
+              value: "apple-code",
+            },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deleted",
+  });
+  expect(dependencies.deleteUser).toHaveBeenCalledWith("google-id-token", [
+    {
+      credentialToken: "apple-id-token",
+      provider: "apple",
+      revocation: {
+        clientId: "dev.openjob.app",
+        kind: "authorization_code",
+        value: "apple-code",
+      },
+    },
+    {
+      credentialToken: "google-id-token",
+      provider: "google",
+      revocation: { kind: "access_token", value: "google-access" },
+    },
+  ]);
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+});
+
+test("reports pending deletion after access ends and still purges local data", async () => {
+  const dependencies = createDependencies({
+    deleteUser: jest.fn(async () => ({ status: "pending" as const })),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: { kind: "access_token" as const, value: "google-access" },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
 });

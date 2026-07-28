@@ -12,6 +12,9 @@ import type {
 import type { OpenJobUser, Username } from "../server/v1-identity.ts";
 
 type StoredUserDirectory = OpenJobUser & {
+  deletionDeadline: string | null;
+  deletionRequestId: string | null;
+  deletionStartedAt: string | null;
   emptyShellEligible: boolean;
   path: string;
   updateTime: string;
@@ -74,8 +77,17 @@ function parseUserDirectory(
     throw new Error("Firestore returned an invalid User directory record.");
   }
   return {
+    ...(document.fields?.deletionState?.stringValue === "pending"
+      ? { deletionPending: true as const }
+      : {}),
     emptyShellEligible:
       document.fields?.emptyShellEligible?.booleanValue === true,
+    deletionDeadline:
+      document.fields?.deletionDeadline?.timestampValue ?? null,
+    deletionRequestId:
+      document.fields?.deletionRequestId?.stringValue ?? null,
+    deletionStartedAt:
+      document.fields?.deletionStartedAt?.timestampValue ?? null,
     path,
     updateTime: document.updateTime,
     userId,
@@ -112,7 +124,11 @@ function parseSignInMethodOwnership(
 }
 
 function publicUser(user: StoredUserDirectory): OpenJobUser {
-  return { userId: user.userId, username: user.username };
+  return {
+    ...(user.deletionPending ? { deletionPending: true as const } : {}),
+    userId: user.userId,
+    username: user.username,
+  };
 }
 
 function isConcurrentWrite(error: unknown) {
@@ -377,6 +393,57 @@ export function createFirestoreUserStore(
   }
 
   return Object.freeze({
+    async deleteForAccount(userId: string, firebaseUids: string[]) {
+      const user = await readUserDirectory(userId);
+      if (!user) return false;
+      const slots = await readProviderSlots(userId);
+      const [usernameClaim, deletionJob, ...legacyUsers] = await Promise.all([
+        user.username ? readDocument(`v1Usernames/${user.username}`) : null,
+        readDocument(`v1AccountDeletions/${userId}`),
+        ...firebaseUids.map(async (uid) =>
+          readDocument(await legacyUserPath(uid)),
+        ),
+      ]);
+      const methodDocuments = await Promise.all(
+        slots.map((slot) => readDocument(signInMethodPath(slot.methodId))),
+      );
+      await commit([
+        ...methodDocuments
+          .filter((document): document is FirestoreDocument => document !== null)
+          .map((document) => ({
+            delete: document.name,
+            currentDocument: { updateTime: document.updateTime },
+          })),
+        ...slots.map((slot) => ({
+          delete: firestore.documentName(slot.path),
+          currentDocument: { updateTime: slot.updateTime },
+        })),
+        ...(usernameClaim
+          ? [{
+              delete: usernameClaim.name,
+              currentDocument: { updateTime: usernameClaim.updateTime },
+            }]
+          : []),
+        ...(deletionJob
+          ? [{
+              delete: deletionJob.name,
+              currentDocument: { updateTime: deletionJob.updateTime },
+            }]
+          : []),
+        ...legacyUsers
+          .filter((document): document is FirestoreDocument => document !== null)
+          .map((document) => ({
+            delete: document.name,
+            currentDocument: { updateTime: document.updateTime },
+          })),
+        {
+          delete: firestore.documentName(user.path),
+          currentDocument: { updateTime: user.updateTime },
+        },
+      ]);
+      return true;
+    },
+
     async resolve(identity: FirebaseTokenIdentity) {
       const resolved = await resolveStored(identity);
       return resolved ? publicUser(resolved.user) : null;
@@ -385,6 +452,9 @@ export function createFirestoreUserStore(
     async create(identity: FirebaseTokenIdentity) {
       const existing = await resolveStored(identity);
       if (existing) {
+        if (existing.user.deletionPending) {
+          return { kind: "deletion_pending" as const };
+        }
         return { kind: "existing" as const, user: publicUser(existing.user) };
       }
 
@@ -445,6 +515,9 @@ export function createFirestoreUserStore(
           if (!isConcurrentWrite(error)) throw error;
           const concurrentlyCreated = await resolveStored(identity);
           if (concurrentlyCreated) {
+            if (concurrentlyCreated.user.deletionPending) {
+              return { kind: "deletion_pending" as const };
+            }
             return {
               kind: "existing" as const,
               user: publicUser(concurrentlyCreated.user),

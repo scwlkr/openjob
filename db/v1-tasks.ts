@@ -56,7 +56,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     !taskId ||
     !groupId ||
     text === undefined ||
-    !["assigned", "unassigned"].includes(assigneeState ?? "") ||
+    !["assigned", "unassigned", "deleted"].includes(assigneeState ?? "") ||
     !["high", "normal", "low"].includes(priority) ||
     !["open", "done"].includes(state ?? "") ||
     !createdAt ||
@@ -68,8 +68,8 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   }
 
   let assignee: OpenJobTask["assignee"];
-  if (assigneeState === "unassigned") {
-    assignee = { state: "unassigned" };
+  if (assigneeState === "unassigned" || assigneeState === "deleted") {
+    assignee = { state: assigneeState };
   } else {
     const userId = document.fields?.assigneeUserId?.stringValue;
     const username = document.fields?.assigneeUsername?.stringValue;

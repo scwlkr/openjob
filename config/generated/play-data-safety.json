@@ -1,11 +1,11 @@
 {
   "metadata": {
     "generatedFrom": "config/release-privacy-inventory.json",
-    "inventoryFingerprint": "sha256:447e81661588d23ef8e91d1a89e1e40f5a86e248506fcb7d6d3ccbdd15195967",
+    "inventoryFingerprint": "sha256:e365251eef2129c650690949ed57ace0f4945160cc388aac02c30f4ba53fd943",
     "inventorySchemaVersion": "1.0.0",
-    "inventoryVersion": "0.3.3"
+    "inventoryVersion": "0.3.4"
   },
-  "submissionReady": false,
+  "submissionReady": true,
   "security": {
     "encryptedInTransit": true
   },
@@ -13,14 +13,14 @@
     "privacyPolicy": {
       "displayName": "Privacy policy",
       "requiredBeforeSubmission": true,
-      "status": "planned",
+      "status": "live",
       "url": "https://openjob.dev/privacy",
       "implementationIssue": 40
     },
     "accountDeletion": {
       "displayName": "Account deletion request",
       "requiredBeforeSubmission": true,
-      "status": "planned",
+      "status": "live",
       "url": "https://openjob.dev/account-deletion",
       "implementationIssue": 42
     },
@@ -33,13 +33,24 @@
   },
   "accountDeletion": {
     "requiredByStore": true,
-    "status": "pending",
+    "status": "implemented",
     "publicUrlId": "accountDeletion",
     "implementationIssue": 42,
-    "inAppAvailable": false,
-    "publicRequestAvailable": false,
+    "inAppAvailable": true,
+    "publicRequestAvailable": true,
+    "accessEnds": "immediate",
+    "maximumRetryDays": 7,
+    "retentionAfterCompletion": "none",
+    "soleMemberGroup": "end",
+    "sharedGroupMembership": "remove",
+    "finalAdminReplacement": "longest-tenured-stable-tie-break",
+    "creatorTasks": "delete",
+    "openAssignedTasks": "unassigned",
+    "doneAssignedTasks": "deleted-user-marker-without-identity",
+    "linkedProviderCleanup": "revoke-before-completion",
+    "pendingState": "minimal-encrypted-retry-job",
     "url": "https://openjob.dev/account-deletion",
-    "urlStatus": "planned"
+    "urlStatus": "live"
   },
   "dataPractices": [
     {

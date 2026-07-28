@@ -469,7 +469,7 @@ function renderReleasePrivacyDocument(inventory) {
     `- Generated from: \`${metadata.generatedFrom}\``,
     "",
     play.submissionReady
-      ? "Preparation status: inventory prerequisites are ready for candidate reconciliation."
+      ? "Preparation status: **not ready for store submission**. Inventory prerequisites are ready; the exact immutable candidate still requires reconciliation and store proof."
       : "Preparation status: **not ready for store submission**. Planned URLs and issue #42 account deletion must be completed and then reconciled against one immutable candidate.",
     "",
     "This document projects OpenJob-owned behavior separately from third-party declarations. SDK or operating-system claims are evidence, not OpenJob product behavior.",
@@ -581,6 +581,8 @@ function renderReleasePrivacyDocument(inventory) {
   lines.push(
     "",
     `Store account deletion is required and currently \`${inventory.accountDeletion.status}\` on issue #${inventory.accountDeletion.implementationIssue}. In-app path available: ${yesNo(inventory.accountDeletion.inAppAvailable)}. Public request path available: ${yesNo(inventory.accountDeletion.publicRequestAvailable)}. Do not save or submit a completed deletion claim until both paths and the public URL are live and proven.`,
+    "",
+    `Implemented deletion policy: access ends ${inventory.accountDeletion.accessEnds}; retries are bounded to ${inventory.accountDeletion.maximumRetryDays} days in a ${inventory.accountDeletion.pendingState}; retention after completion is ${inventory.accountDeletion.retentionAfterCompletion}. Sole-Member Groups ${inventory.accountDeletion.soleMemberGroup}; shared membership is ${inventory.accountDeletion.sharedGroupMembership}; final Admin replacement uses ${inventory.accountDeletion.finalAdminReplacement}. Creator Tasks ${inventory.accountDeletion.creatorTasks}; open assignments become ${inventory.accountDeletion.openAssignedTasks}; completed assignments use a ${inventory.accountDeletion.doneAssignedTasks}. Linked providers ${inventory.accountDeletion.linkedProviderCleanup}.`,
     "",
     "## Third-party declaration evidence",
     "",

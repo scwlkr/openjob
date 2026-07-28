@@ -33,6 +33,7 @@ export type NativeAuthController = Pick<
   | "claimUsername"
   | "confirmLink"
   | "createUser"
+  | "deleteUser"
   | "listGroups"
   | "loadCachedTaskList"
   | "purgeCachedTaskList"
@@ -92,6 +93,10 @@ function resultMessage(result: AuthFlowResult) {
   switch (result.reason) {
     case "cancelled":
       return "Sign-in was canceled. Nothing changed.";
+    case "deleted":
+      return "Your OpenJob User and associated data were deleted.";
+    case "deletion-pending":
+      return "Deletion is in progress. Access ended, and cleanup will finish within seven days.";
     case "expired":
       return "The initial sign-in expired. Sign in again to restart linking.";
     case "interrupted":
@@ -353,6 +358,8 @@ export function NativeAuthGate({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [linkFromManager, setLinkFromManager] = useState(false);
   const [qaEmail, setQaEmail] = useState("");
   const [qaPassword, setQaPassword] = useState("");
@@ -671,6 +678,55 @@ export function NativeAuthGate({
       });
     }
 
+    if (deleting) {
+      return (
+        <AuthScaffold
+          diagnosticsSetting={diagnosticsSetting}
+          message="This permanently deletes your User, Tasks you created, linked sign-ins, notifications, and Group access. Other Members keep shared Groups."
+          title="Delete User"
+        >
+          <Text style={[styles.message, { color: palette.ink }]}>
+            Fresh authentication opens for every linked Sign-in Method after
+            you confirm. Access ends immediately when the request starts.
+          </Text>
+          <Text style={[styles.inputLabel, { color: palette.ink }]}>
+            Type DELETE to confirm permanent deletion
+          </Text>
+          <TextInput
+            accessibilityLabel="Type DELETE to confirm permanent deletion"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!busy}
+            onChangeText={setDeletionConfirmation}
+            style={[
+              styles.input,
+              {
+                backgroundColor: palette.paper,
+                borderColor: palette.line,
+                color: palette.ink,
+              },
+            ]}
+            value={deletionConfirmation}
+          />
+          <ActionButton
+            accessibilityHint="Permanently deletes this User and cannot be undone"
+            disabled={busy || deletionConfirmation !== "DELETE"}
+            label={busy ? "Deleting…" : "Permanently delete User"}
+            onPress={() => void perform(() => auth.deleteUser())}
+          />
+          <ActionButton
+            disabled={busy}
+            label="Cancel deletion"
+            onPress={() => {
+              setDeletionConfirmation("");
+              setDeleting(false);
+            }}
+            secondary
+          />
+        </AuthScaffold>
+      );
+    }
+
     return (
       <AuthScaffold
         diagnosticsSetting={diagnosticsSetting}
@@ -707,6 +763,15 @@ export function NativeAuthGate({
             {message}
           </Text>
         ) : null}
+        <ActionButton
+          disabled={busy}
+          label="Delete User"
+          onPress={() => {
+            setDeletionConfirmation("");
+            setDeleting(true);
+          }}
+          secondary
+        />
         <ActionButton
           disabled={busy}
           label="Back to OpenJob"

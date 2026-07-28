@@ -23,6 +23,8 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     name: "openjob-preview",
     routes: [],
     vars: {
+      APPLE_ACCOUNT_DELETION_CLIENT_IDS:
+        "dev.openjob.app.preview,dev.openjob.auth.nonprod",
       FIREBASE_PROJECT_ID: "openjob-nonprod",
       GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
       OPENJOB_QA_PASSWORD_TENANT_ID: "OpenJob-QA-Two-mvz9m",

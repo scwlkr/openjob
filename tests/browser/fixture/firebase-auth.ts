@@ -135,6 +135,10 @@ export const browserLocalPersistence = { type: "LOCAL" };
 export const inMemoryPersistence = { type: "NONE" };
 
 export class GoogleAuthProvider implements TestProvider {
+  static credentialFromResult() {
+    return { accessToken: "browser-google-access" };
+  }
+
   readonly providerId = "google.com";
 
   setCustomParameters(parameters: Record<string, string>) {
@@ -145,6 +149,10 @@ export class GoogleAuthProvider implements TestProvider {
 }
 
 export class OAuthProvider implements TestProvider {
+  static credentialFromResult() {
+    return { accessToken: "browser-apple-access" };
+  }
+
   readonly providerId: "apple.com";
 
   constructor(providerId: string) {

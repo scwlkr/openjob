@@ -5,6 +5,7 @@ import type {
 import type { GroupStore, OpenJobGroup } from "./v1-groups";
 import {
   defaultRequestId,
+  accountDeletionPendingResponse,
   errorResponse,
   internalErrorResponse,
   isRateLimitError,
@@ -18,6 +19,7 @@ declare const usernameBrand: unique symbol;
 export type Username = string & { readonly [usernameBrand]: true };
 
 export type OpenJobUser = {
+  deletionPending?: true;
   userId: string;
   username: string | null;
 };
@@ -28,6 +30,7 @@ type UserStore = {
   ): Promise<
     | { kind: "created"; user: OpenJobUser }
     | { kind: "existing"; user: OpenJobUser }
+    | { kind: "deletion_pending" }
   >;
   claimUsername(
     identity: FirebaseTokenIdentity,
@@ -219,6 +222,9 @@ export function createV1IdentityApi({
           if (request.method === "GET") {
             const user = await users.resolve(identity);
             if (!user) return signInMethodUnrecognizedResponse(requestId);
+            if (user.deletionPending) {
+              return accountDeletionPendingResponse(requestId);
+            }
             return jsonResponse({
               data: (await users.listSignInMethods(user.userId)).filter(
                 isLinkableProvider,
@@ -272,6 +278,9 @@ export function createV1IdentityApi({
             if (result.kind === "target_changed") {
               return linkTargetChanged(requestId);
             }
+            if (result.user.deletionPending) {
+              return accountDeletionPendingResponse(requestId);
+            }
             return jsonResponse({
               data: await currentUser(result.user, groups),
             });
@@ -295,6 +304,13 @@ export function createV1IdentityApi({
             return jsonResponse({ data: await currentUser(user, groups) });
           }
           const result = await users.create(identity);
+          if (result.kind === "deletion_pending") {
+            return errorResponse(requestId, {
+              code: "account_deletion_pending",
+              message: "Account deletion is already in progress.",
+              status: 410,
+            });
+          }
           return jsonResponse(
             { data: await currentUser(result.user, groups) },
             result.kind === "created" ? 201 : 200,
@@ -304,6 +320,9 @@ export function createV1IdentityApi({
         if (request.method === "GET" && url.pathname === "/api/v1/me") {
           const user = await users.resolve(identity);
           if (!user) return signInMethodUnrecognizedResponse(requestId);
+          if (user.deletionPending) {
+            return accountDeletionPendingResponse(requestId);
+          }
           return jsonResponse({ data: await currentUser(user, groups) });
         }
 
@@ -331,6 +350,9 @@ export function createV1IdentityApi({
           }
           const user = await users.resolve(identity);
           if (!user) return signInMethodUnrecognizedResponse(requestId);
+          if (user.deletionPending) {
+            return accountDeletionPendingResponse(requestId);
+          }
           const result = await users.claimUsername(identity, username);
           if (result.kind === "unrecognized") {
             return signInMethodUnrecognizedResponse(requestId);

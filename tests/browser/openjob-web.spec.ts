@@ -35,7 +35,8 @@ type Task = {
   text: string;
   assignee:
     | { state: "assigned"; userId: string; username: string }
-    | { state: "unassigned" };
+    | { state: "unassigned" }
+    | { state: "deleted" };
   priority?: "high" | "normal" | "low";
   dueDate: string | null;
   state: "open" | "done";
@@ -88,6 +89,7 @@ type ApiState = {
   signInMethods: SignInMethod[];
   identityRequests: Array<{ path: string; body: unknown }>;
   linkAuthorizationHeaders: string[];
+  deletionRequests: unknown[];
   linkFailureCode:
     | "fresh_authentication_required"
     | "link_target_changed"
@@ -372,6 +374,7 @@ async function installApi(
     signInMethods: [...(initial.signInMethods ?? ["google"])],
     identityRequests: [],
     linkAuthorizationHeaders: [],
+    deletionRequests: [],
     linkFailureCode: initial.linkFailureCode ?? null,
   };
 
@@ -446,6 +449,20 @@ async function installApi(
       request.method() === "GET"
     ) {
       await reply(200, { data: [...state.signInMethods].sort() });
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/deletion" &&
+      request.method() === "POST"
+    ) {
+      state.deletionRequests.push(request.postDataJSON());
+      await reply(200, {
+        data: {
+          completedAt: "2026-07-28T12:00:00.000Z",
+          status: "completed",
+        },
+      });
       return;
     }
 
@@ -1104,6 +1121,49 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("public account deletion works without the installed app and clears browser state", async ({ page }) => {
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("openjob:selected-group-id", "grp_private");
+    window.sessionStorage.setItem("openjob:pending-task-editor", "private draft");
+  });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("heading", {
+    name: "Delete your OpenJob User",
+  })).toBeVisible();
+  await expect(page.getByText("You do not need the app or support.")).toBeVisible();
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionRequests).toHaveLength(1);
+  const body = structuredClone(state.deletionRequests[0]) as {
+    confirmation: string;
+    credentials: Array<{
+      credentialToken: string;
+      provider: string;
+      revocation: { kind: string; value: string };
+    }>;
+  };
+  expect(body.confirmation).toBe("delete");
+  expect(body.credentials.map(({ provider }) => provider)).toEqual(["google"]);
+  expect(body.credentials[0].revocation.kind).toBe("access_token");
+  expect(body.credentials[0].credentialToken).toBeTruthy();
+  expect(body.credentials[0].revocation.value).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
 });
 
 test("offers Google and Apple and restores either linked web session", async ({ page }) => {

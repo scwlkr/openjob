@@ -2,6 +2,7 @@ import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import type { OpenJobUser } from "./v1-identity.ts";
 import {
   defaultRequestId,
+  accountDeletionPendingResponse,
   errorResponse,
   internalErrorResponse,
   isRateLimitError,
@@ -135,6 +136,9 @@ export function createV1NotificationSubscriptionsApi({
         }
         const user = await users.resolve(identity);
         if (!user) return signInMethodUnrecognizedResponse(requestId);
+        if (user.deletionPending) {
+          return accountDeletionPendingResponse(requestId);
+        }
         if (request.method === "PUT") {
           const registration = readRegistration(await request.json().catch(() => null));
           if (!registration) {

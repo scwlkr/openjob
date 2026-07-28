@@ -97,3 +97,13 @@ export function signInMethodUnrecognizedResponse(
     status: 409,
   });
 }
+
+export function accountDeletionPendingResponse(
+  requestId: RequestIdFactory,
+) {
+  return errorResponse(requestId, {
+    code: "account_deletion_pending",
+    message: "Account deletion is in progress.",
+    status: 410,
+  });
+}

@@ -39,6 +39,7 @@ const expectedOperations = [
   "post /api/v1/groups/{groupId}/tasks createGroupTask",
   "post /api/v1/invites/{token}/actions/join joinGroupWithInviteLink",
   "post /api/v1/me createCurrentUser",
+  "post /api/v1/me/deletion deleteCurrentUser",
   "post /api/v1/me/sign-in-methods linkSignInMethod",
   "put /api/v1/groups/{groupId}/tasks/{taskId}/state setGroupTaskState",
   "put /api/v1/me/username claimUsername",
@@ -82,7 +83,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 22);
+  assert.equal(Object.keys(contract.paths).length, 23);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -177,10 +178,11 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   assert.deepEqual(schemas.TaskPriority.enum, ["high", "normal", "low"]);
   assert.deepEqual(
     schemas.Assignee.oneOf.map(({ properties }) => properties.state.const).sort(),
-    ["assigned", "unassigned"],
+    ["assigned", "deleted", "unassigned"],
   );
   assert.deepEqual(schemas.AssignedAssignee.required, ["state", "userId", "username"]);
   assert.deepEqual(schemas.UnassignedAssignee.required, ["state"]);
+  assert.deepEqual(schemas.DeletedAssignee.required, ["state"]);
   assert.deepEqual(schemas.NotificationSubscription.required, ["installationId", "state"]);
   assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "endpoint"), false);
   assert.equal(Object.hasOwn(schemas.NotificationSubscription.properties, "keys"), false);

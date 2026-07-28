@@ -63,6 +63,7 @@ function isTask(value: unknown): value is NativeTask {
   if (!isRecord(value) || !isRecord(value.assignee)) return false;
   const assignee =
     value.assignee.state === "unassigned" ||
+    value.assignee.state === "deleted" ||
     (value.assignee.state === "assigned" &&
       typeof value.assignee.userId === "string" &&
       typeof value.assignee.username === "string");
@@ -351,6 +352,33 @@ export function createNativeOpenJobApi({
         body: JSON.stringify({ confirmation: "create" }),
         method: "POST",
       });
+    },
+
+    async deleteUser(
+      token: string,
+      credentials: {
+        credentialToken: string;
+        provider: SignInMethod;
+        revocation:
+          | { kind: "access_token"; value: string }
+          | { clientId: string; kind: "authorization_code"; value: string };
+      }[],
+    ) {
+      const result = await request<unknown>("/me/deletion", token, {
+        body: JSON.stringify({ confirmation: "delete", credentials }),
+        method: "POST",
+      });
+      if (
+        !isRecord(result) ||
+        (result.status !== "completed" && result.status !== "pending")
+      ) {
+        throw new OpenJobApiError(
+          502,
+          "invalid_response",
+          "OpenJob returned an invalid deletion status.",
+        );
+      }
+      return { status: result.status } as const;
     },
 
     claimUsername(token: string, username: string) {

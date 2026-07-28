@@ -80,6 +80,10 @@ function controller(
     claimUsername: jest.fn(async () => signedIn),
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
+    deleteUser: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "deleted" as const,
+    })),
     restore: jest.fn(async () => ({ kind: "signed-out" })),
     restoreCachedSession: jest.fn(async () => null),
     signIn: jest.fn(async () => signedIn),
@@ -770,6 +774,40 @@ test("manages the missing provider and exposes sign-out and switch-user cleanup"
   await waitFor(() => expect(auth.switchUser).toHaveBeenCalledTimes(1));
   expect(
     await screen.findByRole("button", { name: "Continue with Apple" }),
+  ).toBeOnTheScreen();
+});
+
+test("requires explicit irreversible confirmation before deleting a User", async () => {
+  const auth = controller({ restore: jest.fn(async () => signedIn) });
+  await renderGate(auth);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Manage Sign-in Methods" }),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Delete User" }));
+  expect(
+    await screen.findByRole("header", { name: "Delete User" }),
+  ).toBeOnTheScreen();
+  const confirm = screen.getByRole("button", {
+    name: "Permanently delete User",
+  });
+  expect(confirm).toBeDisabled();
+  fireEvent.changeText(
+    screen.getByLabelText("Type DELETE to confirm permanent deletion"),
+    "DELETE",
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Permanently delete User" }),
+    ).not.toBeDisabled(),
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Permanently delete User" }),
+  );
+  await waitFor(() => expect(auth.deleteUser).toHaveBeenCalledTimes(1));
+  expect(
+    await screen.findByText(
+      "Your OpenJob User and associated data were deleted.",
+    ),
   ).toBeOnTheScreen();
 });
 

@@ -5,6 +5,7 @@ import {
   qaPasswordTenantIdFor,
   webFirebaseConfigFor,
 } from "../../config/web-firebase-config.mjs";
+import nativeIdentities from "../../config/native-identities.json" with { type: "json" };
 
 const qaPasswordTenantId = qaPasswordTenantIdFor("preview");
 
@@ -12,6 +13,9 @@ export default defineConfig({
   define: {
     __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(
       webFirebaseConfigFor("preview"),
+    ),
+    __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(
+      nativeIdentities.apple.signInServices.nonproduction.serviceId,
     ),
     __OPENJOB_QA_PASSWORD_AUTH__: JSON.stringify(
       qaPasswordTenantId ? { tenantId: qaPasswordTenantId } : null,

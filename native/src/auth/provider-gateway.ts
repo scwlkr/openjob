@@ -17,6 +17,7 @@ import {
 } from "./coordinator";
 
 type ProviderGatewayConfig = {
+  appleIosClientId?: string;
   appleRedirectUri: string;
   appleServiceId: string;
   googleIosClientId: string;
@@ -37,7 +38,7 @@ export type ProviderNativeModules = {
     isSupported: boolean;
     responseTypeAll: string;
     scopeAll: string;
-    signIn(): Promise<{ idToken?: string }>;
+    signIn(): Promise<{ authorizationCode?: string; idToken?: string }>;
   };
   appleIos: {
     errorCancelled: string;
@@ -49,7 +50,10 @@ export type ProviderNativeModules = {
       requestedOperation: number;
       requestedScopes: never[];
       state: string;
-    }): Promise<{ identityToken?: string | null }>;
+    }): Promise<{
+      authorizationCode?: string | null;
+      identityToken?: string | null;
+    }>;
   };
   google: {
     configure(options: {
@@ -62,6 +66,7 @@ export type ProviderNativeModules = {
     errorInProgress: string;
     errorPlayServices: string;
     hasPlayServices(): Promise<boolean>;
+    getTokens(): Promise<{ accessToken: string }>;
     signIn(): Promise<
       { kind: "cancelled" } | { idToken?: string | null; kind: "success" }
     >;
@@ -92,7 +97,10 @@ function defaultNativeModules(): ProviderNativeModules {
         platform === "android" ? appleAuthAndroid.Scope.ALL : "",
       signIn: async () => {
         const response = await appleAuthAndroid.signIn();
-        return { idToken: response.id_token };
+        return {
+          authorizationCode: response.code,
+          idToken: response.id_token,
+        };
       },
     },
     appleIos: {
@@ -110,6 +118,7 @@ function defaultNativeModules(): ProviderNativeModules {
       errorPlayServices: statusCodes.PLAY_SERVICES_NOT_AVAILABLE,
       hasPlayServices: () =>
         GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true }),
+      getTokens: () => GoogleSignin.getTokens(),
       signIn: async () => {
         const response = await GoogleSignin.signIn();
         if (!isSuccessResponse(response)) return { kind: "cancelled" };
@@ -186,6 +195,10 @@ export function createProviderGateway(
       return {
         idToken: requiredToken(response.idToken),
         provider: "google",
+        revocation: {
+          kind: "access_token",
+          value: requiredToken((await native.google.getTokens()).accessToken),
+        },
       };
     } catch (error) {
       if (error instanceof ProviderSignInError) throw error;
@@ -221,6 +234,11 @@ export function createProviderGateway(
           idToken: requiredToken(response.identityToken),
           nonce,
           provider: "apple",
+          revocation: {
+            clientId: config.appleIosClientId ?? config.appleServiceId,
+            kind: "authorization_code",
+            value: requiredToken(response.authorizationCode),
+          },
         };
       }
 
@@ -240,6 +258,11 @@ export function createProviderGateway(
         idToken: requiredToken(response.idToken),
         nonce,
         provider: "apple",
+        revocation: {
+          clientId: config.appleServiceId,
+          kind: "authorization_code",
+          value: requiredToken(response.authorizationCode),
+        },
       };
     } catch (error) {
       if (error instanceof ProviderSignInError) throw error;

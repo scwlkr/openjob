@@ -59,7 +59,18 @@
         "publicUrlId",
         "implementationIssue",
         "inAppAvailable",
-        "publicRequestAvailable"
+        "publicRequestAvailable",
+        "accessEnds",
+        "maximumRetryDays",
+        "retentionAfterCompletion",
+        "soleMemberGroup",
+        "sharedGroupMembership",
+        "finalAdminReplacement",
+        "creatorTasks",
+        "openAssignedTasks",
+        "doneAssignedTasks",
+        "linkedProviderCleanup",
+        "pendingState"
       ],
       "properties": {
         "requiredByStore": { "const": true },
@@ -67,7 +78,18 @@
         "publicUrlId": { "const": "accountDeletion" },
         "implementationIssue": { "type": "integer", "minimum": 1 },
         "inAppAvailable": { "type": "boolean" },
-        "publicRequestAvailable": { "type": "boolean" }
+        "publicRequestAvailable": { "type": "boolean" },
+        "accessEnds": { "const": "immediate" },
+        "maximumRetryDays": { "const": 7 },
+        "retentionAfterCompletion": { "const": "none" },
+        "soleMemberGroup": { "const": "end" },
+        "sharedGroupMembership": { "const": "remove" },
+        "finalAdminReplacement": { "const": "longest-tenured-stable-tie-break" },
+        "creatorTasks": { "const": "delete" },
+        "openAssignedTasks": { "const": "unassigned" },
+        "doneAssignedTasks": { "const": "deleted-user-marker-without-identity" },
+        "linkedProviderCleanup": { "const": "revoke-before-completion" },
+        "pendingState": { "const": "minimal-encrypted-retry-job" }
       }
     },
     "security": {

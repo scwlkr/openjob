@@ -917,6 +917,12 @@ export function GroupShell(props: GroupShellProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      window.location.assign("/account-deletion");
+                    }}
+                  >Delete User</button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       setOpenMenu(null);
                       props.onSwitchUser();
                     }}

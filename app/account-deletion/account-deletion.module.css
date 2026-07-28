@@ -1,0 +1,112 @@
+.page {
+  min-height: 100vh;
+  padding: 2rem;
+  background: #eef0ea;
+  color: #11141a;
+}
+
+.wordmark {
+  display: inline-block;
+  margin-bottom: 2rem;
+  color: inherit;
+  font-size: 1.35rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.card {
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 2px solid #11141a;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: .5rem .5rem 0 #11141a;
+}
+
+.card h1 {
+  margin: .25rem 0 1rem;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 1;
+}
+
+.kicker {
+  margin: 0;
+  color: #1e4ed8;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: grid;
+  gap: .85rem;
+  margin: 2rem 0;
+}
+
+.actions button,
+.actions input {
+  min-height: 3rem;
+  border: 2px solid #11141a;
+  border-radius: .7rem;
+  padding: .75rem 1rem;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.actions button {
+  cursor: pointer;
+  font-weight: 750;
+  text-align: left;
+}
+
+.actions button:focus-visible,
+.actions input:focus-visible,
+.wordmark:focus-visible {
+  outline: 4px solid #85a5ff;
+  outline-offset: 3px;
+}
+
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.actions .danger {
+  background: #a51d2d;
+  color: #fff;
+  text-align: center;
+}
+
+.error,
+.status {
+  padding: 1rem;
+  border-radius: .7rem;
+  background: #fbe8eb;
+  font-weight: 700;
+}
+
+.status {
+  background: #e4f5e8;
+}
+
+.policy {
+  margin-top: 2rem;
+  color: #4f5563;
+  font-size: .95rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page { background: #11141a; color: #f2f3ee; }
+  .card { border-color: #f2f3ee; background: #1d222c; box-shadow: .5rem .5rem 0 #6f87d9; }
+  .actions button, .actions input { border-color: #f2f3ee; background: #11141a; color: #f2f3ee; }
+  .policy { color: #c3c7d1; }
+  .error { background: #5a1d26; }
+  .status { background: #174a2a; }
+}
+
+@media (max-width: 36rem) {
+  .page { padding: 1rem; }
+  .card { box-shadow: .3rem .3rem 0 #11141a; }
+}

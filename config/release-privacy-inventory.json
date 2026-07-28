@@ -1,7 +1,7 @@
 {
   "$schema": "./release-privacy-inventory.schema.json",
   "schemaVersion": "1.0.0",
-  "inventoryVersion": "0.3.3",
+  "inventoryVersion": "0.3.4",
   "authority": {
     "owner": "OpenJob",
     "scope": "release-privacy-and-store-preparation",
@@ -11,14 +11,14 @@
     "privacyPolicy": {
       "displayName": "Privacy policy",
       "requiredBeforeSubmission": true,
-      "status": "planned",
+      "status": "live",
       "url": "https://openjob.dev/privacy",
       "implementationIssue": 40
     },
     "accountDeletion": {
       "displayName": "Account deletion request",
       "requiredBeforeSubmission": true,
-      "status": "planned",
+      "status": "live",
       "url": "https://openjob.dev/account-deletion",
       "implementationIssue": 42
     },
@@ -31,11 +31,22 @@
   },
   "accountDeletion": {
     "requiredByStore": true,
-    "status": "pending",
+    "status": "implemented",
     "publicUrlId": "accountDeletion",
     "implementationIssue": 42,
-    "inAppAvailable": false,
-    "publicRequestAvailable": false
+    "inAppAvailable": true,
+    "publicRequestAvailable": true,
+    "accessEnds": "immediate",
+    "maximumRetryDays": 7,
+    "retentionAfterCompletion": "none",
+    "soleMemberGroup": "end",
+    "sharedGroupMembership": "remove",
+    "finalAdminReplacement": "longest-tenured-stable-tie-break",
+    "creatorTasks": "delete",
+    "openAssignedTasks": "unassigned",
+    "doneAssignedTasks": "deleted-user-marker-without-identity",
+    "linkedProviderCleanup": "revoke-before-completion",
+    "pendingState": "minimal-encrypted-retry-job"
   },
   "security": {
     "encryptedInTransit": true

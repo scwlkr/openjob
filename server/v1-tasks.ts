@@ -8,6 +8,7 @@ import {
 } from "./v1-identity.ts";
 import {
   defaultRequestId,
+  accountDeletionPendingResponse,
   errorResponse,
   internalErrorResponse,
   isRateLimitError,
@@ -33,7 +34,10 @@ export type AssignedTaskAssignee = {
   username: Username;
 };
 
-export type TaskAssignee = AssignedTaskAssignee | { state: "unassigned" };
+export type TaskAssignee =
+  | AssignedTaskAssignee
+  | { state: "unassigned" }
+  | { state: "deleted" };
 
 export type OpenJobTask = {
   taskId: TaskId;
@@ -722,6 +726,9 @@ export function createV1TasksApi({
         }
         const user = await users.resolve(identity);
         if (!user) return signInMethodUnrecognizedResponse(requestId);
+        if (user.deletionPending) {
+          return accountDeletionPendingResponse(requestId);
+        }
         const url = new URL(request.url);
         const path = taskResourceFromPath(url.pathname);
         if (path.kind === "invalid_group") return groupNotFound(requestId);

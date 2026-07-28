@@ -79,6 +79,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     qaPasswordTenantId,
   });
   const provider = createProviderGateway({
+    appleIosClientId: readNativeApplicationId() ?? "",
     appleRedirectUri: config.appleRedirectUri,
     appleServiceId: config.appleServiceId,
     googleIosClientId: config.googleIosClientId,
@@ -103,6 +104,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     clearProviderSession: () => provider.clearSession(),
     clearStoredSession: () => store.clear(),
     createUser: (token) => api.createUser(token),
+    deleteUser: (token, credentials) => api.deleteUser(token, credentials),
     exchangeProviderCredential: (credential) =>
       firebase.exchange(credential),
     getMe: (token) => api.getMe(token),

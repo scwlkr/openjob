@@ -470,6 +470,25 @@ export function createFirestoreGroupStore(
     };
   }
 
+  function deletionTaskWrite(document: FirestoreDocument, userId: string) {
+    const creatorUserId = document.fields?.creatorUserId?.stringValue ?? null;
+    if (creatorUserId === userId) return deleteDocumentWrite(document);
+    const assigneeUserId = document.fields?.assigneeUserId?.stringValue ?? null;
+    if (assigneeUserId !== userId) return null;
+    const taskState = document.fields?.state?.stringValue;
+    const fields = { ...(document.fields ?? {}) };
+    fields.assigneeState = {
+      stringValue: taskState === "done" ? "deleted" : "unassigned",
+    };
+    delete fields.assigneeMembershipId;
+    delete fields.assigneeUserId;
+    delete fields.assigneeUsername;
+    return {
+      update: { name: document.name, fields },
+      currentDocument: updateTimePrecondition(document),
+    };
+  }
+
   function groupIdReservationWrite(groupId: GroupId) {
     return {
       update: {
@@ -1203,6 +1222,157 @@ export function createFirestoreGroupStore(
         members,
         nextCursor: result.nextPageToken ?? null,
       };
+    },
+
+    async removeUserForDeletion(userId, groupId) {
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const group = await readGroup(groupPath(groupId));
+        if (!group) return { kind: "not_found" as const };
+        const documents = await readAllGroupDocuments(groupId);
+        const members = documents.members.map((document) =>
+          parseMembership(document, document.name),
+        );
+        const deletingMember = members.find((member) => member.userId === userId);
+        if (!deletingMember) return { kind: "not_found" as const };
+
+        if (members.length === 1) {
+          const inviteRoutes = documents.invite.map((document) =>
+            inviteRoutePath(parseInvite(document, document.name).routeId),
+          );
+          const [access, reservation, ...routePointers] = await Promise.all([
+            readDocument(accessPath(userId, groupId)),
+            readDocument(groupIdReservationPath(groupId)),
+            ...inviteRoutes.map((path) => readDocument(path)),
+          ]);
+          const externalDocuments = [access, ...routePointers].filter(
+            (document): document is FirestoreDocument => document !== null,
+          );
+          try {
+            await commit([
+              ...(reservation
+                ? [{
+                    verify: reservation.name,
+                    currentDocument: updateTimePrecondition(reservation),
+                  }]
+                : [groupIdReservationWrite(groupId)]),
+              ...Object.values(documents).flat().map(deleteDocumentWrite),
+              ...externalDocuments.map(deleteDocumentWrite),
+              {
+                delete: firestore.documentName(group.path),
+                currentDocument: { updateTime: group.updateTime },
+              },
+            ]);
+            return { kind: "ended" as const };
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            continue;
+          }
+        }
+
+        const remaining = members.filter((member) => member.userId !== userId);
+        const requiresPromotion =
+          deletingMember.role === "admin" &&
+          !remaining.some((member) => member.role === "admin");
+        const promoted = requiresPromotion
+          ? [...remaining].sort((left, right) => {
+              const joined = (left.joinedAt ?? "￿").localeCompare(
+                right.joinedAt ?? "￿",
+              );
+              return joined !== 0
+                ? joined
+                : (left.userId ?? "").localeCompare(right.userId ?? "");
+            })[0]
+          : null;
+        if (requiresPromotion && (!promoted?.userId || !promoted.updateTime)) {
+          throw new Error("Account deletion could not choose a replacement Admin.");
+        }
+        const [access, evidence, ban] = await Promise.all([
+          readDocument(accessPath(userId, groupId)),
+          readDocument(membershipEvidencePath(groupId, userId)),
+          readDocument(banPath(groupId, userId)),
+        ]);
+        try {
+          await commit([
+            stateRevisionWrite(group),
+            {
+              delete: deletingMember.path,
+              currentDocument: { updateTime: deletingMember.updateTime },
+            },
+            ...(access ? [deleteDocumentWrite(access)] : []),
+            ...(evidence ? [deleteDocumentWrite(evidence)] : []),
+            ...(ban ? [deleteDocumentWrite(ban)] : []),
+            ...(promoted
+              ? [{
+                  update: {
+                    name: promoted.path,
+                    fields: { role: { stringValue: "admin" } },
+                  },
+                  updateMask: { fieldPaths: ["role"] },
+                  currentDocument: { updateTime: promoted.updateTime },
+                }]
+              : []),
+            ...documents.tasks
+              .map((document) => deletionTaskWrite(document, userId))
+              .filter((write) => write !== null),
+          ]);
+          return {
+            kind: "removed" as const,
+            promotedUserId: promoted?.userId ?? null,
+          };
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+        }
+      }
+      throw new Error("Account deletion Group cleanup could not resolve concurrent writes.");
+    },
+
+    async removeDetachedUserData(userId) {
+      const groupDocuments = await readAllCollectionDocuments("v1Groups");
+      let changedGroups = 0;
+      for (const groupDocument of groupDocuments) {
+        const pathMarker = "/documents/";
+        const path = groupDocument.name.slice(
+          groupDocument.name.indexOf(pathMarker) + pathMarker.length,
+        );
+        const group = parseGroup(groupDocument, path);
+        const member = await readMembership(
+          membershipPath(group.groupId, userId),
+        );
+        if (member) continue;
+        for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+          const currentGroup = await readGroup(groupPath(group.groupId));
+          if (!currentGroup) break;
+          const documents = await readAllGroupDocuments(group.groupId);
+          const [evidence, ban] = await Promise.all([
+            readDocument(membershipEvidencePath(group.groupId, userId)),
+            readDocument(banPath(group.groupId, userId)),
+          ]);
+          const taskWrites = documents.tasks
+            .map((document) => deletionTaskWrite(document, userId))
+            .filter((write) => write !== null);
+          const cleanupDocuments = [evidence, ban].filter(
+            (document): document is FirestoreDocument => document !== null,
+          );
+          if (taskWrites.length === 0 && cleanupDocuments.length === 0) break;
+          try {
+            await commit([
+              stateRevisionWrite(currentGroup),
+              ...taskWrites,
+              ...cleanupDocuments.map(deleteDocumentWrite),
+            ]);
+            changedGroups += 1;
+            break;
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+          }
+          if (attempt === MAX_CONCURRENT_ATTEMPTS - 1) {
+            throw new Error(
+              "Detached account deletion data could not resolve concurrent writes.",
+            );
+          }
+        }
+      }
+      return changedGroups;
     },
 
     async promote(actorUserId, groupId, targetUserId) {

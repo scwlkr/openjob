@@ -42,7 +42,8 @@ export type Task = {
   text: string;
   assignee:
     | { state: "assigned"; userId: string; username: string }
-    | { state: "unassigned" };
+    | { state: "unassigned" }
+    | { state: "deleted" };
   priority: TaskPriority;
   dueDate: string | null;
   state: "open" | "done";
@@ -72,6 +73,10 @@ export type AuthSession = {
 export type AuthCredentialProof = {
   signInMethod: SignInMethod;
   getIdToken(): Promise<string>;
+  getRevocationProof(): Promise<
+    | { kind: "access_token"; value: string }
+    | { clientId: string; kind: "access_token"; value: string }
+  >;
   dispose(): Promise<void>;
 };
 
@@ -148,6 +153,19 @@ export type OpenJobApi = {
     state: "open" | "done",
   ): Promise<Task>;
   deleteTask(token: string, groupId: string, taskId: string): Promise<void>;
+  deleteUser(
+    token: string,
+    credentials: Array<{
+      credentialToken: string;
+      provider: SignInMethod;
+      revocation:
+        | { kind: "access_token"; value: string }
+        | { clientId: string; kind: "access_token"; value: string };
+    }>,
+  ): Promise<
+    | { completedAt: string; status: "completed" }
+    | { deadline: string; requestedAt: string; status: "pending" }
+  >;
   getNotificationSubscription(
     token: string,
     installationId: string,
