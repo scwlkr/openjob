@@ -811,6 +811,43 @@ test("requires explicit irreversible confirmation before deleting a User", async
   ).toBeOnTheScreen();
 });
 
+test("keeps deletion fresh-auth failures visible and retryable", async () => {
+  const auth = controller({
+    deleteUser: jest.fn(async () => {
+      throw new OpenJobApiError(
+        409,
+        "link_target_changed",
+        "Authenticate the linked Sign-in Method again.",
+      );
+    }),
+    restore: jest.fn(async () => signedIn),
+  });
+  await renderGate(auth);
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Manage Sign-in Methods" }),
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Delete User" }));
+  fireEvent.changeText(
+    screen.getByLabelText("Type DELETE to confirm permanent deletion"),
+    "DELETE",
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Permanently delete User" }),
+    ).not.toBeDisabled(),
+  );
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Permanently delete User" }),
+  );
+
+  expect(
+    await screen.findByText("Authenticate the linked Sign-in Method again."),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Permanently delete User" }),
+  ).not.toBeDisabled();
+});
+
 test("returns an expired current-User proof to a usable reauthentication action", async () => {
   const confirmation: AuthFlowResult = {
     existingProvider: "google",

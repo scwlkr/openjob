@@ -689,6 +689,14 @@ export function NativeAuthGate({
             Fresh authentication opens for every linked Sign-in Method after
             you confirm. Access ends immediately when the request starts.
           </Text>
+          {message ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.message, { color: palette.muted }]}
+            >
+              {message}
+            </Text>
+          ) : null}
           <Text style={[styles.inputLabel, { color: palette.ink }]}>
             Type DELETE to confirm permanent deletion
           </Text>
