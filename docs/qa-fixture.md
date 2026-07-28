@@ -22,18 +22,27 @@ closed.
 
 ## Routine testing lanes
 
-Use two persistent Preview sessions for routine multi-User testing:
+Use persistent Preview sessions in iOS Simulator and Android Emulator on the
+local Mac for all development, feature, regression, and Preview testing before
+the final release:
 
-- Keep the physical phone signed in as Google-backed `@scwlkr`.
-- Keep the simulator or emulator signed in as Preview-only `@qa-two`.
+- Keep simulated sessions available for Google-backed `@scwlkr` and
+  Preview-only `@qa-two`.
 - Install app updates without clearing app state. Reset the fixture data rather
   than signing out, revoking access, or switching Google or Apple accounts.
-- Enter real Google or Apple provider UI only when authentication, provider
-  configuration, or signing changes, and once on the exact release candidate.
+- Do not use a physical iPhone or Android device before final Release Proof. If
+  behavior cannot be exercised in a simulator or emulator, record the exact
+  deferred physical check instead of treating it as passed.
+- Enter real Google or Apple provider UI before final release only when
+  authentication, provider configuration, or signing changes, and only in the
+  local simulator or emulator. Repeat real-provider acceptance on both physical
+  platforms once for the exact final release candidate.
 
-Real-provider checkpoints remain manual acceptance work on the required
-platforms. The persistent `@qa-two` session speeds up ordinary multi-User
-testing but never counts as Google or Apple evidence.
+The exact final release candidate remains subject to the coequal physical
+iPhone and Android gates in
+`docs/adr/0017-require-cross-platform-native-release-evidence.md`. The
+persistent `@qa-two` session speeds up ordinary multi-User testing but never
+counts as Google or Apple evidence.
 
 ## Access
 

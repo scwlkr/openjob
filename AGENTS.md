@@ -24,8 +24,9 @@ OpenJob uses a single-context root glossary and root ADR directory. See `docs/ag
 
 ### Authentication testing
 
-- For routine Preview testing, keep the physical phone signed in as `@scwlkr` and the simulator or emulator signed in as `@qa-two`. Install updates without clearing app state, and reset fixture data instead of signing out or switching Google or Apple accounts. Follow `docs/qa-fixture.md#routine-testing-lanes`.
-- Use real Google or Apple sign-in only when authentication, provider configuration, or signing changes, and once on the exact release candidate. `@qa-two` never counts as real-provider evidence.
+- Run all development, feature, regression, and Preview testing before the final release through iOS Simulator and Android Emulator on this Mac. Keep persistent simulated sessions for `@scwlkr` and `@qa-two`, install updates without clearing app state, and reset fixture data instead of signing out or switching Google or Apple accounts. Follow `docs/qa-fixture.md#routine-testing-lanes`.
+- Do not use a physical iPhone or Android device before final Release Proof. If behavior cannot be exercised in a simulator or emulator, record that exact check as deferred Release Proof rather than treating it as passed. The exact final release candidate must still pass the coequal physical iPhone and Android gates in `docs/adr/0017-require-cross-platform-native-release-evidence.md`.
+- Use real Google or Apple sign-in before final release only when authentication, provider configuration, or signing changes, and only in the local simulator or emulator. Repeat real-provider acceptance on physical devices once for the exact final release candidate. `@qa-two` never counts as real-provider evidence.
 
 ## git 
 
