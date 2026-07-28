@@ -45,19 +45,19 @@ the result skips the gate with that explicit reason. The check validates the
 inventory and rejects missing, stale, or manually diverged projections before
 submission preparation.
 
-Hardware-specific native inputs also escalate and require written physical
-iPhone and Android evidence. The policy names the existing OS-backed provider,
-secure-storage, lifecycle/network, diagnostics, and encrypted-cache modules;
-an unrecognized new `native/src/` module fails closed as hardware risk. This is
-the narrow immediate physical proof required by the affected feature, not the
-complete #41 Release Proof matrix.
+Hardware-specific native inputs still escalate to the deterministic
+release-candidate verification scope. The policy names the existing OS-backed
+provider, secure-storage, lifecycle/network, diagnostics, and encrypted-cache
+modules; an unrecognized new `native/src/` module fails closed as hardware
+risk. `npm run verify` never collects physical-device evidence. The affected
+physical iPhone and Android checks are recorded as deferred #41 Release Proof
+against the exact final Candidate Artifacts, where the release coordinator
+collects them once.
 
 ```sh
 npm run verify -- focused --base origin/main \
   --evidence ios-simulator-journey=local://issue/ios-simulator \
-  --evidence android-emulator-journey=local://issue/android-emulator \
-  --evidence ios-physical-journey=local://issue/ios-physical \
-  --evidence android-physical-journey=local://issue/android-physical
+  --evidence android-emulator-journey=local://issue/android-emulator
 ```
 
 ## Virtual-runtime evidence

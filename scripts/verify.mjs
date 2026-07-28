@@ -84,8 +84,6 @@ const GATES = [
 const EVIDENCE_GATES = new Set([
   "ios-simulator-journey",
   "android-emulator-journey",
-  "ios-physical-journey",
-  "android-physical-journey",
 ]);
 const REPOSITORY_SUITE_COVERAGE = new Set([
   "web-integration",
@@ -565,10 +563,6 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       selected.add("android-embedded-bundle");
     }
   }
-  if (categories.includes("hardware-risk")) {
-    selected.add("ios-physical-journey");
-    selected.add("android-physical-journey");
-  }
   if (selected.has("repository-suite")) {
     for (const id of REPOSITORY_SUITE_COVERAGE) selected.add(id);
   }
@@ -582,6 +576,10 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       outcome: selected.has(gate.id) ? "selected" : "skipped",
       reason: selected.has(gate.id)
         ? `${gate.id} is required by the ${effectiveMode} impact policy`
+        : ["ios-physical-journey", "android-physical-journey"].includes(
+              gate.id,
+            ) && categories.includes("hardware-risk")
+          ? "hardware-specific physical proof is deferred to issue #41 Release Proof"
         : gate.id === "release-privacy"
           ? "the Release Privacy Inventory, permissions, processors, configuration, and projections are unaffected"
           : "the changed inputs do not affect this gate",

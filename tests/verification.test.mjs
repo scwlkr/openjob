@@ -22,12 +22,6 @@ const FOCUSED_EVIDENCE = [
   "--evidence",
   "android-emulator-journey=local://issue-44/android",
 ];
-const PHYSICAL_EVIDENCE = [
-  "--evidence",
-  "ios-physical-journey=local://issue-44/ios-physical",
-  "--evidence",
-  "android-physical-journey=local://issue-44/android-physical",
-];
 
 function git(cwd, args) {
   return execFileSync(REAL_GIT, args, { cwd, encoding: "utf8" }).trim();
@@ -291,7 +285,7 @@ test("focused native behavior requires both virtual-runtime journeys and reuses 
   assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
 });
 
-test("focused hardware-risk inputs require coequal physical evidence", async () => {
+test("focused hardware-risk inputs defer coequal physical evidence to #41", async () => {
   const fixture = await createVerificationFixture();
   await addChangedFile(
     fixture,
@@ -310,28 +304,29 @@ test("focused hardware-risk inputs require coequal physical evidence", async () 
     ...FOCUSED_EVIDENCE,
   ];
 
-  const missingPhysical = await runVerification(fixture, arguments_);
-  assert.equal(missingPhysical.status, 1);
-  const missingReport = JSON.parse(missingPhysical.stdout);
-  assert.ok(missingReport.categories.includes("hardware-risk"));
-  assert.equal(missingReport.effectiveMode, "release-candidate");
-  assert.equal(
-    missingReport.gates.find((gate) => gate.id === "ios-physical-journey")
-      .outcome,
-    "failed",
-  );
-
-  const proved = await runVerification(fixture, [
-    ...arguments_,
-    ...PHYSICAL_EVIDENCE,
-  ]);
+  const proved = await runVerification(fixture, arguments_);
   assert.equal(proved.status, 0, proved.stderr || proved.stdout);
   const report = JSON.parse(proved.stdout);
+  assert.ok(report.categories.includes("hardware-risk"));
+  assert.equal(report.effectiveMode, "release-candidate");
   for (const id of ["ios-physical-journey", "android-physical-journey"]) {
-    assert.equal(report.gates.find((gate) => gate.id === id).outcome, "passed");
+    const gate = report.gates.find((candidate) => candidate.id === id);
+    assert.equal(gate.outcome, "skipped");
+    assert.match(gate.reason, /deferred to issue #41 Release Proof/u);
   }
   const commands = await readFile(fixture.commandLog, "utf8");
   assert.doesNotMatch(commands, /(?:eas|xcrun|adb|gh) /u);
+
+  const rejectedPhysicalEvidence = await runVerification(fixture, [
+    ...arguments_,
+    "--evidence",
+    "ios-physical-journey=local://issue-44/ios-physical",
+  ]);
+  assert.equal(rejectedPhysicalEvidence.status, 2);
+  assert.equal(
+    JSON.parse(rejectedPhysicalEvidence.stdout).error.code,
+    "invalid_arguments",
+  );
 });
 
 test("native app entry points fail closed to hardware-risk scope", async (context) => {
@@ -350,7 +345,6 @@ test("native app entry points fail closed to hardware-risk scope", async (contex
         "--cache",
         `${fixture.root}-cache.json`,
         ...FOCUSED_EVIDENCE,
-        ...PHYSICAL_EVIDENCE,
       ]);
 
       assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -870,7 +864,7 @@ test("operator documentation separates Feature Proof, merge proof, and #41 Relea
   assert.match(guide, /JSON.*stdout/isu);
   assert.match(guide, /summary.*stderr/isu);
   assert.match(guide, /--evidence ios-simulator-journey=/u);
-  assert.match(guide, /hardware-specific.*physical/isu);
+  assert.match(guide, /hardware-specific.*deferred.*#41/isu);
   assert.match(guide, /full.*fingerprint/isu);
   assert.match(guide, /EAS build|Apple upload/u);
   assert.match(guide, /never.*upload|does not.*upload/iu);

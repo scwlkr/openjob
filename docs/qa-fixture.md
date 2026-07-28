@@ -33,6 +33,8 @@ the final release:
 - Do not use a physical iPhone or Android device before final Release Proof. If
   behavior cannot be exercised in a simulator or emulator, record the exact
   deferred physical check instead of treating it as passed.
+- Older GitHub issue text cannot promote that deferred check into a feature
+  closure gate. Issue #41 is its sole physical-proof owner.
 - Enter real Google or Apple provider UI before final release only when
   authentication, provider configuration, or signing changes, and only in the
   local simulator or emulator. Repeat real-provider acceptance on both physical
