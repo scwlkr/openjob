@@ -392,6 +392,78 @@ test.each([
   );
 });
 
+test("keeps diagnostics copy separate from the opt-out value at 320px and 2x text", async () => {
+  const original = Dimensions.get("window");
+  await act(() => {
+    Dimensions.set({
+      window: { ...original, fontScale: 2, height: 700, width: 320 },
+    });
+  });
+  let rendered: Awaited<ReturnType<typeof renderNativeApp>> | undefined;
+
+  try {
+    rendered = await renderNativeApp(
+      previewConfig,
+      authController({
+        restore: jest.fn(async () => ({ kind: "signed-out" as const })),
+      }),
+      diagnosticsController(false),
+    );
+    expect(
+      await screen.findByRole("header", {
+        name: "Sign in to your shared Task Lists",
+      }),
+    ).toBeOnTheScreen();
+
+    const authSwitch = screen.getByRole("switch", {
+      name: "Share diagnostics",
+    });
+    expect(authSwitch).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ checked: false }),
+    );
+    const authLabel = screen.getByText("Share diagnostics");
+    expect(authLabel).toHaveStyle({ flexShrink: 1, marginRight: 12 });
+    expect(authLabel).not.toHaveProp("numberOfLines");
+    expect(screen.getByText("Off")).toHaveStyle({ flexShrink: 0 });
+
+    await rendered.unmount();
+    rendered = await renderNativeApp(
+      previewConfig,
+      authController(),
+      diagnosticsController(false),
+    );
+    await fireEvent.press(
+      await screen.findByRole("button", {
+        name: "Open appearance settings",
+      }),
+    );
+
+    const settingsSwitch = await screen.findByRole("switch", {
+      name: "Share diagnostics",
+    });
+    expect(settingsSwitch).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ checked: false }),
+    );
+    const settingsLabel = screen.getByText("Share diagnostics");
+    expect(settingsLabel.parent).toHaveStyle({
+      flexShrink: 1,
+      marginRight: 12,
+    });
+    expect(settingsLabel).not.toHaveProp("numberOfLines");
+    expect(screen.getByText("Crashes and hangs only")).not.toHaveProp(
+      "numberOfLines",
+    );
+    expect(screen.getByText("Off")).toHaveStyle({ flexShrink: 0 });
+  } finally {
+    await rendered?.unmount();
+    await act(() => {
+      Dimensions.set({ window: original });
+    });
+  }
+});
+
 test("covers background snapshots with a branded curtain while active screenshots stay available", async () => {
   const appStateListeners: Array<(state: AppStateStatus) => void> = [];
   jest.spyOn(AppState, "addEventListener").mockImplementation((event, listener) => {

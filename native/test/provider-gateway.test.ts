@@ -61,7 +61,10 @@ function nativeModules(
       errorInProgress: "GOOGLE_IN_PROGRESS",
       errorPlayServices: "GOOGLE_PLAY_SERVICES",
       hasPlayServices: jest.fn(async () => true),
-      getTokens: jest.fn(async () => ({ accessToken: "google-access" })),
+      getTokens: jest.fn(async () => ({
+        accessToken: "google-access",
+        idToken: "google-token-snapshot-id",
+      })),
       signIn: jest.fn(async () => ({
         idToken: "google-id",
         kind: "success" as const,
@@ -110,15 +113,15 @@ test("configures the native Google client before bootstrap cleanup", async () =>
   );
 });
 
-test("hands Google system UI output to Firebase without profile or email data", async () => {
+test("uses one Google token snapshot without profile data", async () => {
   const native = nativeModules();
   const gateway = createProviderGateway(config, native);
 
   await expect(gateway.signIn("google")).resolves.toEqual({
-    idToken: "google-id",
+    idToken: "google-token-snapshot-id",
     provider: "google",
     revocation: {
-      idToken: "google-id",
+      idToken: "google-token-snapshot-id",
       kind: "access_token",
       value: "google-access",
     },
@@ -130,6 +133,7 @@ test("hands Google system UI output to Firebase without profile or email data", 
     webClientId: "web-client.apps.googleusercontent.com",
   });
   expect(native.google.signIn).toHaveBeenCalledTimes(1);
+  expect(native.google.getTokens).toHaveBeenCalledTimes(1);
 });
 
 test("uses native Apple authorization on iOS with a raw replay nonce", async () => {

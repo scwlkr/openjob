@@ -111,6 +111,7 @@ async function createGateway(fetchImplementation, overrides = {}) {
     },
     google: {
       allowedClientIds: [
+        "google-android-client.apps.googleusercontent.com",
         "google-web-client.apps.googleusercontent.com",
         "google-ios-client.apps.googleusercontent.com",
       ],
@@ -208,9 +209,233 @@ test("provider gateway binds Google proof to the fresh subject and client withou
     },
   ]);
   assert.equal(requests.some(({ url }) => url.includes("google-proof")), false);
+  assert.equal(
+    requests.some(({ url }) => url.endsWith("/tokeninfo")),
+    false,
+  );
 });
 
-test("provider gateway rejects wrong, unrelated, or expired Google proof before revocation", async () => {
+test("provider gateway validates Android Google access tokens without relying on at_hash", async () => {
+  const authority = await createGoogleTokenAuthority();
+  const requests = [];
+  const proofs = [
+    {
+      accessToken: "google-android-missing-hash",
+      atHash: undefined,
+      clientId: "google-android-client.apps.googleusercontent.com",
+      expiresAt: "2026-07-28T12:30:00.000Z",
+      introspection: {
+        audience: "unrelated-resource-server",
+        expires_in: "3600",
+        issued_to: "google-android-client.apps.googleusercontent.com",
+        user_id: "google-subject",
+      },
+    },
+    {
+      accessToken: "google-android-mismatched-hash",
+      atHash: await oidcAccessTokenHash("other-token"),
+      clientId: "google-android-client.apps.googleusercontent.com",
+      expiresAt: "2026-07-28T12:15:00.000Z",
+      introspection: {
+        aud: "unrelated-resource-server",
+        azp: "google-android-client.apps.googleusercontent.com",
+        exp: "1785240900",
+        sub: "google-subject",
+      },
+    },
+    {
+      accessToken: "google-audience-fallback",
+      atHash: undefined,
+      clientId: "google-web-client.apps.googleusercontent.com",
+      expiresAt: "2026-07-28T12:30:00.000Z",
+      introspection: {
+        aud: "google-web-client.apps.googleusercontent.com",
+        expires_in: 1800,
+        sub: "google-subject",
+      },
+    },
+    {
+      accessToken: "google-legacy-audience-fallback",
+      atHash: await oidcAccessTokenHash("different-token"),
+      clientId: "google-android-client.apps.googleusercontent.com",
+      expiresAt: "2026-07-28T12:30:00.000Z",
+      introspection: {
+        audience: "google-android-client.apps.googleusercontent.com",
+        expires_in: 1800,
+        user_id: "google-subject",
+      },
+    },
+  ];
+  let introspection = 0;
+  const gateway = await createGateway(async (input, init = {}) => {
+    requests.push({
+      body: String(init.body ?? ""),
+      headers: new Headers(init.headers),
+      method: init.method,
+      url: String(input),
+    });
+    if (String(input).endsWith("/oauth2/v3/certs")) {
+      return Response.json({ keys: [authority.jwk] });
+    }
+    if (String(input).endsWith("/tokeninfo")) {
+      return Response.json(proofs[introspection++].introspection);
+    }
+    throw new Error("Unexpected request.");
+  });
+  for (const proof of proofs) {
+    const idToken = await authority.issue({
+      ...(proof.atHash ? { at_hash: proof.atHash } : {}),
+      aud: "google-web-client.apps.googleusercontent.com",
+      exp: 1785241800,
+      iat: 1785240000,
+      iss: "https://accounts.google.com",
+      sub: "google-subject",
+    });
+    const prepared = await gateway.prepareAuthorization({
+      firebaseUid: "firebase_google",
+      provider: "google",
+      providerSubject: "google-subject",
+      revocation: {
+        idToken,
+        kind: "access_token",
+        value: proof.accessToken,
+      },
+    });
+    assert.equal(prepared.revocation.clientId, proof.clientId);
+    assert.equal(prepared.revocation.expiresAt, proof.expiresAt);
+  }
+  const introspectionRequests = requests.filter(({ url }) =>
+    url.endsWith("/tokeninfo")
+  );
+  assert.deepEqual(
+    introspectionRequests.map(({ body, method, url }) => ({ body, method, url })),
+    proofs.map(({ accessToken }) => ({
+      body: `access_token=${accessToken}`,
+      method: "POST",
+      url: "https://oauth2.googleapis.com/tokeninfo",
+    })),
+  );
+  assert.equal(
+    introspectionRequests.every(({ headers }) =>
+      headers.get("content-type") === "application/x-www-form-urlencoded"
+    ),
+    true,
+  );
+  assert.equal(
+    requests.every(({ url }) =>
+      proofs.every(({ accessToken }) => !url.includes(accessToken))
+    ),
+    true,
+  );
+});
+
+test("provider gateway rejects invalid Android Google access-token proof", async () => {
+  const authority = await createGoogleTokenAuthority();
+  const invalidProofs = [
+    {
+      expires_in: 1800,
+      issued_to: "google-android-client.apps.googleusercontent.com",
+      user_id: "another-google-subject",
+    },
+    {
+      expires_in: 1800,
+      issued_to: "unrelated-client.apps.googleusercontent.com",
+      user_id: "google-subject",
+    },
+    {
+      expires_in: 0,
+      issued_to: "google-android-client.apps.googleusercontent.com",
+      user_id: "google-subject",
+    },
+    {
+      expires_in: 1800,
+      issued_to: "google-android-client.apps.googleusercontent.com",
+      sub: "google-subject",
+      user_id: "another-google-subject",
+    },
+    {
+      azp: "google-android-client.apps.googleusercontent.com",
+      expires_in: 1800,
+      issued_to: "google-web-client.apps.googleusercontent.com",
+      sub: "google-subject",
+    },
+  ];
+  for (const introspection of invalidProofs) {
+    const gateway = await createGateway(async (input) => {
+      if (String(input).endsWith("/oauth2/v3/certs")) {
+        return Response.json({ keys: [authority.jwk] });
+      }
+      if (String(input).endsWith("/tokeninfo")) {
+        return Response.json(introspection);
+      }
+      throw new Error("Unexpected request.");
+    });
+    const idToken = await authority.issue({
+      aud: "google-web-client.apps.googleusercontent.com",
+      exp: 1785241800,
+      iat: 1785240000,
+      iss: "https://accounts.google.com",
+      sub: "google-subject",
+    });
+    await assert.rejects(
+      () => gateway.prepareAuthorization({
+        firebaseUid: "firebase_google",
+        provider: "google",
+        providerSubject: "google-subject",
+        revocation: { idToken, kind: "access_token", value: "google-proof" },
+      }),
+      AccountDeletionReauthenticationRequiredError,
+    );
+  }
+});
+
+test("provider gateway distinguishes invalid Google proof from provider outages", async () => {
+  const authority = await createGoogleTokenAuthority();
+  const idToken = await authority.issue({
+    aud: "google-web-client.apps.googleusercontent.com",
+    exp: 1785241800,
+    iat: 1785240000,
+    iss: "https://accounts.google.com",
+    sub: "google-subject",
+  });
+  const credential = {
+    firebaseUid: "firebase_google",
+    provider: "google",
+    providerSubject: "google-subject",
+    revocation: { idToken, kind: "access_token", value: "google-proof" },
+  };
+  for (const status of [400, 401]) {
+    const gateway = await createGateway(async (input) =>
+      String(input).endsWith("/oauth2/v3/certs")
+        ? Response.json({ keys: [authority.jwk] })
+        : new Response(null, { status })
+    );
+    await assert.rejects(
+      () => gateway.prepareAuthorization(credential),
+      AccountDeletionReauthenticationRequiredError,
+    );
+  }
+  for (const unavailable of [
+    async () => new Response(null, { status: 503 }),
+    async () => {
+      throw new Error("network unavailable");
+    },
+  ]) {
+    const gateway = await createGateway(async (input) =>
+      String(input).endsWith("/oauth2/v3/certs")
+        ? Response.json({ keys: [authority.jwk] })
+        : unavailable()
+    );
+    await assert.rejects(
+      () => gateway.prepareAuthorization(credential),
+      (error) =>
+        !(error instanceof AccountDeletionReauthenticationRequiredError) &&
+        error.message === "Google authorization validation is unavailable.",
+    );
+  }
+});
+
+test("provider gateway rejects wrong, unrelated, or expired Google identity proof", async () => {
   const authority = await createGoogleTokenAuthority();
   for (const claims of [
     {
@@ -237,14 +462,6 @@ test("provider gateway rejects wrong, unrelated, or expired Google proof before 
       azp: "google-ios-client.apps.googleusercontent.com",
       exp: 1785239999,
       iat: 1785239000,
-      iss: "https://accounts.google.com",
-      sub: "google-subject",
-    },
-    {
-      at_hash: await oidcAccessTokenHash("different-access-token"),
-      aud: "google-web-client.apps.googleusercontent.com",
-      exp: 1785241800,
-      iat: 1785240000,
       iss: "https://accounts.google.com",
       sub: "google-subject",
     },

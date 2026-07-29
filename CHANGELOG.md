@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- Android account-deletion reauthentication now accepts independently issued Google access tokens after subject and client validation, and large-text diagnostics controls no longer overlap.
+
 ### Security
 
 ## [0.3.5] - 2026-07-29

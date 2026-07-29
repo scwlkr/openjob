@@ -455,7 +455,7 @@ function AppearanceScreen({
               },
             ]}
           >
-            <View>
+            <View style={styles.diagnosticsCopy}>
               <Text style={[styles.diagnosticsLabel, { color: palette.ink }]}>
                 Share diagnostics
               </Text>
@@ -611,6 +611,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 3,
   },
+  diagnosticsCopy: {
+    flexShrink: 1,
+    marginRight: 12,
+  },
   diagnosticsLabel: {
     fontFamily: "Geist_700Bold",
     fontSize: 16,
@@ -631,6 +635,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   diagnosticsValue: {
+    flexShrink: 0,
     fontFamily: "Geist_900Black",
     fontSize: 14,
     textTransform: "uppercase",

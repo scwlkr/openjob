@@ -317,7 +317,8 @@ export function createAccountDeletionProviderGateway({
     const clientId = typeof payload?.azp === "string"
       ? payload.azp
       : payload?.aud;
-    return payload &&
+    if (!(
+      payload &&
         (payload.iss === "https://accounts.google.com" ||
           payload.iss === "accounts.google.com") &&
         typeof payload.aud === "string" &&
@@ -325,11 +326,82 @@ export function createAccountDeletionProviderGateway({
         typeof clientId === "string" &&
         google.allowedClientIds.includes(clientId) &&
         payload.sub === providerSubject &&
-        typeof payload.at_hash === "string" &&
-        payload.at_hash === await accessTokenHash(accessToken) &&
         times
-      ? { clientId, expiresAt: times.expiresAt }
+    )) {
+      return null;
+    }
+    if (
+      typeof payload.at_hash === "string" &&
+      payload.at_hash === await accessTokenHash(accessToken)
+    ) {
+      return { clientId, expiresAt: times.expiresAt };
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImplementation(
+        "https://oauth2.googleapis.com/tokeninfo",
+        {
+          body: new URLSearchParams({ access_token: accessToken }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          method: "POST",
+        },
+      );
+    } catch {
+      throw new Error("Google authorization validation is unavailable.");
+    }
+    if (response.status === 400 || response.status === 401) {
+      throw new AccountDeletionReauthenticationRequiredError("google");
+    }
+    if (!response.ok) {
+      throw new Error("Google authorization validation is unavailable.");
+    }
+    const introspected = (await response.json().catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+    if (!introspected || Array.isArray(introspected)) {
+      throw new AccountDeletionReauthenticationRequiredError("google");
+    }
+    const subjects = [introspected.sub, introspected.user_id].filter(
+      (value): value is string => typeof value === "string",
+    );
+    const authorizedParties = [introspected.azp, introspected.issued_to].filter(
+      (value): value is string => typeof value === "string",
+    );
+    const audiences = [introspected.aud, introspected.audience].filter(
+      (value): value is string => typeof value === "string",
+    );
+    const introspectedClientId = authorizedParties[0] ?? audiences[0];
+    const expiresAtClaim = numericDate(introspected.exp);
+    const expiresIn = numericDate(introspected.expires_in);
+    const nowSeconds = Math.floor(now() / 1_000);
+    const expiresInClaim = expiresIn !== null &&
+        Number.isSafeInteger(nowSeconds + expiresIn)
+      ? nowSeconds + expiresIn
       : null;
+    const accessTokenExpirations = [expiresAtClaim, expiresInClaim].filter(
+      (value): value is number => value !== null,
+    );
+    const accessTokenExpiresAt = accessTokenExpirations.length > 0
+      ? Math.min(...accessTokenExpirations)
+      : null;
+    if (
+      subjects.length === 0 ||
+      subjects.some((subject) => subject !== providerSubject) ||
+      authorizedParties.some((party) => party !== authorizedParties[0]) ||
+      (authorizedParties.length === 0 &&
+        audiences.some((audience) => audience !== audiences[0])) ||
+      typeof introspectedClientId !== "string" ||
+      !google.allowedClientIds.includes(introspectedClientId) ||
+      accessTokenExpiresAt === null ||
+      accessTokenExpiresAt <= nowSeconds
+    ) {
+      throw new AccountDeletionReauthenticationRequiredError("google");
+    }
+    return {
+      clientId: introspectedClientId,
+      expiresAt: Math.min(times.expiresAt, accessTokenExpiresAt),
+    };
   }
 
   async function firebaseAdminRequest(path: string, body: unknown) {

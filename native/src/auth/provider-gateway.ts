@@ -66,7 +66,7 @@ export type ProviderNativeModules = {
     errorInProgress: string;
     errorPlayServices: string;
     hasPlayServices(): Promise<boolean>;
-    getTokens(): Promise<{ accessToken: string }>;
+    getTokens(): Promise<{ accessToken: string; idToken: string }>;
     signIn(): Promise<
       { kind: "cancelled" } | { idToken?: string | null; kind: "success" }
     >;
@@ -192,14 +192,15 @@ export function createProviderGateway(
       if (response.kind === "cancelled") {
         throw new ProviderSignInError("cancelled");
       }
-      const idToken = requiredToken(response.idToken);
+      const tokens = await native.google.getTokens();
+      const idToken = requiredToken(tokens.idToken);
       return {
         idToken,
         provider: "google",
         revocation: {
           idToken,
           kind: "access_token",
-          value: requiredToken((await native.google.getTokens()).accessToken),
+          value: requiredToken(tokens.accessToken),
         },
       };
     } catch (error) {

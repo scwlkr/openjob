@@ -476,8 +476,10 @@ const bootstrapStyles = StyleSheet.create({
     lineHeight: 20,
   },
   authDiagnosticsLabel: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: "700",
+    marginRight: 12,
   },
   authDiagnosticsSwitch: {
     alignItems: "center",
@@ -493,6 +495,7 @@ const bootstrapStyles = StyleSheet.create({
     fontWeight: "900",
   },
   authDiagnosticsValue: {
+    flexShrink: 0,
     fontSize: 14,
     fontWeight: "900",
   },
