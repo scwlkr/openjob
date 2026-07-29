@@ -1,6 +1,6 @@
 {
   "name": "openjob",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "private": true,
   "bin": {
     "openjob": "cli/openjob.mjs"
