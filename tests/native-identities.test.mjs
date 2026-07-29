@@ -786,7 +786,11 @@ test("generated documentation separates app, SDK, and optional diagnostics decla
   );
   assert.match(
     releasePrivacyDocumentation,
-    /not ready for store submission/iu,
+    /generated Apple and Play drafts are ready for #40 virtual-runtime reconciliation/iu,
+  );
+  assert.match(
+    releasePrivacyDocumentation,
+    /Saving or submitting store forms remains deferred to #41 exact-candidate Release Proof/iu,
   );
   for (const dataType of [
     "Phone Number",

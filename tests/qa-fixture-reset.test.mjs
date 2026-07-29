@@ -863,7 +863,7 @@ test("the QA fixture runbook covers access, reset, recovery, rotation, and safe 
   assert.match(runbook, /1Password/);
   assert.match(runbook, /America\/Chicago/);
   assert.match(runbook, /transaction/i);
-  assert.match(runbook, /must remain open/i);
+  assert.match(runbook, /deferred solely to #41\s+Release Proof/i);
 });
 
 test("a concurrent fixture Task aborts a no-op reset", async () => {

@@ -129,7 +129,7 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
       );
       assert.equal(
         config.extra.openjob.releasePrivacy.inventorySchemaVersion,
-        "1.0.0",
+        "1.1.0",
       );
       assert.deepEqual(config.updates, {
         checkAutomatically: "NEVER",
