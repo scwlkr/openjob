@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- Account deletion no longer exhausts the Worker subrequest budget while scanning unrelated Group collections before final identity cleanup.
+
 ### Security
 
 ## [0.3.6] - 2026-07-29

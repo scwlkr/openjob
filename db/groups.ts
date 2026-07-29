@@ -1573,12 +1573,14 @@ export function createFirestoreGroupStore(
               "Another account deletion is already cleaning this Group.",
             );
           }
-          const documents = await readAllGroupDocuments(group.groupId);
+          const tasks = await readAllCollectionDocuments(
+            `${groupPath(group.groupId)}/tasks`,
+          );
           const [evidence, ban] = await Promise.all([
             readDocument(membershipEvidencePath(group.groupId, userId)),
             readDocument(banPath(group.groupId, userId)),
           ]);
-          const taskWrites = documents.tasks
+          const taskWrites = tasks
             .map((document) => deletionTaskWrite(document, userId))
             .filter((write) => write !== null);
           const cleanupDocuments = [evidence, ban].filter(

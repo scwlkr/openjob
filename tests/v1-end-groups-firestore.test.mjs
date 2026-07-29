@@ -24,6 +24,11 @@ function uuid(index) {
 async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
   const authority = await createTestFirebaseAuthority({ now: NOW });
   const firestore = createFakeFirestore();
+  const firestoreRequests = [];
+  const firestoreFetch = (input, init) => {
+    firestoreRequests.push(String(input));
+    return firestore.fetch(input, init);
+  };
   const privateKey = await createPrivateKey();
   const userIds = names.map((_, index) => uuid(index + 1));
   let nextGroupUuid = 501;
@@ -46,16 +51,16 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
   const harness = createV1TestHarness({
     initialNow: NOW,
     createWorker(controls) {
-      const users = createFirestoreUserStore(config, firestore.fetch, {
+      const users = createFirestoreUserStore(config, firestoreFetch, {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => userIds.shift(),
       });
-      const groups = createFirestoreGroupStore(config, firestore.fetch, {
+      const groups = createFirestoreGroupStore(config, firestoreFetch, {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => queuedGroupUuids.shift() ?? uuid(nextGroupUuid++),
       });
       groupStore = groups;
-      const tasks = createFirestoreTaskStore(config, firestore.fetch, {
+      const tasks = createFirestoreTaskStore(config, firestoreFetch, {
         now: () => Date.parse(controls.clock.now()),
         randomUUID: () => uuid(nextTaskUuid++),
       });
@@ -138,6 +143,7 @@ async function createEndGroupsHarness(names, { groupUuids = [] } = {}) {
     claim,
     createGroup,
     firestore,
+    firestoreRequests,
     groupStore,
     harness,
     join,
@@ -663,8 +669,54 @@ test("Account deletion Ends a sole-Member Group and is idempotent", async (t) =>
   assert.equal(concealed.status, 404);
 });
 
+test("detached account cleanup stays within the Worker subrequest budget", async (t) => {
+  const {
+    claim,
+    createGroup,
+    firestoreRequests,
+    groupStore,
+    harness,
+  } = await createEndGroupsHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  await claim("shane");
+  const eli = await claim("eli");
+  await createGroup("First unrelated Group");
+  await createGroup("Second unrelated Group");
+  await createGroup("Third unrelated Group");
+
+  firestoreRequests.length = 0;
+  assert.equal(await groupStore.removeDetachedUserData(eli.userId), 0);
+  const firestoreUrls = firestoreRequests
+    .map((input) => new URL(input))
+    .filter((url) => url.hostname === "firestore.googleapis.com");
+  assert.ok(firestoreUrls.length <= 16);
+  assert.equal(
+    firestoreUrls.filter((url) =>
+      url.searchParams.has("pageSize") &&
+      decodeURIComponent(url.pathname).endsWith("/tasks")
+    ).length,
+    3,
+  );
+  assert.equal(
+    firestoreUrls.some((url) =>
+      url.searchParams.has("pageSize") &&
+      ["/bans", "/invite", "/members", "/membershipEvidence"].some(
+        (collection) => decodeURIComponent(url.pathname).endsWith(collection),
+      )
+    ),
+    false,
+  );
+});
+
 test("Account deletion removes content and attribution left in former Groups", async (t) => {
-  const { claim, createGroup, groupStore, harness, join, request } =
+  const {
+    claim,
+    createGroup,
+    groupStore,
+    harness,
+    join,
+    request,
+  } =
     await createEndGroupsHarness(["shane", "eli"]);
   t.after(() => harness.close());
   const shane = await claim("shane");
