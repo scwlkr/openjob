@@ -1,9 +1,9 @@
 # OpenJob CLI
 
-Requires macOS and Node.js 22.13 or newer. Install OpenJob v0.3.4 from GitHub:
+Requires macOS and Node.js 22.13 or newer. Install OpenJob v0.3.5 from GitHub:
 
 ```bash
-npm install --global https://github.com/scwlkr/openjob/releases/download/v0.3.4/openjob-0.3.4.tgz
+npm install --global https://github.com/scwlkr/openjob/releases/download/v0.3.5/openjob-0.3.5.tgz
 ```
 
 Then run `openjob auth login` and `openjob --help`. OpenJob stores the Firebase

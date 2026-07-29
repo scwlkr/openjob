@@ -10,10 +10,19 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+### Security
+
+## [0.3.5] - 2026-07-29
+
+### Added
+
+### Changed
+
+### Fixed
+
 - Pending User deletion now survives signed-out relaunches through an encrypted, User-bound status capability that exposes no directly readable identity or content; final confirmation remains until acknowledged.
 
 ### Security
-
 ## [0.3.4] - 2026-07-28
 
 ### Added
@@ -91,7 +100,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 - First complete hosted OpenJob release with shared web, API, and CLI Group, governance, and Task workflows.
 
-[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/scwlkr/openjob/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/scwlkr/openjob/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/scwlkr/openjob/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/scwlkr/openjob/compare/v0.3.1...v0.3.2
