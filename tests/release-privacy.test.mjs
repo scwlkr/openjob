@@ -53,19 +53,129 @@ test("release privacy inventory validates and generates deterministic round-trip
   assert.match(fingerprint, /^sha256:[a-f0-9]{64}$/u);
   for (const [path, contents] of first) {
     assert.match(contents, new RegExp(fingerprint, "u"), path);
-    assert.match(contents, /1\.0\.0/u, path);
+    assert.match(contents, new RegExp(inventory.schemaVersion.replaceAll(".", "\\."), "u"), path);
   }
 
   const native = JSON.parse(
     first.get("config/generated/native-privacy.json"),
   );
+  const apple = JSON.parse(
+    first.get("config/generated/apple-app-privacy.json"),
+  );
   const play = JSON.parse(
     first.get("config/generated/play-data-safety.json"),
   );
   assert.equal(native.metadata.inventoryFingerprint, fingerprint);
+  assert.equal(apple.metadata.inventoryFingerprint, fingerprint);
   assert.equal(play.metadata.inventoryFingerprint, fingerprint);
   assert.equal(native.metadata.inventorySchemaVersion, inventory.schemaVersion);
+  assert.equal(apple.metadata.inventorySchemaVersion, inventory.schemaVersion);
   assert.equal(play.metadata.inventorySchemaVersion, inventory.schemaVersion);
+});
+
+test("Apple declaration preparation contains the complete generated store-answer draft", async () => {
+  const { inventory, schema } = await readContract();
+  const outputs = createReleasePrivacyOutputs(inventory, schema);
+  const apple = JSON.parse(
+    outputs.get("config/generated/apple-app-privacy.json"),
+  );
+
+  assert.equal(apple.metadata.inventoryFingerprint, releasePrivacyFingerprint(inventory));
+  assert.equal(apple.inventoryPrerequisitesReady, true);
+  assert.equal(apple.declarationState, "generated-draft");
+  assert.equal(apple.submissionState, "deferred-to-issue-41");
+  assert.equal(apple.accountDeletion.status, "implemented");
+  assert.equal(apple.accountDeletion.inAppAvailable, true);
+  assert.equal(apple.accountDeletion.publicRequestAvailable, true);
+
+  const name = apple.dataPractices.find(({ id }) => id === "name");
+  assert.deepEqual(
+    {
+      collection: name.collection,
+      linked: name.linked,
+      purposes: name.purposes,
+      shared: name.shared,
+      tracking: name.tracking,
+    },
+    {
+      collection: "required",
+      linked: true,
+      purposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+      shared: false,
+      tracking: false,
+    },
+  );
+
+  const crash = apple.dataPractices.find(({ id }) => id === "crash-data");
+  assert.deepEqual(
+    {
+      collection: crash.collection,
+      condition: crash.collectionCondition,
+      linked: crash.linked,
+      shared: crash.shared,
+      tracking: crash.tracking,
+    },
+    {
+      collection: "optional",
+      condition: "share-diagnostics-enabled",
+      linked: false,
+      shared: false,
+      tracking: false,
+    },
+  );
+  assert.deepEqual(apple.permissions, inventory.permissions);
+});
+
+test("store drafts separate #40 preparation from #41 candidate reconciliation", async () => {
+  const { inventory, schema } = await readContract();
+  const outputs = createReleasePrivacyOutputs(inventory, schema);
+  const apple = JSON.parse(
+    outputs.get("config/generated/apple-app-privacy.json"),
+  );
+  const play = JSON.parse(
+    outputs.get("config/generated/play-data-safety.json"),
+  );
+
+  for (const draft of [apple, play]) {
+    assert.equal(draft.inventoryPrerequisitesReady, true);
+    assert.equal(draft.declarationState, "generated-draft");
+    assert.equal(draft.submissionState, "deferred-to-issue-41");
+  }
+  assert.equal(Object.hasOwn(play, "submissionReady"), false);
+
+  const virtualTraffic = inventory.evidencePolicy.inputs.find(
+    ({ id }) => id === "simulator-emulator-provider-api-sentry-traffic",
+  );
+  assert.deepEqual(
+    {
+      candidateScoped: virtualTraffic.candidateScoped,
+      ownerIssue: virtualTraffic.ownerIssue,
+    },
+    { candidateScoped: false, ownerIssue: 40 },
+  );
+  const candidateTraffic = inventory.evidencePolicy.inputs.find(
+    ({ id }) => id === "exact-candidate-provider-api-sentry-traffic",
+  );
+  assert.deepEqual(
+    {
+      candidateScoped: candidateTraffic.candidateScoped,
+      ownerIssue: candidateTraffic.ownerIssue,
+    },
+    { candidateScoped: true, ownerIssue: 41 },
+  );
+
+  assert.ok(
+    inventory.submissionChecklist.some(
+      ({ id, ownerIssue }) =>
+        id === "reconcile-virtual-traffic" && ownerIssue === 40,
+    ),
+  );
+  assert.ok(
+    inventory.submissionChecklist.some(
+      ({ id, ownerIssue }) =>
+        id === "reconcile-candidate-evidence" && ownerIssue === 41,
+    ),
+  );
 });
 
 test("checked-in release privacy projections are current and manual drift is rejected", async () => {
@@ -102,11 +212,11 @@ test("checked-in release privacy projections are current and manual drift is rej
 
     assert.deepEqual((await verifyReleasePrivacyOutputs(root)).stalePaths, []);
     await writeFile(
-      join(root, "config", "generated", "play-data-safety.json"),
+      join(root, "config", "generated", "apple-app-privacy.json"),
       "{}\n",
     );
     assert.deepEqual((await verifyReleasePrivacyOutputs(root)).stalePaths, [
-      "config/generated/play-data-safety.json",
+      "config/generated/apple-app-privacy.json",
     ]);
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -145,6 +255,7 @@ test("one inventory row propagates to every affected projection with a new finge
   const after = createReleasePrivacyOutputs(changed, schema);
   for (const path of [
     "config/generated/native-privacy.json",
+    "config/generated/apple-app-privacy.json",
     "config/generated/play-data-safety.json",
     "docs/generated/release-privacy.md",
   ]) {

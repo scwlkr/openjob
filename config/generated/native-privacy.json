@@ -1,8 +1,8 @@
 {
   "metadata": {
     "generatedFrom": "config/release-privacy-inventory.json",
-    "inventoryFingerprint": "sha256:e365251eef2129c650690949ed57ace0f4945160cc388aac02c30f4ba53fd943",
-    "inventorySchemaVersion": "1.0.0",
+    "inventoryFingerprint": "sha256:5afee142317d259a197a69928a40143ee20acaf4915e2484a5dc2ee3004b9b80",
+    "inventorySchemaVersion": "1.1.0",
     "inventoryVersion": "0.3.4"
   },
   "dataPracticeIds": [

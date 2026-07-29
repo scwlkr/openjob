@@ -59,18 +59,17 @@
       "id": "name",
       "displayName": "Name",
       "authority": "openjob",
-      "dataType": "Personal info > Name",
+      "dataType": "NSPrivacyCollectedDataTypeName",
       "collection": "required",
       "collected": true,
       "collectionCondition": "account-creation-or-sign-in",
-      "shared": false,
-      "sold": false,
       "linked": true,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Account management"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "openjob-api",
@@ -84,18 +83,17 @@
       "id": "email-address",
       "displayName": "Email address",
       "authority": "openjob",
-      "dataType": "Personal info > Email address",
+      "dataType": "NSPrivacyCollectedDataTypeEmailAddress",
       "collection": "required",
       "collected": true,
       "collectionCondition": "account-creation-or-sign-in",
-      "shared": false,
-      "sold": false,
       "linked": true,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Account management"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "openjob-api",
@@ -109,18 +107,17 @@
       "id": "user-id",
       "displayName": "User ID",
       "authority": "openjob",
-      "dataType": "Personal info > User IDs",
+      "dataType": "NSPrivacyCollectedDataTypeUserID",
       "collection": "required",
       "collected": true,
       "collectionCondition": "account-creation-or-sign-in",
-      "shared": false,
-      "sold": false,
       "linked": true,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Account management"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "openjob-api",
@@ -132,17 +129,17 @@
       "id": "product-interaction",
       "displayName": "Product interaction",
       "authority": "openjob",
-      "dataType": "App activity > App interactions",
+      "dataType": "NSPrivacyCollectedDataTypeProductInteraction",
       "collection": "required",
       "collected": true,
       "collectionCondition": "authenticated-app-functionality",
-      "shared": false,
-      "sold": false,
       "linked": true,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "openjob-api"
@@ -153,18 +150,17 @@
       "id": "crash-data",
       "displayName": "Crash data",
       "authority": "openjob",
-      "dataType": "App info and performance > Crash logs",
+      "dataType": "NSPrivacyCollectedDataTypeCrashData",
       "collection": "optional",
       "collected": true,
       "collectionCondition": "share-diagnostics-enabled",
-      "shared": false,
-      "sold": false,
       "linked": false,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Analytics"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "sentry"
@@ -175,18 +171,17 @@
       "id": "performance-data",
       "displayName": "Performance data",
       "authority": "openjob",
-      "dataType": "App info and performance > Diagnostics",
+      "dataType": "NSPrivacyCollectedDataTypePerformanceData",
       "collection": "optional",
       "collected": true,
       "collectionCondition": "share-diagnostics-enabled",
-      "shared": false,
-      "sold": false,
       "linked": false,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Analytics"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "sentry"
@@ -197,18 +192,17 @@
       "id": "other-diagnostic-data",
       "displayName": "Other diagnostic data",
       "authority": "openjob",
-      "dataType": "App info and performance > Diagnostics",
+      "dataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
       "collection": "optional",
       "collected": true,
       "collectionCondition": "share-diagnostics-enabled",
-      "shared": false,
-      "sold": false,
       "linked": false,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [
-        "App functionality",
-        "Analytics"
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality"
       ],
       "processorIds": [
         "sentry"
@@ -219,14 +213,14 @@
       "id": "downloaded-task-group-content",
       "displayName": "Downloaded Task or Group content",
       "authority": "openjob",
-      "dataType": "Messages > Other user-generated content",
+      "dataType": null,
       "collection": "not-collected",
       "collected": false,
       "collectionCondition": "downloaded-only",
-      "shared": false,
-      "sold": false,
       "linked": false,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [],
       "processorIds": [],
@@ -236,14 +230,14 @@
       "id": "device-or-other-ids",
       "displayName": "Device or other IDs",
       "authority": "openjob",
-      "dataType": "Device or other IDs > Device or other IDs",
+      "dataType": null,
       "collection": "not-collected",
       "collected": false,
       "collectionCondition": "never-transmitted",
-      "shared": false,
-      "sold": false,
       "linked": false,
       "tracking": false,
+      "shared": false,
+      "sold": false,
       "encryptedInTransit": true,
       "purposes": [],
       "processorIds": [],

@@ -560,6 +560,7 @@ test("release privacy inputs select the inventory gate while unaffected inputs e
     "config/release-privacy-inventory.json",
     "native/app.config.mjs",
     "native/package.json",
+    "config/generated/apple-app-privacy.json",
     "config/generated/play-data-safety.json",
     "scripts/release-privacy.mjs",
   ]) {
@@ -588,6 +589,12 @@ test("release privacy inputs select the inventory gate while unaffected inputs e
       const report = JSON.parse(result.stdout);
       const gate = report.gates.find(({ id }) => id === "release-privacy");
       assert.equal(report.effectiveMode, "release-candidate");
+      if (path === "config/generated/apple-app-privacy.json") {
+        assert.ok(report.categories.includes("privacy"));
+        assert.ok(report.categories.includes("store-compliance"));
+        assert.ok(report.categories.includes("generated-output"));
+        assert.equal(report.categories.includes("unknown"), false);
+      }
       assert.equal(gate.selection, "escalated");
       assert.equal(gate.outcome, "passed");
       assert.equal(gate.coveredBy, "repository-suite");

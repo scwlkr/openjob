@@ -352,6 +352,7 @@ function isReleasePrivacyInput(file) {
     file === "config/release-privacy-inventory.json" ||
     file === "config/release-privacy-inventory.schema.json" ||
     file === "config/generated/native-privacy.json" ||
+    file === "config/generated/apple-app-privacy.json" ||
     file === "config/generated/play-data-safety.json" ||
     file === "docs/generated/release-privacy.md" ||
     file === "scripts/release-privacy.mjs" ||
@@ -390,6 +391,7 @@ function classify(files) {
     }
     if (
       file === "config/generated/native-privacy.json" ||
+      file === "config/generated/apple-app-privacy.json" ||
       file === "config/generated/play-data-safety.json" ||
       file === "docs/generated/release-privacy.md"
     ) {

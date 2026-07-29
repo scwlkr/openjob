@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://openjob.dev/schemas/release-privacy-inventory-v1.json",
+  "$id": "https://openjob.dev/schemas/release-privacy-inventory-v1.1.json",
   "title": "OpenJob Release Privacy Inventory",
   "type": "object",
   "additionalProperties": false,
@@ -24,7 +24,7 @@
       "const": "./release-privacy-inventory.schema.json"
     },
     "schemaVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "inventoryVersion": {
       "type": "string",
@@ -406,7 +406,13 @@
     "evidenceInput": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "displayName", "sourceType", "candidateScoped"],
+      "required": [
+        "id",
+        "displayName",
+        "sourceType",
+        "candidateScoped",
+        "ownerIssue"
+      ],
       "properties": {
         "id": { "$ref": "#/definitions/identifier" },
         "displayName": { "type": "string", "minLength": 1 },
@@ -418,7 +424,8 @@
             "captured-traffic"
           ]
         },
-        "candidateScoped": { "const": true }
+        "candidateScoped": { "type": "boolean" },
+        "ownerIssue": { "enum": [40, 41] }
       }
     },
     "prohibitedContent": {
@@ -433,7 +440,14 @@
     "checklistItem": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "platforms", "description", "blockingCondition"],
+      "required": [
+        "id",
+        "platforms",
+        "ownerIssue",
+        "stage",
+        "description",
+        "blockingCondition"
+      ],
       "properties": {
         "id": { "$ref": "#/definitions/identifier" },
         "platforms": {
@@ -441,6 +455,8 @@
           "minItems": 1,
           "items": { "enum": ["apple", "play"] }
         },
+        "ownerIssue": { "enum": [40, 41] },
+        "stage": { "enum": ["pre-release-preparation", "release-proof"] },
         "description": { "type": "string", "minLength": 1 },
         "blockingCondition": { "type": "string", "minLength": 1 }
       }

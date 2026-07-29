@@ -2,12 +2,12 @@
 
 # Release Privacy and Store Preparation
 
-- Inventory schema version: `1.0.0`
+- Inventory schema version: `1.1.0`
 - Inventory version: `0.3.4`
-- Inventory fingerprint: `sha256:e365251eef2129c650690949ed57ace0f4945160cc388aac02c30f4ba53fd943`
+- Inventory fingerprint: `sha256:5afee142317d259a197a69928a40143ee20acaf4915e2484a5dc2ee3004b9b80`
 - Generated from: `config/release-privacy-inventory.json`
 
-Preparation status: **not ready for store submission**. Inventory prerequisites are ready; the exact immutable candidate still requires reconciliation and store proof.
+Preparation status: **generated Apple and Play drafts are ready for #40 virtual-runtime reconciliation**. Saving or submitting store forms remains deferred to #41 exact-candidate Release Proof.
 
 This document projects OpenJob-owned behavior separately from third-party declarations. SDK or operating-system claims are evidence, not OpenJob product behavior.
 
@@ -75,14 +75,16 @@ These rows remain separate from the OpenJob-owned Apple manifest and Play answer
 
 ## Submission checklist
 
-- [ ] `match-generated-projections` (apple + play): Match store answers to the generated projections and record this inventory fingerprint. Block when: Any generated projection is stale or manually diverged.
-- [ ] `verify-public-urls` (apple + play): Verify every required public URL is live at its exact inventory URL. Block when: A required URL is planned, absent, redirected incorrectly, or unavailable.
-- [ ] `verify-account-deletion` (apple + play): Verify the implemented in-app and public account-deletion behavior from issue #42. Block when: Account deletion remains pending or differs from the inventory.
-- [ ] `reconcile-candidate-evidence` (apple + play): Reconcile exact dependencies, SDK declarations, and captured traffic against the immutable candidate. Block when: Any evidence discrepancy is unexplained.
-- [ ] `save-without-premature-claims` (apple + play): Save or submit answers only through the authenticated store surface after all blockers clear. Block when: The candidate, traffic, deletion, URL, or declaration proof is incomplete.
+- [ ] `match-generated-projections` (#40 pre-release-preparation; apple + play): Match store answers to the generated projections and record this inventory fingerprint. Block when: Any generated projection is stale or manually diverged.
+- [ ] `verify-public-urls` (#40 pre-release-preparation; apple + play): Verify every required public URL is live at its exact inventory URL. Block when: A required URL is planned, absent, redirected incorrectly, or unavailable.
+- [ ] `verify-account-deletion` (#40 pre-release-preparation; apple + play): Verify the implemented in-app and public account-deletion behavior from issue #42. Block when: Account deletion remains pending or differs from the inventory.
+- [ ] `reconcile-virtual-traffic` (#40 pre-release-preparation; apple + play): Reconcile iOS Simulator and Android Emulator provider, API, and Sentry traffic with the inventory. Block when: Virtual-runtime traffic is missing, contains prohibited data, or differs from the inventory.
+- [ ] `prepare-declaration-answers` (#40 pre-release-preparation; apple + play): Prepare generated Apple App Privacy and Play Data Safety answers without saving or submitting store forms. Block when: A generated answer is missing, stale, inconsistent, or presented as submitted.
+- [ ] `reconcile-candidate-evidence` (#41 release-proof; apple + play): Reconcile exact dependencies, SDK declarations, and captured traffic against the immutable candidate. Block when: Any evidence discrepancy is unexplained.
+- [ ] `save-without-premature-claims` (#41 release-proof; apple + play): Save or submit answers only through the authenticated store surface after all blockers clear. Block when: The candidate, traffic, deletion, URL, or declaration proof is incomplete.
 
 ## Candidate reconciliation boundary
 
-Exact dependency inventories, bundled SDK manifests, Play SDK Index entries, and captured provider/API/Sentry traffic can add a discrepancy. They cannot silently rewrite this inventory. Resolve or escalate every discrepancy on #40, and record the final fingerprint with #41.
+#40 reconciles iOS Simulator and Android Emulator provider/API/Sentry traffic and prepares generated declaration answers. #41 alone reconciles exact Candidate Artifact dependencies, bundled SDK manifests, Play SDK Index entries, final candidate traffic, and authenticated store state. Evidence can add a discrepancy but cannot silently rewrite this inventory.
 
 Evidence and generated reports must exclude credentials, authentication material, personal data, Task content, Group content.

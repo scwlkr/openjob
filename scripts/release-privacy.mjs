@@ -9,10 +9,12 @@ import addFormats from "ajv-formats";
 const INVENTORY_PATH = "config/release-privacy-inventory.json";
 const SCHEMA_PATH = "config/release-privacy-inventory.schema.json";
 const NATIVE_OUTPUT_PATH = "config/generated/native-privacy.json";
+const APPLE_OUTPUT_PATH = "config/generated/apple-app-privacy.json";
 const PLAY_OUTPUT_PATH = "config/generated/play-data-safety.json";
 const DOCUMENT_OUTPUT_PATH = "docs/generated/release-privacy.md";
 const OUTPUT_PATHS = [
   NATIVE_OUTPUT_PATH,
+  APPLE_OUTPUT_PATH,
   PLAY_OUTPUT_PATH,
   DOCUMENT_OUTPUT_PATH,
 ];
@@ -244,6 +246,23 @@ function assertSemanticContract(inventory) {
     }
   }
 
+  for (const input of inventory.evidencePolicy.inputs) {
+    if (input.candidateScoped !== (input.ownerIssue === 41)) {
+      throw new Error(
+        `Release Privacy Inventory evidence input ${input.id} has a contradictory issue scope.`,
+      );
+    }
+  }
+  for (const item of inventory.submissionChecklist) {
+    const expectedStage =
+      item.ownerIssue === 40 ? "pre-release-preparation" : "release-proof";
+    if (item.stage !== expectedStage) {
+      throw new Error(
+        `Release Privacy Inventory checklist item ${item.id} has a contradictory issue stage.`,
+      );
+    }
+  }
+
   const deletionUrl = inventory.publicUrls[inventory.accountDeletion.publicUrlId];
   if (!deletionUrl) {
     throw new Error(
@@ -408,13 +427,61 @@ function createNativeProjection(inventory) {
   };
 }
 
+function inventoryPrerequisitesReady(inventory) {
+  return (
+    inventory.accountDeletion.status === "implemented" &&
+    inventory.accountDeletion.inAppAvailable &&
+    inventory.accountDeletion.publicRequestAvailable &&
+    Object.values(inventory.publicUrls).every(({ status }) => status === "live")
+  );
+}
+
+function createAppleProjection(inventory) {
+  const deletionUrl = inventory.publicUrls[inventory.accountDeletion.publicUrlId];
+  return {
+    metadata: projectionMetadata(inventory),
+    inventoryPrerequisitesReady: inventoryPrerequisitesReady(inventory),
+    declarationState: "generated-draft",
+    submissionState: "deferred-to-issue-41",
+    security: inventory.security,
+    publicUrls: inventory.publicUrls,
+    accountDeletion: {
+      ...inventory.accountDeletion,
+      url: deletionUrl.url,
+      urlStatus: deletionUrl.status,
+    },
+    dataPractices: inventory.dataPractices.map((practice) => ({
+      id: practice.id,
+      displayName: practice.displayName,
+      authority: practice.authority,
+      dataType: practice.apple.dataType ?? null,
+      collection: practice.collection,
+      collected: practice.apple.collected,
+      collectionCondition: practice.collectionCondition,
+      linked: practice.linked,
+      tracking: practice.tracking,
+      shared: practice.shared,
+      sold: practice.sold,
+      encryptedInTransit: practice.encryptedInTransit,
+      purposes: practice.apple.purposes,
+      processorIds: practice.processorIds,
+      permissionIds: practice.permissionIds,
+    })),
+    processors: inventory.processors,
+    permissions: inventory.permissions,
+    thirdPartyEvidence: inventory.thirdPartyEvidence,
+    evidencePolicy: inventory.evidencePolicy,
+    submissionChecklist: inventory.submissionChecklist,
+  };
+}
+
 function createPlayProjection(inventory) {
   const deletionUrl = inventory.publicUrls[inventory.accountDeletion.publicUrlId];
   return {
     metadata: projectionMetadata(inventory),
-    submissionReady:
-      inventory.accountDeletion.status === "implemented" &&
-      Object.values(inventory.publicUrls).every(({ status }) => status === "live"),
+    inventoryPrerequisitesReady: inventoryPrerequisitesReady(inventory),
+    declarationState: "generated-draft",
+    submissionState: "deferred-to-issue-41",
     security: inventory.security,
     publicUrls: inventory.publicUrls,
     accountDeletion: {
@@ -468,8 +535,8 @@ function renderReleasePrivacyDocument(inventory) {
     `- Inventory fingerprint: \`${metadata.inventoryFingerprint}\``,
     `- Generated from: \`${metadata.generatedFrom}\``,
     "",
-    play.submissionReady
-      ? "Preparation status: **not ready for store submission**. Inventory prerequisites are ready; the exact immutable candidate still requires reconciliation and store proof."
+    play.inventoryPrerequisitesReady
+      ? "Preparation status: **generated Apple and Play drafts are ready for #40 virtual-runtime reconciliation**. Saving or submitting store forms remains deferred to #41 exact-candidate Release Proof."
       : "Preparation status: **not ready for store submission**. Planned URLs and issue #42 account deletion must be completed and then reconciled against one immutable candidate.",
     "",
     "This document projects OpenJob-owned behavior separately from third-party declarations. SDK or operating-system claims are evidence, not OpenJob product behavior.",
@@ -614,7 +681,7 @@ function renderReleasePrivacyDocument(inventory) {
   );
   for (const item of inventory.submissionChecklist) {
     lines.push(
-      `- [ ] \`${item.id}\` (${item.platforms.join(" + ")}): ${item.description} Block when: ${item.blockingCondition}`,
+      `- [ ] \`${item.id}\` (#${item.ownerIssue} ${item.stage}; ${item.platforms.join(" + ")}): ${item.description} Block when: ${item.blockingCondition}`,
     );
   }
 
@@ -622,7 +689,7 @@ function renderReleasePrivacyDocument(inventory) {
     "",
     "## Candidate reconciliation boundary",
     "",
-    "Exact dependency inventories, bundled SDK manifests, Play SDK Index entries, and captured provider/API/Sentry traffic can add a discrepancy. They cannot silently rewrite this inventory. Resolve or escalate every discrepancy on #40, and record the final fingerprint with #41.",
+    "#40 reconciles iOS Simulator and Android Emulator provider/API/Sentry traffic and prepares generated declaration answers. #41 alone reconciles exact Candidate Artifact dependencies, bundled SDK manifests, Play SDK Index entries, final candidate traffic, and authenticated store state. Evidence can add a discrepancy but cannot silently rewrite this inventory.",
     "",
     `Evidence and generated reports must exclude ${inventory.evidencePolicy.prohibitedContent
       .map(({ displayName }) => displayName)
@@ -640,6 +707,7 @@ export function createReleasePrivacyOutputs(inventory, schema) {
   validateReleasePrivacyInventory(inventory, schema);
   return new Map([
     [NATIVE_OUTPUT_PATH, serializeJson(createNativeProjection(inventory))],
+    [APPLE_OUTPUT_PATH, serializeJson(createAppleProjection(inventory))],
     [PLAY_OUTPUT_PATH, serializeJson(createPlayProjection(inventory))],
     [DOCUMENT_OUTPUT_PATH, renderReleasePrivacyDocument(inventory)],
   ]);

@@ -1,6 +1,6 @@
 {
   "$schema": "./release-privacy-inventory.schema.json",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "inventoryVersion": "0.3.4",
   "authority": {
     "owner": "OpenJob",
@@ -463,25 +463,36 @@
         "id": "exact-dependency-inventories",
         "displayName": "Exact signed iOS and Android dependency inventories",
         "sourceType": "exact-dependency-inventory",
-        "candidateScoped": true
+        "candidateScoped": true,
+        "ownerIssue": 41
       },
       {
         "id": "bundled-sdk-manifests",
         "displayName": "Bundled SDK privacy manifests",
         "sourceType": "sdk-manifest",
-        "candidateScoped": true
+        "candidateScoped": true,
+        "ownerIssue": 41
       },
       {
         "id": "play-sdk-index",
         "displayName": "Play SDK Index entries",
         "sourceType": "sdk-index",
-        "candidateScoped": true
+        "candidateScoped": true,
+        "ownerIssue": 41
       },
       {
-        "id": "captured-provider-api-sentry-traffic",
-        "displayName": "Captured provider, API, and Sentry traffic",
+        "id": "simulator-emulator-provider-api-sentry-traffic",
+        "displayName": "Simulator and emulator provider, API, and Sentry traffic",
         "sourceType": "captured-traffic",
-        "candidateScoped": true
+        "candidateScoped": false,
+        "ownerIssue": 40
+      },
+      {
+        "id": "exact-candidate-provider-api-sentry-traffic",
+        "displayName": "Exact Candidate Artifact provider, API, and Sentry traffic",
+        "sourceType": "captured-traffic",
+        "candidateScoped": true,
+        "ownerIssue": 41
       }
     ],
     "prohibitedContent": [
@@ -496,30 +507,56 @@
     {
       "id": "match-generated-projections",
       "platforms": ["apple", "play"],
+      "ownerIssue": 40,
+      "stage": "pre-release-preparation",
       "description": "Match store answers to the generated projections and record this inventory fingerprint.",
       "blockingCondition": "Any generated projection is stale or manually diverged."
     },
     {
       "id": "verify-public-urls",
       "platforms": ["apple", "play"],
+      "ownerIssue": 40,
+      "stage": "pre-release-preparation",
       "description": "Verify every required public URL is live at its exact inventory URL.",
       "blockingCondition": "A required URL is planned, absent, redirected incorrectly, or unavailable."
     },
     {
       "id": "verify-account-deletion",
       "platforms": ["apple", "play"],
+      "ownerIssue": 40,
+      "stage": "pre-release-preparation",
       "description": "Verify the implemented in-app and public account-deletion behavior from issue #42.",
       "blockingCondition": "Account deletion remains pending or differs from the inventory."
     },
     {
+      "id": "reconcile-virtual-traffic",
+      "platforms": ["apple", "play"],
+      "ownerIssue": 40,
+      "stage": "pre-release-preparation",
+      "description": "Reconcile iOS Simulator and Android Emulator provider, API, and Sentry traffic with the inventory.",
+      "blockingCondition": "Virtual-runtime traffic is missing, contains prohibited data, or differs from the inventory."
+    },
+    {
+      "id": "prepare-declaration-answers",
+      "platforms": ["apple", "play"],
+      "ownerIssue": 40,
+      "stage": "pre-release-preparation",
+      "description": "Prepare generated Apple App Privacy and Play Data Safety answers without saving or submitting store forms.",
+      "blockingCondition": "A generated answer is missing, stale, inconsistent, or presented as submitted."
+    },
+    {
       "id": "reconcile-candidate-evidence",
       "platforms": ["apple", "play"],
+      "ownerIssue": 41,
+      "stage": "release-proof",
       "description": "Reconcile exact dependencies, SDK declarations, and captured traffic against the immutable candidate.",
       "blockingCondition": "Any evidence discrepancy is unexplained."
     },
     {
       "id": "save-without-premature-claims",
       "platforms": ["apple", "play"],
+      "ownerIssue": 41,
+      "stage": "release-proof",
       "description": "Save or submit answers only through the authenticated store surface after all blockers clear.",
       "blockingCondition": "The candidate, traffic, deletion, URL, or declaration proof is incomplete."
     }
