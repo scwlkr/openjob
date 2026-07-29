@@ -10,10 +10,19 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+### Security
+
+## [0.3.7] - 2026-07-29
+
+### Added
+
+### Changed
+
+### Fixed
+
 - Account deletion no longer exhausts the Worker subrequest budget while scanning unrelated Group collections before final identity cleanup.
 
 ### Security
-
 ## [0.3.6] - 2026-07-29
 
 ### Added
@@ -113,7 +122,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 - First complete hosted OpenJob release with shared web, API, and CLI Group, governance, and Task workflows.
 
-[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/scwlkr/openjob/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/scwlkr/openjob/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/scwlkr/openjob/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/scwlkr/openjob/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/scwlkr/openjob/compare/v0.3.3...v0.3.4
