@@ -423,20 +423,20 @@ export function TaskList({
     setTaskActionTarget(document.getElementById("signed-in-task-action"));
   }, []);
 
-  const finishEditorClose = useCallback((clearActionError: boolean) => {
-    window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+  const finishEditorClose = useCallback(() => {
     setEditor(null);
-    setEditorInput(null);
     setEditorClosing(false);
-    if (clearActionError) setActionError("");
     editorCloseTimeout.current = null;
   }, []);
 
   const beginEditorClose = useCallback((clearActionError = true) => {
     if (editorCloseTimeout.current !== null) return;
+    window.sessionStorage.removeItem(TASK_EDITOR_DRAFT_KEY);
+    setEditorInput(null);
+    if (clearActionError) setActionError("");
     setEditorClosing(true);
     const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : TASK_EDITOR_EXIT_MS;
-    editorCloseTimeout.current = window.setTimeout(() => finishEditorClose(clearActionError), delay);
+    editorCloseTimeout.current = window.setTimeout(finishEditorClose, delay);
   }, [finishEditorClose]);
 
   const closeEditor = useCallback(() => beginEditorClose(), [beginEditorClose]);
@@ -1118,6 +1118,7 @@ export function TaskList({
             role="dialog"
             aria-modal="true"
             aria-labelledby="task-editor-title"
+            inert={editorClosing}
             ref={editorDialog}
             tabIndex={-1}
           >

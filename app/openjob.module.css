@@ -340,7 +340,7 @@
   .statusFilters button { justify-content: center; min-width: 0; padding: 0 8px; }
   .taskSections { width: calc(100% - 24px); }
   .taskDialogBackdrop { inset: auto 0; top: var(--editor-viewport-offset, 0); align-items: end; height: var(--editor-viewport-height, 100dvh); padding: 0; }
-  .taskDialog { width: 100%; height: min(52%, 480px); max-height: 100%; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 18px 18px 0 0; padding: 8px 16px 0; box-shadow: 0 -18px 48px rgba(21,23,19,.24); transform: translateY(var(--editor-sheet-drag-offset, 0)); transition: height 220ms cubic-bezier(.22,1,.36,1); animation-name: taskSheetIn; }
+  .taskDialog { width: 100%; height: min(52%, 480px); max-height: 100%; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 18px 18px 0 0; padding: 8px 16px 0; box-shadow: 0 -18px 48px rgba(21,23,19,.24); transform: translateY(var(--editor-sheet-drag-offset, 0)); animation-name: taskSheetIn; }
   .taskDialogBackdropKeyboard .taskDialog { height: calc(100% - 8px); }
   .taskDialogBackdropClosing .taskDialog { animation-name: taskSheetOut; }
   .taskDialogHandle { display: flex; flex: 0 0 44px; align-self: center; align-items: center; justify-content: center; width: 96px; height: 44px; touch-action: none; cursor: grab; }

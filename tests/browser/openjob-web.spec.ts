@@ -5425,6 +5425,20 @@ test("keeps compact Task controls clear and mobile dismissal immediate", async (
   await expect(editor.getByLabel("Task text")).toHaveValue("");
   await expect(editor.getByLabel("Assignee")).toHaveValue("");
   await expect(editor.getByRole("radio", { name: "Normal" })).toBeChecked();
+  await editor.getByLabel("Task text").fill("Discard this close-control draft");
+
+  const closingEditorIsInert = await editor.getByRole("button", { name: "Close Task Editor" }).evaluate(async (button) => {
+    (button as HTMLButtonElement).click();
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const dialog = button.closest<HTMLElement>('[role="dialog"]');
+    return dialog?.inert ?? false;
+  });
+  expect(closingEditorIsInert).toBe(true);
+  await expect(editor).toHaveCount(0);
+
+  await open.click();
+  editor = page.getByRole("dialog", { name: "New Task" });
+  await expect(editor.getByLabel("Task text")).toHaveValue("");
 
   await expect.poll(async () => {
     const box = await editor.boundingBox();
@@ -5509,7 +5523,12 @@ test("keeps Task text fully visible when iOS resizes both viewports for the keyb
   expect(textBox!.height).toBeGreaterThanOrEqual(76);
   expect(textBox!.y).toBeGreaterThanOrEqual(editorBox!.y);
   expect(textBox!.y + textBox!.height).toBeLessThanOrEqual(actionBox!.y);
-  expect(await editor.evaluate((element) => Number.parseFloat(getComputedStyle(element).transitionDuration))).toBeGreaterThan(0);
+  const transition = await editor.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { duration: Number.parseFloat(style.transitionDuration), property: style.transitionProperty };
+  });
+  expect(transition.duration).toBe(0);
+  expect(transition.property).not.toContain("height");
 });
 
 test("keeps the reduced-motion Task sheet immediately operable", async ({ page }) => {
