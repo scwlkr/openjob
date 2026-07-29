@@ -20,6 +20,24 @@ const OUTPUT_PATHS = [
 ];
 const REQUIRED_EVIDENCE_INPUTS = [
   {
+    id: "exact-dependency-inventories",
+    sourceType: "exact-dependency-inventory",
+    candidateScoped: true,
+    ownerIssue: 41,
+  },
+  {
+    id: "bundled-sdk-manifests",
+    sourceType: "sdk-manifest",
+    candidateScoped: true,
+    ownerIssue: 41,
+  },
+  {
+    id: "play-sdk-index",
+    sourceType: "sdk-index",
+    candidateScoped: true,
+    ownerIssue: 41,
+  },
+  {
     id: "simulator-emulator-provider-api-sentry-traffic",
     sourceType: "captured-traffic",
     candidateScoped: false,
@@ -34,9 +52,46 @@ const REQUIRED_EVIDENCE_INPUTS = [
 ];
 const REQUIRED_CHECKLIST_ITEMS = [
   {
-    id: "prepare-declaration-answers",
+    id: "match-generated-projections",
+    platforms: ["apple", "play"],
     ownerIssue: 40,
     stage: "pre-release-preparation",
+  },
+  {
+    id: "verify-public-urls",
+    platforms: ["apple", "play"],
+    ownerIssue: 40,
+    stage: "pre-release-preparation",
+  },
+  {
+    id: "verify-account-deletion",
+    platforms: ["apple", "play"],
+    ownerIssue: 40,
+    stage: "pre-release-preparation",
+  },
+  {
+    id: "reconcile-virtual-traffic",
+    platforms: ["apple", "play"],
+    ownerIssue: 40,
+    stage: "pre-release-preparation",
+  },
+  {
+    id: "prepare-declaration-answers",
+    platforms: ["apple", "play"],
+    ownerIssue: 40,
+    stage: "pre-release-preparation",
+  },
+  {
+    id: "reconcile-candidate-evidence",
+    platforms: ["apple", "play"],
+    ownerIssue: 41,
+    stage: "release-proof",
+  },
+  {
+    id: "save-without-premature-claims",
+    platforms: ["apple", "play"],
+    ownerIssue: 41,
+    stage: "release-proof",
   },
 ];
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,7 +135,12 @@ function assertRequiredContracts(label, values, requiredContracts) {
       );
     }
     for (const [field, expected] of Object.entries(required)) {
-      if (field !== "id" && actual[field] !== expected) {
+      const matches = Array.isArray(expected)
+        ? Array.isArray(actual[field]) &&
+          actual[field].length === expected.length &&
+          expected.every((value) => actual[field].includes(value))
+        : actual[field] === expected;
+      if (field !== "id" && !matches) {
         throw new Error(
           `Release Privacy Inventory ${label} ${required.id} has invalid ${field}; expected ${expected}.`,
         );

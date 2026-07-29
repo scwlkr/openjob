@@ -337,6 +337,22 @@ test("native processor dependencies must be declared without becoming inventory 
 
 test("release privacy validation fails closed on omissions and contradictions", async (context) => {
   const { inventory, schema } = await readContract();
+  const requiredEvidenceInputIds = [
+    "exact-dependency-inventories",
+    "bundled-sdk-manifests",
+    "play-sdk-index",
+    "simulator-emulator-provider-api-sentry-traffic",
+    "exact-candidate-provider-api-sentry-traffic",
+  ];
+  const requiredChecklistItemIds = [
+    "match-generated-projections",
+    "verify-public-urls",
+    "verify-account-deletion",
+    "reconcile-virtual-traffic",
+    "prepare-declaration-answers",
+    "reconcile-candidate-evidence",
+    "save-without-premature-claims",
+  ];
   const cases = [
     ["missing platform mapping", (copy) => delete copy.dataPractices[0].apple, /apple/iu],
     [
@@ -383,33 +399,24 @@ test("release privacy validation fails closed on omissions and contradictions", 
       },
       /rewrite|constant/iu,
     ],
-    [
-      "missing virtual traffic evidence",
+    ...requiredEvidenceInputIds.map((id) => [
+      `missing required evidence input ${id}`,
       (copy) => {
         copy.evidencePolicy.inputs = copy.evidencePolicy.inputs.filter(
-          ({ id }) => id !== "simulator-emulator-provider-api-sentry-traffic",
+          (input) => input.id !== id,
         );
       },
-      /required evidence input.*simulator-emulator-provider-api-sentry-traffic/iu,
-    ],
-    [
-      "missing candidate traffic evidence",
-      (copy) => {
-        copy.evidencePolicy.inputs = copy.evidencePolicy.inputs.filter(
-          ({ id }) => id !== "exact-candidate-provider-api-sentry-traffic",
-        );
-      },
-      /required evidence input.*exact-candidate-provider-api-sentry-traffic/iu,
-    ],
-    [
-      "missing declaration preparation gate",
+      new RegExp(`required evidence input.*${id}`, "iu"),
+    ]),
+    ...requiredChecklistItemIds.map((id) => [
+      `missing required checklist item ${id}`,
       (copy) => {
         copy.submissionChecklist = copy.submissionChecklist.filter(
-          ({ id }) => id !== "prepare-declaration-answers",
+          (item) => item.id !== id,
         );
       },
-      /required checklist item.*prepare-declaration-answers/iu,
-    ],
+      new RegExp(`required checklist item.*${id}`, "iu"),
+    ]),
     [
       "wrong virtual traffic source",
       (copy) => {
@@ -440,6 +447,15 @@ test("release privacy validation fails closed on omissions and contradictions", 
         item.stage = "release-proof";
       },
       /prepare-declaration-answers.*ownerIssue|stage/iu,
+    ],
+    [
+      "incomplete declaration preparation platform scope",
+      (copy) => {
+        copy.submissionChecklist.find(
+          ({ id }) => id === "prepare-declaration-answers",
+        ).platforms = ["apple"];
+      },
+      /prepare-declaration-answers.*platforms/iu,
     ],
   ];
 
