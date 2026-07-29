@@ -383,6 +383,64 @@ test("release privacy validation fails closed on omissions and contradictions", 
       },
       /rewrite|constant/iu,
     ],
+    [
+      "missing virtual traffic evidence",
+      (copy) => {
+        copy.evidencePolicy.inputs = copy.evidencePolicy.inputs.filter(
+          ({ id }) => id !== "simulator-emulator-provider-api-sentry-traffic",
+        );
+      },
+      /required evidence input.*simulator-emulator-provider-api-sentry-traffic/iu,
+    ],
+    [
+      "missing candidate traffic evidence",
+      (copy) => {
+        copy.evidencePolicy.inputs = copy.evidencePolicy.inputs.filter(
+          ({ id }) => id !== "exact-candidate-provider-api-sentry-traffic",
+        );
+      },
+      /required evidence input.*exact-candidate-provider-api-sentry-traffic/iu,
+    ],
+    [
+      "missing declaration preparation gate",
+      (copy) => {
+        copy.submissionChecklist = copy.submissionChecklist.filter(
+          ({ id }) => id !== "prepare-declaration-answers",
+        );
+      },
+      /required checklist item.*prepare-declaration-answers/iu,
+    ],
+    [
+      "wrong virtual traffic source",
+      (copy) => {
+        copy.evidencePolicy.inputs.find(
+          ({ id }) => id === "simulator-emulator-provider-api-sentry-traffic",
+        ).sourceType = "sdk-index";
+      },
+      /simulator-emulator-provider-api-sentry-traffic.*sourceType/iu,
+    ],
+    [
+      "wrong candidate traffic scope",
+      (copy) => {
+        const input = copy.evidencePolicy.inputs.find(
+          ({ id }) => id === "exact-candidate-provider-api-sentry-traffic",
+        );
+        input.candidateScoped = false;
+        input.ownerIssue = 40;
+      },
+      /exact-candidate-provider-api-sentry-traffic.*candidateScoped|ownerIssue/iu,
+    ],
+    [
+      "wrong declaration preparation stage",
+      (copy) => {
+        const item = copy.submissionChecklist.find(
+          ({ id }) => id === "prepare-declaration-answers",
+        );
+        item.ownerIssue = 41;
+        item.stage = "release-proof";
+      },
+      /prepare-declaration-answers.*ownerIssue|stage/iu,
+    ],
   ];
 
   for (const [name, mutate, pattern] of cases) {

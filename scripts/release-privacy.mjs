@@ -18,6 +18,27 @@ const OUTPUT_PATHS = [
   PLAY_OUTPUT_PATH,
   DOCUMENT_OUTPUT_PATH,
 ];
+const REQUIRED_EVIDENCE_INPUTS = [
+  {
+    id: "simulator-emulator-provider-api-sentry-traffic",
+    sourceType: "captured-traffic",
+    candidateScoped: false,
+    ownerIssue: 40,
+  },
+  {
+    id: "exact-candidate-provider-api-sentry-traffic",
+    sourceType: "captured-traffic",
+    candidateScoped: true,
+    ownerIssue: 41,
+  },
+];
+const REQUIRED_CHECKLIST_ITEMS = [
+  {
+    id: "prepare-declaration-answers",
+    ownerIssue: 40,
+    stage: "pre-release-preparation",
+  },
+];
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function canonicalize(value) {
@@ -46,6 +67,25 @@ function assertUniqueIds(label, values) {
     throw new Error(
       `Release Privacy Inventory has duplicate ${label} IDs: ${duplicates.join(", ")}.`,
     );
+  }
+}
+
+function assertRequiredContracts(label, values, requiredContracts) {
+  const valuesById = new Map(values.map((value) => [value.id, value]));
+  for (const required of requiredContracts) {
+    const actual = valuesById.get(required.id);
+    if (!actual) {
+      throw new Error(
+        `Release Privacy Inventory is missing required ${label} ${required.id}.`,
+      );
+    }
+    for (const [field, expected] of Object.entries(required)) {
+      if (field !== "id" && actual[field] !== expected) {
+        throw new Error(
+          `Release Privacy Inventory ${label} ${required.id} has invalid ${field}; expected ${expected}.`,
+        );
+      }
+    }
   }
 }
 
@@ -126,6 +166,16 @@ function assertSemanticContract(inventory) {
     inventory.evidencePolicy.prohibitedContent,
   );
   assertUniqueIds("submission-checklist", inventory.submissionChecklist);
+  assertRequiredContracts(
+    "evidence input",
+    inventory.evidencePolicy.inputs,
+    REQUIRED_EVIDENCE_INPUTS,
+  );
+  assertRequiredContracts(
+    "checklist item",
+    inventory.submissionChecklist,
+    REQUIRED_CHECKLIST_ITEMS,
+  );
 
   const processors = new Map(
     inventory.processors.map((processor) => [processor.id, processor]),
