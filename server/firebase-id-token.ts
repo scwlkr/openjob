@@ -9,7 +9,9 @@ export type SignInProvider = LinkableSignInProvider | "qa-password";
 
 export type FirebaseTokenIdentity = {
   authenticatedAt: number;
+  expiresAt?: number;
   provider: SignInProvider;
+  providerSubject?: string;
   uid: string;
 };
 
@@ -17,7 +19,11 @@ type FirebaseTokenPayload = {
   aud?: unknown;
   auth_time?: unknown;
   exp?: unknown;
-  firebase?: { sign_in_provider?: unknown; tenant?: unknown };
+  firebase?: {
+    identities?: Record<string, unknown>;
+    sign_in_provider?: unknown;
+    tenant?: unknown;
+  };
   iat?: unknown;
   iss?: unknown;
   sub?: unknown;
@@ -82,12 +88,27 @@ function signInProvider(
   return null;
 }
 
+function providerSubject(
+  payload: FirebaseTokenPayload,
+  provider: LinkableSignInProvider,
+) {
+  const value = payload.firebase?.identities?.[`${provider}.com`];
+  return Array.isArray(value) &&
+      value.length === 1 &&
+      typeof value[0] === "string" &&
+      value[0].length > 0 &&
+      value[0].length <= 255
+    ? value[0]
+    : null;
+}
+
 function validPayload(
   payload: FirebaseTokenPayload,
   projectId: string,
   nowSeconds: number,
 ): payload is FirebaseTokenPayload & {
   auth_time: number;
+  exp: number;
   firebase: { sign_in_provider: unknown; tenant?: unknown };
   sub: string;
 } {
@@ -212,9 +233,15 @@ export function createFirebaseIdTokenVerifier({
       if (!validPayload(payload, projectId, nowSeconds)) return null;
       const provider = signInProvider(payload, qaPassword);
       if (!provider) return null;
+      const subject = provider === "qa-password"
+        ? null
+        : providerSubject(payload, provider);
+      if (provider !== "qa-password" && !subject) return null;
       return {
         authenticatedAt: payload.auth_time * 1000,
+        expiresAt: payload.exp * 1000,
         provider,
+        ...(subject ? { providerSubject: subject } : {}),
         uid: payload.sub,
       };
     } catch {

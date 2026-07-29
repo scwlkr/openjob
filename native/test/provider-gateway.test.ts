@@ -117,7 +117,11 @@ test("hands Google system UI output to Firebase without profile or email data", 
   await expect(gateway.signIn("google")).resolves.toEqual({
     idToken: "google-id",
     provider: "google",
-    revocation: { kind: "access_token", value: "google-access" },
+    revocation: {
+      idToken: "google-id",
+      kind: "access_token",
+      value: "google-access",
+    },
   });
   expect(native.google.configure).toHaveBeenCalledWith({
     iosClientId: "ios-client.apps.googleusercontent.com",
@@ -138,6 +142,7 @@ test("uses native Apple authorization on iOS with a raw replay nonce", async () 
     provider: "apple",
     revocation: {
       clientId: "dev.openjob.app.preview",
+      idToken: "apple-ios-id",
       kind: "authorization_code",
       value: "apple-ios-code",
     },
@@ -184,7 +189,10 @@ test("uses the registered Apple Service ID and exact HTTPS return URL on Android
     provider: "apple",
     revocation: {
       clientId: "dev.openjob.auth.nonprod",
+      idToken: "apple-android-id",
       kind: "authorization_code",
+      redirectUri:
+        "https://openjob-nonprod.firebaseapp.com/__/auth/handler",
       value: "apple-android-code",
     },
   });

@@ -101,13 +101,17 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     claimUsername: (token, username) =>
       api.claimUsername(token, username),
     clearCleanupPending: () => store.clearCleanupPending(),
+    clearDeletionReceipt: () => store.clearDeletionReceipt(),
     clearProviderSession: () => provider.clearSession(),
     clearStoredSession: () => store.clear(),
     createUser: (token) => api.createUser(token),
-    deleteUser: (token, credentials) => api.deleteUser(token, credentials),
+    deleteUser: (token, credentials, statusToken) =>
+      api.deleteUser(token, credentials, statusToken),
     exchangeProviderCredential: (credential) =>
       firebase.exchange(credential),
     getMe: (token) => api.getMe(token),
+    getDeletionStatus: (statusToken) =>
+      api.getDeletionStatus(statusToken),
     linkSignInMethod: (token, credentialToken, expectedTargetUserId) =>
       api.linkSignInMethod(
         token,
@@ -121,12 +125,19 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
       api.listTasks(token, groupId, validator),
     loadLocalTaskListCache: (ownerUserId) => domainCache.load(ownerUserId),
     loadCleanupPending: () => store.loadCleanupPending(),
+    loadDeletionReceipt: () => store.loadDeletionReceipt(),
     loadStoredSession: () => store.load(),
     markCleanupPending: () => store.markCleanupPending(),
     now: Date.now,
+    prepareDeletionStatus: (token, credential) =>
+      api.prepareDeletionStatus(token, credential),
     purgeLocalDomainCache,
+    refreshDeletionProvider: (statusToken, credential) =>
+      api.refreshDeletionProvider(statusToken, credential),
     refreshSession: (stored) => firebase.refresh(stored),
     saveStoredSession: (stored) => store.save(stored),
+    saveDeletionReceipt: (receipt) =>
+      store.saveDeletionReceipt(receipt),
     saveLocalTaskListCache: (entry) => domainCache.save(entry),
     signInWithQaPassword: (email, password) =>
       firebase.signInWithPassword(email, password),

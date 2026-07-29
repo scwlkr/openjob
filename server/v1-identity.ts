@@ -2,6 +2,10 @@ import type {
   FirebaseTokenIdentity,
   LinkableSignInProvider,
 } from "./firebase-id-token";
+import {
+  InactiveUserError,
+  isInactiveUserError,
+} from "../db/user-history.ts";
 import type { GroupStore, OpenJobGroup } from "./v1-groups";
 import {
   defaultRequestId,
@@ -38,6 +42,7 @@ type UserStore = {
   ): Promise<
     | { kind: "claimed"; user: OpenJobUser }
     | { kind: "immutable" }
+    | { kind: "deletion_pending" }
     | { kind: "taken" }
     | { kind: "unrecognized" }
   >;
@@ -48,6 +53,7 @@ type UserStore = {
   ): Promise<
     | { kind: "linked"; user: OpenJobUser }
     | { kind: "conflict" }
+    | { kind: "deletion_pending" }
     | { kind: "target_changed" }
     | { kind: "unrecognized" }
   >;
@@ -218,6 +224,19 @@ export function createV1IdentityApi({
           });
         }
 
+        const responseCurrentUser = async (user: OpenJobUser) => {
+          const data = await currentUser(user, groups);
+          const current = await users.resolve(identity);
+          if (
+            !current ||
+            current.userId !== user.userId ||
+            current.deletionPending
+          ) {
+            throw new InactiveUserError(user.userId);
+          }
+          return data;
+        };
+
         if (url.pathname === SIGN_IN_METHODS_PATH) {
           if (request.method === "GET") {
             const user = await users.resolve(identity);
@@ -225,14 +244,27 @@ export function createV1IdentityApi({
             if (user.deletionPending) {
               return accountDeletionPendingResponse(requestId);
             }
+            const methods = (await users.listSignInMethods(user.userId)).filter(
+              isLinkableProvider,
+            );
+            const current = await users.resolve(identity);
+            if (
+              !current ||
+              current.userId !== user.userId ||
+              current.deletionPending
+            ) {
+              throw new InactiveUserError(user.userId);
+            }
             return jsonResponse({
-              data: (await users.listSignInMethods(user.userId)).filter(
-                isLinkableProvider,
-              ),
+              data: methods,
             });
           }
 
           if (request.method === "POST") {
+            const current = await users.resolve(identity);
+            if (current?.deletionPending) {
+              return accountDeletionPendingResponse(requestId);
+            }
             const confirmation = await readLinkConfirmation(request);
             if (!confirmation) {
               return errorResponse(requestId, {
@@ -272,6 +304,9 @@ export function createV1IdentityApi({
             if (result.kind === "unrecognized") {
               return signInMethodUnrecognizedResponse(requestId);
             }
+            if (result.kind === "deletion_pending") {
+              return accountDeletionPendingResponse(requestId);
+            }
             if (result.kind === "conflict") {
               return signInMethodConflict(requestId);
             }
@@ -282,7 +317,7 @@ export function createV1IdentityApi({
               return accountDeletionPendingResponse(requestId);
             }
             return jsonResponse({
-              data: await currentUser(result.user, groups),
+              data: await responseCurrentUser(result.user),
             });
           }
         }
@@ -301,7 +336,7 @@ export function createV1IdentityApi({
           if (identity.provider === "qa-password") {
             const user = await users.resolve(identity);
             if (!user) return signInMethodUnrecognizedResponse(requestId);
-            return jsonResponse({ data: await currentUser(user, groups) });
+            return jsonResponse({ data: await responseCurrentUser(user) });
           }
           const result = await users.create(identity);
           if (result.kind === "deletion_pending") {
@@ -312,7 +347,7 @@ export function createV1IdentityApi({
             });
           }
           return jsonResponse(
-            { data: await currentUser(result.user, groups) },
+            { data: await responseCurrentUser(result.user) },
             result.kind === "created" ? 201 : 200,
           );
         }
@@ -323,7 +358,7 @@ export function createV1IdentityApi({
           if (user.deletionPending) {
             return accountDeletionPendingResponse(requestId);
           }
-          return jsonResponse({ data: await currentUser(user, groups) });
+          return jsonResponse({ data: await responseCurrentUser(user) });
         }
 
         if (
@@ -357,8 +392,13 @@ export function createV1IdentityApi({
           if (result.kind === "unrecognized") {
             return signInMethodUnrecognizedResponse(requestId);
           }
+          if (result.kind === "deletion_pending") {
+            return accountDeletionPendingResponse(requestId);
+          }
           if (result.kind === "claimed") {
-            return jsonResponse({ data: await currentUser(result.user, groups) });
+            return jsonResponse({
+              data: await responseCurrentUser(result.user),
+            });
           }
           const immutable = result.kind === "immutable";
           return errorResponse(requestId, {
@@ -376,6 +416,9 @@ export function createV1IdentityApi({
           status: 404,
         });
       } catch (error) {
+        if (isInactiveUserError(error)) {
+          return accountDeletionPendingResponse(requestId);
+        }
         if (isRateLimitError(error)) {
           return rateLimitedErrorResponse(requestId);
         }

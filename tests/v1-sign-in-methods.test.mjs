@@ -381,6 +381,7 @@ test("an unknown current credential links only through a fresh recognized target
   };
   const links = [];
   let credentialVerifications = 0;
+  let linked = false;
   const api = createV1IdentityApi({
     groups: {
       async list() {
@@ -391,6 +392,7 @@ test("an unknown current credential links only through a fresh recognized target
     users: {
       async link(first, second, expectedTargetUserId) {
         links.push({ first, second, expectedTargetUserId });
+        linked = true;
         return {
           kind: "linked",
           user: { userId: "user_existing", username: "shane" },
@@ -400,7 +402,9 @@ test("an unknown current credential links only through a fresh recognized target
         return [];
       },
       async resolve() {
-        return null;
+        return linked
+          ? { userId: "user_existing", username: "shane" }
+          : null;
       },
     },
     verifyCredentialToken: async () => {

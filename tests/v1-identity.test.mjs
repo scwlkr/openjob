@@ -131,7 +131,9 @@ test("Firebase verification returns only safe Google and Apple Sign-in Method id
       ),
       {
         authenticatedAt: Date.parse(NOW) - 60_000,
+        expiresAt: Date.parse(NOW) + 3_600_000,
         provider,
+        providerSubject: `firebase_${provider}-provider-subject`,
         uid: `firebase_${provider}`,
       },
     );
@@ -196,6 +198,7 @@ test("Firebase verification accepts only the exact allowlisted Preview QA passwo
 
   assert.deepEqual(await verifyIdToken.verifyToken(token), {
     authenticatedAt: Date.parse(NOW) - 60_000,
+    expiresAt: Date.parse(NOW) + 3_600_000,
     provider: "qa-password",
     uid: exact.uid,
   });
@@ -386,6 +389,60 @@ test("GET /me resolves only an explicitly created OpenJob User", async (t) => {
   assert.notEqual((await second.json()).data.userId, firstUser.userId);
 });
 
+test("identity reads return 410 when deletion wins before the final active check", async () => {
+  for (const path of ["/api/v1/me", "/api/v1/me/sign-in-methods"]) {
+    let deletionPending = false;
+    let notifyRead;
+    let releaseRead;
+    const readStarted = new Promise((resolve) => {
+      notifyRead = resolve;
+    });
+    const readReleased = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const user = { userId: "user_racing", username: "racing" };
+    const waitForDeletion = async () => {
+      notifyRead();
+      await readReleased;
+    };
+    const api = createV1IdentityApi({
+      groups: {
+        async list() {
+          if (path === "/api/v1/me") await waitForDeletion();
+          return { groups: [], nextCursor: null };
+        },
+      },
+      users: {
+        async listSignInMethods() {
+          if (path.endsWith("sign-in-methods")) await waitForDeletion();
+          return ["google"];
+        },
+        async resolve() {
+          return deletionPending ? { ...user, deletionPending: true } : user;
+        },
+      },
+      verifyIdToken: async () => ({
+        authenticatedAt: Date.parse(NOW) - 60_000,
+        provider: "google",
+        uid: "firebase_racing",
+      }),
+    });
+
+    const responsePromise = api.fetch(
+      new Request(`https://openjob.test${path}`),
+    );
+    await readStarted;
+    deletionPending = true;
+    releaseRead();
+    const response = await responsePromise;
+    assert.equal(response.status, 410);
+    const text = await response.text();
+    assert.equal(JSON.parse(text).error.code, "account_deletion_pending");
+    assert.equal(text.includes("google"), false);
+    assert.equal(text.includes("user_racing"), false);
+  }
+});
+
 test("the Worker rejects every invalid or unsupported Firebase identity", async (t) => {
   const { authority, harness } = await createIdentityHarness();
   t.after(() => harness.close());
@@ -403,6 +460,21 @@ test("the Worker rejects every invalid or unsupported Firebase identity", async 
     await authority.issue({ uid: "future_issued", claims: { iat: now + 1 } }),
     await authority.issue({ uid: "future_auth", claims: { auth_time: now + 1 } }),
     await authority.issue({ uid: "" }),
+    await authority.issue({
+      uid: "missing_provider_subject",
+      claims: {
+        firebase: { identities: {}, sign_in_provider: "google.com" },
+      },
+    }),
+    await authority.issue({
+      uid: "ambiguous_provider_subject",
+      claims: {
+        firebase: {
+          identities: { "google.com": ["subject-one", "subject-two"] },
+          sign_in_provider: "google.com",
+        },
+      },
+    }),
     await authority.issue({
       uid: "password_user",
       claims: { firebase: { sign_in_provider: "password" } },

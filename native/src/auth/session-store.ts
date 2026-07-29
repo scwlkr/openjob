@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import {
+  type DeletionReceipt,
+  isDeletionStatusToken,
   ProviderSignInError,
   type StoredSession,
 } from "./coordinator";
@@ -30,6 +32,25 @@ function isStoredSession(
   );
 }
 
+function isDeletionReceipt(value: unknown): value is DeletionReceipt {
+  if (!value || typeof value !== "object") return false;
+  const keys = Object.keys(value);
+  if (
+    keys.length !== 3 ||
+    !keys.every((key) => ["phase", "statusToken", "version"].includes(key))
+  ) {
+    return false;
+  }
+  const receipt = value as Partial<DeletionReceipt>;
+  return (
+    receipt.version === 1 &&
+    (receipt.phase === "completed" ||
+      receipt.phase === "prepared" ||
+      receipt.phase === "submitting") &&
+    isDeletionStatusToken(receipt.statusToken)
+  );
+}
+
 export function createSecureSessionStore({
   allowQaPassword,
   keychainService,
@@ -37,6 +58,7 @@ export function createSecureSessionStore({
 }: SecureSessionStoreConfig) {
   const sharedOptions = { keychainService };
   const cleanupStorageKey = `${storageKey}.cleanup-pending`;
+  const deletionReceiptStorageKey = `${storageKey}.deletion-receipt`;
   const legacyCleanupStorageKey = `${storageKey}:cleanup-pending`;
   const protectedOptions = {
     ...sharedOptions,
@@ -44,6 +66,13 @@ export function createSecureSessionStore({
   };
 
   return {
+    async clearDeletionReceipt() {
+      await SecureStore.deleteItemAsync(
+        deletionReceiptStorageKey,
+        sharedOptions,
+      );
+    },
+
     async clear() {
       await SecureStore.deleteItemAsync(storageKey, sharedOptions);
     },
@@ -65,6 +94,26 @@ export function createSecureSessionStore({
       }
       await SecureStore.deleteItemAsync(storageKey, sharedOptions);
       return null;
+    },
+
+    async loadDeletionReceipt(): Promise<DeletionReceipt | null> {
+      let serialized: string | null;
+      try {
+        serialized = await SecureStore.getItemAsync(
+          deletionReceiptStorageKey,
+          sharedOptions,
+        );
+      } catch {
+        throw new ProviderSignInError("unavailable");
+      }
+      if (!serialized) return null;
+      try {
+        const receipt: unknown = JSON.parse(serialized);
+        if (isDeletionReceipt(receipt)) return receipt;
+      } catch {
+        // A malformed receipt must continue to block sign-in.
+      }
+      throw new ProviderSignInError("unavailable");
     },
 
     async loadCleanupPending() {
@@ -119,6 +168,17 @@ export function createSecureSessionStore({
       await SecureStore.setItemAsync(
         storageKey,
         JSON.stringify(session),
+        protectedOptions,
+      );
+    },
+
+    async saveDeletionReceipt(receipt: DeletionReceipt) {
+      if (!isDeletionReceipt(receipt)) {
+        throw new ProviderSignInError("unavailable");
+      }
+      await SecureStore.setItemAsync(
+        deletionReceiptStorageKey,
+        JSON.stringify(receipt),
         protectedOptions,
       );
     },

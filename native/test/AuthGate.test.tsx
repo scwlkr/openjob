@@ -59,6 +59,7 @@ afterEach(() => {
 function controller(
   overrides: Partial<NativeAuthController> = {},
 ): NativeAuthController & {
+  acknowledgeDeletionCompletion: jest.Mock;
   authenticateExistingUser: jest.Mock;
   authenticateNewMethod: jest.Mock;
   cancelPending: jest.Mock;
@@ -67,6 +68,7 @@ function controller(
   createUser: jest.Mock;
   restore: jest.Mock;
   restoreCachedSession: jest.Mock;
+  reauthenticateDeletionProvider: jest.Mock;
   signIn: jest.Mock;
   signInWithQaPassword: jest.Mock;
   signOut: jest.Mock;
@@ -74,6 +76,10 @@ function controller(
   switchUser: jest.Mock;
 } {
   return {
+    acknowledgeDeletionCompletion: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "deleted" as const,
+    })),
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
     cancelPending: jest.fn(async () => ({ kind: "signed-out" })),
@@ -81,8 +87,13 @@ function controller(
     confirmLink: jest.fn(async () => signedIn),
     createUser: jest.fn(async () => signedIn),
     deleteUser: jest.fn(async () => ({
-      kind: "signed-out" as const,
-      reason: "deleted" as const,
+      kind: "deletion-completed" as const,
+    })),
+    refreshDeletionStatus: jest.fn(async () => ({
+      kind: "deletion-completed" as const,
+    })),
+    reauthenticateDeletionProvider: jest.fn(async () => ({
+      kind: "deletion-completed" as const,
     })),
     restore: jest.fn(async () => ({ kind: "signed-out" })),
     restoreCachedSession: jest.fn(async () => null),
@@ -350,6 +361,32 @@ test("restores either linked provider before rendering the signed-in surface", a
   expect(await screen.findByText("Signed in as walker")).toBeOnTheScreen();
   expect(auth.restore).toHaveBeenCalledTimes(1);
   expect(screen.queryByText("Continue with Google")).not.toBeOnTheScreen();
+});
+
+test("prompts interactive provider sign-in when a restored session has no fresh deletion proof", async () => {
+  const auth = controller({
+    restore: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "deletion-pending" as const,
+    })),
+  });
+
+  await renderGate(auth);
+
+  expect(
+    await screen.findByText(
+      "Deletion is in progress. Sign in again with Google or Apple to resume provider cleanup; access remains blocked.",
+    ),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Continue with Google" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Continue with Apple" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Sign in as Preview QA User" }),
+  ).not.toBeOnTheScreen();
 });
 
 test("continues network-first restoration when unreadable cached state cannot be cleaned", async () => {
@@ -719,13 +756,12 @@ test("blocks another sign-in until failed local cleanup is retried", async () =>
   );
   expect(
     await screen.findByText(
-      "OpenJob could not finish removing saved data. Retry before signing in again.",
+      "OpenJob could not finish protected local cleanup. Retry before signing in again.",
     ),
   ).toBeOnTheScreen();
   expect(
     screen.queryByRole("button", { name: "Continue with Google" }),
   ).not.toBeOnTheScreen();
-
   await fireEvent.press(
     screen.getByRole("button", { name: "Retry cleanup" }),
   );
@@ -846,6 +882,215 @@ test("keeps deletion fresh-auth failures visible and retryable", async () => {
   expect(
     screen.getByRole("button", { name: "Permanently delete User" }),
   ).not.toBeDisabled();
+});
+
+test("blocks sign-in while deletion is pending and refreshes to an accessible final confirmation", async () => {
+  const auth = controller({
+    refreshDeletionStatus: jest.fn(async () => ({
+      kind: "deletion-completed" as const,
+    })),
+    restore: jest.fn(async () => ({
+      deadline: "2026-08-04T12:00:00.000Z",
+      kind: "deletion-pending" as const,
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByRole("header", { name: "Deletion in progress" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Continue with Google" }),
+  ).not.toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Refresh deletion status" }),
+  );
+
+  expect(
+    await screen.findByRole("header", { name: "Deletion complete" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByText("Your OpenJob User and associated data were deleted."),
+  ).toHaveProp("accessibilityLiveRegion", "polite");
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Continue to sign in" }),
+  );
+  expect(auth.acknowledgeDeletionCompletion).toHaveBeenCalledTimes(1);
+  expect(
+    await screen.findByRole("button", { name: "Continue with Google" }),
+  ).toBeOnTheScreen();
+});
+
+test("reports operator escalation instead of promising a past deletion deadline", async () => {
+  const auth = controller({
+    restore: jest.fn(async () => ({
+      deadline: "2026-07-01T12:00:00.000Z",
+      kind: "deletion-pending" as const,
+      reauthenticationProviders: [],
+      requestedAt: "2026-06-24T12:00:00.000Z",
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByText(
+      "Automatic cleanup ended. OpenJob operator completion is required; access remains blocked.",
+    ),
+  ).toHaveProp("accessibilityLiveRegion", "polite");
+});
+
+test("keeps an unproven receipt blocked when status is unavailable", async () => {
+  const auth = controller({
+    refreshDeletionStatus: jest.fn(async () => ({
+      deadline: "2026-08-04T12:00:00.000Z",
+      kind: "deletion-pending" as const,
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+    })),
+    restore: jest.fn(async () => ({
+      kind: "deletion-status-retry" as const,
+      reason: "unavailable" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByRole("header", { name: "Confirm deletion status" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByText(
+      "OpenJob could not confirm deletion status. Your protected receipt remains on this device.",
+    ),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Continue with Google" }),
+  ).not.toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Refresh deletion status" }),
+  );
+  expect(
+    await screen.findByRole("header", { name: "Deletion in progress" }),
+  ).toBeOnTheScreen();
+});
+
+test("offers an explicit retry while fresh deletion-recovery proof remains only in memory", async () => {
+  const auth = controller({
+    restore: jest.fn(async () => ({
+      kind: "deletion-status-retry" as const,
+      reason: "proof-retry" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByText(
+      "OpenJob could not resume deletion yet. Fresh provider proof remains only while this app stays open; retry now.",
+    ),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByRole("button", { name: "Refresh deletion status" }),
+  ).toBeOnTheScreen();
+  expect(screen.queryByText("Signed in as walker")).not.toBeOnTheScreen();
+});
+
+test("keeps an unsaved pending receipt blocked with immediate retry guidance", async () => {
+  const auth = controller({
+    restore: jest.fn(async () => ({
+      kind: "deletion-status-retry" as const,
+      reason: "storage-unavailable" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByRole("header", { name: "Confirm deletion status" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.getByText(
+      "OpenJob could not save the protected deletion receipt. Keep the app open and retry now.",
+    ),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Continue with Google" }),
+  ).not.toBeOnTheScreen();
+});
+
+test("offers only the providers that a pending deletion requires again", async () => {
+  const reauthenticateDeletionProvider = jest.fn(async () => ({
+    deadline: "2026-08-04T12:00:00.000Z",
+    kind: "deletion-pending" as const,
+    reauthenticationProviders: [] as Array<"apple" | "google">,
+    requestedAt: "2026-07-28T12:00:00.000Z",
+  }));
+  const auth = controller({
+    reauthenticateDeletionProvider,
+    restore: jest.fn(async () => ({
+      deadline: "2026-08-04T12:00:00.000Z",
+      kind: "deletion-pending" as const,
+      reauthenticationProviders: ["google" as const],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+    })),
+  });
+  await renderGate(auth);
+
+  expect(
+    await screen.findByRole("button", { name: "Reauthenticate Google" }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Reauthenticate Apple" }),
+  ).not.toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Reauthenticate Google" }),
+  );
+  await waitFor(() =>
+    expect(reauthenticateDeletionProvider).toHaveBeenCalledWith("google"),
+  );
+});
+
+test("keeps completion acknowledgement failure visible and retryable", async () => {
+  const auth = controller({
+    acknowledgeDeletionCompletion: jest
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "deletion-clear-retry" as const,
+        status: "completed" as const,
+      })
+      .mockResolvedValueOnce({
+        kind: "signed-out" as const,
+        reason: "deleted" as const,
+      }),
+    restore: jest.fn(async () => ({
+      kind: "deletion-completed" as const,
+    })),
+  });
+  await renderGate(auth);
+
+  await fireEvent.press(
+    await screen.findByRole("button", { name: "Continue to sign in" }),
+  );
+
+  expect(
+    await screen.findByRole("header", {
+      name: "Finish confirming deletion",
+    }),
+  ).toBeOnTheScreen();
+  expect(
+    screen.queryByRole("button", { name: "Continue with Google" }),
+  ).not.toBeOnTheScreen();
+  expect(
+    screen.getByText(
+      "Deletion is complete, but OpenJob could not remove its protected receipt. Retry before signing in.",
+    ),
+  ).toBeOnTheScreen();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Retry deletion confirmation" }),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Continue with Google" }),
+  ).toBeOnTheScreen();
+  expect(auth.acknowledgeDeletionCompletion).toHaveBeenCalledTimes(2);
 });
 
 test("returns an expired current-User proof to a usable reauthentication action", async () => {

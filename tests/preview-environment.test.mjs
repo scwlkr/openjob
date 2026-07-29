@@ -19,13 +19,32 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     readFile(new URL("config/qa-fixture.json", root), "utf8").then(JSON.parse),
   ]);
 
+  const productionGoogleDeletionClientIds = [
+    identities.environments.production.firebase.googleWebClientId,
+    identities.environments.production.ios.googleClientId,
+    identities.environments.production.android.googleClientId,
+  ].join(",");
+  const previewGoogleDeletionClientIds = [
+    identities.environments.preview.firebase.googleWebClientId,
+    identities.environments.development.ios.googleClientId,
+    identities.environments.development.android.googleClientId,
+    identities.environments.preview.ios.googleClientId,
+    identities.environments.preview.android.googleClientId,
+  ].join(",");
+
   assert.deepEqual(wrangler.env.preview, {
     name: "openjob-preview",
     routes: [],
     vars: {
       APPLE_ACCOUNT_DELETION_CLIENT_IDS:
         "dev.openjob.app.preview,dev.openjob.auth.nonprod",
+      APPLE_ACCOUNT_DELETION_REDIRECT_URI:
+        identities.apple.signInServices.nonproduction.returnUrl,
+      APPLE_ACCOUNT_DELETION_SERVICE_ID:
+        identities.apple.signInServices.nonproduction.serviceId,
+      FIREBASE_API_KEY: identities.environments.preview.firebase.apiKey,
       FIREBASE_PROJECT_ID: "openjob-nonprod",
+      GOOGLE_ACCOUNT_DELETION_CLIENT_IDS: previewGoogleDeletionClientIds,
       GOOGLE_OAUTH_CLIENT_ID: GOOGLE_PREVIEW_OWNER_DESKTOP_CLIENT_ID,
       OPENJOB_QA_PASSWORD_TENANT_ID: "OpenJob-QA-Two-mvz9m",
       OPENJOB_RUNTIME_TIER: "preview",
@@ -46,7 +65,43 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
     qaPasswordTenantId,
   );
   assert.equal(qaPasswordTenantIdFor("production"), null);
+  assert.equal(
+    wrangler.vars.APPLE_ACCOUNT_DELETION_REDIRECT_URI,
+    identities.apple.signInServices.production.returnUrl,
+  );
+  assert.equal(
+    wrangler.vars.APPLE_ACCOUNT_DELETION_SERVICE_ID,
+    identities.apple.signInServices.production.serviceId,
+  );
+  assert.equal(
+    wrangler.vars.FIREBASE_API_KEY,
+    identities.environments.production.firebase.apiKey,
+  );
   assert.equal(wrangler.vars.FIREBASE_PROJECT_ID, "openjob-dev");
+  assert.equal(
+    wrangler.vars.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS,
+    productionGoogleDeletionClientIds,
+  );
+  assert.notEqual(
+    wrangler.vars.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS,
+    wrangler.vars.GOOGLE_OAUTH_CLIENT_ID,
+  );
+  assert.notEqual(
+    wrangler.env.preview.vars.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS,
+    wrangler.env.preview.vars.GOOGLE_OAUTH_CLIENT_ID,
+  );
+  assert.equal(
+    wrangler.vars.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS
+      .split(",")
+      .includes(wrangler.vars.GOOGLE_OAUTH_CLIENT_ID),
+    false,
+  );
+  assert.equal(
+    wrangler.env.preview.vars.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS
+      .split(",")
+      .includes(wrangler.env.preview.vars.GOOGLE_OAUTH_CLIENT_ID),
+    false,
+  );
   assert.equal(wrangler.vars.OPENJOB_RUNTIME_TIER, "production");
   assert.equal(
     Object.hasOwn(wrangler.vars, "OPENJOB_QA_PASSWORD_TENANT_ID"),
@@ -55,6 +110,7 @@ test("preview deployment cannot inherit the production Worker or Firebase projec
   assert.deepEqual(wrangler.routes, [
     { custom_domain: true, pattern: "openjob.dev" },
   ]);
+  assert.deepEqual(wrangler.triggers.crons, ["*/15 * * * *"]);
   assert.match(
     packageJson.scripts["deploy:preview"],
     /^CLOUDFLARE_ENV=preview /u,

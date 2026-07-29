@@ -1,7 +1,11 @@
 import {
+  hasValidDeletionTimeline,
+  isFiniteTimestamp,
   OpenJobApiError,
   type OpenJobUser,
+  type DeletionProviderCredential,
   ProviderSignInError,
+  isDeletionStatusToken,
   type SignInMethod,
 } from "./coordinator";
 import type { FetchImplementation } from "./firebase-rest";
@@ -33,6 +37,176 @@ function isMethod(value: unknown): value is SignInMethod {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(
+  value: unknown,
+  keys: readonly string[],
+): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    Object.keys(value).sort().join(",") === [...keys].sort().join(",")
+  );
+}
+
+function invalidDeletionStatus(): never {
+  throw new OpenJobApiError(
+    502,
+    "invalid_response",
+    "OpenJob returned an invalid deletion status.",
+  );
+}
+
+function readReauthenticationProviders(value: unknown) {
+  if (
+    !Array.isArray(value) ||
+    !value.every(isMethod) ||
+    new Set(value).size !== value.length ||
+    value.join(",") !== [...value].sort().join(",")
+  ) {
+    invalidDeletionStatus();
+  }
+  return value;
+}
+
+function readDeletionStatus(value: unknown) {
+  if (!isRecord(value)) invalidDeletionStatus();
+  if (value.status === "not_started") {
+    if (
+      !hasExactKeys(value, [
+        "status",
+        "submissionExpired",
+        "submissionExpiresAt",
+      ]) ||
+      typeof value.submissionExpired !== "boolean" ||
+      !isFiniteTimestamp(value.submissionExpiresAt)
+    ) {
+      invalidDeletionStatus();
+    }
+    return {
+      status: "not_started" as const,
+      submissionExpired: value.submissionExpired,
+      submissionExpiresAt: value.submissionExpiresAt,
+    };
+  }
+  if (value.status === "completed") {
+    if (!hasExactKeys(value, ["status"])) invalidDeletionStatus();
+    return { status: "completed" as const };
+  }
+  if (
+    !hasExactKeys(value, [
+      "deadline",
+      "reauthenticationProviders",
+      "requestedAt",
+      "status",
+    ]) ||
+    value.status !== "pending" ||
+    !hasValidDeletionTimeline(value)
+  ) {
+    invalidDeletionStatus();
+  }
+  return {
+    deadline: value.deadline,
+    reauthenticationProviders: readReauthenticationProviders(
+      (value as Record<string, unknown>).reauthenticationProviders,
+    ),
+    requestedAt: value.requestedAt,
+    status: "pending" as const,
+  };
+}
+
+function readDeletionPrepareResult(value: unknown) {
+  if (isRecord(value) && value.status === "completed") {
+    if (
+      !hasExactKeys(value, ["completedAt", "status"]) ||
+      !isFiniteTimestamp(value.completedAt)
+    ) {
+      invalidDeletionStatus();
+    }
+    return { status: "completed" as const };
+  }
+  if (isRecord(value) && value.status === "pending") {
+    const statusToken = value.statusToken;
+    if (
+      !hasExactKeys(value, [
+        "deadline",
+        "reauthenticationProviders",
+        "requestedAt",
+        "status",
+        "statusToken",
+      ]) ||
+      !isDeletionStatusToken(statusToken) ||
+      !hasValidDeletionTimeline(value)
+    ) {
+      invalidDeletionStatus();
+    }
+    return {
+      deadline: value.deadline,
+      reauthenticationProviders: readReauthenticationProviders(
+        (value as Record<string, unknown>).reauthenticationProviders,
+      ),
+      requestedAt: value.requestedAt,
+      status: "pending" as const,
+      statusToken,
+    };
+  }
+  if (
+    !hasExactKeys(value, [
+      "status",
+      "statusToken",
+      "submissionExpiresAt",
+    ]) ||
+    value.status !== "not_started" ||
+    !isDeletionStatusToken(value.statusToken) ||
+    !isFiniteTimestamp(value.submissionExpiresAt)
+  ) {
+    invalidDeletionStatus();
+  }
+  return {
+    status: "not_started" as const,
+    statusToken: value.statusToken,
+    submissionExpiresAt: value.submissionExpiresAt,
+  };
+}
+
+function readDeletionStartResult(
+  value: unknown,
+  expectedStatusToken: string,
+) {
+  if (!isRecord(value)) invalidDeletionStatus();
+  if (value.status === "completed") {
+    if (
+      !hasExactKeys(value, ["completedAt", "status"]) ||
+      !isFiniteTimestamp(value.completedAt)
+    ) {
+      invalidDeletionStatus();
+    }
+    return { status: "completed" as const };
+  }
+  if (
+    !hasExactKeys(value, [
+      "deadline",
+      "reauthenticationProviders",
+      "requestedAt",
+      "status",
+      "statusToken",
+    ]) ||
+    value.status !== "pending" ||
+    !isDeletionStatusToken(value.statusToken) ||
+    value.statusToken !== expectedStatusToken ||
+    !hasValidDeletionTimeline(value)
+  ) {
+    invalidDeletionStatus();
+  }
+  return {
+    deadline: value.deadline,
+    reauthenticationProviders: readReauthenticationProviders(
+      (value as Record<string, unknown>).reauthenticationProviders,
+    ),
+    requestedAt: value.requestedAt,
+    status: "pending" as const,
+    statusToken: expectedStatusToken,
+  };
 }
 
 function isRole(value: unknown): value is NativeGroup["role"] {
@@ -187,6 +361,15 @@ export function createNativeOpenJobApi({
   ): Promise<T> {
     const body = await requestEnvelope(path, token, init);
     return body.data as T;
+  }
+
+  async function requestDeletionData(
+    token: string,
+    init: RequestInit = {},
+  ) {
+    const body = await requestEnvelope("/me/deletion", token, init);
+    if (!hasExactKeys(body, ["data"])) invalidDeletionStatus();
+    return body.data;
   }
 
   async function listAll<T>(
@@ -356,29 +539,53 @@ export function createNativeOpenJobApi({
 
     async deleteUser(
       token: string,
-      credentials: {
-        credentialToken: string;
-        provider: SignInMethod;
-        revocation:
-          | { kind: "access_token"; value: string }
-          | { clientId: string; kind: "authorization_code"; value: string };
-      }[],
+      credentials: DeletionProviderCredential[],
+      statusToken: string,
     ) {
-      const result = await request<unknown>("/me/deletion", token, {
+      if (!isDeletionStatusToken(statusToken)) {
+        invalidDeletionStatus();
+      }
+      const result = await requestDeletionData(token, {
         body: JSON.stringify({ confirmation: "delete", credentials }),
+        headers: { "x-openjob-deletion-status": statusToken },
         method: "POST",
       });
-      if (
-        !isRecord(result) ||
-        (result.status !== "completed" && result.status !== "pending")
-      ) {
-        throw new OpenJobApiError(
-          502,
-          "invalid_response",
-          "OpenJob returned an invalid deletion status.",
-        );
+      return readDeletionStartResult(result, statusToken);
+    },
+
+    async refreshDeletionProvider(
+      statusToken: string,
+      credential: DeletionProviderCredential,
+    ) {
+      if (!isDeletionStatusToken(statusToken)) {
+        invalidDeletionStatus();
       }
-      return { status: result.status } as const;
+      const result = await requestDeletionData(statusToken, {
+        body: JSON.stringify({ credential }),
+        method: "PATCH",
+      });
+      return readDeletionStartResult(result, statusToken);
+    },
+
+    async prepareDeletionStatus(
+      token: string,
+      credential?: DeletionProviderCredential,
+    ) {
+      const result = await requestDeletionData(token, {
+        ...(credential
+          ? { body: JSON.stringify({ credential }) }
+          : {}),
+        method: "PUT",
+      });
+      return readDeletionPrepareResult(result);
+    },
+
+    async getDeletionStatus(statusToken: string) {
+      if (!isDeletionStatusToken(statusToken)) {
+        invalidDeletionStatus();
+      }
+      const result = await requestDeletionData(statusToken);
+      return readDeletionStatus(result);
     },
 
     claimUsername(token: string, username: string) {

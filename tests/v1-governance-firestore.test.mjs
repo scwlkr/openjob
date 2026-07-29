@@ -1358,7 +1358,7 @@ test("Kick remains atomic independently of the removed Member's open Task count"
     tasks.push((await created.json()).data);
   }
 
-  firestore.setMaxCommitWrites(4);
+  firestore.setMaxCommitWrites(5);
   const commitsBeforeKick = firestore.commitAttempts();
   const kicked = await request("shane", {
     method: "POST",

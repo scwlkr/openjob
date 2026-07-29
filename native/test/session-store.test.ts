@@ -60,6 +60,85 @@ test("stores only a versioned provider refresh credential with device-only acces
   );
 });
 
+test.each(["prepared", "submitting", "completed"] as const)(
+  "stores a %s deletion receipt in a separate device-only protected entry",
+  async (phase) => {
+    const receipt = {
+      phase,
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      version: 1 as const,
+    };
+
+    await store.saveDeletionReceipt(receipt);
+
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      "openjob.native.auth.preview.v1.deletion-receipt",
+      JSON.stringify(receipt),
+      {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        keychainService: "dev.openjob.app.preview.auth",
+      },
+    );
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining(receipt.statusToken),
+    );
+
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+      JSON.stringify(receipt),
+    );
+    await expect(store.loadDeletionReceipt()).resolves.toEqual(receipt);
+
+    await store.clearDeletionReceipt();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(
+      "openjob.native.auth.preview.v1.deletion-receipt",
+      { keychainService: "dev.openjob.app.preview.auth" },
+    );
+  },
+);
+
+test("fails closed without deleting a malformed protected deletion receipt", async () => {
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+    JSON.stringify({
+      phase: "prepared",
+      statusToken: "invalid-capability",
+      version: 1,
+    }),
+  );
+
+  await expect(store.loadDeletionReceipt()).rejects.toMatchObject({
+    code: "unavailable",
+  });
+  expect(SecureStore.deleteItemAsync).not.toHaveBeenCalledWith(
+    "openjob.native.auth.preview.v1.deletion-receipt",
+    expect.anything(),
+  );
+});
+
+test.each([
+  ["an unknown phase", { phase: "unknown" }],
+  ["extra status metadata", { deadline: "2026-08-04T12:00:00.000Z" }],
+])("fails closed for a deletion receipt with %s", async (_name, override) => {
+  const receipt = {
+    phase: "prepared",
+    statusToken: "v1.deletionStatusCapability.signaturePayload",
+    version: 1,
+    ...override,
+  };
+  (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(
+    JSON.stringify(receipt),
+  );
+
+  await expect(store.loadDeletionReceipt()).rejects.toMatchObject({
+    code: "unavailable",
+  });
+  await expect(
+    store.saveDeletionReceipt(
+      receipt as Parameters<typeof store.saveDeletionReceipt>[0],
+    ),
+  ).rejects.toMatchObject({ code: "unavailable" });
+});
+
 test("stores and restores the Preview-only QA refresh credential", async () => {
   const session = {
     provider: "qa-password" as const,

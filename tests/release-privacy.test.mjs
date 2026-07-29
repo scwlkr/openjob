@@ -71,6 +71,14 @@ test("release privacy inventory validates and generates deterministic round-trip
   assert.equal(native.metadata.inventorySchemaVersion, inventory.schemaVersion);
   assert.equal(apple.metadata.inventorySchemaVersion, inventory.schemaVersion);
   assert.equal(play.metadata.inventorySchemaVersion, inventory.schemaVersion);
+  assert.equal(
+    apple.accountDeletion.statusReceipt,
+    "opaque-user-and-intent-bound-capability-with-minimal-server-intent",
+  );
+  assert.equal(
+    play.accountDeletion.statusReceiptRetention,
+    "through-submission-until-canceled-replaced-or-completion-acknowledged",
+  );
 });
 
 test("Apple declaration preparation contains the complete generated store-answer draft", async () => {

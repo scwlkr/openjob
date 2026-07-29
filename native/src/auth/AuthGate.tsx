@@ -27,6 +27,7 @@ export type { AuthFlowResult, SignedInResult } from "./coordinator";
 
 export type NativeAuthController = Pick<
   NativeAuthCoordinator,
+  | "acknowledgeDeletionCompletion"
   | "authenticateExistingUser"
   | "authenticateNewMethod"
   | "cancelPending"
@@ -48,7 +49,11 @@ export type NativeAuthController = Pick<
   | "subscribeToCredentialRevocation"
   | "syncTaskList"
   | "switchUser"
->;
+> & {
+  reauthenticateDeletionProvider?:
+    NativeAuthCoordinator["reauthenticateDeletionProvider"];
+  refreshDeletionStatus?: NativeAuthCoordinator["refreshDeletionStatus"];
+};
 
 type SignedInViewProps = {
   onManageSignInMethods?: () => void;
@@ -77,6 +82,36 @@ function methodName(method: AuthenticationMethod) {
 }
 
 function resultMessage(result: AuthFlowResult) {
+  if (result.kind === "deletion-completed") {
+    return "Your OpenJob User and associated data were deleted.";
+  }
+  if (result.kind === "deletion-clear-retry") {
+    return result.status === "completed"
+      ? "Deletion is complete, but OpenJob could not remove its protected receipt. Retry before signing in."
+      : "Deletion did not start, but OpenJob could not remove its protected preparation receipt. Retry before continuing.";
+  }
+  if (result.kind === "deletion-pending") {
+    if (result.reauthenticationProviders.length > 0) {
+      const names = result.reauthenticationProviders.map(methodName).join(" and ");
+      return `Deletion is in progress. Reauthenticate ${names} so provider cleanup can resume.`;
+    }
+    if (Date.parse(result.deadline) <= Date.now()) {
+      return "Automatic cleanup ended. OpenJob operator completion is required; access remains blocked.";
+    }
+    return "Deletion is in progress. Access ended, and cleanup will finish within seven days.";
+  }
+  if (result.kind === "deletion-status-retry") {
+    if (result.reason === "proof-retry") {
+      return "OpenJob could not resume deletion yet. Fresh provider proof remains only while this app stays open; retry now.";
+    }
+    if (result.reason === "offline") {
+      return "OpenJob is offline. Your protected deletion receipt remains on this device.";
+    }
+    if (result.reason === "storage-unavailable") {
+      return "OpenJob could not save the protected deletion receipt. Keep the app open and retry now.";
+    }
+    return "OpenJob could not confirm deletion status. Your protected receipt remains on this device.";
+  }
   if (
     (result.kind === "signed-in" || result.kind === "unrecognized") &&
     result.notice === "fresh_authentication_required"
@@ -96,7 +131,7 @@ function resultMessage(result: AuthFlowResult) {
     case "deleted":
       return "Your OpenJob User and associated data were deleted.";
     case "deletion-pending":
-      return "Deletion is in progress. Access ended, and cleanup will finish within seven days.";
+      return "Deletion is in progress. Sign in again with Google or Apple to resume provider cleanup; access remains blocked.";
     case "expired":
       return "The initial sign-in expired. Sign in again to restart linking.";
     case "interrupted":
@@ -409,6 +444,10 @@ export function NativeAuthGate({
     }
   }
 
+  function refreshDeletionStatus() {
+    return auth.refreshDeletionStatus?.() ?? auth.restore();
+  }
+
   useEffect(() => {
     let mounted = true;
     void (async () => {
@@ -460,6 +499,106 @@ export function NativeAuthGate({
         title="Restoring your sign-in"
       >
         <ActivityIndicator accessibilityLabel="Restoring sign-in" />
+      </AuthScaffold>
+    );
+  }
+
+  if (state.kind === "deletion-pending") {
+    return (
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        message={message ?? resultMessage(state)}
+        title="Deletion in progress"
+      >
+        <Text style={[styles.message, { color: palette.muted }]}>
+          {`Cleanup deadline: ${state.deadline}`}
+        </Text>
+        {state.reauthenticationProviders.map((provider) => (
+          <ActionButton
+            disabled={busy}
+            key={provider}
+            label={
+              busy
+                ? `Reauthenticating ${methodName(provider)}…`
+                : `Reauthenticate ${methodName(provider)}`
+            }
+            onPress={() =>
+              void perform(() =>
+                auth.reauthenticateDeletionProvider?.(provider) ??
+                  refreshDeletionStatus(),
+              )
+            }
+          />
+        ))}
+        <ActionButton
+          disabled={busy}
+          label={busy ? "Refreshing…" : "Refresh deletion status"}
+          onPress={() =>
+            void perform(() => refreshDeletionStatus())
+          }
+        />
+      </AuthScaffold>
+    );
+  }
+
+  if (state.kind === "deletion-clear-retry") {
+    return (
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        message={message ?? resultMessage(state)}
+        title={
+          state.status === "completed"
+            ? "Finish confirming deletion"
+            : "Finish canceling deletion"
+        }
+      >
+        <ActionButton
+          disabled={busy}
+          label={busy ? "Retrying…" : "Retry deletion confirmation"}
+          onPress={() =>
+            void perform(() =>
+              state.status === "completed"
+                ? auth.acknowledgeDeletionCompletion()
+                : refreshDeletionStatus(),
+            )
+          }
+        />
+      </AuthScaffold>
+    );
+  }
+
+  if (state.kind === "deletion-status-retry") {
+    return (
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        message={message ?? resultMessage(state)}
+        title="Confirm deletion status"
+      >
+        <ActionButton
+          disabled={busy}
+          label={busy ? "Refreshing…" : "Refresh deletion status"}
+          onPress={() =>
+            void perform(() => refreshDeletionStatus())
+          }
+        />
+      </AuthScaffold>
+    );
+  }
+
+  if (state.kind === "deletion-completed") {
+    return (
+      <AuthScaffold
+        diagnosticsSetting={diagnosticsSetting}
+        message={message ?? resultMessage(state)}
+        title="Deletion complete"
+      >
+        <ActionButton
+          disabled={busy}
+          label={busy ? "Continuing…" : "Continue to sign in"}
+          onPress={() =>
+            void perform(() => auth.acknowledgeDeletionCompletion())
+          }
+        />
       </AuthScaffold>
     );
   }
@@ -517,7 +656,7 @@ export function NativeAuthGate({
     return (
       <AuthScaffold
         diagnosticsSetting={diagnosticsSetting}
-        message="OpenJob could not finish removing saved data. Retry before signing in again."
+        message="OpenJob could not finish protected local cleanup. Retry before signing in again."
         title="Finish signing out"
       >
         <ActionButton
@@ -819,7 +958,10 @@ export function NativeAuthGate({
         onPress={() => void perform(() => auth.signIn("apple"))}
         secondary
       />
-      {qaPasswordEnabled ? (
+      {qaPasswordEnabled &&
+      !(
+        state.kind === "signed-out" && state.reason === "deletion-pending"
+      ) ? (
         <View style={styles.qaForm}>
           <Text style={[styles.qaTitle, { color: palette.ink }]}>
             Preview QA sign-in

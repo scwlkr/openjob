@@ -43,6 +43,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -73,6 +75,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -96,6 +100,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -129,12 +135,116 @@ paths:
           $ref: "#/components/responses/LinkAuthenticationErrorResponse"
         "409":
           $ref: "#/components/responses/LinkSignInMethodConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
 
   /api/v1/me/deletion:
+    get:
+      tags: [Identity]
+      summary: Read account-deletion status
+      description: |
+        Uses the opaque status capability prepared before deletion. The capability
+        is accepted only in the Authorization header and is never placed in a
+        URL, logged, or echoed. For the exact active User and a fresh prepared
+        intent, this operation is read-only and returns not_started with
+        submissionExpired false, so a racing POST can still consume the intent.
+        At or after submissionExpiresAt, this operation atomically removes the
+        expired intent and returns submissionExpired true.
+        Pending requires an exact matching deletion job and deletion-blocked
+        User. Completed requires the User, job, and prepared intent all to be
+        absent. Ambiguous or inconsistent state fails closed.
+      operationId: getAccountDeletionStatus
+      security:
+        - deletionStatusBearer: []
+      x-openjob-authorization: capability
+      x-openjob-retryable: true
+      responses:
+        "200":
+          $ref: "#/components/responses/AccountDeletionStatusResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        "503":
+          $ref: "#/components/responses/AccountDeletionUnavailableResponse"
+    patch:
+      tags: [Identity]
+      summary: Refresh one unusable provider proof for a pending deletion
+      description: |
+        Uses only the opaque deletion status capability. The fresh Firebase and
+        provider proof must match one exact encrypted, incomplete provider slot
+        already marked as requiring reauthentication. The replacement is
+        encrypted atomically, never restores OpenJob access, and resumes the
+        same deletion job. Provider credentials and subjects are never returned
+        or logged.
+      operationId: refreshAccountDeletionProvider
+      security:
+        - deletionStatusBearer: []
+      x-openjob-authorization: capability
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/RefreshAccountDeletionProviderRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AccountDeletionCompletedResponse"
+        "202":
+          $ref: "#/components/responses/AccountDeletionPendingResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/LinkAuthenticationErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        "503":
+          $ref: "#/components/responses/AccountDeletionUnavailableResponse"
+    put:
+      tags: [Identity]
+      summary: Prepare an account-deletion status capability
+      description: |
+        Without a request body, authenticates an active User and creates or reuses
+        one minimal durable prepared intent. The encrypted capability binds that
+        User and exact intent and is accepted for a destructive POST until
+        submissionExpiresAt, five minutes after preparation.
+
+        After an exact account_deletion_pending response, the client instead sends
+        the fresh Firebase and provider proof from that same sign-in. The proof
+        must match the authenticated Firebase UID, provider, and upstream subject.
+        OpenJob atomically reopens that provider under a successor processing
+        lease, stores the encrypted proof, reruns Firebase-session and provider
+        revocation, and returns a pending capability for durable client storage.
+        If finalization already won, OpenJob still revokes the fresh authorization
+        and deletes the recreated Firebase identity before returning completed.
+        A Firebase-only restored session cannot recover a lost receipt.
+      operationId: mintAccountDeletionStatusToken
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      requestBody:
+        $ref: "#/components/requestBodies/RecoverAccountDeletionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AccountDeletionPreparationResponse"
+        "202":
+          $ref: "#/components/responses/AccountDeletionPendingResponse"
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/AccountDeletionRecoveryAuthenticationResponse"
+        "409":
+          $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        "503":
+          $ref: "#/components/responses/AccountDeletionUnavailableResponse"
     post:
       tags: [Identity]
       summary: Permanently delete the current User and associated data
@@ -146,11 +256,26 @@ paths:
         Username indexes, notifications, Group access, User-created Tasks, and
         personal attribution were removed. A pending response means access has
         ended but provider or infrastructure cleanup will retry for no more than
-        seven calendar days. Credential and revocation values are never logged,
-        returned, or retained after completion.
+        seven calendar days. Clients prepare and persist the status capability
+        with PUT, then send that exact capability in x-openjob-deletion-status.
+        The atomic start consumes the exact unexpired prepared intent while it
+        creates the deletion job and blocks the User. A pending response echoes
+        the exact prepared capability. Already-pending Users are rejected before
+        any fresh provider authentication. Credential and revocation values are
+        never logged, returned, or retained after completion.
       operationId: deleteCurrentUser
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
+      parameters:
+        - name: x-openjob-deletion-status
+          in: header
+          required: true
+          description: |
+            The exact capability returned by PUT and already persisted by the
+            client. It must bind to this User and exact prepared intent and be
+            submitted before submissionExpiresAt.
+          schema:
+            $ref: "#/components/schemas/AccountDeletionStatusToken"
       requestBody:
         $ref: "#/components/requestBodies/DeleteCurrentUserRequest"
       responses:
@@ -164,6 +289,8 @@ paths:
           $ref: "#/components/responses/LinkAuthenticationErrorResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -193,6 +320,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/UsernameConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -223,6 +352,8 @@ paths:
           $ref: "#/components/responses/NotificationSubscriptionNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -249,6 +380,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -275,6 +408,8 @@ paths:
           $ref: "#/components/responses/NotificationSubscriptionNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -300,6 +435,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -324,6 +461,8 @@ paths:
           $ref: "#/components/responses/UnauthorizedResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -350,6 +489,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -378,6 +519,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -405,6 +548,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/LeaveGroupConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -438,6 +583,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/EndGroupConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -469,6 +616,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -499,6 +648,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
           $ref: "#/components/responses/KickMemberConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -528,6 +679,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
           $ref: "#/components/responses/PromoteMemberConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -557,6 +710,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrMemberNotFoundResponse"
         "409":
           $ref: "#/components/responses/DemoteMemberConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -590,6 +745,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -623,6 +780,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrUserNotFoundResponse"
         "409":
           $ref: "#/components/responses/BanUserConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -652,6 +811,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrBanNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -680,6 +841,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -709,6 +872,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -736,6 +901,8 @@ paths:
           $ref: "#/components/responses/InvalidInviteResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -765,6 +932,8 @@ paths:
           $ref: "#/components/responses/InvalidInviteResponse"
         "409":
           $ref: "#/components/responses/JoinGroupConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -820,6 +989,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -846,6 +1017,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupNotFoundResponse"
         "409":
           $ref: "#/components/responses/CreateTaskConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -871,6 +1044,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -898,6 +1073,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
         "409":
           $ref: "#/components/responses/UpdateTaskConflictResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -920,6 +1097,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -951,6 +1130,8 @@ paths:
           $ref: "#/components/responses/ConcealedGroupOrTaskNotFoundResponse"
         "409":
           $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
         "429":
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
@@ -967,6 +1148,24 @@ components:
         The service verifies Firebase claims, permits only the Google and Apple
         sign-in providers, resolves a provider-scoped subject to one canonical
         User, and rechecks authorization on every request.
+    deletionStatusBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque account-deletion status capability
+      description: |
+        Client-held capability prepared before account deletion starts. It
+        authorizes status reads, contains no plaintext identity or content,
+        never appears in a URL or log, and is removed by the client only after
+        confirmed completion is acknowledged. When sent to OpenJob it appears only in GET
+        Authorization or the destructive POST x-openjob-deletion-status binding
+        header.
+
+  headers:
+    NoStore:
+      description: Sensitive authentication and status responses are never cached.
+      required: true
+      schema:
+        const: no-store
 
   parameters:
     InstallationId:
@@ -1111,7 +1310,42 @@ components:
                 provider: google
                 revocation:
                   kind: access_token
+                  idToken: fresh-google-provider-id-token
                   value: fresh-provider-access-token
+    RefreshAccountDeletionProviderRequest:
+      description: One fresh proof for the exact pending provider slot.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RefreshAccountDeletionProviderInput"
+          example:
+            credential:
+              credentialToken: fresh-firebase-id-token
+              provider: google
+              revocation:
+                idToken: fresh-google-provider-id-token
+                kind: access_token
+                value: fresh-provider-access-token
+    RecoverAccountDeletionRequest:
+      description: |
+        Optional only for lost-receipt recovery after an exact
+        account_deletion_pending response. It carries the Firebase ID token and
+        raw provider revocation proof from the same fresh sign-in. Active-User
+        status preparation omits the body.
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RefreshAccountDeletionProviderInput"
+          example:
+            credential:
+              credentialToken: fresh-firebase-id-token
+              provider: google
+              revocation:
+                idToken: fresh-google-provider-id-token
+                kind: access_token
+                value: fresh-provider-access-token
     ClaimUsernameRequest:
       description: Immutable Username claim.
       required: true
@@ -1230,6 +1464,9 @@ components:
             data: [apple, google]
     AccountDeletionCompletedResponse:
       description: Account deletion completed and no retry state remains.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
       content:
         application/json:
           schema:
@@ -1238,8 +1475,37 @@ components:
             data:
               completedAt: "2026-07-28T12:00:00Z"
               status: completed
+    AccountDeletionPreparationResponse:
+      description: |
+        A fresh active-User status capability, or final confirmation after a
+        recovery proof was synchronously revoked and its recreated Firebase
+        identity was deleted.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/AccountDeletionStatusTokenEnvelope"
+              - $ref: "#/components/schemas/AccountDeletionCompletedEnvelope"
+          examples:
+            prepared:
+              value:
+                data:
+                  status: not_started
+                  statusToken: v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+                  submissionExpiresAt: "2026-07-28T12:05:00Z"
+            completedRecovery:
+              value:
+                data:
+                  completedAt: "2026-07-28T12:00:00Z"
+                  status: completed
     AccountDeletionPendingResponse:
       description: Access ended and deletion is retrying within seven days.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
       content:
         application/json:
           schema:
@@ -1247,10 +1513,48 @@ components:
           example:
             data:
               deadline: "2026-08-04T12:00:00Z"
+              reauthenticationProviders: []
+              requestedAt: "2026-07-28T12:00:00Z"
+              statusToken: v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+              status: pending
+    AccountDeletionStatusTokenResponse:
+      description: |
+        User-and-intent-bound status capability plus its five-minute destructive
+        submission deadline.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionStatusTokenEnvelope"
+          example:
+            data:
+              status: not_started
+              statusToken: v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+              submissionExpiresAt: "2026-07-28T12:05:00Z"
+    AccountDeletionStatusResponse:
+      description: Fail-closed pending status or final deletion confirmation.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionStatusEnvelope"
+          example:
+            data:
+              deadline: "2026-08-04T12:00:00Z"
+              reauthenticationProviders: []
               requestedAt: "2026-07-28T12:00:00Z"
               status: pending
     AccountDeletionUnavailableResponse:
-      description: Provider cleanup is not ready, so deletion did not start.
+      description: |
+        Deletion cannot safely start or its status cannot safely be resolved.
+        This response never implies completion.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
       content:
         application/json:
           schema:
@@ -1260,6 +1564,44 @@ components:
               code: account_deletion_unavailable
               message: Account deletion is temporarily unavailable.
               requestId: req_delete_unavailable
+    AccountDeletionRecoveryAuthenticationResponse:
+      description: |
+        The Firebase Bearer credential is missing or invalid, or pending
+        recovery omitted a fresh same-provider proof bound to that credential.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LinkAuthenticationErrorEnvelope"
+          examples:
+            missingBearer:
+              value:
+                error:
+                  code: authentication_required
+                  message: Authentication is required.
+                  requestId: req_delete_auth
+            missingFreshProof:
+              value:
+                error:
+                  code: fresh_authentication_required
+                  message: Freshly authenticate the required Sign-in Method.
+                  requestId: req_delete_fresh
+    AccountDeletionAlreadyPendingResponse:
+      description: Account deletion already started; recover status with PUT.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AccountDeletionPendingErrorEnvelope"
+          example:
+            error:
+              code: account_deletion_pending
+              message: Account deletion is pending.
+              requestId: req_delete_pending
     GroupResponse:
       description: One Group in a single-resource success envelope.
       content:
@@ -1455,7 +1797,14 @@ components:
                 name: Must contain 1 to 80 characters.
               requestId: req_01J0VALID
     UnauthorizedResponse:
-      description: Bearer token is missing, invalid, expired, or not an allowed Google- or Apple-backed Firebase identity.
+      description: |
+        The required Bearer credential is missing, malformed, expired, or
+        invalid for this operation. Most operations require an allowed Google-
+        or Apple-backed Firebase identity; deletion status requires its opaque
+        device-held capability.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
       content:
         application/json:
           schema:
@@ -1726,6 +2075,8 @@ components:
     RateLimitedResponse:
       description: Infrastructure throttling. OpenJob defines no product-level quota in v1.
       headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
         Retry-After:
           description: Seconds to wait before another attempt, when known.
           schema:
@@ -1742,6 +2093,9 @@ components:
               requestId: req_01J0RATE
     InternalErrorResponse:
       description: Unexpected service failure. The requestId can be used for support correlation.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
       content:
         application/json:
           schema:
@@ -1860,48 +2214,100 @@ components:
           description: |
             User ID displayed during explicit confirmation. The atomic link is
             rejected if the resolved surviving User changed before commit.
-    AccountDeletionRevocationProof:
-      oneOf:
-        - type: object
-          additionalProperties: false
-          required: [kind, value]
-          properties:
-            kind:
-              const: access_token
-            value:
-              type: string
-              minLength: 1
-              maxLength: 8192
-              writeOnly: true
-        - type: object
-          additionalProperties: false
-          required: [clientId, kind, value]
-          properties:
-            clientId:
-              type: string
-              minLength: 1
-              maxLength: 256
-            kind:
-              enum: [access_token, authorization_code]
-            value:
-              type: string
-              minLength: 1
-              maxLength: 8192
-              writeOnly: true
-    AccountDeletionCredentialInput:
+    GoogleAccountDeletionRevocationProof:
       type: object
       additionalProperties: false
-      required: [credentialToken, provider, revocation]
+      required: [idToken, kind, value]
       properties:
-        credentialToken:
+        idToken:
           type: string
           minLength: 1
           maxLength: 8192
           writeOnly: true
-        provider:
-          enum: [apple, google]
-        revocation:
-          $ref: "#/components/schemas/AccountDeletionRevocationProof"
+        kind:
+          const: access_token
+        value:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+    AppleAccessTokenAccountDeletionRevocationProof:
+      type: object
+      additionalProperties: false
+      required: [clientId, kind, value]
+      properties:
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        kind:
+          const: access_token
+        value:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+    AppleAuthorizationCodeAccountDeletionRevocationProof:
+      type: object
+      additionalProperties: false
+      required: [clientId, idToken, kind, value]
+      properties:
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        idToken:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+        kind:
+          const: authorization_code
+        redirectUri:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          writeOnly: true
+        value:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+    AccountDeletionRevocationProof:
+      oneOf:
+        - $ref: "#/components/schemas/GoogleAccountDeletionRevocationProof"
+        - $ref: "#/components/schemas/AppleAccessTokenAccountDeletionRevocationProof"
+        - $ref: "#/components/schemas/AppleAuthorizationCodeAccountDeletionRevocationProof"
+    AccountDeletionCredentialInput:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [credentialToken, provider, revocation]
+          properties:
+            credentialToken:
+              type: string
+              minLength: 1
+              maxLength: 8192
+              writeOnly: true
+            provider:
+              const: google
+            revocation:
+              $ref: "#/components/schemas/GoogleAccountDeletionRevocationProof"
+        - type: object
+          additionalProperties: false
+          required: [credentialToken, provider, revocation]
+          properties:
+            credentialToken:
+              type: string
+              minLength: 1
+              maxLength: 8192
+              writeOnly: true
+            provider:
+              const: apple
+            revocation:
+              oneOf:
+                - $ref: "#/components/schemas/AppleAccessTokenAccountDeletionRevocationProof"
+                - $ref: "#/components/schemas/AppleAuthorizationCodeAccountDeletionRevocationProof"
     DeleteCurrentUserInput:
       type: object
       additionalProperties: false
@@ -1916,6 +2322,13 @@ components:
           uniqueItems: true
           items:
             $ref: "#/components/schemas/AccountDeletionCredentialInput"
+    RefreshAccountDeletionProviderInput:
+      type: object
+      additionalProperties: false
+      required: [credential]
+      properties:
+        credential:
+          $ref: "#/components/schemas/AccountDeletionCredentialInput"
     AccountDeletionCompleted:
       type: object
       additionalProperties: false
@@ -1928,14 +2341,77 @@ components:
     AccountDeletionPending:
       type: object
       additionalProperties: false
-      required: [deadline, requestedAt, status]
+      required: [deadline, reauthenticationProviders, requestedAt, status, statusToken]
       properties:
         deadline:
           $ref: "#/components/schemas/Timestamp"
+        reauthenticationProviders:
+          type: array
+          uniqueItems: true
+          items:
+            enum: [apple, google]
         requestedAt:
           $ref: "#/components/schemas/Timestamp"
         status:
           const: pending
+        statusToken:
+          $ref: "#/components/schemas/AccountDeletionStatusToken"
+    AccountDeletionStatusToken:
+      type: string
+      minLength: 32
+      maxLength: 8192
+      pattern: '^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+      description: |
+        Sensitive opaque status capability encrypted with an exact User and
+        durable prepared-intent binding before deletion.
+        The web client stores it in browser localStorage; native clients use
+        platform secure storage. Never log it or put it in a URL. When sending it
+        to OpenJob, use only GET or PATCH Authorization, or POST
+        x-openjob-deletion-status.
+    AccountDeletionStatusNotStarted:
+      type: object
+      additionalProperties: false
+      required: [status, submissionExpired, submissionExpiresAt]
+      properties:
+        status:
+          const: not_started
+        submissionExpired:
+          type: boolean
+          description: |
+            False while the exact prepared intent remains fresh and available
+            for POST. True only after its submission deadline, when this status
+            read removed the expired intent or observed it already absent. No
+            later POST with an expired capability can create a deletion job.
+        submissionExpiresAt:
+          $ref: "#/components/schemas/Timestamp"
+    AccountDeletionStatusCompleted:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          const: completed
+    AccountDeletionStatusPending:
+      type: object
+      additionalProperties: false
+      required: [deadline, reauthenticationProviders, requestedAt, status]
+      properties:
+        deadline:
+          $ref: "#/components/schemas/Timestamp"
+        reauthenticationProviders:
+          type: array
+          uniqueItems: true
+          items:
+            enum: [apple, google]
+        requestedAt:
+          $ref: "#/components/schemas/Timestamp"
+        status:
+          const: pending
+    AccountDeletionStatus:
+      oneOf:
+        - $ref: "#/components/schemas/AccountDeletionStatusNotStarted"
+        - $ref: "#/components/schemas/AccountDeletionStatusCompleted"
+        - $ref: "#/components/schemas/AccountDeletionStatusPending"
     AccountDeletionCompletedEnvelope:
       type: object
       additionalProperties: false
@@ -1950,6 +2426,29 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/AccountDeletionPending"
+    AccountDeletionStatusTokenEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status, statusToken, submissionExpiresAt]
+          properties:
+            status:
+              const: not_started
+            statusToken:
+              $ref: "#/components/schemas/AccountDeletionStatusToken"
+            submissionExpiresAt:
+              $ref: "#/components/schemas/Timestamp"
+    AccountDeletionStatusEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AccountDeletionStatus"
 
     PushSubscriptionKeysInput:
       type: object
@@ -2283,6 +2782,14 @@ components:
               properties:
                 code:
                   const: account_deletion_unavailable
+    AccountDeletionPendingErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - properties:
+            error:
+              properties:
+                code:
+                  const: account_deletion_pending
     SignInMethodUnrecognizedErrorEnvelope:
       allOf:
         - $ref: "#/components/schemas/ErrorEnvelope"

@@ -1,4 +1,7 @@
 import {
+  type AccountDeletionRequestResult,
+  type AccountDeletionStatus,
+  type AccountDeletionPreflight,
   ApiError,
   type Ban,
   type BrowserPushSubscription,
@@ -12,6 +15,7 @@ import {
   type Task,
   type User,
 } from "./openjob-contracts";
+import { isOpenJobTimestamp } from "./openjob-timestamp";
 
 type ErrorEnvelope = {
   error?: {
@@ -20,6 +24,152 @@ type ErrorEnvelope = {
     fields?: Record<string, string>;
   };
 };
+
+function exactRecord(value: unknown, keys: string[]) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join(",") === [...keys].sort().join(","),
+  );
+}
+
+function statusToken(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.length >= 32 &&
+    value.length <= 8_192 &&
+    /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value);
+}
+
+function unexpectedDeletionResponse(): never {
+  throw new ApiError(
+    502,
+    "unexpected_response",
+    "OpenJob returned an unexpected account-deletion response.",
+  );
+}
+
+function reauthenticationProviders(value: unknown): value is SignInMethod[] {
+  return Array.isArray(value) &&
+    value.every((provider) => provider === "apple" || provider === "google") &&
+    new Set(value).size === value.length &&
+    value.join(",") === [...value].sort().join(",");
+}
+
+function deletionData(payload: unknown) {
+  if (!exactRecord(payload, ["data"])) unexpectedDeletionResponse();
+  return (payload as { data: unknown }).data;
+}
+
+function deletionPreflight(payload: unknown): AccountDeletionPreflight {
+  const data = deletionData(payload);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    unexpectedDeletionResponse();
+  }
+  const result = data as Record<string, unknown>;
+  if (result.status === "completed") {
+    if (
+      !exactRecord(result, ["completedAt", "status"]) ||
+      !isOpenJobTimestamp(result.completedAt)
+    ) unexpectedDeletionResponse();
+    return result as AccountDeletionPreflight;
+  }
+  if (result.status === "not_started") {
+    if (
+      !exactRecord(result, [
+        "status",
+        "statusToken",
+        "submissionExpiresAt",
+      ]) ||
+      !statusToken(result.statusToken) ||
+      !isOpenJobTimestamp(result.submissionExpiresAt)
+    ) unexpectedDeletionResponse();
+    return result as AccountDeletionPreflight;
+  }
+  if (
+    result.status !== "pending" ||
+    !exactRecord(result, [
+      "deadline",
+      "reauthenticationProviders",
+      "requestedAt",
+      "status",
+      "statusToken",
+    ]) ||
+    !isOpenJobTimestamp(result.deadline) ||
+    !reauthenticationProviders(result.reauthenticationProviders) ||
+    !isOpenJobTimestamp(result.requestedAt) ||
+    !statusToken(result.statusToken)
+  ) unexpectedDeletionResponse();
+  return result as AccountDeletionPreflight;
+}
+
+function deletionResult(
+  payload: unknown,
+  expectedStatusToken: string,
+): AccountDeletionRequestResult {
+  const data = deletionData(payload);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    unexpectedDeletionResponse();
+  }
+  const result = data as Record<string, unknown>;
+  if (result.status === "completed") {
+    if (!exactRecord(result, ["completedAt", "status"]) ||
+      !isOpenJobTimestamp(result.completedAt)) unexpectedDeletionResponse();
+    return result as AccountDeletionRequestResult;
+  }
+  if (
+    result.status !== "pending" ||
+    !exactRecord(result, [
+      "deadline",
+      "reauthenticationProviders",
+      "requestedAt",
+      "status",
+      "statusToken",
+    ]) ||
+    !isOpenJobTimestamp(result.deadline) ||
+    !reauthenticationProviders(result.reauthenticationProviders) ||
+    !isOpenJobTimestamp(result.requestedAt) ||
+    result.statusToken !== expectedStatusToken
+  ) unexpectedDeletionResponse();
+  return result as AccountDeletionRequestResult;
+}
+
+function deletionStatus(payload: unknown): AccountDeletionStatus {
+  const data = deletionData(payload);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    unexpectedDeletionResponse();
+  }
+  const result = data as Record<string, unknown>;
+  if (result.status === "completed") {
+    if (!exactRecord(result, ["status"])) unexpectedDeletionResponse();
+    return result as AccountDeletionStatus;
+  }
+  if (result.status === "not_started") {
+    if (
+      !exactRecord(result, [
+        "status",
+        "submissionExpired",
+        "submissionExpiresAt",
+      ]) ||
+      typeof result.submissionExpired !== "boolean" ||
+      !isOpenJobTimestamp(result.submissionExpiresAt)
+    ) unexpectedDeletionResponse();
+    return result as AccountDeletionStatus;
+  }
+  if (
+    result.status !== "pending" ||
+    !exactRecord(result, [
+      "deadline",
+      "reauthenticationProviders",
+      "requestedAt",
+      "status",
+    ]) ||
+    !isOpenJobTimestamp(result.deadline) ||
+    !reauthenticationProviders(result.reauthenticationProviders) ||
+    !isOpenJobTimestamp(result.requestedAt)
+  ) unexpectedDeletionResponse();
+  return result as AccountDeletionStatus;
+}
 
 async function request<T>(
   path: string,
@@ -87,16 +237,52 @@ export function createOpenJobApi(): OpenJobApi {
       return response.data;
     },
 
-    async deleteUser(token, credentials) {
-      const response = await request<{
-        data:
-          | { completedAt: string; status: "completed" }
-          | { deadline: string; requestedAt: string; status: "pending" };
-      }>("/api/v1/me/deletion", token, {
-        body: JSON.stringify({ confirmation: "delete", credentials }),
-        method: "POST",
-      });
-      return response.data;
+    async prepareAccountDeletion(token, credential) {
+      return deletionPreflight(await request<unknown>(
+        "/api/v1/me/deletion",
+        token,
+        {
+          ...(credential
+            ? { body: JSON.stringify({ credential }) }
+            : {}),
+          method: "PUT",
+        },
+      ));
+    },
+
+    async deleteUser(token, deletionStatusToken, credentials) {
+      const response = await request<unknown>(
+        "/api/v1/me/deletion",
+        token,
+        {
+          body: JSON.stringify({ confirmation: "delete", credentials }),
+          headers: {
+            "x-openjob-deletion-status": deletionStatusToken,
+          },
+          method: "POST",
+        },
+      );
+      return deletionResult(response, deletionStatusToken);
+    },
+
+    async getAccountDeletionStatus(statusToken) {
+      const response = await request<unknown>(
+        "/api/v1/me/deletion",
+        statusToken,
+      );
+      return deletionStatus(response);
+    },
+
+    async refreshAccountDeletionProvider(statusToken, credential) {
+      const response = await request<unknown>(
+        "/api/v1/me/deletion",
+        statusToken,
+        {
+          body: JSON.stringify({ credential }),
+          method: "PATCH",
+        },
+      );
+      return deletionResult(response, statusToken);
     },
 
     async listSignInMethods(token) {

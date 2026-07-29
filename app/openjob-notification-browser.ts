@@ -112,6 +112,64 @@ export function clearWorkerPrivateState(installationId: string) {
   });
 }
 
+function clearDeletionWorkerPrivateState() {
+  if (!("indexedDB" in window)) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const request = window.indexedDB.open(DATABASE_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DATABASE_STORE)) {
+        request.result.createObjectStore(DATABASE_STORE);
+      }
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(DATABASE_STORE, "readwrite");
+      const store = transaction.objectStore(DATABASE_STORE);
+      store.delete(DATABASE_RECORD);
+      store.delete(PENDING_LAUNCH_RECORD);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onabort = () => {
+        database.close();
+        reject(transaction.error);
+      };
+      transaction.onerror = () => undefined;
+    };
+  });
+}
+
+export async function clearDeletionNotificationState() {
+  let failure: unknown;
+  try {
+    window.localStorage.removeItem(LOCAL_STATE_KEY);
+    if (window.localStorage.getItem(LOCAL_STATE_KEY) !== null) {
+      throw new Error("The notification installation could not be cleared.");
+    }
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await clearDeletionWorkerPrivateState();
+  } catch (error) {
+    failure ??= error;
+  }
+  try {
+    const registration = navigator.serviceWorker
+      ? await navigator.serviceWorker.getRegistration()
+      : undefined;
+    const subscription = await registration?.pushManager.getSubscription();
+    if (subscription && !await subscription.unsubscribe()) {
+      throw new Error("The browser Push subscription could not be removed.");
+    }
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure) throw failure;
+}
+
 export function consumePendingNotificationGroup() {
   if (!("indexedDB" in window)) return Promise.resolve(null);
   return new Promise<string | null>((resolve) => {

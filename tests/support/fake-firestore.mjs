@@ -25,7 +25,7 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
   let commitWaiters = [];
   let commitAttemptCount = 0;
   let preconditionFailureCount = 0;
-  let maxCommitWrites = Number.POSITIVE_INFINITY;
+  let maxCommitWrites = 500;
   let pausedDocumentRead = null;
   let transactionSequence = 0;
   let mutateBeforeTransactionCommit = null;
@@ -159,13 +159,17 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       const current = snapshot.get(write.update.name);
       const masked = write.updateMask?.fieldPaths;
       const fields = masked
-        ? {
-            ...(current?.fields ?? {}),
-            ...Object.fromEntries(
-              masked.map((field) => [field, write.update.fields[field]]),
-            ),
-          }
+        ? { ...(current?.fields ?? {}) }
         : write.update.fields;
+      if (masked) {
+        for (const field of masked) {
+          if (Object.hasOwn(write.update.fields, field)) {
+            fields[field] = write.update.fields[field];
+          } else {
+            delete fields[field];
+          }
+        }
+      }
       revision += 1;
       const document = {
         name: write.update.name,
@@ -216,8 +220,14 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       }
       mutateBeforeTransactionCommit = mutate;
     },
-    pauseNextDocumentRead(path) {
-      if (typeof path !== "string" || path.length === 0 || pausedDocumentRead) {
+    pauseNextDocumentRead(path, afterMatchingReads = 0) {
+      if (
+        typeof path !== "string" ||
+        path.length === 0 ||
+        !Number.isInteger(afterMatchingReads) ||
+        afterMatchingReads < 0 ||
+        pausedDocumentRead
+      ) {
         throw new TypeError("A document read pause requires one unused path.");
       }
       let notifyPaused;
@@ -228,7 +238,12 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       const released = new Promise((resolve) => {
         releaseRead = resolve;
       });
-      pausedDocumentRead = { path, notifyPaused, released };
+      pausedDocumentRead = {
+        path,
+        remainingMatches: afterMatchingReads,
+        notifyPaused,
+        released,
+      };
       return {
         release() {
           releaseRead();
@@ -330,7 +345,12 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
       if (transactionToken && !transaction) {
         return error(400, "INVALID_ARGUMENT", "Unknown transaction.");
       }
-      if (pausedDocumentRead?.path === path) {
+      if (
+        pausedDocumentRead?.path === path &&
+        pausedDocumentRead.remainingMatches > 0
+      ) {
+        pausedDocumentRead.remainingMatches -= 1;
+      } else if (pausedDocumentRead?.path === path) {
         const paused = pausedDocumentRead;
         pausedDocumentRead = null;
         paused.notifyPaused();

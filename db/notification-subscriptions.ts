@@ -4,7 +4,11 @@ import {
   type FirebaseConfig,
   type FirestoreDocument,
 } from "./firestore-rest.ts";
-import { userHistoryWrite } from "./user-history.ts";
+import {
+  activeUserFenceWrite,
+  activeUserHistoryWrite,
+  isActiveUser,
+} from "./user-history.ts";
 
 export type StoredNotificationSubscription = {
   installationId: string;
@@ -24,11 +28,13 @@ type PersistedNotificationSubscription = StoredNotificationSubscription & {
 };
 
 type StoreOptions = { now?: () => number };
+const MAX_COMMIT_WRITES = 500;
+const MAX_CONCURRENT_ATTEMPTS = 40;
 
 function isConcurrentWrite(error: unknown) {
   return (
     error instanceof FirestoreRequestError &&
-    ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION"].includes(
+    ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION", "NOT_FOUND"].includes(
       error.code ?? "",
     )
   );
@@ -143,47 +149,59 @@ export function createFirestoreNotificationSubscriptionStore(
 
   return Object.freeze({
     async removeAllForUser(userId: string) {
-      const indexes: FirestoreDocument[] = [];
-      let pageToken: string | null = null;
-      do {
+      let removed = 0;
+      let consecutiveFailures = 0;
+      while (consecutiveFailures < MAX_CONCURRENT_ATTEMPTS) {
         const parameters = new URLSearchParams({
           pageSize: "500",
           orderBy: "__name__",
         });
-        if (pageToken !== null) parameters.set("pageToken", pageToken);
         const response = await firestore.request(
           `v1NotificationSubscriptionUsers/${userId}/installations?${parameters}`,
         );
-        const page = (await response.json()) as {
+        const indexes = ((await response.json()) as {
           documents?: FirestoreDocument[];
-          nextPageToken?: string;
-        };
-        indexes.push(...(page.documents ?? []));
-        pageToken = page.nextPageToken ?? null;
-      } while (pageToken !== null);
-      const subscriptions = await Promise.all(
-        indexes.map((index) => {
-          const installationId = index.fields?.installationId?.stringValue;
-          return installationId ? read(installationId) : Promise.resolve(null);
-        }),
+        }).documents ?? [];
+        if (indexes.length === 0) return removed;
+        const subscriptions = await Promise.all(
+          indexes.map((index) => {
+            const installationId = index.fields?.installationId?.stringValue;
+            return installationId ? read(installationId) : Promise.resolve(null);
+          }),
+        );
+        const writes: unknown[] = [];
+        let includedIndexes = 0;
+        for (const [index, subscription] of indexes.map((index, position) =>
+          [index, subscriptions[position]] as const
+        )) {
+          const operation = [
+            ...(subscription?.userId === userId
+              ? [{
+                  delete: firestore.documentName(subscription.path),
+                  currentDocument: { updateTime: subscription.updateTime },
+                }]
+              : []),
+            {
+              delete: index.name,
+              currentDocument: { updateTime: index.updateTime },
+            },
+          ];
+          if (writes.length + operation.length > MAX_COMMIT_WRITES) break;
+          writes.push(...operation);
+          includedIndexes += 1;
+        }
+        try {
+          await commit(writes);
+          removed += includedIndexes;
+          consecutiveFailures = 0;
+        } catch (error) {
+          if (!isConcurrentWrite(error)) throw error;
+          consecutiveFailures += 1;
+        }
+      }
+      throw new Error(
+        "Notification Subscription cleanup could not resolve concurrent writes.",
       );
-      if (indexes.length === 0) return 0;
-      await commit([
-        ...subscriptions
-          .filter(
-            (subscription): subscription is PersistedNotificationSubscription =>
-              subscription !== null && subscription.userId === userId,
-          )
-          .map((subscription) => ({
-            delete: firestore.documentName(subscription.path),
-            currentDocument: { updateTime: subscription.updateTime },
-          })),
-        ...indexes.map((index) => ({
-          delete: index.name,
-          currentDocument: { updateTime: index.updateTime },
-        })),
-      ]);
-      return indexes.length;
     },
 
     async get(installationId: string) {
@@ -231,7 +249,7 @@ export function createFirestoreNotificationSubscriptionStore(
         }
         pageToken = page.nextPageToken ?? null;
       } while (pageToken !== null);
-      return active;
+      return await isActiveUser(firestore, userId) ? active : [];
     },
 
     async remove(installationId: string, userId: string) {
@@ -280,7 +298,7 @@ export function createFirestoreNotificationSubscriptionStore(
         };
         try {
           await commit([
-            userHistoryWrite(firestore, input.userId),
+            await activeUserHistoryWrite(firestore, input.userId),
             {
               update: {
                 name: firestore.documentName(pathFor(input.installationId)),
@@ -332,6 +350,7 @@ export function createFirestoreNotificationSubscriptionStore(
         };
         try {
           await commit([
+            await activeUserFenceWrite(firestore, userId),
             {
               update: {
                 name: firestore.documentName(existing.path),

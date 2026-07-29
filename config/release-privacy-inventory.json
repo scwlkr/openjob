@@ -1,7 +1,7 @@
 {
   "$schema": "./release-privacy-inventory.schema.json",
-  "schemaVersion": "1.1.0",
-  "inventoryVersion": "0.3.4",
+  "schemaVersion": "1.2.0",
+  "inventoryVersion": "0.3.5",
   "authority": {
     "owner": "OpenJob",
     "scope": "release-privacy-and-store-preparation",
@@ -46,7 +46,9 @@
     "openAssignedTasks": "unassigned",
     "doneAssignedTasks": "deleted-user-marker-without-identity",
     "linkedProviderCleanup": "revoke-before-completion",
-    "pendingState": "minimal-encrypted-retry-job"
+    "pendingState": "minimal-encrypted-retry-job",
+    "statusReceipt": "opaque-user-and-intent-bound-capability-with-minimal-server-intent",
+    "statusReceiptRetention": "through-submission-until-canceled-replaced-or-completion-acknowledged"
   },
   "security": {
     "encryptedInTransit": true

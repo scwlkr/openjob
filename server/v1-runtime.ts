@@ -7,6 +7,7 @@ import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
 import { createAccountDeletionProviderGateway } from "./account-deletion-providers";
+import { parseAccountDeletionOperatorTarget } from "./account-deletion-operator.ts";
 import {
   qaPasswordIdentityConfig,
   type QaPasswordRuntimeBindings,
@@ -27,13 +28,18 @@ import { createWebPushSender } from "./web-push";
 
 type FirebaseBindings = QaPasswordRuntimeBindings & {
   ACCOUNT_DELETION_KEY?: string;
+  ACCOUNT_DELETION_OPERATOR_TARGET?: string;
   APPLE_ACCOUNT_DELETION_CLIENT_IDS?: string;
+  APPLE_ACCOUNT_DELETION_REDIRECT_URI?: string;
+  APPLE_ACCOUNT_DELETION_SERVICE_ID?: string;
   APPLE_KEY_ID?: string;
   APPLE_PRIVATE_KEY?: string;
   APPLE_TEAM_ID?: string;
   FIREBASE_CLIENT_EMAIL?: string;
+  FIREBASE_API_KEY?: string;
   FIREBASE_PRIVATE_KEY?: string;
   FIREBASE_PROJECT_ID?: string;
+  GOOGLE_ACCOUNT_DELETION_CLIENT_IDS?: string;
   VAPID_PRIVATE_KEY?: string;
 };
 
@@ -61,6 +67,7 @@ function getRuntime() {
   const bindings = env as FirebaseBindings;
   const projectId = requiredBinding(bindings, "FIREBASE_PROJECT_ID");
   const firebase = {
+    apiKey: requiredBinding(bindings, "FIREBASE_API_KEY"),
     projectId,
     clientEmail: requiredBinding(bindings, "FIREBASE_CLIENT_EMAIL"),
     privateKey: requiredBinding(bindings, "FIREBASE_PRIVATE_KEY"),
@@ -82,9 +89,21 @@ function getRuntime() {
         .filter(Boolean),
       keyId: bindings.APPLE_KEY_ID ?? "",
       privateKey: bindings.APPLE_PRIVATE_KEY ?? "",
+      redirectUrisByClientId: {
+        [bindings.APPLE_ACCOUNT_DELETION_SERVICE_ID ?? ""]:
+          bindings.APPLE_ACCOUNT_DELETION_REDIRECT_URI
+            ? [bindings.APPLE_ACCOUNT_DELETION_REDIRECT_URI]
+            : [],
+      },
       teamId: bindings.APPLE_TEAM_ID ?? "",
     },
     firebase,
+    google: {
+      allowedClientIds: (bindings.GOOGLE_ACCOUNT_DELETION_CLIENT_IDS ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    },
   });
   const notificationDispatcher = createTaskNotificationDispatcher({
     groups,
@@ -110,10 +129,8 @@ function getRuntime() {
       jobs: accountDeletionJobs,
       notifications: notificationSubscriptions,
       providers: accountDeletionProviders,
-      reportEscalation(requestId) {
-        console.warn(
-          `Account deletion ${requestId} requires operator completion.`,
-        );
+      reportEscalation() {
+        console.warn("Account deletion requires operator completion.");
       },
       users,
       verifyCredentialToken: verifyIdToken.verifyToken,
@@ -177,5 +194,27 @@ export const handleV1NotificationSubscriptionsRequest =
 export const handleV1TasksRequest = createV1TasksHandler(getTasksApi);
 
 export function retryPendingAccountDeletions() {
-  return getAccountDeletionApi().retryPending();
+  const configuredTarget = (env as FirebaseBindings)
+    .ACCOUNT_DELETION_OPERATOR_TARGET;
+  const target = parseAccountDeletionOperatorTarget(configuredTarget);
+  if (configuredTarget !== undefined && !target) {
+    console.warn(
+      "Account deletion operator target is invalid; bulk retry continues.",
+    );
+  }
+  return getAccountDeletionApi().retryPending(
+    undefined,
+    target ? { priority: target } : undefined,
+  );
+}
+
+export function retryAccountDeletion(userId: string, requestId: string) {
+  const target = parseAccountDeletionOperatorTarget(JSON.stringify({
+    requestId,
+    userId,
+  }));
+  if (!target) {
+    throw new Error("Account deletion operator target is invalid.");
+  }
+  return getAccountDeletionApi().retryPending(target);
 }

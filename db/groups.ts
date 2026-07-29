@@ -9,7 +9,11 @@ import {
   advanceGroupStateRevisionWrite,
   readGroupStateRevision,
 } from "./group-state.ts";
-import { userHistoryWrite } from "./user-history.ts";
+import {
+  assertActiveUser,
+  activeUserFenceWrite,
+  activeUserHistoryWrite,
+} from "./user-history.ts";
 import { isOpenTaskAssignedTo } from "./v1-tasks.ts";
 import {
   InvalidBanCursorError,
@@ -29,9 +33,12 @@ import {
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const INVITE_JOIN_LIMIT = 25;
 const MAX_CONCURRENT_ATTEMPTS = 40;
+const MAX_CLEANUP_WRITES_PER_COMMIT = 500;
+const DELETION_CLEANUP_USER_ID_FIELD = "deletionCleanupUserId";
 
 type StoredGroup = {
   createdAt: string;
+  deletionCleanupUserId: string | null;
   groupId: GroupId;
   name: string;
   path: string;
@@ -80,17 +87,21 @@ function parseGroup(document: FirestoreDocument, path: string): StoredGroup {
   const groupId = document.fields?.groupId?.stringValue as GroupId | undefined;
   const name = document.fields?.name?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
+  const deletionCleanupUserId = document.fields?.deletionCleanupUserId;
   const stateRevision = readGroupStateRevision(document);
   if (
     !groupId ||
     !name ||
     !createdAt ||
+    (deletionCleanupUserId !== undefined &&
+      !deletionCleanupUserId.stringValue) ||
     !document.updateTime
   ) {
     throw new Error("Firestore returned an invalid Group record.");
   }
   return {
     createdAt,
+    deletionCleanupUserId: deletionCleanupUserId?.stringValue ?? null,
     groupId,
     name,
     path,
@@ -233,9 +244,13 @@ export function createFirestoreGroupStore(
     return (await response.json()) as FirestoreDocument;
   }
 
-  async function readGroup(path: string) {
+  async function readGroup(path: string, includeDeletionCleanup = false) {
     const document = await readDocument(path);
-    return document ? parseGroup(document, path) : null;
+    if (!document) return null;
+    const group = parseGroup(document, path);
+    return includeDeletionCleanup || group.deletionCleanupUserId === null
+      ? group
+      : null;
   }
 
   async function readMembership(path: string) {
@@ -489,6 +504,21 @@ export function createFirestoreGroupStore(
     };
   }
 
+  function firstCleanupChunk(operations: unknown[][]) {
+    const writes: unknown[] = [];
+    for (const operation of operations) {
+      if (
+        operation.length === 0 ||
+        writes.length + operation.length >= MAX_CLEANUP_WRITES_PER_COMMIT
+      ) {
+        if (operation.length === 0) continue;
+        break;
+      }
+      writes.push(...operation);
+    }
+    return writes;
+  }
+
   function groupIdReservationWrite(groupId: GroupId) {
     return {
       update: {
@@ -499,23 +529,49 @@ export function createFirestoreGroupStore(
     };
   }
 
+  async function readGroupForUser(
+    userId: string,
+    groupId: GroupId,
+    includeDeletionCleanup = false,
+  ) {
+    for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+      const membership = await readMembership(membershipPath(groupId, userId));
+      const group = membership
+        ? await readGroup(groupPath(groupId), includeDeletionCleanup)
+        : null;
+      if (!membership || !group) return null;
+      if (includeDeletionCleanup) return publicGroup(group, membership.role);
+      const current = await readGroup(groupPath(groupId));
+      if (!current) return null;
+      if (current.updateTime !== group.updateTime) continue;
+      const currentMembership = await readMembership(
+        membershipPath(groupId, userId),
+      );
+      if (!currentMembership) return null;
+      if (currentMembership.updateTime !== membership.updateTime) continue;
+      return publicGroup(group, membership.role);
+    }
+    throw new Error("Group read could not resolve concurrent writes.");
+  }
+
   async function get(userId: string, groupId: GroupId) {
-    const membership = await readMembership(membershipPath(groupId, userId));
-    if (!membership) return null;
-    const group = await readGroup(groupPath(groupId));
-    return group ? publicGroup(group, membership.role) : null;
+    const result = await readGroupForUser(userId, groupId);
+    await assertActiveUser(firestore, userId);
+    return result;
   }
 
   function stateRevisionWrite(
     group: StoredGroup,
     additionalFields: Record<string, unknown> = {},
+    deletedFieldPaths: string[] = [],
   ) {
     const revisionWrite = advanceGroupStateRevisionWrite({
       documentName: firestore.documentName(group.path),
       revision: group.stateRevision,
       updateTime: group.updateTime,
     });
-    return Object.keys(additionalFields).length === 0
+    return Object.keys(additionalFields).length === 0 &&
+      deletedFieldPaths.length === 0
       ? revisionWrite
       : {
           ...revisionWrite,
@@ -530,18 +586,31 @@ export function createFirestoreGroupStore(
             fieldPaths: [
               ...revisionWrite.updateMask.fieldPaths,
               ...Object.keys(additionalFields),
+              ...deletedFieldPaths,
             ],
           },
         };
   }
 
+  function deletionCleanupFenceWrite(group: StoredGroup, userId: string) {
+    return stateRevisionWrite(group, {
+      [DELETION_CLEANUP_USER_ID_FIELD]: { stringValue: userId },
+    });
+  }
+
+  function clearDeletionCleanupFenceWrite(group: StoredGroup) {
+    return stateRevisionWrite(group, {}, [DELETION_CLEANUP_USER_ID_FIELD]);
+  }
+
   async function rotateCurrentInvite(
+    userId: string,
     group: StoredGroup,
     member: StoredMembership,
     current: StoredInvite | null,
   ) {
     const fresh = freshInvite(group.groupId, current?.routeId);
     const writes: unknown[] = [
+      await activeUserFenceWrite(firestore, userId),
       {
         verify: firestore.documentName(member.path),
         currentDocument: { updateTime: member.updateTime },
@@ -591,6 +660,7 @@ export function createFirestoreGroupStore(
 
       try {
         await commit([
+          await activeUserFenceWrite(firestore, actorUserId),
           stateRevisionWrite(group),
           ...(actor.path === target.path
             ? []
@@ -618,6 +688,52 @@ export function createFirestoreGroupStore(
       }
     }
     throw new Error("Member role change could not resolve concurrent writes.");
+  }
+
+  async function listAccessibleGroups(
+    userId: string,
+    { cursor, limit }: { cursor: string | null; limit: number },
+    includeDeletionCleanup: boolean,
+  ) {
+    const parameters = new URLSearchParams({
+      pageSize: String(limit),
+      orderBy: "__name__",
+    });
+    if (cursor !== null) parameters.set("pageToken", cursor);
+    let response;
+    try {
+      response = await firestore.request(
+        `v1GroupAccess/${userId}/groups?${parameters}`,
+      );
+    } catch (error) {
+      if (
+        error instanceof FirestoreRequestError &&
+        error.code === "INVALID_ARGUMENT"
+      ) {
+        throw new InvalidGroupCursorError();
+      }
+      throw error;
+    }
+    const result = (await response.json()) as {
+      documents?: FirestoreDocument[];
+      nextPageToken?: string;
+    };
+    const groupIds = (result.documents ?? []).map((document) => {
+      const groupId = document.fields?.groupId?.stringValue;
+      if (!groupId) {
+        throw new Error("Firestore returned an invalid Group access record.");
+      }
+      return groupId as GroupId;
+    });
+    const groups = (await Promise.all(
+      groupIds.map((groupId) =>
+        readGroupForUser(userId, groupId, includeDeletionCleanup)
+      ),
+    )).filter((group): group is OpenJobGroup => group !== null);
+    return {
+      groups,
+      nextCursor: result.nextPageToken ?? null,
+    };
   }
 
   return Object.freeze({
@@ -654,6 +770,7 @@ export function createFirestoreGroupStore(
         };
         try {
           await commit([
+            await activeUserFenceWrite(firestore, actorUserId),
             stateRevisionWrite(group),
             {
               verify: firestore.documentName(actor.path),
@@ -716,7 +833,7 @@ export function createFirestoreGroupStore(
         try {
           await commit([
             groupIdReservationWrite(groupId),
-            userHistoryWrite(firestore, user.userId),
+            await activeUserHistoryWrite(firestore, user.userId),
             {
               update: {
                 name: firestore.documentName(groupDocumentPath),
@@ -813,6 +930,7 @@ export function createFirestoreGroupStore(
 
         try {
           await commit([
+            await activeUserFenceWrite(firestore, actorUserId),
             ...(reservation
               ? [
                   {
@@ -841,25 +959,45 @@ export function createFirestoreGroupStore(
     async getInvite(userId, groupId) {
       for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
         const member = await readMembership(membershipPath(groupId, userId));
-        if (!member) return { kind: "not_found" as const };
+        if (!member) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
+        }
         const group = await readGroup(groupPath(groupId));
-        if (!group) return { kind: "not_found" as const };
-        if (member.role !== "admin") return { kind: "forbidden" as const };
+        if (!group) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
+        }
+        if (member.role !== "admin") {
+          await assertActiveUser(firestore, userId);
+          return { kind: "forbidden" as const };
+        }
         const current = await readInvite(currentInvitePath(groupId));
+        let invite: OpenJobInviteLink;
         if (current) {
-          return {
-            kind: "found" as const,
-            invite: await publicInvite(current),
-          };
+          invite = await publicInvite(current);
+        } else {
+          try {
+            invite = await rotateCurrentInvite(userId, group, member, current);
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            continue;
+          }
         }
-        try {
-          return {
-            kind: "found" as const,
-            invite: await rotateCurrentInvite(group, member, current),
-          };
-        } catch (error) {
-          if (!isConcurrentWrite(error)) throw error;
+        const [latestGroup, latestMember] = await Promise.all([
+          readGroup(groupPath(groupId)),
+          readMembership(membershipPath(groupId, userId)),
+        ]);
+        if (!latestGroup || !latestMember) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
         }
+        if (
+          latestGroup.updateTime !== group.updateTime ||
+          latestMember.updateTime !== member.updateTime
+        ) continue;
+        await assertActiveUser(firestore, userId);
+        return { kind: "found" as const, invite };
       }
       throw new Error("Invite Link refresh could not resolve concurrent writes.");
     },
@@ -877,7 +1015,9 @@ export function createFirestoreGroupStore(
         return { kind: "not_found" as const };
       }
       const active = await publicInvite(current);
-      return active.token === token
+      if (active.token !== token) return { kind: "not_found" as const };
+      const latestGroup = await readGroup(groupPath(pointer.groupId));
+      return latestGroup?.updateTime === group.updateTime
         ? { kind: "found" as const, groupName: group.name }
         : { kind: "not_found" as const };
     },
@@ -940,7 +1080,7 @@ export function createFirestoreGroupStore(
             verify: firestore.documentName(userBanPath),
             currentDocument: { exists: false },
           },
-          userHistoryWrite(firestore, user.userId),
+          await activeUserHistoryWrite(firestore, user.userId),
           {
             update: {
               name: firestore.documentName(memberDocumentPath),
@@ -1023,6 +1163,7 @@ export function createFirestoreGroupStore(
         }
         try {
           await commit([
+            await activeUserFenceWrite(firestore, actorUserId),
             stateRevisionWrite(group),
             {
               verify: firestore.documentName(actor.path),
@@ -1073,6 +1214,7 @@ export function createFirestoreGroupStore(
 
         try {
           await commit([
+            await activeUserFenceWrite(firestore, userId),
             stateRevisionWrite(group),
             {
               delete: firestore.documentName(member.path),
@@ -1099,154 +1241,213 @@ export function createFirestoreGroupStore(
     },
 
     async list(userId, { cursor, limit }) {
-      const parameters = new URLSearchParams({
-        pageSize: String(limit),
-        orderBy: "__name__",
-      });
-      if (cursor !== null) parameters.set("pageToken", cursor);
-      let response;
-      try {
-        response = await firestore.request(
-          `v1GroupAccess/${userId}/groups?${parameters}`,
-        );
-      } catch (error) {
-        if (
-          error instanceof FirestoreRequestError &&
-          error.code === "INVALID_ARGUMENT"
-        ) {
-          throw new InvalidGroupCursorError();
-        }
-        throw error;
-      }
-      const result = (await response.json()) as {
-        documents?: FirestoreDocument[];
-        nextPageToken?: string;
-      };
-      const groupIds = (result.documents ?? []).map((document) => {
-        const groupId = document.fields?.groupId?.stringValue;
-        if (!groupId) {
-          throw new Error("Firestore returned an invalid Group access record.");
-        }
-        return groupId as GroupId;
-      });
-      const groups = await Promise.all(
-        groupIds.map(async (groupId) => {
-          const group = await get(userId, groupId);
-          if (!group) {
-            throw new Error("Firestore returned an inconsistent Group access record.");
-          }
-          return group;
-        }),
+      const result = await listAccessibleGroups(
+        userId,
+        { cursor, limit },
+        false,
       );
-      return {
-        groups,
-        nextCursor: result.nextPageToken ?? null,
-      };
+      await assertActiveUser(firestore, userId);
+      return result;
+    },
+
+    async listForDeletion(userId, { cursor, limit }) {
+      return listAccessibleGroups(userId, { cursor, limit }, true);
     },
 
     async listBans(userId, groupId, { cursor, limit }) {
-      const [member, group] = await Promise.all([
-        readMembership(membershipPath(groupId, userId)),
-        readGroup(groupPath(groupId)),
-      ]);
-      if (!member || !group) return { kind: "not_found" as const };
-      if (member.role !== "admin") return { kind: "forbidden" as const };
-
-      const parameters = new URLSearchParams({
-        pageSize: String(limit),
-        orderBy: "__name__",
-      });
-      if (cursor !== null) parameters.set("pageToken", cursor);
-      let response;
-      try {
-        response = await firestore.request(
-          `${groupPath(groupId)}/bans?${parameters}`,
-        );
-      } catch (error) {
-        if (
-          error instanceof FirestoreRequestError &&
-          error.code === "INVALID_ARGUMENT"
-        ) {
-          throw new InvalidBanCursorError();
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const [member, group] = await Promise.all([
+          readMembership(membershipPath(groupId, userId)),
+          readGroup(groupPath(groupId)),
+        ]);
+        if (!member || !group) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
         }
-        throw error;
+        if (member.role !== "admin") {
+          await assertActiveUser(firestore, userId);
+          return { kind: "forbidden" as const };
+        }
+
+        const parameters = new URLSearchParams({
+          pageSize: String(limit),
+          orderBy: "__name__",
+        });
+        if (cursor !== null) parameters.set("pageToken", cursor);
+        let response;
+        try {
+          response = await firestore.request(
+            `${groupPath(groupId)}/bans?${parameters}`,
+          );
+        } catch (error) {
+          if (
+            error instanceof FirestoreRequestError &&
+            error.code === "INVALID_ARGUMENT"
+          ) {
+            throw new InvalidBanCursorError();
+          }
+          throw error;
+        }
+        const result = (await response.json()) as {
+          documents?: FirestoreDocument[];
+          nextPageToken?: string;
+        };
+        const [latestGroup, latestMember] = await Promise.all([
+          readGroup(groupPath(groupId)),
+          readMembership(membershipPath(groupId, userId)),
+        ]);
+        if (!latestGroup || !latestMember) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
+        }
+        if (
+          latestGroup.updateTime !== group.updateTime ||
+          latestMember.updateTime !== member.updateTime
+        ) continue;
+        await assertActiveUser(firestore, userId);
+        return {
+          kind: "found" as const,
+          bans: (result.documents ?? []).map((document) =>
+            publicBan(parseBan(document, document.name)),
+          ),
+          nextCursor: result.nextPageToken ?? null,
+        };
       }
-      const result = (await response.json()) as {
-        documents?: FirestoreDocument[];
-        nextPageToken?: string;
-      };
-      return {
-        kind: "found" as const,
-        bans: (result.documents ?? []).map((document) =>
-          publicBan(parseBan(document, document.name)),
-        ),
-        nextCursor: result.nextPageToken ?? null,
-      };
+      throw new Error("Ban list read could not resolve concurrent writes.");
     },
 
     async listMembers(userId, groupId, { cursor, limit }) {
-      const [member, group] = await Promise.all([
-        readMembership(membershipPath(groupId, userId)),
-        readGroup(groupPath(groupId)),
-      ]);
-      if (!member || !group) return { kind: "not_found" as const };
-
-      const parameters = new URLSearchParams({
-        pageSize: String(limit),
-        orderBy: "__name__",
-      });
-      if (cursor !== null) parameters.set("pageToken", cursor);
-      let response;
-      try {
-        response = await firestore.request(
-          `${groupPath(groupId)}/members?${parameters}`,
-        );
-      } catch (error) {
-        if (
-          error instanceof FirestoreRequestError &&
-          error.code === "INVALID_ARGUMENT"
-        ) {
-          throw new InvalidMemberCursorError();
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const [member, group] = await Promise.all([
+          readMembership(membershipPath(groupId, userId)),
+          readGroup(groupPath(groupId)),
+        ]);
+        if (!member || !group) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
         }
-        throw error;
+
+        const parameters = new URLSearchParams({
+          pageSize: String(limit),
+          orderBy: "__name__",
+        });
+        if (cursor !== null) parameters.set("pageToken", cursor);
+        let response;
+        try {
+          response = await firestore.request(
+            `${groupPath(groupId)}/members?${parameters}`,
+          );
+        } catch (error) {
+          if (
+            error instanceof FirestoreRequestError &&
+            error.code === "INVALID_ARGUMENT"
+          ) {
+            throw new InvalidMemberCursorError();
+          }
+          throw error;
+        }
+        const result = (await response.json()) as {
+          documents?: FirestoreDocument[];
+          nextPageToken?: string;
+        };
+        const [latestGroup, latestMember] = await Promise.all([
+          readGroup(groupPath(groupId)),
+          readMembership(membershipPath(groupId, userId)),
+        ]);
+        if (!latestGroup || !latestMember) {
+          await assertActiveUser(firestore, userId);
+          return { kind: "not_found" as const };
+        }
+        if (
+          latestGroup.updateTime !== group.updateTime ||
+          latestMember.updateTime !== member.updateTime
+        ) continue;
+        await assertActiveUser(firestore, userId);
+        return {
+          kind: "found" as const,
+          members: (result.documents ?? []).map((document) =>
+            publicMember(parseMembership(document, document.name)),
+          ),
+          nextCursor: result.nextPageToken ?? null,
+        };
       }
-      const result = (await response.json()) as {
-        documents?: FirestoreDocument[];
-        nextPageToken?: string;
-      };
-      const members = (result.documents ?? []).map((document) =>
-        publicMember(parseMembership(document, document.name)),
-      );
-      return {
-        kind: "found" as const,
-        members,
-        nextCursor: result.nextPageToken ?? null,
-      };
+      throw new Error("Member list read could not resolve concurrent writes.");
     },
 
     async removeUserForDeletion(userId, groupId) {
-      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-        const group = await readGroup(groupPath(groupId));
+      let consecutiveFailures = 0;
+      while (consecutiveFailures < MAX_CONCURRENT_ATTEMPTS) {
+        const group = await readGroup(groupPath(groupId), true);
         if (!group) return { kind: "not_found" as const };
+        if (
+          group.deletionCleanupUserId !== null &&
+          group.deletionCleanupUserId !== userId
+        ) {
+          throw new Error("Another account deletion is already cleaning this Group.");
+        }
+        if (group.deletionCleanupUserId === null) {
+          try {
+            await commit([deletionCleanupFenceWrite(group, userId)]);
+            consecutiveFailures = 0;
+            continue;
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            consecutiveFailures += 1;
+            continue;
+          }
+        }
         const documents = await readAllGroupDocuments(groupId);
         const members = documents.members.map((document) =>
           parseMembership(document, document.name),
         );
         const deletingMember = members.find((member) => member.userId === userId);
-        if (!deletingMember) return { kind: "not_found" as const };
+        if (!deletingMember) {
+          try {
+            await commit([clearDeletionCleanupFenceWrite(group)]);
+            return { kind: "not_found" as const };
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            consecutiveFailures += 1;
+            continue;
+          }
+        }
 
         if (members.length === 1) {
-          const inviteRoutes = documents.invite.map((document) =>
-            inviteRoutePath(parseInvite(document, document.name).routeId),
+          const inviteOperations = await Promise.all(
+            documents.invite.map(async (document) => {
+              const route = await readDocument(
+                inviteRoutePath(parseInvite(document, document.name).routeId),
+              );
+              return [
+                deleteDocumentWrite(document),
+                ...(route ? [deleteDocumentWrite(route)] : []),
+              ];
+            }),
           );
-          const [access, reservation, ...routePointers] = await Promise.all([
+          const stagedWrites = firstCleanupChunk([
+            ...documents.tasks.map((document) => [deleteDocumentWrite(document)]),
+            ...documents.bans.map((document) => [deleteDocumentWrite(document)]),
+            ...documents.membershipEvidence.map((document) => [
+              deleteDocumentWrite(document),
+            ]),
+            ...inviteOperations,
+          ]);
+          if (stagedWrites.length > 0) {
+            try {
+              await commit([stateRevisionWrite(group), ...stagedWrites]);
+              consecutiveFailures = 0;
+              continue;
+            } catch (error) {
+              if (!isConcurrentWrite(error)) throw error;
+              consecutiveFailures += 1;
+              continue;
+            }
+          }
+
+          const [access, reservation] = await Promise.all([
             readDocument(accessPath(userId, groupId)),
             readDocument(groupIdReservationPath(groupId)),
-            ...inviteRoutes.map((path) => readDocument(path)),
           ]);
-          const externalDocuments = [access, ...routePointers].filter(
-            (document): document is FirestoreDocument => document !== null,
-          );
           try {
             await commit([
               ...(reservation
@@ -1255,8 +1456,12 @@ export function createFirestoreGroupStore(
                     currentDocument: updateTimePrecondition(reservation),
                   }]
                 : [groupIdReservationWrite(groupId)]),
-              ...Object.values(documents).flat().map(deleteDocumentWrite),
-              ...externalDocuments.map(deleteDocumentWrite),
+              deleteDocumentWrite(
+                documents.members.find((document) =>
+                  document.name === deletingMember.path
+                )!,
+              ),
+              ...(access ? [deleteDocumentWrite(access)] : []),
               {
                 delete: firestore.documentName(group.path),
                 currentDocument: { updateTime: group.updateTime },
@@ -1265,6 +1470,7 @@ export function createFirestoreGroupStore(
             return { kind: "ended" as const };
           } catch (error) {
             if (!isConcurrentWrite(error)) throw error;
+            consecutiveFailures += 1;
             continue;
           }
         }
@@ -1291,9 +1497,26 @@ export function createFirestoreGroupStore(
           readDocument(membershipEvidencePath(groupId, userId)),
           readDocument(banPath(groupId, userId)),
         ]);
+        const taskWrites = documents.tasks
+          .map((document) => deletionTaskWrite(document, userId))
+          .filter((write) => write !== null);
+        const stagedWrites = firstCleanupChunk(
+          taskWrites.map((write) => [write]),
+        );
+        if (stagedWrites.length > 0) {
+          try {
+            await commit([stateRevisionWrite(group), ...stagedWrites]);
+            consecutiveFailures = 0;
+            continue;
+          } catch (error) {
+            if (!isConcurrentWrite(error)) throw error;
+            consecutiveFailures += 1;
+            continue;
+          }
+        }
         try {
           await commit([
-            stateRevisionWrite(group),
+            clearDeletionCleanupFenceWrite(group),
             {
               delete: deletingMember.path,
               currentDocument: { updateTime: deletingMember.updateTime },
@@ -1311,9 +1534,6 @@ export function createFirestoreGroupStore(
                   currentDocument: { updateTime: promoted.updateTime },
                 }]
               : []),
-            ...documents.tasks
-              .map((document) => deletionTaskWrite(document, userId))
-              .filter((write) => write !== null),
           ]);
           return {
             kind: "removed" as const,
@@ -1321,6 +1541,7 @@ export function createFirestoreGroupStore(
           };
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
+          consecutiveFailures += 1;
         }
       }
       throw new Error("Account deletion Group cleanup could not resolve concurrent writes.");
@@ -1339,9 +1560,19 @@ export function createFirestoreGroupStore(
           membershipPath(group.groupId, userId),
         );
         if (member) continue;
-        for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
-          const currentGroup = await readGroup(groupPath(group.groupId));
+        let changedGroup = false;
+        let consecutiveFailures = 0;
+        while (consecutiveFailures < MAX_CONCURRENT_ATTEMPTS) {
+          const currentGroup = await readGroup(groupPath(group.groupId), true);
           if (!currentGroup) break;
+          if (
+            currentGroup.deletionCleanupUserId !== null &&
+            currentGroup.deletionCleanupUserId !== userId
+          ) {
+            throw new Error(
+              "Another account deletion is already cleaning this Group.",
+            );
+          }
           const documents = await readAllGroupDocuments(group.groupId);
           const [evidence, ban] = await Promise.all([
             readDocument(membershipEvidencePath(group.groupId, userId)),
@@ -1353,24 +1584,58 @@ export function createFirestoreGroupStore(
           const cleanupDocuments = [evidence, ban].filter(
             (document): document is FirestoreDocument => document !== null,
           );
-          if (taskWrites.length === 0 && cleanupDocuments.length === 0) break;
+          if (taskWrites.length === 0 && cleanupDocuments.length === 0) {
+            if (currentGroup.deletionCleanupUserId === userId) {
+              try {
+                await commit([clearDeletionCleanupFenceWrite(currentGroup)]);
+                changedGroup = true;
+                consecutiveFailures = 0;
+                break;
+              } catch (error) {
+                if (!isConcurrentWrite(error)) throw error;
+                consecutiveFailures += 1;
+                continue;
+              }
+            }
+            break;
+          }
+          if (currentGroup.deletionCleanupUserId === null) {
+            try {
+              await commit([deletionCleanupFenceWrite(currentGroup, userId)]);
+              changedGroup = true;
+              consecutiveFailures = 0;
+              continue;
+            } catch (error) {
+              if (!isConcurrentWrite(error)) throw error;
+              consecutiveFailures += 1;
+              continue;
+            }
+          }
+          const stagedWrites = firstCleanupChunk([
+            ...taskWrites.map((write) => [write]),
+            ...cleanupDocuments.map((document) => [
+              deleteDocumentWrite(document),
+            ]),
+          ]);
           try {
             await commit([
               stateRevisionWrite(currentGroup),
-              ...taskWrites,
-              ...cleanupDocuments.map(deleteDocumentWrite),
+              ...stagedWrites,
             ]);
-            changedGroups += 1;
-            break;
+            changedGroup = true;
+            consecutiveFailures = 0;
+            continue;
           } catch (error) {
             if (!isConcurrentWrite(error)) throw error;
-          }
-          if (attempt === MAX_CONCURRENT_ATTEMPTS - 1) {
-            throw new Error(
-              "Detached account deletion data could not resolve concurrent writes.",
-            );
+            consecutiveFailures += 1;
           }
         }
+        if (consecutiveFailures === MAX_CONCURRENT_ATTEMPTS) {
+          throw new Error(
+            "Detached account deletion data could not resolve concurrent writes.",
+          );
+        }
+        if (changedGroup) changedGroups += 1;
       }
       return changedGroups;
     },
@@ -1406,6 +1671,7 @@ export function createFirestoreGroupStore(
 
         try {
           await commit([
+            await activeUserFenceWrite(firestore, userId),
             {
               verify: firestore.documentName(member.path),
               currentDocument: { updateTime: member.updateTime },
@@ -1434,7 +1700,7 @@ export function createFirestoreGroupStore(
         try {
           return {
             kind: "rotated" as const,
-            invite: await rotateCurrentInvite(group, member, current),
+            invite: await rotateCurrentInvite(userId, group, member, current),
           };
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
@@ -1456,6 +1722,7 @@ export function createFirestoreGroupStore(
         if (!ban) return { kind: "ban_not_found" as const };
         try {
           await commit([
+            await activeUserFenceWrite(firestore, actorUserId),
             stateRevisionWrite(group),
             {
               verify: firestore.documentName(actor.path),

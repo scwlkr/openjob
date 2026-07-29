@@ -24,7 +24,7 @@
       "const": "./release-privacy-inventory.schema.json"
     },
     "schemaVersion": {
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "inventoryVersion": {
       "type": "string",
@@ -70,7 +70,9 @@
         "openAssignedTasks",
         "doneAssignedTasks",
         "linkedProviderCleanup",
-        "pendingState"
+        "pendingState",
+        "statusReceipt",
+        "statusReceiptRetention"
       ],
       "properties": {
         "requiredByStore": { "const": true },
@@ -89,7 +91,9 @@
         "openAssignedTasks": { "const": "unassigned" },
         "doneAssignedTasks": { "const": "deleted-user-marker-without-identity" },
         "linkedProviderCleanup": { "const": "revoke-before-completion" },
-        "pendingState": { "const": "minimal-encrypted-retry-job" }
+        "pendingState": { "const": "minimal-encrypted-retry-job" },
+        "statusReceipt": { "const": "opaque-user-and-intent-bound-capability-with-minimal-server-intent" },
+        "statusReceiptRetention": { "const": "through-submission-until-canceled-replaced-or-completion-acknowledged" }
       }
     },
     "security": {

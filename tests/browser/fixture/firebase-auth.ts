@@ -136,7 +136,10 @@ export const inMemoryPersistence = { type: "NONE" };
 
 export class GoogleAuthProvider implements TestProvider {
   static credentialFromResult() {
-    return { accessToken: "browser-google-access" };
+    return {
+      accessToken: "browser-google-access",
+      idToken: "browser-google-id-token",
+    };
   }
 
   readonly providerId = "google.com";

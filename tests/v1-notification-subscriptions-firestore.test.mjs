@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirestoreNotificationSubscriptionStore } from "../db/notification-subscriptions.ts";
+import { createTaskNotificationDispatcher } from "../server/task-notifications.ts";
 import { createFakeFirestore, createPrivateKey } from "./support/fake-firestore.mjs";
 
 const INSTALLATION_ID = "installation_0123456789abcdef";
@@ -141,4 +142,114 @@ test("delivery lists every active installation for one User and removes only its
   assert.equal(await store.remove(activeId, "user_shane"), true);
   assert.deepEqual(await store.listActive("user_shane"), []);
   assert.equal((await store.get(foreignId)).userId, "user_eli");
+});
+
+test("delivery suppresses retained subscriptions after the User becomes pending", async () => {
+  const { firestore, store } = await createStore();
+  await store.register({
+    installationId: INSTALLATION_ID,
+    userId: "user_shane",
+    ...CAPABILITY,
+  });
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  const userPath = `${database}/v1UserDirectory/user_shane`;
+  const user = firestore.documents.get(userPath);
+  user.fields.deletionRequestId = { stringValue: "del_pending" };
+  user.fields.deletionStartedAt = {
+    timestampValue: "2026-07-18T12:01:00.000Z",
+  };
+  user.fields.deletionDeadline = {
+    timestampValue: "2026-07-25T12:01:00.000Z",
+  };
+  user.updateTime = "2026-07-18T12:01:00.000001Z";
+
+  const sent = [];
+  const dispatcher = createTaskNotificationDispatcher({
+    groups: {
+      async get() {
+        return {
+          createdAt: "2026-07-18T11:00:00.000Z",
+          groupId: "grp_notifications",
+          name: "Release Team",
+          role: "member",
+        };
+      },
+    },
+    subscriptions: store,
+    push: {
+      async send(subscription) {
+        sent.push(subscription.installationId);
+        return { status: 201 };
+      },
+    },
+  });
+  await dispatcher.dispatch({
+    eventKind: "assignment",
+    groupId: "grp_notifications",
+    taskId: "task_release",
+    taskText: "Prepare release",
+    recipientUserIds: ["user_shane"],
+  });
+
+  assert.deepEqual(await store.listActive("user_shane"), []);
+  assert.deepEqual(sent, []);
+  assert.equal(
+    firestore.documents.has(
+      `${database}/v1NotificationSubscriptions/${INSTALLATION_ID}`,
+    ),
+    true,
+  );
+});
+
+test("account deletion removes more than 500 installations in idempotent bounded commits", async () => {
+  const { firestore, store } = await createStore();
+  const database = "projects/openjob-dev/databases/(default)/documents";
+  const timestamp = "2026-07-18T12:00:00.000Z";
+  for (let index = 0; index < 501; index += 1) {
+    const installationId = `installation_cleanup_${String(index).padStart(4, "0")}`;
+    const subscriptionName =
+      `${database}/v1NotificationSubscriptions/${installationId}`;
+    const indexName =
+      `${database}/v1NotificationSubscriptionUsers/user_shane/installations/${installationId}`;
+    firestore.documents.set(subscriptionName, {
+      fields: {
+        auth: { stringValue: CAPABILITY.auth },
+        createdAt: { timestampValue: timestamp },
+        endpoint: {
+          stringValue: `${CAPABILITY.endpoint}/${installationId}`,
+        },
+        installationId: { stringValue: installationId },
+        p256dh: { stringValue: CAPABILITY.p256dh },
+        state: { stringValue: "active" },
+        stateChangedAt: { timestampValue: timestamp },
+        updatedAt: { timestampValue: timestamp },
+        userId: { stringValue: "user_shane" },
+      },
+      name: subscriptionName,
+      updateTime: timestamp,
+    });
+    firestore.documents.set(indexName, {
+      fields: {
+        installationId: { stringValue: installationId },
+        state: { stringValue: "active" },
+        userId: { stringValue: "user_shane" },
+      },
+      name: indexName,
+      updateTime: timestamp,
+    });
+  }
+  const commitsBeforeCleanup = firestore.commitAttempts();
+
+  assert.equal(await store.removeAllForUser("user_shane"), 501);
+  assert.equal(firestore.commitAttempts() - commitsBeforeCleanup, 3);
+  assert.deepEqual(await store.listActive("user_shane"), []);
+  assert.equal(
+    [...firestore.documents.keys()].some((name) =>
+      name.includes("/v1NotificationSubscriptions/installation_cleanup_") ||
+      name.includes(
+        "/v1NotificationSubscriptionUsers/user_shane/installations/installation_cleanup_",
+      )
+    ),
+    false,
+  );
 });

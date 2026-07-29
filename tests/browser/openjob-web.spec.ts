@@ -46,6 +46,13 @@ type Task = {
 
 type SignInMethod = "apple" | "google";
 
+type DeletionStatusReceipt = {
+  phase: "completed" | "prepared" | "submitting";
+  statusToken: string;
+  submissionExpiresAt: string | null;
+  version: 1;
+};
+
 type ApiState = {
   user: { userId: string; username: string | null; usernameRequired: boolean };
   groups: Group[];
@@ -90,6 +97,24 @@ type ApiState = {
   identityRequests: Array<{ path: string; body: unknown }>;
   linkAuthorizationHeaders: string[];
   deletionRequests: unknown[];
+  deletionPreparationBodies: unknown[];
+  deletionPreparationFailureStatuses: number[];
+  deletionPreparationRequests: number;
+  deletionRefreshDelayMs: number;
+  deletionRefreshPayload: unknown | undefined;
+  deletionRefreshRequests: unknown[];
+  deletionRequestStatus: "completed" | "pending";
+  deletionStatus: "completed" | "not_started" | "pending";
+  deletionPostDelayMs: number;
+  deletionPostPayload: unknown | undefined;
+  deletionPreparePayload: unknown | undefined;
+  deletionStatusFailureStatus: number | null;
+  deletionStatusDelayMs: number;
+  deletionStatusPayload: unknown | undefined;
+  deletionStatusRequests: number;
+  deletionStatusToken: string;
+  deletionSubmissionExpiresAt: string;
+  deletionSubmissionHeaders: string[];
   linkFailureCode:
     | "fresh_authentication_required"
     | "link_target_changed"
@@ -133,6 +158,192 @@ function visibleMorganTask(createdAt: string): Task {
 async function startSignedIn(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("openjob-test:firebase-session", "signed-in");
+  });
+}
+
+async function installDeletionReceiptStorageFailures(
+  page: Page,
+  options: {
+    failRemove?: boolean;
+    failSet?: boolean;
+    failSetAt?: number;
+    initialReceipt?: DeletionStatusReceipt;
+  },
+) {
+  await page.addInitScript((settings) => {
+    const receiptKey = "openjob:account-deletion-status-receipt";
+    const seededKey = "openjob-test:deletion-receipt-seeded";
+    const nativeRemoveItem = Storage.prototype.removeItem;
+    const nativeSetItem = Storage.prototype.setItem;
+    if (
+      settings.initialReceipt &&
+      window.sessionStorage.getItem(seededKey) !== "true"
+    ) {
+      nativeSetItem.call(
+        window.localStorage,
+        receiptKey,
+        JSON.stringify(settings.initialReceipt),
+      );
+      window.sessionStorage.setItem(seededKey, "true");
+    }
+    const controls = {
+      failRemove: Boolean(settings.failRemove),
+      failSet: Boolean(settings.failSet),
+      failSetAt: settings.failSetAt ?? null,
+      secondarySignedInAtSet: [] as boolean[],
+      setCalls: 0,
+      values: [] as string[],
+    };
+    Object.defineProperty(window, "__openjobDeletionReceiptStorageFailures", {
+      configurable: true,
+      value: controls,
+    });
+    Storage.prototype.setItem = function (key, value) {
+      if (this === window.localStorage && key === receiptKey) {
+        controls.setCalls += 1;
+        controls.values.push(value);
+        controls.secondarySignedInAtSet.push(Boolean((window as typeof window & {
+          __openjobFirebaseTest?: { secondarySignedIn(): boolean };
+        }).__openjobFirebaseTest?.secondarySignedIn()));
+        if (
+          controls.failSet ||
+          controls.setCalls === controls.failSetAt
+        ) {
+          throw new DOMException("Test receipt write failure.", "QuotaExceededError");
+        }
+      }
+      return nativeSetItem.call(this, key, value);
+    };
+    Storage.prototype.removeItem = function (key) {
+      if (
+        this === window.localStorage &&
+        key === receiptKey &&
+        controls.failRemove
+      ) {
+        throw new DOMException("Test receipt removal failure.", "SecurityError");
+      }
+      return nativeRemoveItem.call(this, key);
+    };
+  }, options);
+}
+
+function deletionReceipt(
+  statusToken: string,
+  phase: DeletionStatusReceipt["phase"] = "submitting",
+  submissionExpiresAt: string | null = "2026-07-28T12:05:00.000Z",
+): DeletionStatusReceipt {
+  return { phase, statusToken, submissionExpiresAt, version: 1 };
+}
+
+async function storedDeletionReceipt(page: Page) {
+  return page.evaluate(() => {
+    const value = window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    );
+    return value === null ? null : JSON.parse(value) as unknown;
+  });
+}
+
+async function installDeletionPrivateState(
+  page: Page,
+  { signedIn = false }: { signedIn?: boolean } = {},
+) {
+  await page.addInitScript((shouldSignIn) => {
+    const seededKey = "openjob-test:deletion-private-state-seeded";
+    if (window.sessionStorage.getItem(seededKey) === "true") return;
+    window.sessionStorage.setItem(seededKey, "true");
+    window.localStorage.setItem("openjob:selected-group-id", "grp_private");
+    window.sessionStorage.setItem("openjob:pending-task-editor", "private draft");
+    if (shouldSignIn) {
+      window.localStorage.setItem("openjob-test:firebase-session", "google");
+    }
+  }, signedIn);
+}
+
+async function seedDeletionNotificationState(page: Page) {
+  await page.evaluate(async () => {
+    window.localStorage.setItem(
+      "openjob:notification-installation",
+      JSON.stringify({
+        enabled: true,
+        installationId: "installation_deletion_1234567890",
+        invitationSettled: true,
+        ownerUserId: "user_shane",
+      }),
+    );
+    window.localStorage.setItem("openjob-test:push-subscription", "present");
+    await new Promise<void>((resolve, reject) => {
+      const request = window.indexedDB.open("openjob-notifications", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("installation-state")) {
+          request.result.createObjectStore("installation-state");
+        }
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(
+          "installation-state",
+          "readwrite",
+        );
+        const store = transaction.objectStore("installation-state");
+        store.put(
+          {
+            active: true,
+            installationId: "installation_deletion_1234567890",
+            ownerUserId: "user_shane",
+          },
+          "current",
+        );
+        store.put({ groupId: "grp_private" }, "pending-launch");
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+  });
+}
+
+async function deletionNotificationState(page: Page) {
+  return page.evaluate(async () => {
+    const indexed = await new Promise<{ current: unknown; pending: unknown }>(
+      (resolve, reject) => {
+        const request = window.indexedDB.open("openjob-notifications", 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction(
+            "installation-state",
+            "readonly",
+          );
+          const store = transaction.objectStore("installation-state");
+          const current = store.get("current");
+          const pending = store.get("pending-launch");
+          transaction.oncomplete = () => {
+            database.close();
+            resolve({
+              current: current.result ?? null,
+              pending: pending.result ?? null,
+            });
+          };
+          transaction.onerror = () => reject(transaction.error);
+        };
+      },
+    );
+    return {
+      ...indexed,
+      installation: window.localStorage.getItem(
+        "openjob:notification-installation",
+      ),
+      pushSubscription: window.localStorage.getItem(
+        "openjob-test:push-subscription",
+      ),
+      unsubscribeCalls: (window as typeof window & {
+        __openjobNotificationTest?: { unsubscribeCalls: number };
+      }).__openjobNotificationTest?.unsubscribeCalls ?? 0,
+    };
   });
 }
 
@@ -268,6 +479,12 @@ async function installNotificationEnvironment(
     }
     const pushManager = {
       async getSubscription() {
+        if (
+          !testState.subscription &&
+          window.localStorage.getItem("openjob-test:push-subscription")
+        ) {
+          testState.subscription = createSubscription();
+        }
         return testState.subscription;
       },
       async subscribe() {
@@ -283,6 +500,9 @@ async function installNotificationEnvironment(
       configurable: true,
       value: {
         ready: Promise.resolve(registration),
+        async getRegistration() {
+          return registration;
+        },
         addEventListener(type: string, listener: (event: MessageEvent) => void) {
           if (type === "message") testState.serviceWorkerMessageListener = listener;
         },
@@ -315,7 +535,7 @@ async function failIndexedDbWrites(page: Page) {
 
 async function installApi(
   page: Page,
-  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "meDelayMs" | "createGroupDelayMs" | "getGroupDelayMs" | "linkDelayMs" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs" | "credentialRecognized" | "freshCredentialRecognized" | "signInMethods" | "linkFailureCode">> = {},
+  initial: Partial<Pick<ApiState, "user" | "groups" | "members" | "bans" | "invite" | "tasks" | "meFailureStatus" | "claimFailureStatus" | "getGroupFailureStatus" | "taskFailureStatus" | "taskMutationFailureStatus" | "failGroups" | "failTaskNetwork" | "failTaskMutationNetwork" | "hangMe" | "hangTasks" | "meDelayMs" | "createGroupDelayMs" | "getGroupDelayMs" | "linkDelayMs" | "membershipDenied" | "taskMutationDelayMs" | "notificationSubscription" | "notificationRegistrationDelayMs" | "credentialRecognized" | "freshCredentialRecognized" | "signInMethods" | "deletionRequestStatus" | "deletionStatus" | "deletionStatusFailureStatus" | "linkFailureCode">> = {},
 ) {
   const members = [...(initial.members ?? [])];
   const bans = [...(initial.bans ?? [])];
@@ -375,6 +595,24 @@ async function installApi(
     identityRequests: [],
     linkAuthorizationHeaders: [],
     deletionRequests: [],
+    deletionPreparationBodies: [],
+    deletionPreparationFailureStatuses: [],
+    deletionPreparationRequests: 0,
+    deletionRefreshDelayMs: 0,
+    deletionRefreshPayload: undefined,
+    deletionRefreshRequests: [],
+    deletionRequestStatus: initial.deletionRequestStatus ?? "completed",
+    deletionStatus: initial.deletionStatus ?? "completed",
+    deletionPostDelayMs: 0,
+    deletionPostPayload: undefined,
+    deletionPreparePayload: undefined,
+    deletionStatusFailureStatus: initial.deletionStatusFailureStatus ?? null,
+    deletionStatusDelayMs: 0,
+    deletionStatusPayload: undefined,
+    deletionStatusRequests: 0,
+    deletionStatusToken: "v1.browser-receipt.browser-capability",
+    deletionSubmissionExpiresAt: "2026-07-28T12:05:00.000Z",
+    deletionSubmissionHeaders: [],
     linkFailureCode: initial.linkFailureCode ?? null,
   };
 
@@ -396,6 +634,9 @@ async function installApi(
       request.method() === "POST";
     const isFreshIdentityRequest =
       url.pathname === "/api/v1/me" && request.method() === "GET";
+    const isDeletionCapabilityRequest =
+      url.pathname === "/api/v1/me/deletion" &&
+      (request.method() === "GET" || request.method() === "PATCH");
     state.authorizationHeaders.push(authorization);
 
     const reply = (status: number, body: unknown) =>
@@ -438,6 +679,10 @@ async function installApi(
         (isLinkRequest || isFreshIdentityRequest) &&
         (authorization === "Bearer browser-fresh-apple-token" ||
           authorization === "Bearer browser-fresh-google-token")
+      ) &&
+      !(
+        isDeletionCapabilityRequest &&
+        authorization === `Bearer ${state.deletionStatusToken}`
       )
     ) {
       await error(401, "authentication_required", "Authentication is required.");
@@ -454,15 +699,133 @@ async function installApi(
 
     if (
       url.pathname === "/api/v1/me/deletion" &&
-      request.method() === "POST"
+      request.method() === "PUT"
     ) {
-      state.deletionRequests.push(request.postDataJSON());
-      await reply(200, {
+      state.deletionPreparationRequests += 1;
+      state.deletionPreparationBodies.push(
+        request.postData() === null ? null : request.postDataJSON(),
+      );
+      const failureStatus = state.deletionPreparationFailureStatuses.shift();
+      if (failureStatus === 0) {
+        await route.abort("failed");
+        return;
+      }
+      if (failureStatus) {
+        await error(
+          failureStatus,
+          "account_deletion_unavailable",
+          "Account deletion recovery is temporarily unavailable.",
+        );
+        return;
+      }
+      const payload = state.deletionPreparePayload ?? {
+        data: {
+          status: "not_started",
+          statusToken: state.deletionStatusToken,
+          submissionExpiresAt: state.deletionSubmissionExpiresAt,
+        },
+      };
+      const status = (payload as { data?: { status?: string } }).data?.status ===
+          "pending"
+        ? 202
+        : 200;
+      await reply(status, payload);
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/deletion" &&
+      request.method() === "GET"
+    ) {
+      state.deletionStatusRequests += 1;
+      if (state.deletionStatusDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.deletionStatusDelayMs)
+        );
+      }
+      if (state.deletionStatusFailureStatus) {
+        await error(
+          state.deletionStatusFailureStatus,
+          "account_deletion_unavailable",
+          "Account deletion status is temporarily unavailable.",
+        );
+        return;
+      }
+      await reply(200, state.deletionStatusPayload ?? {
+        data: state.deletionStatus === "completed"
+          ? { status: "completed" }
+          : state.deletionStatus === "not_started"
+            ? {
+                status: "not_started",
+                submissionExpired: true,
+                submissionExpiresAt: state.deletionSubmissionExpiresAt,
+              }
+            : {
+              deadline: "2026-08-04T12:00:00.000Z",
+              reauthenticationProviders: [],
+              requestedAt: "2026-07-28T12:00:00.000Z",
+              status: "pending",
+            },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/deletion" &&
+      request.method() === "PATCH"
+    ) {
+      state.deletionRefreshRequests.push(request.postDataJSON());
+      if (state.deletionRefreshDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.deletionRefreshDelayMs)
+        );
+      }
+      const payload = state.deletionRefreshPayload ?? {
         data: {
           completedAt: "2026-07-28T12:00:00.000Z",
           status: "completed",
         },
-      });
+      };
+      const status = (payload as { data?: { status?: string } }).data?.status ===
+          "pending"
+        ? 202
+        : 200;
+      await reply(status, payload);
+      return;
+    }
+
+    if (
+      url.pathname === "/api/v1/me/deletion" &&
+      request.method() === "POST"
+    ) {
+      state.deletionRequests.push(request.postDataJSON());
+      state.deletionSubmissionHeaders.push(
+        request.headers()["x-openjob-deletion-status"] ?? "",
+      );
+      if (
+        state.deletionSubmissionHeaders.at(-1) !== state.deletionStatusToken
+      ) {
+        await error(401, "authentication_required", "Deletion status is required.");
+        return;
+      }
+      if (state.deletionPostDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, state.deletionPostDelayMs));
+      }
+      await reply(state.deletionRequestStatus === "pending" ? 202 : 200,
+        state.deletionPostPayload ?? {
+        data: state.deletionRequestStatus === "completed"
+          ? {
+              completedAt: "2026-07-28T12:00:00.000Z",
+              status: "completed",
+            }
+          : {
+              deadline: "2026-08-04T12:00:00.000Z",
+              reauthenticationProviders: [],
+              requestedAt: "2026-07-28T12:00:00.000Z",
+              status: "pending",
+              statusToken: state.deletionStatusToken,
+            },
+        });
       return;
     }
 
@@ -523,10 +886,16 @@ async function installApi(
       if (state.meFailureStatus) {
         await error(
           state.meFailureStatus,
-          state.meFailureStatus === 401 ? "authentication_required" : "internal_error",
+          state.meFailureStatus === 401
+            ? "authentication_required"
+            : state.meFailureStatus === 410
+              ? "account_deletion_pending"
+              : "internal_error",
           state.meFailureStatus === 401
             ? "Authentication is required."
-            : "An unexpected error occurred.",
+            : state.meFailureStatus === 410
+              ? "Account deletion is already in progress."
+              : "An unexpected error occurred.",
         );
         return;
       }
@@ -1124,14 +1493,13 @@ test("runs the production sign-in, Username, Group creation, persistence, and si
 });
 
 test("public account deletion works without the installed app and clears browser state", async ({ page }) => {
+  await installNotificationEnvironment(page);
   const state = await installApi(page, {
     signInMethods: ["google"],
     user: signedInUser,
   });
-  await page.addInitScript(() => {
-    window.localStorage.setItem("openjob:selected-group-id", "grp_private");
-    window.sessionStorage.setItem("openjob:pending-task-editor", "private draft");
-  });
+  await installDeletionReceiptStorageFailures(page, {});
+  await installDeletionPrivateState(page);
   await page.goto("/account-deletion");
 
   await expect(page.getByRole("heading", {
@@ -1140,30 +1508,1447 @@ test("public account deletion works without the installed app and clears browser
   await expect(page.getByText("You do not need the app or support.")).toBeVisible();
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await seedDeletionNotificationState(page);
   await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "prepared"),
+  );
   await page.getByLabel(/Type DELETE/).fill("DELETE");
   await page.getByRole("button", { name: "Permanently delete User" }).click();
 
   await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionPreparationBodies).toEqual([null]);
   expect(state.deletionRequests).toHaveLength(1);
+  expect(state.deletionSubmissionHeaders).toEqual([state.deletionStatusToken]);
+  expect(await page.evaluate(() => {
+    const controls = (window as typeof window & {
+      __openjobDeletionReceiptStorageFailures: {
+        secondarySignedInAtSet: boolean[];
+        values: string[];
+      };
+    }).__openjobDeletionReceiptStorageFailures;
+    return {
+      phases: controls.values.map((value) => JSON.parse(value).phase),
+      secondarySignedInAtSet: controls.secondarySignedInAtSet,
+    };
+  })).toEqual({
+    phases: ["prepared", "submitting", "completed"],
+    secondarySignedInAtSet: [false, true, false],
+  });
   const body = structuredClone(state.deletionRequests[0]) as {
     confirmation: string;
     credentials: Array<{
       credentialToken: string;
       provider: string;
-      revocation: { kind: string; value: string };
+      revocation: { idToken?: string; kind: string; value: string };
     }>;
   };
   expect(body.confirmation).toBe("delete");
   expect(body.credentials.map(({ provider }) => provider)).toEqual(["google"]);
   expect(body.credentials[0].revocation.kind).toBe("access_token");
   expect(body.credentials[0].credentialToken).toBeTruthy();
+  expect(body.credentials[0].revocation.idToken).toBe(
+    "browser-google-id-token",
+  );
   expect(body.credentials[0].revocation.value).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: JSON.parse(window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ) ?? "null"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: null,
+    receipt: deletionReceipt(state.deletionStatusToken, "completed"),
+    selectedGroup: null,
+    session: null,
+  });
+  await expect.poll(() => deletionNotificationState(page)).toEqual({
+    current: null,
+    installation: null,
+    pending: null,
+    pushSubscription: null,
+    unsubscribeCalls: 1,
+  });
+
+  await page.reload();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+  expect(state.deletionStatusRequests).toBe(0);
+
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+});
+
+test("pending account deletion survives reload and fails closed until completion", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    deletionRequestStatus: "pending",
+    deletionStatus: "pending",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await seedDeletionNotificationState(page);
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Deletion is in progress");
+  await expect(page.getByRole("button", {
+    name: "Refresh deletion status",
+  })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: JSON.parse(window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ) ?? "null"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: null,
+    receipt: deletionReceipt(state.deletionStatusToken),
+    selectedGroup: null,
+    session: null,
+  });
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(1);
+  expect(state.deletionSubmissionHeaders).toEqual([state.deletionStatusToken]);
+  await expect.poll(() => deletionNotificationState(page)).toEqual({
+    current: null,
+    installation: null,
+    pending: null,
+    pushSubscription: null,
+    unsubscribeCalls: 1,
+  });
+
+  await page.evaluate(() => {
+    window.localStorage.setItem("openjob-test:firebase-session", "google");
+  });
+  const authorizationCount = state.authorizationHeaders.length;
+  await page.reload();
+
+  await expect(page.getByRole("status")).toContainText(
+    "Deletion is in progress and will finish by",
+  );
+  await expect.poll(() => state.deletionStatusRequests).toBe(1);
+  expect(state.authorizationHeaders.slice(authorizationCount)).toEqual([
+    `Bearer ${state.deletionStatusToken}`,
+  ]);
+
+  state.deletionStatusFailureStatus = 503;
+  await page.getByRole("button", { name: "Refresh deletion status" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "could not refresh deletion status",
+  );
+  await expect(page.getByRole("status")).toContainText("Deletion is in progress");
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+
+  state.deletionStatusFailureStatus = null;
+  state.deletionStatus = "completed";
+  await page.getByRole("button", { name: "Refresh deletion status" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect(page.getByRole("button", { name: "Refresh deletion status" })).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  expect(state.deletionRequests).toHaveLength(1);
+
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+});
+
+test("pending account deletion recovers its capability when this browser has no receipt", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: state.deletionStatusToken,
+    },
+  };
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText(
+    "Deletion is in progress",
+  );
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "submitting", null),
+  );
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionPreparationBodies).toEqual([{
+    credential: {
+      credentialToken: "browser-test-token",
+      provider: "google",
+      revocation: {
+        idToken: "browser-google-id-token",
+        kind: "access_token",
+        value: "browser-google-access",
+      },
+    },
+  }]);
+  expect(state.deletionStatusRequests).toBe(0);
   await expect.poll(() => page.evaluate(() => ({
     draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
     selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
     session: window.localStorage.getItem("openjob-test:firebase-session"),
   }))).toEqual({ draft: null, selectedGroup: null, session: null });
+});
+
+test("pending deletion with only a restored Firebase session requires a fresh provider popup", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: state.deletionStatusToken,
+    },
+  };
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByText(
+    "Deletion is already in progress. Sign in again with the same provider",
+  )).toBeVisible();
+  expect(state.deletionPreparationRequests).toBe(0);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Deletion is in progress",
+  );
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionPreparationBodies).toHaveLength(1);
+  expect(state.deletionPreparationBodies[0]).toMatchObject({
+    credential: {
+      credentialToken: "browser-test-token",
+      provider: "google",
+    },
+  });
+});
+
+test("pending deletion recovery purges a fresh provider proof when finalization already won", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      completedAt: "2026-07-28T12:01:00.000Z",
+      status: "completed",
+    },
+  };
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionPreparationBodies).toHaveLength(1);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+  expect(await page.evaluate(() => (
+    window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }
+  ).__openjobFirebaseTest.secondarySignedIn())).toBe(false);
+});
+
+test("the public deletion page removes a recreated Firebase identity after finalization", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    credentialRecognized: false,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      completedAt: "2026-07-28T12:01:00.000Z",
+      status: "completed",
+    },
+  };
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionPreparationBodies).toEqual([{
+    credential: {
+      credentialToken: "browser-test-token",
+      provider: "google",
+      revocation: {
+        idToken: "browser-google-id-token",
+        kind: "access_token",
+        value: "browser-google-access",
+      },
+    },
+  }]);
+  expect(state.identityRequests).toEqual([]);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+});
+
+test("pending deletion recovery retries the exact in-memory proof across transient failures while access stays blocked", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparationFailureStatuses.push(0, 429, 503);
+  state.deletionPreparePayload = {
+    data: {
+      completedAt: "2026-07-28T12:01:00.000Z",
+      status: "completed",
+    },
+  };
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect.poll(() => state.deletionPreparationRequests).toBeGreaterThan(0);
+  await expect(page.getByRole("status")).toContainText(
+    "Access is blocked while OpenJob retries",
+  );
+  await expect(page.getByRole("button", {
+    name: "Continue with Google",
+  })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionPreparationRequests).toBe(4);
+  expect(state.deletionPreparationBodies).toEqual(Array.from(
+    { length: 4 },
+    () => ({
+      credential: {
+        credentialToken: "browser-test-token",
+        provider: "google",
+        revocation: {
+          idToken: "browser-google-id-token",
+          kind: "access_token",
+          value: "browser-google-access",
+        },
+      },
+    }),
+  ));
+  expect(await page.evaluate(() => JSON.stringify({
+    local: { ...window.localStorage },
+    session: { ...window.sessionStorage },
+  }))).not.toContain("browser-google-access");
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+});
+
+test("pending deletion recovery clears its proof after the transient retry bound", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparationFailureStatuses.push(503, 503, 503, 503, 503);
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "retry limit was reached",
+  );
+  await expect(page.getByRole("button", {
+    name: "Continue with Google",
+  })).toBeVisible();
+  expect(state.deletionPreparationRequests).toBe(4);
+  await page.waitForTimeout(750);
+  expect(state.deletionPreparationRequests).toBe(4);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+});
+
+test("pending deletion recovery clears an expired in-memory proof without another PUT", async ({ page }) => {
+  await page.addInitScript(() => {
+    const nativeNow = Date.now.bind(Date);
+    let offset = 0;
+    Date.now = () => nativeNow() + offset;
+    Object.defineProperty(window, "__openjobRecoveryClock", {
+      configurable: true,
+      value: {
+        expire() {
+          offset += 5 * 60 * 1_000;
+        },
+      },
+    });
+  });
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    meFailureStatus: 410,
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparationFailureStatuses.push(503, 503);
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect.poll(() => state.deletionPreparationRequests).toBe(1);
+  await page.evaluate(() => (
+    window as typeof window & {
+      __openjobRecoveryClock: { expire(): void };
+    }
+  ).__openjobRecoveryClock.expire());
+
+  await expect(page.getByRole("alert")).toContainText(
+    "provider proof expired",
+  );
+  await expect(page.getByRole("button", {
+    name: "Continue with Google",
+  })).toBeVisible();
+  expect(state.deletionPreparationRequests).toBe(1);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+});
+
+test("pending account deletion refreshes only the requested provider through its status capability", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    deletionStatus: "pending",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("button", {
+    name: "Reauthenticate Google",
+  })).toBeVisible();
+  await expect(page.getByRole("button", {
+    name: "Reauthenticate Apple",
+  })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reauthenticate Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionRefreshRequests).toEqual([{
+    credential: {
+      credentialToken: "browser-fresh-google-token",
+      provider: "google",
+      revocation: {
+        idToken: "browser-google-id-token",
+        kind: "access_token",
+        value: "browser-google-access",
+      },
+    },
+  }]);
+  expect(state.authorizationHeaders.filter(
+    (header) => header === `Bearer ${state.deletionStatusToken}`,
+  )).toHaveLength(2);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+  expect(await page.evaluate(() => (
+    window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }
+  ).__openjobFirebaseTest.secondarySignedIn())).toBe(false);
+});
+
+test("provider refresh keeps completed deletion blocked until failed secondary cleanup is retried", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, { deletionStatus: "pending" });
+  state.deletionRefreshDelayMs = 500;
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Reauthenticate Google" }).click();
+  await expect.poll(() => state.deletionRefreshRequests.length).toBe(1);
+  await expect(page.getByRole("button", {
+    name: "Refreshing provider…",
+  })).toBeDisabled();
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:secondary-signout-failure",
+      "once",
+    );
+  });
+
+  await expect(page.getByRole("status")).toContainText("needs local cleanup");
+  await expect(page.getByRole("alert")).toContainText(
+    "could not finish clearing this browser",
+  );
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+  await expect(page.getByRole("button", { name: "Retry local cleanup" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Retry local cleanup" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+});
+
+test("pending account deletion transitions exact Apple and Google reauthentication proofs", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, { deletionStatus: "pending" });
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["apple", "google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  state.deletionRefreshPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: state.deletionStatusToken,
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Reauthenticate Apple" }).click();
+
+  await expect.poll(() => state.deletionRefreshRequests.length).toBe(1);
+  expect(state.deletionRefreshRequests[0]).toEqual({
+    credential: {
+      credentialToken: "browser-fresh-apple-token",
+      provider: "apple",
+      revocation: {
+        clientId: "dev.openjob.auth.nonprod",
+        kind: "access_token",
+        value: "browser-apple-access",
+      },
+    },
+  });
+  await expect(page.getByRole("button", {
+    name: "Reauthenticate Apple",
+  })).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "Reauthenticate Google",
+  })).toBeVisible();
+
+  state.deletionRefreshPayload = undefined;
+  await page.getByRole("button", { name: "Reauthenticate Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(state.deletionRefreshRequests[1]).toEqual({
+    credential: {
+      credentialToken: "browser-fresh-google-token",
+      provider: "google",
+      revocation: {
+        idToken: "browser-google-id-token",
+        kind: "access_token",
+        value: "browser-google-access",
+      },
+    },
+  });
+});
+
+test("provider refresh rejects a mismatched pending status capability response", async ({ page }) => {
+  const state = await installApi(page, { deletionStatus: "pending" });
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  state.deletionRefreshPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: "v1.wrong-capability.wrong-capability-signature",
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Reauthenticate Google" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "unexpected account-deletion response",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "Deletion is in progress",
+  );
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+});
+
+test("pending provider refresh exposes failed local cleanup as retryable", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, { deletionStatus: "pending" });
+  state.deletionRefreshDelayMs = 500;
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  state.deletionRefreshPayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: state.deletionStatusToken,
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Reauthenticate Google" }).click();
+  await expect.poll(() => state.deletionRefreshRequests.length).toBe(1);
+  await page.evaluate(() => {
+    window.sessionStorage.setItem(
+      "openjob-test:secondary-signout-failure",
+      "once",
+    );
+  });
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Refresh deletion status to retry local cleanup",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "Deletion is in progress",
+  );
+  await expect(page.getByRole("button", {
+    name: "Reauthenticate Google",
+  })).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "Refresh deletion status",
+  })).toBeVisible();
+});
+
+test("pending account deletion preflight blocks before fresh provider authentication", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      deadline: "2026-08-04T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: state.deletionStatusToken,
+    },
+  };
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await seedDeletionNotificationState(page);
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Deletion is in progress");
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "submitting", null),
+  );
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+  expect(await page.evaluate(() => (
+    window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }
+  ).__openjobFirebaseTest.secondarySignedIn())).toBe(false);
+  await expect.poll(() => deletionNotificationState(page)).toEqual({
+    current: null,
+    installation: null,
+    pending: null,
+    pushSubscription: null,
+    unsubscribeCalls: 1,
+  });
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
+});
+
+test("account deletion does not POST when the prepared receipt cannot be saved", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionRequestStatus: "pending",
+    deletionStatus: "pending",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await installDeletionReceiptStorageFailures(page, { failSet: true });
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "Fresh authentication did not start",
+  );
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Permanently delete User" })).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: "private draft",
+    receipt: null,
+    selectedGroup: "grp_private",
+    session: "google",
+  });
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+  expect(await page.evaluate(() => (
+    window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }
+  ).__openjobFirebaseTest.secondarySignedIn())).toBe(false);
+});
+
+test("account deletion does not POST when submitting phase cannot be saved", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await installDeletionReceiptStorageFailures(page, { failSetAt: 2 });
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "prepared but not submitted",
+  );
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "prepared"),
+  );
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+  expect(await page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: "private draft",
+    selectedGroup: "grp_private",
+    session: "google",
+  });
+
+  await page.reload();
+
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  expect(state.deletionStatusRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+});
+
+test("completed deletion retains submitting status when final confirmation cannot be saved", async ({ page }) => {
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await installDeletionReceiptStorageFailures(page, { failSetAt: 3 });
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("status")).toContainText("needs local cleanup");
+  await expect(page.getByRole("alert")).toContainText(
+    "could not save final confirmation",
+  );
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+
+  await page.evaluate(() => {
+    const controls = (window as typeof window & {
+      __openjobDeletionReceiptStorageFailures: { failSetAt: number | null };
+    }).__openjobDeletionReceiptStorageFailures;
+    controls.failSetAt = null;
+  });
+  await page.getByRole("button", { name: "Retry local cleanup" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+  expect(state.deletionRequests).toHaveLength(1);
+});
+
+for (const cleanupFailure of ["localStorage", "indexedDB", "push"] as const) {
+  test(`notification ${cleanupFailure} purge failure blocks completed deletion confirmation`, async ({ page }) => {
+    await installNotificationEnvironment(page);
+    const state = await installApi(page, {
+      signInMethods: ["google"],
+      user: signedInUser,
+    });
+    await page.goto("/account-deletion");
+
+    await page.getByRole("button", { name: "Continue with Google" }).click();
+    await expect(page.getByText("Deleting @shane.")).toBeVisible();
+    await seedDeletionNotificationState(page);
+    await page.getByRole("button", { name: "Authenticate Google" }).click();
+    await page.evaluate(async (failure) => {
+      if (failure === "localStorage") {
+        const nativeRemoveItem = Storage.prototype.removeItem;
+        Storage.prototype.removeItem = function (key) {
+          if (
+            this === window.localStorage &&
+            key === "openjob:notification-installation"
+          ) {
+            throw new Error("Test notification localStorage failure.");
+          }
+          return nativeRemoveItem.call(this, key);
+        };
+      } else if (failure === "indexedDB") {
+        Object.defineProperty(window.indexedDB, "open", {
+          configurable: true,
+          value() {
+            throw new Error("Test notification IndexedDB failure.");
+          },
+        });
+      } else {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (!subscription) throw new Error("Test Push subscription was not seeded.");
+        subscription.unsubscribe = async () => {
+          throw new Error("Test Push unsubscribe failure.");
+        };
+      }
+    }, cleanupFailure);
+    await page.getByLabel(/Type DELETE/).fill("DELETE");
+    await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+    await expect(page.getByRole("status")).toContainText("needs local cleanup");
+    await expect(page.getByRole("alert")).toContainText(
+      cleanupFailure === "localStorage"
+        ? "Test notification localStorage failure"
+        : cleanupFailure === "indexedDB"
+          ? "Test notification IndexedDB failure"
+          : "Test Push unsubscribe failure",
+    );
+    await expect(page.getByText("were deleted")).toHaveCount(0);
+    await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+      deletionReceipt(state.deletionStatusToken),
+    );
+  });
+}
+
+test("completed account deletion requires explicit acknowledgement and retains a failed clear", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "completed",
+  });
+  await installDeletionReceiptStorageFailures(page, {
+    failRemove: true,
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: null,
+    receipt: JSON.stringify(deletionReceipt(state.deletionStatusToken, "completed")),
+    selectedGroup: null,
+    session: null,
+  });
+
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await expect(page.getByRole("alert")).toContainText(
+    "could not acknowledge final deletion status",
+  );
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+
+  await page.evaluate(() => {
+    const controls = (window as typeof window & {
+      __openjobDeletionReceiptStorageFailures: { failRemove: boolean };
+    }).__openjobDeletionReceiptStorageFailures;
+    controls.failRemove = false;
+  });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  expect(state.deletionStatusRequests).toBe(1);
+});
+
+test("completed account deletion retries failed sign-out before final confirmation", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "completed",
+  });
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion?scenario=signout-failure");
+
+  await expect(page.getByRole("status")).toContainText(
+    "needs local cleanup",
+  );
+  await expect(page.getByRole("button", { name: "Retry local cleanup" })).toBeVisible();
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: null,
+    receipt: JSON.stringify(deletionReceipt(state.deletionStatusToken)),
+    selectedGroup: null,
+    session: "google",
+  });
+
+  await page.getByRole("button", { name: "Retry local cleanup" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect(page.getByRole("button", { name: "Retry local cleanup" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    receipt: window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    receipt: JSON.stringify(deletionReceipt(state.deletionStatusToken, "completed")),
+    session: null,
+  });
+  expect(state.deletionStatusRequests).toBe(1);
+});
+
+test("immediate completed account deletion blocks on failed local sign-out", async ({ page }) => {
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  await installDeletionPrivateState(page);
+  await page.goto("/account-deletion?scenario=signout-failure");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("status")).toContainText("needs local cleanup");
+  await expect(page.getByRole("button", { name: "Retry local cleanup" })).toBeVisible();
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    receipt: window.localStorage.getItem(
+      "openjob:account-deletion-status-receipt",
+    ),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: null,
+    receipt: JSON.stringify(deletionReceipt(state.deletionStatusToken)),
+    selectedGroup: null,
+    session: "google",
+  });
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(1);
+  expect(state.deletionSubmissionHeaders).toEqual([state.deletionStatusToken]);
+
+  await page.getByRole("button", { name: "Retry local cleanup" }).click();
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken, "completed"),
+  );
+  expect(state.deletionRequests).toHaveLength(1);
+});
+
+test("prepared account deletion receipt recovers safely in a new process", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+    user: signedInUser,
+  });
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken, "prepared"),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  expect(await page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({
+    draft: "private draft",
+    selectedGroup: "grp_private",
+    session: "google",
+  });
+  expect(state.deletionStatusRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+});
+
+test("submitting prepared-intent receipt clears only after atomic cancellation", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+  });
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(state.deletionStatusRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+});
+
+test("prepared account deletion recovery does not clear a concurrent submitting phase", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+  });
+  state.deletionStatusDelayMs = 250;
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken, "prepared"),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+  await expect.poll(() => state.deletionStatusRequests).toBe(1);
+
+  await page.evaluate((receipt) => {
+    window.localStorage.setItem(
+      "openjob:account-deletion-status-receipt",
+      JSON.stringify(receipt),
+    );
+  }, deletionReceipt(state.deletionStatusToken));
+
+  await expect(page.getByRole("alert")).toContainText(
+    "changed in another tab",
+  );
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  expect(state.deletionRequests).toHaveLength(0);
+});
+
+test("root account deletion guard redirects before authenticated bootstrap", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+  });
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("openjob-test:firebase-session", "google");
+  });
+
+  await page.goto("/");
+
+  await expect(page).toHaveURL(/\/account-deletion$/);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  expect(state.authorizationHeaders).toEqual([
+    `Bearer ${state.deletionStatusToken}`,
+  ]);
+});
+
+test("root account deletion guard redirects on a cross-tab receipt write", async ({ page }) => {
+  const state = await installApi(page, {
+    deletionStatus: "not_started",
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  const otherPage = await page.context().newPage();
+  await otherPage.goto("/");
+
+  await otherPage.evaluate((receipt) => {
+    window.localStorage.setItem(
+      "openjob:account-deletion-status-receipt",
+      JSON.stringify(receipt),
+    );
+  }, deletionReceipt(state.deletionStatusToken, "prepared"));
+
+  await expect(page).toHaveURL(/\/account-deletion$/);
+  await otherPage.close();
+});
+
+test("a sibling tab blocks without canceling the owner's prepared deletion", async ({ page }) => {
+  await installNotificationEnvironment(page);
+  const ownerState = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  ownerState.deletionSubmissionExpiresAt = "2099-07-28T12:05:00.000Z";
+  ownerState.deletionPostDelayMs = 250;
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(
+      ownerState.deletionStatusToken,
+      "prepared",
+      ownerState.deletionSubmissionExpiresAt,
+    ),
+  );
+  const ownerTabId = await page.evaluate(() =>
+    window.sessionStorage.getItem("openjob:account-deletion-tab-id")
+  );
+  if (!ownerTabId) throw new Error("The owner tab ID was not saved.");
+
+  const sibling = await page.context().newPage();
+  await sibling.addInitScript((clonedOwnerId) => {
+    window.sessionStorage.setItem(
+      "openjob:account-deletion-tab-id",
+      clonedOwnerId,
+    );
+  }, ownerTabId);
+  await installNotificationEnvironment(sibling);
+  const siblingState = await installApi(sibling, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  siblingState.deletionSubmissionExpiresAt =
+    ownerState.deletionSubmissionExpiresAt;
+  await sibling.goto("/");
+  await expect(sibling).toHaveURL(/\/account-deletion$/);
+  await expect(sibling.getByRole("status")).toContainText(
+    "Another tab is completing deletion",
+  );
+  expect(await sibling.evaluate(() =>
+    window.sessionStorage.getItem("openjob:account-deletion-tab-id")
+  )).not.toBe(ownerTabId);
+  expect(siblingState.deletionStatusRequests).toBe(0);
+
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", {
+    name: "Permanently delete User",
+  }).click();
+  await expect.poll(() => ownerState.deletionRequests.length).toBe(1);
+  expect(siblingState.deletionStatusRequests).toBe(0);
+
+  await expect(page.getByRole("status")).toContainText("were deleted");
+  expect(ownerState.deletionPreparationRequests).toBe(1);
+  expect(ownerState.deletionSubmissionHeaders).toEqual([
+    ownerState.deletionStatusToken,
+  ]);
+  await sibling.close();
+});
+
+test("past-deadline deletion requires operator completion without a false promise", async ({ page }) => {
+  const state = await installApi(page, { deletionStatus: "pending" });
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-07-28T12:00:00.000Z",
+      reauthenticationProviders: ["google"],
+      requestedAt: "2026-07-21T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("status")).toContainText(
+    "Operator completion is required",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "Complete the fresh provider prompt, then check again",
+  );
+  await expect(page.getByRole("status")).not.toContainText("will finish by");
+});
+
+test("account deletion rejects a near-valid preflight timestamp before fresh authentication", async ({ page }) => {
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPreparePayload = {
+    data: {
+      status: "not_started",
+      statusToken: state.deletionStatusToken,
+      submissionExpiresAt: "2026-07-28 12:05:00.000Z",
+    },
+  };
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("unexpected account-deletion response");
+  expect(state.deletionPreparationRequests).toBe(1);
+  expect(state.deletionRequests).toHaveLength(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toBeNull();
+  expect(await page.evaluate(() => (
+    window as typeof window & {
+      __openjobFirebaseTest: { secondarySignedIn(): boolean };
+    }
+  ).__openjobFirebaseTest.secondarySignedIn())).toBe(false);
+});
+
+test("account deletion rejects an invalid POST response and remains blocked", async ({ page }) => {
+  const state = await installApi(page, {
+    signInMethods: ["google"],
+    user: signedInUser,
+  });
+  state.deletionPostPayload = {
+    data: { completedAt: "2026-07-28T12:00:00.00Z", status: "completed" },
+  };
+  await page.goto("/account-deletion");
+
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.getByText("Deleting @shane.")).toBeVisible();
+  await page.getByRole("button", { name: "Authenticate Google" }).click();
+  await page.getByLabel(/Type DELETE/).fill("DELETE");
+  await page.getByRole("button", { name: "Permanently delete User" }).click();
+
+  await expect(page.getByRole("status")).toContainText(
+    "status could not be confirmed",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "unexpected account-deletion response",
+  );
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+  expect(state.deletionRequests).toHaveLength(1);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+});
+
+test("account deletion rejects an invalid GET response and remains blocked", async ({ page }) => {
+  const state = await installApi(page);
+  state.deletionStatusPayload = {
+    data: {
+      deadline: "2026-02-30T12:00:00.000Z",
+      reauthenticationProviders: [],
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(state.deletionStatusToken),
+  });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("openjob-test:firebase-session", "google");
+  });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("status")).toContainText(
+    "status could not be confirmed",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "unexpected account-deletion response",
+  );
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(state.deletionStatusToken),
+  );
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBeNull();
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+});
+
+test("account deletion retains a fresh prepared receipt after a status read", async ({ page }) => {
+  const state = await installApi(page);
+  state.deletionSubmissionExpiresAt = "2099-07-28T12:05:00.000Z";
+  state.deletionStatusPayload = {
+    data: {
+      status: "not_started",
+      submissionExpired: false,
+      submissionExpiresAt: state.deletionSubmissionExpiresAt,
+    },
+  };
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: deletionReceipt(
+      state.deletionStatusToken,
+      "prepared",
+      state.deletionSubmissionExpiresAt,
+    ),
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("status")).toContainText(
+    "remains available until",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(
+    deletionReceipt(
+      state.deletionStatusToken,
+      "prepared",
+      state.deletionSubmissionExpiresAt,
+    ),
+  );
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("openjob-test:firebase-session")
+  )).toBe("google");
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+});
+
+test("account deletion rejects a near-valid saved receipt timestamp and purges access", async ({ page }) => {
+  const state = await installApi(page);
+  const invalidReceipt = deletionReceipt(
+    state.deletionStatusToken,
+    "submitting",
+    "2026-02-30T12:05:00.000Z",
+  );
+  await installDeletionReceiptStorageFailures(page, {
+    initialReceipt: invalidReceipt,
+  });
+  await installDeletionPrivateState(page, { signedIn: true });
+  await page.goto("/account-deletion");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "could not read deletion status",
+  );
+  await expect(page.getByText("were deleted")).toHaveCount(0);
+  await expect.poll(() => storedDeletionReceipt(page)).toEqual(invalidReceipt);
+  await expect.poll(() => page.evaluate(() => ({
+    draft: window.sessionStorage.getItem("openjob:pending-task-editor"),
+    selectedGroup: window.localStorage.getItem("openjob:selected-group-id"),
+    session: window.localStorage.getItem("openjob-test:firebase-session"),
+  }))).toEqual({ draft: null, selectedGroup: null, session: null });
+  expect(state.deletionStatusRequests).toBe(0);
 });
 
 test("offers Google and Apple and restores either linked web session", async ({ page }) => {

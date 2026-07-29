@@ -90,6 +90,10 @@ function authController(
       validator: '"task-list"',
     }));
   return {
+    acknowledgeDeletionCompletion: jest.fn(async () => ({
+      kind: "signed-out" as const,
+      reason: "deleted" as const,
+    })),
     authenticateExistingUser: jest.fn(async () => signedIn),
     authenticateNewMethod: jest.fn(async () => signedIn),
     cancelPending: jest.fn(async () => signedIn),

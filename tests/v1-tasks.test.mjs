@@ -1330,3 +1330,60 @@ test("representative Task responses validate against OpenAPI", async (t) => {
     "get",
   );
 });
+
+test("a Task GET returns 410 when deletion wins before its final active check", async () => {
+  let deletionPending = false;
+  let notifyRead;
+  let releaseRead;
+  const readStarted = new Promise((resolve) => {
+    notifyRead = resolve;
+  });
+  const readReleased = new Promise((resolve) => {
+    releaseRead = resolve;
+  });
+  const user = { userId: "user_racing", username: "racing" };
+  const api = createV1TasksApi({
+    tasks: {
+      async get() {
+        notifyRead();
+        await readReleased;
+        return {
+          kind: "found",
+          task: {
+            assignee: { state: "unassigned" },
+            completedAt: null,
+            createdAt: "2026-07-15T12:00:00.000Z",
+            dueDate: null,
+            groupId: "grp_racing",
+            priority: "normal",
+            state: "open",
+            taskId: "task_racing",
+            text: "Must stay private",
+          },
+        };
+      },
+    },
+    users: {
+      async resolve() {
+        return deletionPending ? { ...user, deletionPending: true } : user;
+      },
+    },
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
+      uid: "firebase_racing",
+    }),
+  });
+
+  const responsePromise = api.fetch(new Request(
+    "https://openjob.test/api/v1/groups/grp_racing/tasks/task_racing",
+  ));
+  await readStarted;
+  deletionPending = true;
+  releaseRead();
+  const response = await responsePromise;
+  assert.equal(response.status, 410);
+  const text = await response.text();
+  assert.equal(JSON.parse(text).error.code, "account_deletion_pending");
+  assert.equal(text.includes("Must stay private"), false);
+});

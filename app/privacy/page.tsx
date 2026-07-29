@@ -47,8 +47,15 @@ export default function PrivacyPage() {
           You can permanently delete your User inside OpenJob or from the public
           deletion page. Access ends immediately. Automated cleanup normally
           completes in the same flow and retries for no more than seven days
-          during a provider outage. OpenJob has no approved business or legal
-          retention for deleted User or User-generated data.
+          during a provider outage. Before deletion is submitted, the web app
+          saves a small status receipt in browser localStorage so a reload or
+          another tab can safely recover the result. It contains an encrypted,
+          User-bound status capability, workflow phase, and an expiry when one
+          applies. Those stored values expose no directly readable User identity
+          or User content. The receipt is removed after a safe unsubmitted
+          recovery or after you acknowledge confirmed completion. OpenJob has no
+          approved business or legal retention for deleted User or User-generated
+          data.
         </p>
         <p><Link href="/account-deletion">Request account deletion</Link></p>
 

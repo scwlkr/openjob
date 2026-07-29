@@ -79,8 +79,38 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
+        /**
+         * Read account-deletion status
+         * @description Uses the opaque status capability prepared before deletion. The capability
+         *     is accepted only in the Authorization header and is never placed in a
+         *     URL, logged, or echoed. For the exact active User and a fresh prepared
+         *     intent, this operation is read-only and returns not_started with
+         *     submissionExpired false, so a racing POST can still consume the intent.
+         *     At or after submissionExpiresAt, this operation atomically removes the
+         *     expired intent and returns submissionExpired true.
+         *     Pending requires an exact matching deletion job and deletion-blocked
+         *     User. Completed requires the User, job, and prepared intent all to be
+         *     absent. Ambiguous or inconsistent state fails closed.
+         */
+        get: operations["getAccountDeletionStatus"];
+        /**
+         * Prepare an account-deletion status capability
+         * @description Without a request body, authenticates an active User and creates or reuses
+         *     one minimal durable prepared intent. The encrypted capability binds that
+         *     User and exact intent and is accepted for a destructive POST until
+         *     submissionExpiresAt, five minutes after preparation.
+         *
+         *     After an exact account_deletion_pending response, the client instead sends
+         *     the fresh Firebase and provider proof from that same sign-in. The proof
+         *     must match the authenticated Firebase UID, provider, and upstream subject.
+         *     OpenJob atomically reopens that provider under a successor processing
+         *     lease, stores the encrypted proof, reruns Firebase-session and provider
+         *     revocation, and returns a pending capability for durable client storage.
+         *     If finalization already won, OpenJob still revokes the fresh authorization
+         *     and deletes the recreated Firebase identity before returning completed.
+         *     A Firebase-only restored session cannot recover a lost receipt.
+         */
+        put: operations["mintAccountDeletionStatusToken"];
         /**
          * Permanently delete the current User and associated data
          * @description Starts one idempotent deletion after explicit irreversible confirmation
@@ -90,14 +120,28 @@ export interface paths {
          *     Username indexes, notifications, Group access, User-created Tasks, and
          *     personal attribution were removed. A pending response means access has
          *     ended but provider or infrastructure cleanup will retry for no more than
-         *     seven calendar days. Credential and revocation values are never logged,
-         *     returned, or retained after completion.
+         *     seven calendar days. Clients prepare and persist the status capability
+         *     with PUT, then send that exact capability in x-openjob-deletion-status.
+         *     The atomic start consumes the exact unexpired prepared intent while it
+         *     creates the deletion job and blocks the User. A pending response echoes
+         *     the exact prepared capability. Already-pending Users are rejected before
+         *     any fresh provider authentication. Credential and revocation values are
+         *     never logged, returned, or retained after completion.
          */
         post: operations["deleteCurrentUser"];
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Refresh one unusable provider proof for a pending deletion
+         * @description Uses only the opaque deletion status capability. The fresh Firebase and
+         *     provider proof must match one exact encrypted, incomplete provider slot
+         *     already marked as requiring reauthentication. The replacement is
+         *     encrypted atomically, never restores OpenJob access, and resumes the
+         *     same deletion job. Provider credentials and subjects are never returned
+         *     or logged.
+         */
+        patch: operations["refreshAccountDeletionProvider"];
         trace?: never;
     };
     "/api/v1/me/username": {
@@ -788,26 +832,45 @@ export interface components {
              */
             expectedTargetUserId: components["schemas"]["UserId"];
         };
-        AccountDeletionRevocationProof: {
+        GoogleAccountDeletionRevocationProof: {
+            idToken: string;
             /** @constant */
             kind: "access_token";
             value: string;
-        } | {
+        };
+        AppleAccessTokenAccountDeletionRevocationProof: {
             clientId: string;
-            /** @enum {unknown} */
-            kind: "access_token" | "authorization_code";
+            /** @constant */
+            kind: "access_token";
             value: string;
         };
+        AppleAuthorizationCodeAccountDeletionRevocationProof: {
+            clientId: string;
+            idToken: string;
+            /** @constant */
+            kind: "authorization_code";
+            redirectUri?: string;
+            value: string;
+        };
+        AccountDeletionRevocationProof: components["schemas"]["GoogleAccountDeletionRevocationProof"] | components["schemas"]["AppleAccessTokenAccountDeletionRevocationProof"] | components["schemas"]["AppleAuthorizationCodeAccountDeletionRevocationProof"];
         AccountDeletionCredentialInput: {
             credentialToken: string;
-            /** @enum {unknown} */
-            provider: "apple" | "google";
-            revocation: components["schemas"]["AccountDeletionRevocationProof"];
+            /** @constant */
+            provider: "google";
+            revocation: components["schemas"]["GoogleAccountDeletionRevocationProof"];
+        } | {
+            credentialToken: string;
+            /** @constant */
+            provider: "apple";
+            revocation: components["schemas"]["AppleAccessTokenAccountDeletionRevocationProof"] | components["schemas"]["AppleAuthorizationCodeAccountDeletionRevocationProof"];
         };
         DeleteCurrentUserInput: {
             /** @constant */
             confirmation: "delete";
             credentials: components["schemas"]["AccountDeletionCredentialInput"][];
+        };
+        RefreshAccountDeletionProviderInput: {
+            credential: components["schemas"]["AccountDeletionCredentialInput"];
         };
         AccountDeletionCompleted: {
             completedAt: components["schemas"]["Timestamp"];
@@ -816,15 +879,61 @@ export interface components {
         };
         AccountDeletionPending: {
             deadline: components["schemas"]["Timestamp"];
+            reauthenticationProviders: ("apple" | "google")[];
+            requestedAt: components["schemas"]["Timestamp"];
+            /** @constant */
+            status: "pending";
+            statusToken: components["schemas"]["AccountDeletionStatusToken"];
+        };
+        /**
+         * @description Sensitive opaque status capability encrypted with an exact User and
+         *     durable prepared-intent binding before deletion.
+         *     The web client stores it in browser localStorage; native clients use
+         *     platform secure storage. Never log it or put it in a URL. When sending it
+         *     to OpenJob, use only GET or PATCH Authorization, or POST
+         *     x-openjob-deletion-status.
+         */
+        AccountDeletionStatusToken: string;
+        AccountDeletionStatusNotStarted: {
+            /** @constant */
+            status: "not_started";
+            /**
+             * @description False while the exact prepared intent remains fresh and available
+             *     for POST. True only after its submission deadline, when this status
+             *     read removed the expired intent or observed it already absent. No
+             *     later POST with an expired capability can create a deletion job.
+             */
+            submissionExpired: boolean;
+            submissionExpiresAt: components["schemas"]["Timestamp"];
+        };
+        AccountDeletionStatusCompleted: {
+            /** @constant */
+            status: "completed";
+        };
+        AccountDeletionStatusPending: {
+            deadline: components["schemas"]["Timestamp"];
+            reauthenticationProviders: ("apple" | "google")[];
             requestedAt: components["schemas"]["Timestamp"];
             /** @constant */
             status: "pending";
         };
+        AccountDeletionStatus: components["schemas"]["AccountDeletionStatusNotStarted"] | components["schemas"]["AccountDeletionStatusCompleted"] | components["schemas"]["AccountDeletionStatusPending"];
         AccountDeletionCompletedEnvelope: {
             data: components["schemas"]["AccountDeletionCompleted"];
         };
         AccountDeletionPendingEnvelope: {
             data: components["schemas"]["AccountDeletionPending"];
+        };
+        AccountDeletionStatusTokenEnvelope: {
+            data: {
+                /** @constant */
+                status: "not_started";
+                statusToken: components["schemas"]["AccountDeletionStatusToken"];
+                submissionExpiresAt: components["schemas"]["Timestamp"];
+            };
+        };
+        AccountDeletionStatusEnvelope: {
+            data: components["schemas"]["AccountDeletionStatus"];
         };
         PushSubscriptionKeysInput: {
             p256dh: string;
@@ -976,6 +1085,12 @@ export interface components {
             error?: {
                 /** @constant */
                 code?: "account_deletion_unavailable";
+            };
+        };
+        AccountDeletionPendingErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
+            error?: {
+                /** @constant */
+                code?: "account_deletion_pending";
             };
         };
         SignInMethodUnrecognizedErrorEnvelope: components["schemas"]["ErrorEnvelope"] & {
@@ -1252,6 +1367,7 @@ export interface components {
         /** @description Account deletion completed and no retry state remains. */
         AccountDeletionCompletedResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 [name: string]: unknown;
             };
             content: {
@@ -1266,9 +1382,24 @@ export interface components {
                 "application/json": components["schemas"]["AccountDeletionCompletedEnvelope"];
             };
         };
+        /**
+         * @description A fresh active-User status capability, or final confirmation after a
+         *     recovery proof was synchronously revoked and its recreated Firebase
+         *     identity was deleted.
+         */
+        AccountDeletionPreparationResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccountDeletionStatusTokenEnvelope"] | components["schemas"]["AccountDeletionCompletedEnvelope"];
+            };
+        };
         /** @description Access ended and deletion is retrying within seven days. */
         AccountDeletionPendingResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 [name: string]: unknown;
             };
             content: {
@@ -1276,7 +1407,9 @@ export interface components {
                  * @example {
                  *       "data": {
                  *         "deadline": "2026-08-04T12:00:00Z",
+                 *         "reauthenticationProviders": [],
                  *         "requestedAt": "2026-07-28T12:00:00Z",
+                 *         "statusToken": "v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
                  *         "status": "pending"
                  *       }
                  *     }
@@ -1284,9 +1417,55 @@ export interface components {
                 "application/json": components["schemas"]["AccountDeletionPendingEnvelope"];
             };
         };
-        /** @description Provider cleanup is not ready, so deletion did not start. */
+        /**
+         * @description User-and-intent-bound status capability plus its five-minute destructive
+         *     submission deadline.
+         */
+        AccountDeletionStatusTokenResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": {
+                 *         "status": "not_started",
+                 *         "statusToken": "v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                 *         "submissionExpiresAt": "2026-07-28T12:05:00Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionStatusTokenEnvelope"];
+            };
+        };
+        /** @description Fail-closed pending status or final deletion confirmation. */
+        AccountDeletionStatusResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "data": {
+                 *         "deadline": "2026-08-04T12:00:00Z",
+                 *         "reauthenticationProviders": [],
+                 *         "requestedAt": "2026-07-28T12:00:00Z",
+                 *         "status": "pending"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionStatusEnvelope"];
+            };
+        };
+        /**
+         * @description Deletion cannot safely start or its status cannot safely be resolved.
+         *     This response never implies completion.
+         */
         AccountDeletionUnavailableResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 [name: string]: unknown;
             };
             content: {
@@ -1300,6 +1479,38 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["AccountDeletionUnavailableErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The Firebase Bearer credential is missing or invalid, or pending
+         *     recovery omitted a fresh same-provider proof bound to that credential.
+         */
+        AccountDeletionRecoveryAuthenticationResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["LinkAuthenticationErrorEnvelope"];
+            };
+        };
+        /** @description Account deletion already started; recover status with PUT. */
+        AccountDeletionAlreadyPendingResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "account_deletion_pending",
+                 *         "message": "Account deletion is pending.",
+                 *         "requestId": "req_delete_pending"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["AccountDeletionPendingErrorEnvelope"];
             };
         };
         /** @description One Group in a single-resource success envelope. */
@@ -1525,9 +1736,15 @@ export interface components {
                 "application/json": components["schemas"]["InvalidRequestErrorEnvelope"];
             };
         };
-        /** @description Bearer token is missing, invalid, expired, or not an allowed Google- or Apple-backed Firebase identity. */
+        /**
+         * @description The required Bearer credential is missing, malformed, expired, or
+         *     invalid for this operation. Most operations require an allowed Google-
+         *     or Apple-backed Firebase identity; deletion status requires its opaque
+         *     device-held capability.
+         */
         UnauthorizedResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 [name: string]: unknown;
             };
             content: {
@@ -1964,6 +2181,7 @@ export interface components {
         /** @description Infrastructure throttling. OpenJob defines no product-level quota in v1. */
         RateLimitedResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 /** @description Seconds to wait before another attempt, when known. */
                 "Retry-After"?: number;
                 [name: string]: unknown;
@@ -1984,6 +2202,7 @@ export interface components {
         /** @description Unexpected service failure. The requestId can be used for support correlation. */
         InternalErrorResponse: {
             headers: {
+                "Cache-Control": components["headers"]["NoStore"];
                 [name: string]: unknown;
             };
             content: {
@@ -2115,6 +2334,7 @@ export interface components {
                  *           "provider": "google",
                  *           "revocation": {
                  *             "kind": "access_token",
+                 *             "idToken": "fresh-google-provider-id-token",
                  *             "value": "fresh-provider-access-token"
                  *           }
                  *         }
@@ -2122,6 +2342,49 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["DeleteCurrentUserInput"];
+            };
+        };
+        /** @description One fresh proof for the exact pending provider slot. */
+        RefreshAccountDeletionProviderRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "credential": {
+                 *         "credentialToken": "fresh-firebase-id-token",
+                 *         "provider": "google",
+                 *         "revocation": {
+                 *           "idToken": "fresh-google-provider-id-token",
+                 *           "kind": "access_token",
+                 *           "value": "fresh-provider-access-token"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["RefreshAccountDeletionProviderInput"];
+            };
+        };
+        /**
+         * @description Optional only for lost-receipt recovery after an exact
+         *     account_deletion_pending response. It carries the Firebase ID token and
+         *     raw provider revocation proof from the same fresh sign-in. Active-User
+         *     status preparation omits the body.
+         */
+        RecoverAccountDeletionRequest: {
+            content: {
+                /**
+                 * @example {
+                 *       "credential": {
+                 *         "credentialToken": "fresh-firebase-id-token",
+                 *         "provider": "google",
+                 *         "revocation": {
+                 *           "idToken": "fresh-google-provider-id-token",
+                 *           "kind": "access_token",
+                 *           "value": "fresh-provider-access-token"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["RefreshAccountDeletionProviderInput"];
             };
         };
         /** @description Immutable Username claim. */
@@ -2219,7 +2482,10 @@ export interface components {
             };
         };
     };
-    headers: never;
+    headers: {
+        /** @description Sensitive authentication and status responses are never cached. */
+        NoStore: "no-store";
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -2236,6 +2502,7 @@ export interface operations {
             200: components["responses"]["CurrentUserResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2254,6 +2521,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2270,6 +2538,7 @@ export interface operations {
             200: components["responses"]["SignInMethodCollectionResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2287,14 +2556,57 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["LinkAuthenticationErrorResponse"];
             409: components["responses"]["LinkSignInMethodConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    getAccountDeletionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AccountDeletionStatusResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            503: components["responses"]["AccountDeletionUnavailableResponse"];
+        };
+    };
+    mintAccountDeletionStatusToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["RecoverAccountDeletionRequest"];
+        responses: {
+            200: components["responses"]["AccountDeletionPreparationResponse"];
+            202: components["responses"]["AccountDeletionPendingResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["AccountDeletionRecoveryAuthenticationResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            503: components["responses"]["AccountDeletionUnavailableResponse"];
         };
     };
     deleteCurrentUser: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description The exact capability returned by PUT and already persisted by the
+                 *     client. It must bind to this User and exact prepared intent and be
+                 *     submitted before submissionExpiresAt.
+                 */
+                "x-openjob-deletion-status": components["schemas"]["AccountDeletionStatusToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2305,6 +2617,25 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["LinkAuthenticationErrorResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            503: components["responses"]["AccountDeletionUnavailableResponse"];
+        };
+    };
+    refreshAccountDeletionProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["RefreshAccountDeletionProviderRequest"];
+        responses: {
+            200: components["responses"]["AccountDeletionCompletedResponse"];
+            202: components["responses"]["AccountDeletionPendingResponse"];
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["LinkAuthenticationErrorResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
             503: components["responses"]["AccountDeletionUnavailableResponse"];
@@ -2323,6 +2654,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["UsernameConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2347,6 +2679,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2370,6 +2703,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2394,6 +2728,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["NotificationSubscriptionNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2422,6 +2757,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2439,6 +2775,7 @@ export interface operations {
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2462,6 +2799,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2487,6 +2825,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2516,6 +2855,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["LeaveGroupConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2547,6 +2887,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["EndGroupConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2582,6 +2923,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2617,6 +2959,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrMemberNotFoundResponse"];
             409: components["responses"]["KickMemberConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2646,6 +2989,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrMemberNotFoundResponse"];
             409: components["responses"]["PromoteMemberConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2675,6 +3019,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrMemberNotFoundResponse"];
             409: components["responses"]["DemoteMemberConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2711,6 +3056,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2736,6 +3082,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrUserNotFoundResponse"];
             409: components["responses"]["BanUserConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2771,6 +3118,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupOrBanNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2795,6 +3143,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2819,6 +3168,7 @@ export interface operations {
             403: components["responses"]["ForbiddenResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2842,6 +3192,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["InvalidInviteResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2866,6 +3217,7 @@ export interface operations {
             403: components["responses"]["MembershipDeniedResponse"];
             404: components["responses"]["InvalidInviteResponse"];
             409: components["responses"]["JoinGroupConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2924,6 +3276,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2948,6 +3301,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["CreateTaskConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -2976,6 +3330,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -3010,6 +3365,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -3039,6 +3395,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["UpdateTaskConflictResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };
@@ -3068,6 +3425,7 @@ export interface operations {
             401: components["responses"]["UnauthorizedResponse"];
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

@@ -8,6 +8,11 @@ import {
   advanceGroupStateRevisionWrite,
   readGroupStateRevision,
 } from "./group-state.ts";
+import {
+  assertActiveUser,
+  activeUserFenceWrite,
+  isInactiveUserError,
+} from "./user-history.ts";
 import type {
   DueDate,
   OpenJobTask,
@@ -203,6 +208,13 @@ export function createFirestoreTaskStore(
     return `${groupPath(groupId)}/tasks/${taskId}`;
   }
 
+  function isVisibleGroup(document: FirestoreDocument) {
+    return !Object.hasOwn(
+      document.fields ?? {},
+      "deletionCleanupUserId",
+    );
+  }
+
   function stateRevisionWrite(group: FirestoreDocument) {
     if (!group.name || !group.updateTime) {
       throw new Error("Firestore returned an invalid Group record.");
@@ -252,7 +264,18 @@ export function createFirestoreTaskStore(
       readDocument(groupPath(groupId)),
       readDocument(membershipPath(groupId, userId)),
     ]);
-    return group && member ? { group, member } : null;
+    return group && member && isVisibleGroup(group) ? { group, member } : null;
+  }
+
+  async function accessVisibility(
+    groupId: GroupId,
+    access: { group: FirestoreDocument },
+  ) {
+    const current = await readDocument(groupPath(groupId));
+    if (!current || !isVisibleGroup(current)) return "hidden" as const;
+    return current.updateTime === access.group.updateTime
+      ? "same" as const
+      : "changed" as const;
   }
 
   async function readCreationAccess(
@@ -313,6 +336,14 @@ export function createFirestoreTaskStore(
       method: "POST",
       body: JSON.stringify({ writes }),
     });
+  }
+
+  async function activeUserFences(...userIds: string[]) {
+    return Promise.all(
+      [...new Set(userIds)].map((userId) =>
+        activeUserFenceWrite(firestore, userId)
+      ),
+    );
   }
 
   function accessVerifies(access: {
@@ -377,17 +408,38 @@ export function createFirestoreTaskStore(
 
   return Object.freeze({
     async hasAccess(actorUserId, groupId) {
-      return Boolean(await readAccess(actorUserId, groupId));
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const access = await readAccess(actorUserId, groupId);
+        if (!access) {
+          await assertActiveUser(firestore, actorUserId);
+          return false;
+        }
+        const visibility = await accessVisibility(groupId, access);
+        if (visibility === "changed") continue;
+        await assertActiveUser(firestore, actorUserId);
+        return visibility === "same";
+      }
+      throw new Error("Task access read could not resolve concurrent writes.");
     },
 
     async readState(actorUserId, groupId) {
-      const access = await readAccess(actorUserId, groupId);
-      return access
-        ? {
-            kind: "found" as const,
-            revision: readGroupStateRevision(access.group),
-          }
-        : { kind: "not_found" as const };
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const access = await readAccess(actorUserId, groupId);
+        if (!access) {
+          await assertActiveUser(firestore, actorUserId);
+          return { kind: "not_found" as const };
+        }
+        const visibility = await accessVisibility(groupId, access);
+        if (visibility === "changed") continue;
+        await assertActiveUser(firestore, actorUserId);
+        return visibility === "same"
+          ? {
+              kind: "found" as const,
+              revision: readGroupStateRevision(access.group),
+            }
+          : { kind: "not_found" as const };
+      }
+      throw new Error("Task state read could not resolve concurrent writes.");
     },
 
     async create(actorUserId, groupId, assignee, input) {
@@ -437,6 +489,7 @@ export function createFirestoreTaskStore(
         ];
         try {
           await commit([
+            ...await activeUserFences(actorUserId, assignee.userId),
             stateRevisionWrite(access.group),
             ...membershipVerifies,
             {
@@ -457,6 +510,13 @@ export function createFirestoreTaskStore(
             },
           };
         } catch (error) {
+          if (
+            isInactiveUserError(error) &&
+            error.userId === assignee.userId &&
+            error.userId !== actorUserId
+          ) {
+            return { kind: "assignee_not_member" as const };
+          }
           if (!isConcurrentWrite(error)) throw error;
         }
       }
@@ -471,65 +531,99 @@ export function createFirestoreTaskStore(
     },
 
     async get(actorUserId, groupId, taskId) {
-      if (!(await readAccess(actorUserId, groupId))) {
-        return { kind: "group_not_found" as const };
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const access = await readAccess(actorUserId, groupId);
+        if (!access) {
+          await assertActiveUser(firestore, actorUserId);
+          return { kind: "group_not_found" as const };
+        }
+        const document = await readDocument(taskPath(groupId, taskId));
+        const task = document
+          ? await resolveOpenTaskAssignee(
+              parseTask(document, document.name),
+            )
+          : null;
+        const visibility = await accessVisibility(groupId, access);
+        if (visibility === "changed") continue;
+        await assertActiveUser(firestore, actorUserId);
+        if (visibility === "hidden") {
+          return { kind: "group_not_found" as const };
+        }
+        return task
+          ? { kind: "found" as const, task: publicTask(task) }
+          : { kind: "task_not_found" as const };
       }
-      const document = await readDocument(taskPath(groupId, taskId));
-      if (!document) return { kind: "task_not_found" as const };
-      const task = await resolveOpenTaskAssignee(
-        parseTask(document, document.name),
-      );
-      return { kind: "found" as const, task: publicTask(task) };
+      throw new Error("Task read could not resolve concurrent writes.");
     },
 
     async update(actorUserId, groupId, taskId, input) {
-      return retryTaskMutation(
-        () => readUpdateAccess(actorUserId, groupId, taskId, input),
-        async ({ access, assigneeMember, task }) => {
-          const updated: StoredTask = {
-            ...task,
-            ...(input.text !== undefined ? { text: input.text } : {}),
-            ...(input.assignee
-              ? {
-                  assignee: {
-                    state: "assigned" as const,
-                    userId: input.assignee.userId,
-                    username: input.assignee.username,
-                  },
-                  assigneeMembershipId: membershipId(assigneeMember!),
-                }
-              : {}),
-            ...(input.priority !== undefined ? { priority: input.priority } : {}),
-            ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
-          };
-          const actorMemberName = access.member.name;
-          const assigneeMemberName = assigneeMember?.name;
-          await commit([
-            ...guardedAccessWrites(access),
-            ...(assigneeMemberName && assigneeMemberName !== actorMemberName
-              ? [
-                  {
-                    verify: assigneeMemberName,
-                    currentDocument: { updateTime: assigneeMember!.updateTime },
-                  },
-                ]
-              : []),
-            {
-              update: {
-                name: task.path,
-                fields: taskFields(updated),
+      try {
+        return await retryTaskMutation(
+          () => readUpdateAccess(actorUserId, groupId, taskId, input),
+          async ({ access, assigneeMember, task }) => {
+            const updated: StoredTask = {
+              ...task,
+              ...(input.text !== undefined ? { text: input.text } : {}),
+              ...(input.assignee
+                ? {
+                    assignee: {
+                      state: "assigned" as const,
+                      userId: input.assignee.userId,
+                      username: input.assignee.username,
+                    },
+                    assigneeMembershipId: membershipId(assigneeMember!),
+                  }
+                : {}),
+              ...(input.priority !== undefined
+                ? { priority: input.priority }
+                : {}),
+              ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
+            };
+            const actorMemberName = access.member.name;
+            const assigneeMemberName = assigneeMember?.name;
+            await commit([
+              ...await activeUserFences(
+                actorUserId,
+                ...(input.assignee ? [input.assignee.userId] : []),
+              ),
+              ...guardedAccessWrites(access),
+              ...(assigneeMemberName && assigneeMemberName !== actorMemberName
+                ? [
+                    {
+                      verify: assigneeMemberName,
+                      currentDocument: {
+                        updateTime: assigneeMember!.updateTime,
+                      },
+                    },
+                  ]
+                : []),
+              {
+                update: {
+                  name: task.path,
+                  fields: taskFields(updated),
+                },
+                currentDocument: { updateTime: task.updateTime },
               },
-              currentDocument: { updateTime: task.updateTime },
-            },
-          ]);
-          return {
-            kind: "updated" as const,
-            task: publicTask(updated),
-            change: taskMutationChange(task),
-          };
-        },
-        "Task update could not resolve concurrent writes.",
-      );
+            ]);
+            return {
+              kind: "updated" as const,
+              task: publicTask(updated),
+              change: taskMutationChange(task),
+            };
+          },
+          "Task update could not resolve concurrent writes.",
+        );
+      } catch (error) {
+        if (
+          input.assignee &&
+          isInactiveUserError(error) &&
+          error.userId === input.assignee.userId &&
+          error.userId !== actorUserId
+        ) {
+          return { kind: "assignee_not_member" as const };
+        }
+        throw error;
+      }
     },
 
     async setState(actorUserId, groupId, taskId, desiredState) {
@@ -538,6 +632,7 @@ export function createFirestoreTaskStore(
         async ({ access, task }) => {
           if (task.state === desiredState) {
             await commit([
+              ...await activeUserFences(actorUserId),
               ...accessVerifies(access),
               {
                 verify: task.path,
@@ -558,6 +653,7 @@ export function createFirestoreTaskStore(
           };
           const updated = await resolveOpenTaskAssignee(transitioned);
           await commit([
+            ...await activeUserFences(actorUserId),
             ...guardedAccessWrites(access),
             {
               update: {
@@ -582,6 +678,7 @@ export function createFirestoreTaskStore(
         () => readTaskAccess(actorUserId, groupId, taskId),
         async ({ access, task }) => {
           await commit([
+            ...await activeUserFences(actorUserId),
             ...guardedAccessWrites(access),
             {
               delete: task.path,
@@ -595,42 +692,52 @@ export function createFirestoreTaskStore(
     },
 
     async list(actorUserId, groupId) {
-      if (!(await readAccess(actorUserId, groupId))) {
-        return { kind: "not_found" as const };
-      }
-      const tasks: OpenJobTask[] = [];
-      const membershipReads = new Map<
-        string,
-        Promise<FirestoreDocument | null>
-      >();
-      let pageToken: string | null = null;
-      do {
-        const parameters = new URLSearchParams({
-          pageSize: "500",
-          orderBy: "__name__",
-        });
-        if (pageToken !== null) parameters.set("pageToken", pageToken);
-        const response = await firestore.request(
-          `${groupPath(groupId)}/tasks?${parameters}`,
-        );
-        const page = (await response.json()) as {
-          documents?: FirestoreDocument[];
-          nextPageToken?: string;
-        };
-        const pageTasks = await Promise.all(
-          (page.documents ?? []).map(async (document) =>
-            publicTask(
-              await resolveOpenTaskAssignee(
-                parseTask(document, document.name),
-                membershipReads,
+      for (let attempt = 0; attempt < MAX_CONCURRENT_ATTEMPTS; attempt += 1) {
+        const access = await readAccess(actorUserId, groupId);
+        if (!access) {
+          await assertActiveUser(firestore, actorUserId);
+          return { kind: "not_found" as const };
+        }
+        const tasks: OpenJobTask[] = [];
+        const membershipReads = new Map<
+          string,
+          Promise<FirestoreDocument | null>
+        >();
+        let pageToken: string | null = null;
+        do {
+          const parameters = new URLSearchParams({
+            pageSize: "500",
+            orderBy: "__name__",
+          });
+          if (pageToken !== null) parameters.set("pageToken", pageToken);
+          const response = await firestore.request(
+            `${groupPath(groupId)}/tasks?${parameters}`,
+          );
+          const page = (await response.json()) as {
+            documents?: FirestoreDocument[];
+            nextPageToken?: string;
+          };
+          const pageTasks = await Promise.all(
+            (page.documents ?? []).map(async (document) =>
+              publicTask(
+                await resolveOpenTaskAssignee(
+                  parseTask(document, document.name),
+                  membershipReads,
+                ),
               ),
             ),
-          ),
-        );
-        tasks.push(...pageTasks);
-        pageToken = page.nextPageToken ?? null;
-      } while (pageToken !== null);
-      return { kind: "found" as const, tasks };
+          );
+          tasks.push(...pageTasks);
+          pageToken = page.nextPageToken ?? null;
+        } while (pageToken !== null);
+        const visibility = await accessVisibility(groupId, access);
+        if (visibility === "changed") continue;
+        await assertActiveUser(firestore, actorUserId);
+        return visibility === "same"
+          ? { kind: "found" as const, tasks }
+          : { kind: "not_found" as const };
+      }
+      throw new Error("Task list read could not resolve concurrent writes.");
     },
   });
 }

@@ -506,8 +506,9 @@ export function OpenJobApp({
     if (!isCurrentAuthEpoch(epoch)) return;
     setSigningIn(method);
     setError("");
+    let proof: AuthCredentialProof | null = null;
     try {
-      await auth.signIn(method);
+      proof = await auth.signIn(method);
       if (!isCurrentAuthEpoch(epoch)) return;
       if (authObserverFailed) {
         beginAuthBoundary();
@@ -521,6 +522,13 @@ export function OpenJobApp({
         setError(providerError(signInError, method));
       }
     } finally {
+      try {
+        await proof?.dispose();
+      } catch (cleanupError) {
+        if (isCurrentAuthEpoch(epoch)) {
+          setError(providerError(cleanupError, method));
+        }
+      }
       setSigningIn(null);
     }
   }

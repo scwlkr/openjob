@@ -22,10 +22,12 @@ const expectedOperations = [
   "get /api/v1/groups/{groupId}/tasks/{taskId} getGroupTask",
   "get /api/v1/invites/{token} inspectInviteLink",
   "get /api/v1/me getMe",
+  "get /api/v1/me/deletion getAccountDeletionStatus",
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "get /api/v1/me/sign-in-methods listSignInMethods",
   "patch /api/v1/groups/{groupId} renameGroup",
   "patch /api/v1/groups/{groupId}/tasks/{taskId} updateGroupTask",
+  "patch /api/v1/me/deletion refreshAccountDeletionProvider",
   "patch /api/v1/me/notification-subscriptions/{installationId} setNotificationSubscriptionState",
   "post /api/v1/groups createGroup",
   "post /api/v1/groups/{groupId}/actions/end endGroup",
@@ -42,6 +44,7 @@ const expectedOperations = [
   "post /api/v1/me/deletion deleteCurrentUser",
   "post /api/v1/me/sign-in-methods linkSignInMethod",
   "put /api/v1/groups/{groupId}/tasks/{taskId}/state setGroupTaskState",
+  "put /api/v1/me/deletion mintAccountDeletionStatusToken",
   "put /api/v1/me/username claimUsername",
   "put /api/v1/me/notification-subscriptions/{installationId} registerNotificationSubscription",
 ].sort();
@@ -55,6 +58,12 @@ const httpMethods = new Set([
   "post",
   "put",
   "trace",
+]);
+
+const accountDeletionPendingResponseExceptions = new Set([
+  "get /api/v1/me/deletion",
+  "patch /api/v1/me/deletion",
+  "put /api/v1/me/deletion",
 ]);
 
 function operations(contract) {
@@ -92,15 +101,37 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   );
   assert.deepEqual(contract.security, [{ firebaseBearer: [] }]);
   assert.equal(contract.components.securitySchemes.firebaseBearer.scheme, "bearer");
+  assert.equal(
+    contract.components.securitySchemes.deletionStatusBearer.scheme,
+    "bearer",
+  );
 
   for (const { method, path, operation } of actualOperations) {
     const location = `${method.toUpperCase()} ${path}`;
+    const operationKey = `${method} ${path}`;
     assert.match(operation.operationId, /^[a-z][A-Za-z0-9]+$/, location);
-    assert.match(operation["x-openjob-authorization"], /^(authenticated|member|admin)$/, location);
+    assert.match(
+      operation["x-openjob-authorization"],
+      /^(authenticated|member|admin|capability)$/,
+      location,
+    );
     assert.equal(typeof operation["x-openjob-retryable"], "boolean", location);
 
     for (const status of ["401", "429", "500"]) {
       assert.ok(operation.responses[status], `${location} declares ${status}`);
+    }
+    if (!accountDeletionPendingResponseExceptions.has(operationKey)) {
+      const deletionPending = operation.responses["410"];
+      assert.ok(
+        deletionPending,
+        `${location} declares the deletion-pending access fence`,
+      );
+      assert.equal(
+        deletionPending.content["application/json"].schema.allOf[1]
+          .properties.error.properties.code.const,
+        "account_deletion_pending",
+        `${location} validates the deletion-pending response code`,
+      );
     }
 
     const success = Object.entries(operation.responses).find(([status]) => /^2\d\d$/.test(status));
@@ -145,6 +176,183 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   assert.match(
     securitySchemes.firebaseBearer.description,
     /Google and Apple\s+sign-in\s+providers/,
+  );
+  assert.match(
+    securitySchemes.deletionStatusBearer.description,
+    /never appears in a URL or log/,
+  );
+  const deletionStatus = contract.paths["/api/v1/me/deletion"].get;
+  const deletionRefresh = contract.paths["/api/v1/me/deletion"].patch;
+  const deletionPrepare = contract.paths["/api/v1/me/deletion"].put;
+  const deletionStart = contract.paths["/api/v1/me/deletion"].post;
+  assert.deepEqual(deletionStatus.security, [{ deletionStatusBearer: [] }]);
+  assert.deepEqual(deletionRefresh.security, [{ deletionStatusBearer: [] }]);
+  assert.equal(deletionStatus["x-openjob-authorization"], "capability");
+  assert.equal(deletionRefresh["x-openjob-authorization"], "capability");
+  assert.equal(deletionPrepare["x-openjob-authorization"], "authenticated");
+  const statusBinding = deletionStart.parameters.find(
+    ({ in: location, name }) =>
+      location === "header" && name === "x-openjob-deletion-status",
+  );
+  assert.ok(statusBinding);
+  assert.equal(statusBinding.required, true);
+  assert.match(statusBinding.description, /exact capability returned by PUT/);
+  assert.equal(
+    schemas.AccountDeletionPending.required.includes("statusToken"),
+    true,
+  );
+  assert.equal(
+    schemas.AccountDeletionPending.required.includes(
+      "reauthenticationProviders",
+    ),
+    true,
+  );
+  assert.equal(
+    schemas.AccountDeletionStatusPending.required.includes(
+      "reauthenticationProviders",
+    ),
+    true,
+  );
+  assert.equal(
+    schemas.AccountDeletionPending.properties.reauthenticationProviders
+      .uniqueItems,
+    true,
+  );
+  assert.deepEqual(
+    schemas.AccountDeletionPending.properties.reauthenticationProviders.items
+      .enum,
+    ["apple", "google"],
+  );
+  assert.deepEqual(
+    schemas.AccountDeletionStatusNotStarted.required,
+    ["status", "submissionExpired", "submissionExpiresAt"],
+  );
+  assert.equal(
+    schemas.AccountDeletionStatusNotStarted.properties.submissionExpired.type,
+    "boolean",
+  );
+  assert.deepEqual(Object.keys(deletionPrepare.responses).sort(), [
+    "200",
+    "202",
+    "400",
+    "401",
+    "409",
+    "429",
+    "500",
+    "503",
+  ]);
+  assert.deepEqual(Object.keys(deletionRefresh.responses).sort(), [
+    "200",
+    "202",
+    "400",
+    "401",
+    "429",
+    "500",
+    "503",
+  ]);
+  assert.deepEqual(
+    deletionRefresh.requestBody.content["application/json"].schema,
+    schemas.RefreshAccountDeletionProviderInput,
+  );
+  assert.equal(Boolean(deletionStart.responses["410"]), true);
+  assert.doesNotMatch(
+    `${deletionStatus.description}\n${deletionRefresh.description}\n${deletionPrepare.description}\n${deletionStart.description}`,
+    /15-minute|drain window|legacy clients/i,
+  );
+  assert.deepEqual(
+    schemas.AccountDeletionStatus.oneOf
+      .map(({ properties }) => properties.status.const)
+      .sort(),
+    ["completed", "not_started", "pending"],
+  );
+  assert.equal(
+    schemas.AccountDeletionStatusToken.pattern,
+    "^v1\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+  );
+  assert.match(
+    schemas.AccountDeletionStatusToken.description,
+    /browser localStorage/,
+  );
+  assert.doesNotMatch(
+    schemas.AccountDeletionStatusToken.description,
+    /protected local storage/,
+  );
+  assert.match(
+    schemas.AccountDeletionStatusToken.description,
+    /GET or PATCH Authorization[\s\S]*POST\s+x-openjob-deletion-status/,
+  );
+  const [googleRevocation, appleAccessRevocation, appleCodeRevocation] =
+    schemas.AccountDeletionRevocationProof.oneOf;
+  assert.deepEqual(googleRevocation.required, ["idToken", "kind", "value"]);
+  assert.equal(googleRevocation.properties.idToken.writeOnly, true);
+  assert.deepEqual(appleAccessRevocation.required, [
+    "clientId",
+    "kind",
+    "value",
+  ]);
+  assert.deepEqual(appleCodeRevocation.required, [
+    "clientId",
+    "idToken",
+    "kind",
+    "value",
+  ]);
+  assert.equal(appleCodeRevocation.properties.redirectUri.writeOnly, true);
+  const [googleCredential, appleCredential] =
+    schemas.AccountDeletionCredentialInput.oneOf;
+  assert.equal(googleCredential.properties.provider.const, "google");
+  assert.deepEqual(
+    googleCredential.properties.revocation,
+    schemas.GoogleAccountDeletionRevocationProof,
+  );
+  assert.equal(appleCredential.properties.provider.const, "apple");
+  assert.deepEqual(
+    appleCredential.properties.revocation.oneOf,
+    [
+      schemas.AppleAccessTokenAccountDeletionRevocationProof,
+      schemas.AppleAuthorizationCodeAccountDeletionRevocationProof,
+    ],
+  );
+  const validateCredential = compileSchema(
+    schemas.AccountDeletionCredentialInput,
+  );
+  assert.equal(validateCredential({
+    credentialToken: "firebase-proof",
+    provider: "google",
+    revocation: {
+      clientId: "dev.openjob.auth",
+      kind: "access_token",
+      value: "apple-access-token",
+    },
+  }), false);
+  assert.equal(validateCredential({
+    credentialToken: "firebase-proof",
+    provider: "apple",
+    revocation: {
+      idToken: "google-id-token",
+      kind: "access_token",
+      value: "google-access-token",
+    },
+  }), false);
+  assert.equal(contract.components.headers.NoStore.schema.const, "no-store");
+  for (const responseName of [
+    "AccountDeletionCompletedResponse",
+    "AccountDeletionPendingResponse",
+    "AccountDeletionStatusResponse",
+    "AccountDeletionStatusTokenResponse",
+    "AccountDeletionUnavailableResponse",
+    "UnauthorizedResponse",
+    "RateLimitedResponse",
+    "InternalErrorResponse",
+  ]) {
+    assert.deepEqual(
+      contract.components.responses[responseName].headers["Cache-Control"],
+      contract.components.headers.NoStore,
+      responseName,
+    );
+  }
+  assert.match(
+    contract.components.responses.UnauthorizedResponse.description,
+    /deletion status requires its opaque\s+device-held capability/,
   );
   assert.deepEqual(
     [parameters.Limit.schema.default, parameters.Limit.schema.maximum],
@@ -193,6 +401,8 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
   );
   const linkOperation =
     contract.paths["/api/v1/me/sign-in-methods"].post;
+  const listSignInMethodsOperation =
+    contract.paths["/api/v1/me/sign-in-methods"].get;
   assert.match(
     linkOperation.description,
     /Authorization always carries the current primary session/,
@@ -209,6 +419,8 @@ test("shared v1 representations lock identity, pagination, errors, dates, and as
     contract.components.responses.LinkSignInMethodConflictResponse.description,
     /link_target_changed/,
   );
+  assert.ok(listSignInMethodsOperation.responses["410"]);
+  assert.ok(linkOperation.responses["410"]);
 
   const requiredConflictCodes = [
     "assignee_not_member",
@@ -320,12 +532,46 @@ test("contract schemas enforce normalized domain rules and status-specific error
     }),
     false,
   );
+  const signInConflictOperations = [
+    "banGroupUser",
+    "claimUsername",
+    "createCurrentUser",
+    "createGroup",
+    "createGroupTask",
+    "deleteCurrentUser",
+    "deleteGroupTask",
+    "demoteGroupMember",
+    "endGroup",
+    "getGroup",
+    "getGroupInviteLink",
+    "getGroupTask",
+    "getMe",
+    "getNotificationSubscription",
+    "inspectInviteLink",
+    "joinGroupWithInviteLink",
+    "kickGroupMember",
+    "leaveGroup",
+    "linkSignInMethod",
+    "listGroupBans",
+    "listGroupMembers",
+    "listGroupTasks",
+    "listGroups",
+    "listSignInMethods",
+    "mintAccountDeletionStatusToken",
+    "promoteGroupMember",
+    "registerNotificationSubscription",
+    "renameGroup",
+    "rotateGroupInviteLink",
+    "setGroupTaskState",
+    "setNotificationSubscriptionState",
+    "unbanGroupUser",
+    "updateGroupTask",
+  ];
   const expectedConflictCodes = new Map(
-    operations(contract)
-      .map(({ operation }) => [
-        operation.operationId,
-        ["sign_in_method_unrecognized"],
-      ]),
+    signInConflictOperations.map((operationId) => [
+      operationId,
+      ["sign_in_method_unrecognized"],
+    ]),
   );
   const domainConflictCodes = new Map([
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],

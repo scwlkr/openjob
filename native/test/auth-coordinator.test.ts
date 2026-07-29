@@ -31,6 +31,28 @@ const user = {
   username: "walker",
   usernameRequired: false,
 };
+const deletionStatusToken =
+  "v1.deletionStatusCapability.signaturePayload";
+const submissionExpiresAt = "2026-07-28T12:05:00.000Z";
+const deletionReceipt = {
+  phase: "prepared" as const,
+  statusToken: deletionStatusToken,
+  version: 1 as const,
+};
+const submittingDeletionReceipt = {
+  ...deletionReceipt,
+  phase: "submitting" as const,
+};
+const completedDeletionReceipt = {
+  ...deletionReceipt,
+  phase: "completed" as const,
+};
+const pendingDeletionStatus = {
+  deadline: "2026-08-04T12:00:00.000Z",
+  reauthenticationProviders: [] as Array<"apple" | "google">,
+  requestedAt: "2026-07-28T12:00:00.000Z",
+  status: "pending" as const,
+};
 
 function createDependencies(
   overrides: Partial<NativeAuthDependencies> = {},
@@ -39,12 +61,15 @@ function createDependencies(
   clearProviderSession: jest.Mock;
   clearStoredSession: jest.Mock;
   createUser: jest.Mock;
+  deleteUser: jest.Mock;
   exchangeProviderCredential: jest.Mock;
   getMe: jest.Mock;
   linkSignInMethod: jest.Mock;
   listSignInMethods: jest.Mock;
   loadStoredSession: jest.Mock;
+  prepareDeletionStatus: jest.Mock;
   purgeLocalDomainCache: jest.Mock;
+  refreshDeletionProvider: jest.Mock;
   refreshSession: jest.Mock;
   saveStoredSession: jest.Mock;
   signInWithQaPassword: jest.Mock;
@@ -53,6 +78,7 @@ function createDependencies(
   return {
     claimUsername: jest.fn(async () => user),
     clearCleanupPending: jest.fn(async () => undefined),
+    clearDeletionReceipt: jest.fn(async () => undefined),
     clearProviderSession: jest.fn(async () => undefined),
     clearStoredSession: jest.fn(async () => undefined),
     createUser: jest.fn(async () => user),
@@ -61,6 +87,7 @@ function createDependencies(
       credential.provider === "google" ? googleSession : appleSession,
     ),
     getMe: jest.fn(async () => user),
+    getDeletionStatus: jest.fn(async () => ({ status: "completed" as const })),
     linkSignInMethod: jest.fn(async () => user),
     listGroups: jest.fn(async () => []),
     listMembers: jest.fn(async () => []),
@@ -72,12 +99,22 @@ function createDependencies(
     })),
     loadLocalTaskListCache: jest.fn(async () => null),
     loadCleanupPending: jest.fn(async () => false),
+    loadDeletionReceipt: jest.fn(async () => null),
     loadStoredSession: jest.fn(async () => null),
     markCleanupPending: jest.fn(async () => undefined),
     now: () => 1_000,
+    prepareDeletionStatus: jest.fn(async () => ({
+      status: "not_started" as const,
+      statusToken: deletionStatusToken,
+      submissionExpiresAt,
+    })),
     purgeLocalDomainCache: jest.fn(async () => undefined),
+    refreshDeletionProvider: jest.fn(async () => ({
+      status: "completed" as const,
+    })),
     refreshSession: jest.fn(async () => googleSession),
     saveStoredSession: jest.fn(async () => undefined),
+    saveDeletionReceipt: jest.fn(async () => undefined),
     saveLocalTaskListCache: jest.fn(async () => undefined),
     signInWithQaPassword: jest.fn(async () => qaPasswordSession),
     signInWithProvider: jest.fn(async (provider) => ({
@@ -90,12 +127,15 @@ function createDependencies(
     clearProviderSession: jest.Mock;
     clearStoredSession: jest.Mock;
     createUser: jest.Mock;
+    deleteUser: jest.Mock;
     exchangeProviderCredential: jest.Mock;
     getMe: jest.Mock;
     linkSignInMethod: jest.Mock;
     listSignInMethods: jest.Mock;
     loadStoredSession: jest.Mock;
+    prepareDeletionStatus: jest.Mock;
     purgeLocalDomainCache: jest.Mock;
+    refreshDeletionProvider: jest.Mock;
     refreshSession: jest.Mock;
     saveStoredSession: jest.Mock;
     signInWithQaPassword: jest.Mock;
@@ -1513,6 +1553,491 @@ test("serializes a provider prompt before revocation cleanup", async () => {
   ]);
 });
 
+test("recovers a pending deletion after sign-in on a device without its receipt", async () => {
+  const pendingStatusToken = "v1.pendingJobCapability.signaturePayload";
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus: jest.fn(async () => {
+      events.push("prepare");
+      return {
+        ...pendingDeletionStatus,
+        statusToken: pendingStatusToken,
+      };
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async () => {
+      events.push("save-receipt");
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledWith(
+    "google-id-token",
+    {
+      credentialToken: "google-id-token",
+      provider: "google",
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token",
+        value: "fresh-google-access-token",
+      },
+    },
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith({
+    phase: "submitting",
+    statusToken: pendingStatusToken,
+    version: 1,
+  });
+  expect(dependencies.listSignInMethods).not.toHaveBeenCalled();
+  expect(dependencies.saveStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(events).toEqual(["prepare", "save-receipt", "purge"]);
+});
+
+test("accepts a completed deletion race during proof-bound lost-receipt recovery", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus: jest.fn(async () => {
+      events.push("prepare");
+      return { status: "completed" as const };
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-completed",
+  });
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledWith(
+    "google-id-token",
+    {
+      credentialToken: "google-id-token",
+      provider: "google",
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token",
+        value: "fresh-google-access-token",
+      },
+    },
+  );
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(events).toEqual(["prepare", "purge"]);
+});
+
+test("retries a transient lost-receipt PUT with the exact same in-memory provider proof while access stays purged", async () => {
+  const pendingStatusToken = "v1.pendingJobCapability.signaturePayload";
+  const events: string[] = [];
+  const prepareDeletionStatus = jest
+    .fn()
+    .mockImplementationOnce(async () => {
+      events.push("prepare-1");
+      throw new OpenJobApiError(
+        503,
+        "request_failed",
+        "OpenJob could not complete the request.",
+      );
+    })
+    .mockImplementationOnce(async () => {
+      events.push("prepare-2");
+      return {
+        ...pendingDeletionStatus,
+        statusToken: pendingStatusToken,
+      };
+    });
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus,
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async () => {
+      events.push("save-receipt");
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "proof-retry",
+  });
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(prepareDeletionStatus).toHaveBeenCalledTimes(2);
+  expect(prepareDeletionStatus.mock.calls[1][0]).toBe(
+    prepareDeletionStatus.mock.calls[0][0],
+  );
+  expect(prepareDeletionStatus.mock.calls[1][1]).toBe(
+    prepareDeletionStatus.mock.calls[0][1],
+  );
+  expect(prepareDeletionStatus.mock.calls[1]).toEqual([
+    "google-id-token",
+    {
+      credentialToken: "google-id-token",
+      provider: "google",
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token",
+        value: "fresh-google-access-token",
+      },
+    },
+  ]);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith({
+    phase: "submitting",
+    statusToken: pendingStatusToken,
+    version: 1,
+  });
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(2);
+  expect(events).toEqual([
+    "prepare-1",
+    "purge",
+    "prepare-2",
+    "save-receipt",
+    "purge",
+  ]);
+});
+
+test("bounds transient lost-receipt proof retries and then requires a new interactive provider sign-in", async () => {
+  const prepareDeletionStatus = jest.fn(async () => {
+    throw new OpenJobApiError(
+      503,
+      "request_failed",
+      "OpenJob could not complete the request.",
+    );
+  });
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus,
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "proof-retry",
+  });
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "proof-retry",
+  });
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "signed-out",
+  });
+  expect(prepareDeletionStatus).toHaveBeenCalledTimes(3);
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(3);
+});
+
+test("expires an in-memory lost-receipt proof after five minutes without resubmitting it", async () => {
+  let now = 1_000;
+  const prepareDeletionStatus = jest.fn(async () => {
+    throw new OpenJobApiError(
+      503,
+      "request_failed",
+      "OpenJob could not complete the request.",
+    );
+  });
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    now: () => now,
+    prepareDeletionStatus,
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "proof-retry",
+  });
+  now += 5 * 60_000;
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  expect(prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(2);
+});
+
+test("drops a permanently invalid lost-receipt response instead of resubmitting sensitive proof", async () => {
+  const prepareDeletionStatus = jest.fn(async () => {
+    throw new OpenJobApiError(
+      502,
+      "invalid_response",
+      "OpenJob returned an invalid deletion status.",
+    );
+  });
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus,
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "signed-out",
+  });
+  expect(prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+});
+
+test("a Firebase-only restore cannot recover a lost pending receipt without fresh provider proof", async () => {
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    loadStoredSession: jest.fn(async () => ({
+      ownerUserId: user.userId,
+      provider: "google" as const,
+      refreshToken: "google-refresh-token",
+      version: 2 as const,
+    })),
+    prepareDeletionStatus: jest.fn(async () => {
+      throw new OpenJobApiError(
+        401,
+        "fresh_authentication_required",
+        "Freshly authenticate the required Sign-in Method.",
+      );
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.restore()).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  expect(dependencies.prepareDeletionStatus).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+});
+
+test("a QA-only sign-in cannot recover a lost pending receipt without fresh provider proof", async () => {
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(
+    coordinator.signInWithQaPassword("qa@example.test", "qa-password"),
+  ).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  expect(dependencies.prepareDeletionStatus).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+});
+
+test("interactive recovery without revocation proof fails closed and prompts provider sign-in again", async () => {
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deletion-pending",
+  });
+  expect(dependencies.prepareDeletionStatus).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+});
+
+test("fails closed when a recovered pending-deletion receipt cannot be stored", async () => {
+  const pendingStatusToken = "v1.pendingJobCapability.signaturePayload";
+  const saveError = new Error("Keychain unavailable");
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    getMe: jest.fn(async () => {
+      throw new OpenJobApiError(
+        410,
+        "account_deletion_pending",
+        "Account deletion is in progress.",
+      );
+    }),
+    prepareDeletionStatus: jest.fn(async () => {
+      events.push("prepare");
+      return {
+        ...pendingDeletionStatus,
+        statusToken: pendingStatusToken,
+      };
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async () => {
+      events.push("save-receipt");
+      throw saveError;
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "fresh-google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "storage-unavailable",
+  });
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith({
+    phase: "submitting",
+    statusToken: pendingStatusToken,
+    version: 1,
+  });
+  expect(dependencies.listSignInMethods).not.toHaveBeenCalled();
+  expect(dependencies.saveStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(events).toEqual(["prepare", "save-receipt", "purge"]);
+});
+
 test("deletes a User only after fresh proof for every linked method and purges local data", async () => {
   const dependencies = createDependencies({
     listSignInMethods: jest.fn(async () => ["google" as const, "apple" as const]),
@@ -1521,9 +2046,14 @@ test("deletes a User only after fresh proof for every linked method and purges l
       provider,
       revocation:
         provider === "google"
-          ? { kind: "access_token" as const, value: "google-access" }
+          ? {
+              idToken: "google-provider-token",
+              kind: "access_token" as const,
+              value: "google-access",
+            }
           : {
               clientId: "dev.openjob.app",
+              idToken: "apple-provider-token",
               kind: "authorization_code" as const,
               value: "apple-code",
             },
@@ -1533,44 +2063,842 @@ test("deletes a User only after fresh proof for every linked method and purges l
   await coordinator.signIn("google");
 
   await expect(coordinator.deleteUser()).resolves.toEqual({
-    kind: "signed-out",
-    reason: "deleted",
+    kind: "deletion-completed",
   });
-  expect(dependencies.deleteUser).toHaveBeenCalledWith("google-id-token", [
-    {
-      credentialToken: "apple-id-token",
-      provider: "apple",
-      revocation: {
-        clientId: "dev.openjob.app",
-        kind: "authorization_code",
-        value: "apple-code",
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledWith(
+    "google-id-token",
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    1,
+    deletionReceipt,
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    2,
+    submittingDeletionReceipt,
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    3,
+    completedDeletionReceipt,
+  );
+  expect(dependencies.deleteUser).toHaveBeenCalledWith(
+    "google-id-token",
+    [
+      {
+        credentialToken: "apple-id-token",
+        provider: "apple",
+        revocation: {
+          clientId: "dev.openjob.app",
+          idToken: "apple-provider-token",
+          kind: "authorization_code",
+          value: "apple-code",
+        },
       },
-    },
+      {
+        credentialToken: "google-id-token",
+        provider: "google",
+        revocation: {
+          idToken: "google-provider-token",
+          kind: "access_token",
+          value: "google-access",
+        },
+      },
+    ],
+    deletionStatusToken,
+  );
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+});
+
+test("reports pending deletion after access ends and still purges local data", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    deleteUser: jest.fn(async () => {
+      events.push("delete");
+      return {
+        ...pendingDeletionStatus,
+        statusToken: deletionStatusToken,
+      };
+    }),
+    prepareDeletionStatus: jest.fn(async () => {
+      events.push("prepare");
+      return {
+        status: "not_started" as const,
+        statusToken: deletionStatusToken,
+        submissionExpiresAt: "2026-07-28T12:05:00.000Z",
+      };
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async () => {
+      events.push("save-receipt");
+    }),
+    signInWithProvider: jest.fn(async () => {
+      events.push("provider");
+      return {
+        idToken: "google-provider-token",
+        provider: "google" as const,
+        revocation: {
+          idToken: "google-provider-token",
+          kind: "access_token" as const,
+          value: "google-access",
+        },
+      };
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+  events.length = 0;
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    1,
+    deletionReceipt,
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    2,
+    submittingDeletionReceipt,
+  );
+  expect(events).toEqual([
+    "prepare",
+    "save-receipt",
+    "provider",
+    "save-receipt",
+    "delete",
+    "purge",
+  ]);
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+});
+
+test("reauthenticates only the requested pending provider and resumes the same deletion", async () => {
+  const pendingReauthentication = {
+    ...pendingDeletionStatus,
+    reauthenticationProviders: ["google" as const],
+  };
+  const dependencies = createDependencies({
+    getDeletionStatus: jest.fn(async () => pendingReauthentication),
+    loadDeletionReceipt: jest.fn(async () => submittingDeletionReceipt),
+    refreshDeletionProvider: jest.fn(async () => ({
+      ...pendingDeletionStatus,
+      statusToken: deletionStatusToken,
+    })),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "raw-google-id-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token" as const,
+        value: "google-access-token",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(
+    coordinator.reauthenticateDeletionProvider("google"),
+  ).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: [],
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+  expect(dependencies.signInWithProvider).toHaveBeenCalledWith("google");
+  expect(dependencies.refreshDeletionProvider).toHaveBeenCalledWith(
+    deletionStatusToken,
     {
       credentialToken: "google-id-token",
       provider: "google",
-      revocation: { kind: "access_token", value: "google-access" },
+      revocation: {
+        idToken: "raw-google-id-token",
+        kind: "access_token",
+        value: "google-access-token",
+      },
     },
+  );
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(2);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(2);
+});
+
+test("an already-pending PUT stores its job receipt and ends access before provider auth", async () => {
+  const events: string[] = [];
+  const pendingStatusToken = "v1.pendingJobCapability.signaturePayload";
+  const pendingReceipt = {
+    phase: "submitting" as const,
+    statusToken: pendingStatusToken,
+    version: 1 as const,
+  };
+  const signInWithProvider = jest.fn(async () => ({
+    idToken: "google-provider-token",
+    provider: "google" as const,
+  }));
+  const dependencies = createDependencies({
+    prepareDeletionStatus: jest.fn(async () => {
+      events.push("prepare");
+      return {
+        ...pendingDeletionStatus,
+        statusToken: pendingStatusToken,
+      };
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async (receipt) => {
+      events.push(`save-${receipt.phase}`);
+    }),
+    signInWithProvider,
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+  events.length = 0;
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(events).toEqual(["prepare", "save-submitting", "purge"]);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith(
+    pendingReceipt,
+  );
+  expect(signInWithProvider).toHaveBeenCalledTimes(1);
+  expect(dependencies.exchangeProviderCredential).toHaveBeenCalledTimes(1);
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+});
+
+test("an already-pending PUT still purges access when its job receipt cannot be saved", async () => {
+  const saveError = new Error("Keychain unavailable");
+  const signInWithProvider = jest.fn(async () => ({
+    idToken: "google-provider-token",
+    provider: "google" as const,
+  }));
+  const dependencies = createDependencies({
+    getDeletionStatus: jest.fn(async () => pendingDeletionStatus),
+    prepareDeletionStatus: jest.fn(async () => ({
+      ...pendingDeletionStatus,
+      statusToken: "v1.pendingJobCapability.signaturePayload",
+    })),
+    saveDeletionReceipt: jest
+      .fn()
+      .mockRejectedValueOnce(saveError)
+      .mockResolvedValueOnce(undefined),
+    signInWithProvider,
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "storage-unavailable",
+  });
+  expect(signInWithProvider).toHaveBeenCalledTimes(1);
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
+
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledTimes(2);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenLastCalledWith({
+    phase: "submitting",
+    statusToken: "v1.pendingJobCapability.signaturePayload",
+    version: 1,
+  });
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(2);
+  expect(signInWithProvider).toHaveBeenCalledTimes(1);
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+});
+
+test("serializes deletion attempts so status capabilities cannot interleave", async () => {
+  let finishPost: ((result: { status: "completed" }) => void) | undefined;
+  let markPostStarted: (() => void) | undefined;
+  const postStarted = new Promise<void>((resolve) => {
+    markPostStarted = resolve;
+  });
+  const dependencies = createDependencies({
+    deleteUser: jest.fn(
+      () =>
+        new Promise<{ status: "completed" }>((resolve) => {
+          markPostStarted?.();
+          finishPost = resolve;
+        }),
+    ),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  const first = coordinator.deleteUser();
+  const second = coordinator.deleteUser();
+  await postStarted;
+
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledTimes(2);
+  expect(dependencies.deleteUser).toHaveBeenCalledTimes(1);
+  finishPost?.({ status: "completed" });
+  await expect(first).resolves.toEqual({ kind: "deletion-completed" });
+  await expect(second).rejects.toThrow(
+    "An authenticated OpenJob User is required.",
+  );
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.deleteUser).toHaveBeenCalledTimes(1);
+});
+
+test("does not start deletion or purge when its prepared receipt cannot be persisted", async () => {
+  const saveError = new Error("Keychain unavailable");
+  const dependencies = createDependencies({
+    saveDeletionReceipt: jest.fn(async () => {
+      throw saveError;
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).rejects.toBe(saveError);
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith(
+    deletionReceipt,
+  );
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.clearProviderSession).not.toHaveBeenCalled();
+  expect(dependencies.signInWithProvider).toHaveBeenCalledTimes(1);
+  await expect(coordinator.listGroups()).resolves.toEqual([]);
+});
+
+test("persists prepared intent before fresh provider authentication", async () => {
+  const providerError = new ProviderSignInError("cancelled");
+  const signInWithProvider = jest
+    .fn()
+    .mockResolvedValueOnce({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+    })
+    .mockRejectedValueOnce(providerError);
+  const dependencies = createDependencies({ signInWithProvider });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).rejects.toBe(providerError);
+  expect(dependencies.prepareDeletionStatus).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenCalledWith(
+    deletionReceipt,
+  );
+  expect(signInWithProvider).toHaveBeenCalledTimes(2);
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+});
+
+test("does not prompt providers when the deletion preflight rejects an existing intent", async () => {
+  const preflightError = new OpenJobApiError(
+    409,
+    "deletion_pending",
+    "Deletion is already pending.",
+  );
+  const signInWithProvider = jest.fn(async () => ({
+    idToken: "google-provider-token",
+    provider: "google" as const,
+  }));
+  const dependencies = createDependencies({
+    prepareDeletionStatus: jest.fn(async () => {
+      throw preflightError;
+    }),
+    signInWithProvider,
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).rejects.toBe(preflightError);
+  expect(signInWithProvider).toHaveBeenCalledTimes(1);
+  expect(dependencies.saveDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+});
+
+test("does not POST when the submitting phase overwrite fails", async () => {
+  const saveError = new Error("Keychain overwrite unavailable");
+  const dependencies = createDependencies({
+    saveDeletionReceipt: jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(saveError),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).rejects.toBe(saveError);
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    1,
+    deletionReceipt,
+  );
+  expect(dependencies.saveDeletionReceipt).toHaveBeenNthCalledWith(
+    2,
+    submittingDeletionReceipt,
+  );
+  expect(dependencies.deleteUser).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+  await expect(coordinator.listGroups()).resolves.toEqual([]);
+});
+
+test("resolves a destructive POST response loss through the pre-persisted token", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    deleteUser: jest.fn(async () => {
+      events.push("delete");
+      throw new ProviderSignInError("offline");
+    }),
+    getDeletionStatus: jest.fn(async () => {
+      events.push("status");
+      return pendingDeletionStatus;
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+    saveDeletionReceipt: jest.fn(async () => {
+      events.push("save-receipt");
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(events).toEqual([
+    "save-receipt",
+    "save-receipt",
+    "delete",
+    "status",
+    "purge",
   ]);
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+});
+
+test("finishes failed local cleanup before restoring a pending deletion receipt", async () => {
+  const dependencies = createDependencies({
+    clearStoredSession: jest
+      .fn()
+      .mockRejectedValueOnce(new Error("Keychain unavailable"))
+      .mockResolvedValueOnce(undefined),
+    deleteUser: jest.fn(async () => ({
+      ...pendingDeletionStatus,
+      statusToken: deletionStatusToken,
+    })),
+    getDeletionStatus: jest.fn(async () => pendingDeletionStatus),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    kind: "cleanup-retry",
+  });
+  await expect(coordinator.signOut()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+});
+
+test("a new coordinator clears a prepared not-started receipt and restores auth without purging", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    clearDeletionReceipt: jest.fn(async () => {
+      events.push("clear-receipt");
+    }),
+    getDeletionStatus: jest.fn(async () => {
+      events.push("status");
+      return {
+        status: "not_started" as const,
+        submissionExpired: true as const,
+        submissionExpiresAt,
+      };
+    }),
+    loadDeletionReceipt: jest.fn(async () => deletionReceipt),
+    loadStoredSession: jest.fn(async () => ({
+      ownerUserId: user.userId,
+      provider: "google" as const,
+      refreshToken: "google-refresh-token",
+      version: 2 as const,
+    })),
+    refreshSession: jest.fn(async () => {
+      events.push("refresh-auth");
+      return googleSession;
+    }),
+  });
+  const relaunched = new NativeAuthCoordinator(dependencies);
+
+  await expect(relaunched.restoreCachedSession()).resolves.toBeNull();
+  await expect(relaunched.restore()).resolves.toEqual({
+    kind: "signed-in",
+    methods: ["google"],
+    user,
+  });
+  expect(events).toEqual(["status", "clear-receipt", "refresh-auth"]);
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).not.toHaveBeenCalled();
+});
+
+test("a not-started receipt remains access-blocking until its exact submission window expires", async () => {
+  const dependencies = createDependencies({
+    getDeletionStatus: jest.fn(async () => ({
+      status: "not_started" as const,
+      submissionExpired: false,
+      submissionExpiresAt,
+    })),
+    loadDeletionReceipt: jest.fn(async () => deletionReceipt),
+    loadStoredSession: jest.fn(async () => ({
+      ownerUserId: user.userId,
+      provider: "google" as const,
+      refreshToken: "google-refresh-token",
+      version: 2 as const,
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.restoreCachedSession()).resolves.toBeNull();
+  await expect(coordinator.restore()).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "unavailable",
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.loadStoredSession).not.toHaveBeenCalled();
   expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
   expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
   expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(1);
 });
 
-test("reports pending deletion after access ends and still purges local data", async () => {
+test("a new coordinator clears a canceled submitting receipt and restores auth", async () => {
   const dependencies = createDependencies({
-    deleteUser: jest.fn(async () => ({ status: "pending" as const })),
+    getDeletionStatus: jest.fn(async () => ({
+      status: "not_started" as const,
+      submissionExpired: true as const,
+      submissionExpiresAt,
+    })),
+    loadDeletionReceipt: jest.fn(async () => submittingDeletionReceipt),
+    loadStoredSession: jest.fn(async () => ({
+      ownerUserId: user.userId,
+      provider: "google" as const,
+      refreshToken: "google-refresh-token",
+      version: 2 as const,
+    })),
+  });
+  const relaunched = new NativeAuthCoordinator(dependencies);
+
+  await expect(relaunched.restore()).resolves.toEqual({
+    kind: "signed-in",
+    methods: ["google"],
+    user,
+  });
+  expect(dependencies.clearDeletionReceipt).toHaveBeenCalledTimes(1);
+  expect(dependencies.purgeLocalDomainCache).not.toHaveBeenCalled();
+});
+
+test("a new coordinator queries a pending receipt before purging and blocks sign-in", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    getDeletionStatus: jest.fn(async () => {
+      events.push("status");
+      return pendingDeletionStatus;
+    }),
+    loadDeletionReceipt: jest.fn(async () => deletionReceipt),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.restoreCachedSession()).resolves.toBeNull();
+  await expect(coordinator.restore()).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    deadline: pendingDeletionStatus.deadline,
+    kind: "deletion-pending",
+    reauthenticationProviders: pendingDeletionStatus.reauthenticationProviders,
+    requestedAt: pendingDeletionStatus.requestedAt,
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+  expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
+  expect(dependencies.loadStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(2);
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(2);
+  expect(dependencies.clearProviderSession).toHaveBeenCalledTimes(2);
+  expect(events.slice(0, 2)).toEqual(["status", "purge"]);
+});
+
+test.each([
+  ["offline", new ProviderSignInError("offline")],
+  [
+    "invalid-response",
+    new OpenJobApiError(502, "invalid_response", "Invalid response"),
+  ],
+])("purges and retains a submitting receipt when status refresh is %s", async (reason, error) => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    getDeletionStatus: jest.fn(async () => {
+      events.push("status");
+      throw error;
+    }),
+    loadDeletionReceipt: jest.fn(async () => submittingDeletionReceipt),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.refreshDeletionStatus()).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason,
+  });
+  expect(events).toEqual(["status", "purge"]);
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+});
+
+test("purges and blocks sign-in when the protected receipt cannot be decoded", async () => {
+  const events: string[] = [];
+  const dependencies = createDependencies({
+    loadDeletionReceipt: jest.fn(async () => {
+      events.push("load-receipt");
+      throw new ProviderSignInError("unavailable");
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.signIn("google")).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "unavailable",
+  });
+  expect(events).toEqual(["load-receipt", "purge"]);
+  expect(dependencies.signInWithProvider).not.toHaveBeenCalled();
+  expect(dependencies.clearStoredSession).toHaveBeenCalledTimes(1);
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+});
+
+test("a completed receipt survives termination before final UI render", async () => {
+  const events: string[] = [];
+  let storedReceipt:
+    | typeof completedDeletionReceipt
+    | typeof deletionReceipt
+    | typeof submittingDeletionReceipt
+    | null = null;
+  let releaseCompletedSave: (() => void) | undefined;
+  let markCompletedSaved: (() => void) | undefined;
+  const completedSaved = new Promise<void>((resolve) => {
+    markCompletedSaved = resolve;
+  });
+  const dependencies = createDependencies({
+    loadDeletionReceipt: jest.fn(async () => storedReceipt),
+    saveDeletionReceipt: jest.fn(async (receipt) => {
+      events.push(`save-${receipt.phase}`);
+      storedReceipt = receipt;
+      if (receipt.phase === "completed") {
+        markCompletedSaved?.();
+        await new Promise<void>((resolve) => {
+          releaseCompletedSave = resolve;
+        });
+      }
+    }),
+    purgeLocalDomainCache: jest.fn(async () => {
+      events.push("purge");
+    }),
     signInWithProvider: jest.fn(async () => ({
       idToken: "google-provider-token",
       provider: "google" as const,
-      revocation: { kind: "access_token" as const, value: "google-access" },
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
     })),
   });
   const coordinator = new NativeAuthCoordinator(dependencies);
   await coordinator.signIn("google");
-  await expect(coordinator.deleteUser()).resolves.toEqual({
-    kind: "signed-out",
-    reason: "deletion-pending",
+
+  const deletion = coordinator.deleteUser();
+  await completedSaved;
+  expect(storedReceipt).toEqual(completedDeletionReceipt);
+  expect(events).toEqual([
+    "save-prepared",
+    "save-submitting",
+    "purge",
+    "save-completed",
+  ]);
+
+  const relaunched = new NativeAuthCoordinator(dependencies);
+  const getMeCalls = dependencies.getMe.mock.calls.length;
+  await expect(relaunched.restoreCachedSession()).resolves.toBeNull();
+  await expect(relaunched.restore()).resolves.toEqual({
+    kind: "deletion-completed",
   });
-  expect(dependencies.purgeLocalDomainCache).toHaveBeenCalledTimes(1);
+  expect(dependencies.getDeletionStatus).not.toHaveBeenCalled();
+  expect(dependencies.getMe).toHaveBeenCalledTimes(getMeCalls);
+  expect(dependencies.refreshSession).not.toHaveBeenCalled();
+  expect(dependencies.loadStoredSession).not.toHaveBeenCalled();
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+
+  releaseCompletedSave?.();
+  await expect(deletion).resolves.toEqual({ kind: "deletion-completed" });
+});
+
+test("a failed completed-phase write retains submitting so relaunch re-proves completion", async () => {
+  let storedReceipt:
+    | typeof completedDeletionReceipt
+    | typeof deletionReceipt
+    | typeof submittingDeletionReceipt
+    | null = null;
+  let failCompletedSave = true;
+  const dependencies = createDependencies({
+    loadDeletionReceipt: jest.fn(async () => storedReceipt),
+    saveDeletionReceipt: jest.fn(async (receipt) => {
+      if (receipt.phase === "completed" && failCompletedSave) {
+        failCompletedSave = false;
+        throw new Error("Keychain unavailable");
+      }
+      storedReceipt = receipt;
+    }),
+    signInWithProvider: jest.fn(async () => ({
+      idToken: "google-provider-token",
+      provider: "google" as const,
+      revocation: {
+        idToken: "google-provider-token",
+        kind: "access_token" as const,
+        value: "google-access",
+      },
+    })),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+  await coordinator.signIn("google");
+
+  await expect(coordinator.deleteUser()).resolves.toEqual({
+    kind: "deletion-status-retry",
+    reason: "unavailable",
+  });
+  expect(storedReceipt).toEqual(submittingDeletionReceipt);
+
+  const relaunched = new NativeAuthCoordinator(dependencies);
+  await expect(relaunched.restore()).resolves.toEqual({
+    kind: "deletion-completed",
+  });
+  expect(dependencies.getDeletionStatus).toHaveBeenCalledWith(
+    deletionStatusToken,
+  );
+  expect(storedReceipt).toEqual(completedDeletionReceipt);
+  expect(dependencies.clearDeletionReceipt).not.toHaveBeenCalled();
+});
+
+test("acknowledgement alone clears a completed receipt and retries clear failure", async () => {
+  const clearDeletionReceipt = jest
+    .fn()
+    .mockRejectedValueOnce(new Error("Keychain unavailable"))
+    .mockResolvedValueOnce(undefined);
+  const dependencies = createDependencies({
+    clearDeletionReceipt,
+    loadDeletionReceipt: jest.fn(async () => completedDeletionReceipt),
+  });
+  const coordinator = new NativeAuthCoordinator(dependencies);
+
+  await expect(coordinator.restore()).resolves.toEqual({
+    kind: "deletion-completed",
+  });
+  expect(dependencies.getDeletionStatus).not.toHaveBeenCalled();
+  expect(clearDeletionReceipt).not.toHaveBeenCalled();
+
+  await expect(
+    coordinator.acknowledgeDeletionCompletion(),
+  ).resolves.toEqual({
+    kind: "deletion-clear-retry",
+    status: "completed",
+  });
+  await expect(
+    coordinator.acknowledgeDeletionCompletion(),
+  ).resolves.toEqual({
+    kind: "signed-out",
+    reason: "deleted",
+  });
+  expect(clearDeletionReceipt).toHaveBeenCalledTimes(2);
 });

@@ -1,5 +1,9 @@
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
+  InactiveUserError,
+  isInactiveUserError,
+} from "../db/user-history.ts";
+import {
   defaultRequestId,
   accountDeletionPendingResponse,
   errorResponse,
@@ -165,6 +169,10 @@ export type GroupStore = {
     | { kind: "open_tasks_assigned" }
   >;
   list(
+    userId: string,
+    options: { cursor: string | null; limit: number },
+  ): Promise<{ groups: OpenJobGroup[]; nextCursor: string | null }>;
+  listForDeletion(
     userId: string,
     options: { cursor: string | null; limit: number },
   ): Promise<{ groups: OpenJobGroup[]; nextCursor: string | null }>;
@@ -602,6 +610,16 @@ export function createV1GroupsApi({
         if (user.deletionPending) {
           return accountDeletionPendingResponse(requestId);
         }
+        const assertResponseUserIsActive = async () => {
+          const current = await users.resolve(identity);
+          if (
+            !current ||
+            current.userId !== user.userId ||
+            current.deletionPending
+          ) {
+            throw new InactiveUserError(user.userId);
+          }
+        };
         const url = new URL(request.url);
 
         if (url.pathname === "/api/v1/groups") {
@@ -619,6 +637,7 @@ export function createV1GroupsApi({
               }
               throw error;
             }
+            await assertResponseUserIsActive();
             return jsonResponse({
               data: page.groups,
               nextCursor: page.nextCursor,
@@ -639,6 +658,7 @@ export function createV1GroupsApi({
           const { groupId, resource } = groupPath;
           if (resource === "group" && request.method === "GET") {
             const group = await groups.get(user.userId, groupId);
+            await assertResponseUserIsActive();
             if (group) return jsonResponse({ data: group });
             return groupNotFound(requestId);
           }
@@ -681,6 +701,7 @@ export function createV1GroupsApi({
                 };
               }),
             );
+            await assertResponseUserIsActive();
             return jsonResponse({
               data: members,
               nextCursor: result.nextCursor,
@@ -705,6 +726,7 @@ export function createV1GroupsApi({
             }
             if (result.kind === "forbidden") return adminRequired(requestId);
             if (result.kind === "not_found") return groupNotFound(requestId);
+            await assertResponseUserIsActive();
             return jsonResponse({
               data: result.bans,
               nextCursor: result.nextCursor,
@@ -756,6 +778,7 @@ export function createV1GroupsApi({
           }
           if (resource === "invite" && request.method === "GET") {
             const result = await groups.getInvite(user.userId, groupId);
+            await assertResponseUserIsActive();
             if (result.kind === "found") {
               return jsonResponse({ data: result.invite });
             }
@@ -876,6 +899,7 @@ export function createV1GroupsApi({
         if (invitePath.kind === "valid") {
           if (invitePath.resource === "inspect" && request.method === "GET") {
             const result = await groups.inspectInvite(invitePath.token);
+            await assertResponseUserIsActive();
             return result.kind === "found"
               ? jsonResponse({ data: { groupName: result.groupName } })
               : inviteNotFound(requestId);
@@ -905,6 +929,9 @@ export function createV1GroupsApi({
           status: 404,
         });
       } catch (error) {
+        if (isInactiveUserError(error)) {
+          return accountDeletionPendingResponse(requestId);
+        }
         if (isRateLimitError(error)) {
           return rateLimitedErrorResponse(requestId);
         }

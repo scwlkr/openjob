@@ -51,6 +51,16 @@ export async function createTestFirebaseAuthority({
         user_id: uid,
         ...claims,
       };
+      const signInProvider = payload.firebase?.sign_in_provider;
+      if (
+        (signInProvider === "google.com" || signInProvider === "apple.com") &&
+        !Object.hasOwn(payload.firebase, "identities")
+      ) {
+        payload.firebase = {
+          ...payload.firebase,
+          identities: { [signInProvider]: [`${uid}-provider-subject`] },
+        };
+      }
       const encodedHeader = base64Url(JSON.stringify(protectedHeader));
       const encodedPayload = base64Url(JSON.stringify(payload));
       const input = `${encodedHeader}.${encodedPayload}`;

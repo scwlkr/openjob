@@ -170,3 +170,80 @@ test("registration, state, and installation identifiers are strictly bounded", a
     assert.deepEqual(Object.keys((await response.json()).error.fields), ["installationId"]);
   }
 });
+
+test("a Notification Subscription GET returns 410 when deletion wins before its final active check", async () => {
+  let deletionPending = false;
+  let notifyRead;
+  let releaseRead;
+  const readStarted = new Promise((resolve) => {
+    notifyRead = resolve;
+  });
+  const readReleased = new Promise((resolve) => {
+    releaseRead = resolve;
+  });
+  const user = { userId: "user_racing", username: "racing" };
+  const api = createV1NotificationSubscriptionsApi({
+    subscriptions: {
+      async get() {
+        notifyRead();
+        await readReleased;
+        return {
+          installationId: INSTALLATION_ID,
+          state: "active",
+          userId: user.userId,
+        };
+      },
+    },
+    users: {
+      async resolve() {
+        return deletionPending ? { ...user, deletionPending: true } : user;
+      },
+    },
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
+      uid: "firebase_racing",
+    }),
+  });
+
+  const responsePromise = request(api, { as: "racing" });
+  await readStarted;
+  deletionPending = true;
+  releaseRead();
+  const response = await responsePromise;
+  assert.equal(response.status, 410);
+  const text = await response.text();
+  assert.equal(JSON.parse(text).error.code, "account_deletion_pending");
+  assert.equal(text.includes(INSTALLATION_ID), false);
+});
+
+test("an active requester gets concealed 404 for a pending User's installation", async () => {
+  const api = createV1NotificationSubscriptionsApi({
+    subscriptions: {
+      async get() {
+        return {
+          installationId: INSTALLATION_ID,
+          state: "active",
+          userId: "user_pending_owner",
+        };
+      },
+    },
+    users: {
+      async resolve() {
+        return { userId: "user_active_requester", username: "active" };
+      },
+    },
+    verifyIdToken: async () => ({
+      authenticatedAt: Date.now(),
+      provider: "google",
+      uid: "firebase_active_requester",
+    }),
+  });
+
+  const response = await request(api, { as: "active-requester" });
+  assert.equal(response.status, 404);
+  assert.equal(
+    (await response.json()).error.code,
+    "notification_subscription_not_found",
+  );
+});

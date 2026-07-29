@@ -63,6 +63,60 @@ export type BrowserPushSubscription = {
 
 export type SignInMethod = "apple" | "google";
 
+export type GoogleAccountDeletionRevocationProof = {
+  idToken: string;
+  kind: "access_token";
+  value: string;
+};
+
+export type AppleAccountDeletionRevocationProof =
+  | { clientId: string; kind: "access_token"; value: string }
+  | {
+      clientId: string;
+      idToken: string;
+      kind: "authorization_code";
+      redirectUri?: string;
+      value: string;
+    };
+
+export type AccountDeletionPending = {
+  deadline: string;
+  reauthenticationProviders: SignInMethod[];
+  requestedAt: string;
+  status: "pending";
+};
+
+export type AccountDeletionPrepared = {
+  status: "not_started";
+  statusToken: string;
+  submissionExpiresAt: string;
+};
+
+export type AccountDeletionStatusReceipt = {
+  phase: "completed" | "prepared" | "submitting";
+  statusToken: string;
+  submissionExpiresAt: string | null;
+  version: 1;
+};
+
+export type AccountDeletionPreflight =
+  | AccountDeletionPrepared
+  | { completedAt: string; status: "completed" }
+  | (AccountDeletionPending & { statusToken: string });
+
+export type AccountDeletionRequestResult =
+  | { completedAt: string; status: "completed" }
+  | (AccountDeletionPending & { statusToken: string });
+
+export type AccountDeletionStatus =
+  | { status: "completed" }
+  | {
+      status: "not_started";
+      submissionExpired: boolean;
+      submissionExpiresAt: string;
+    }
+  | AccountDeletionPending;
+
 export type AuthenticationMethod = SignInMethod | "qa-password";
 
 export type AuthSession = {
@@ -70,15 +124,34 @@ export type AuthSession = {
   getIdToken(): Promise<string>;
 };
 
-export type AuthCredentialProof = {
-  signInMethod: SignInMethod;
+type AuthCredentialProofBase = {
   getIdToken(): Promise<string>;
-  getRevocationProof(): Promise<
-    | { kind: "access_token"; value: string }
-    | { clientId: string; kind: "access_token"; value: string }
-  >;
   dispose(): Promise<void>;
 };
+
+export type AuthCredentialProof =
+  | (AuthCredentialProofBase & {
+      signInMethod: "google";
+      getRevocationProof(): Promise<GoogleAccountDeletionRevocationProof>;
+    })
+  | (AuthCredentialProofBase & {
+      signInMethod: "apple";
+      getRevocationProof(): Promise<
+        Extract<AppleAccountDeletionRevocationProof, { kind: "access_token" }>
+      >;
+    });
+
+export type AccountDeletionCredentialInput =
+  | {
+      credentialToken: string;
+      provider: "google";
+      revocation: GoogleAccountDeletionRevocationProof;
+    }
+  | {
+      credentialToken: string;
+      provider: "apple";
+      revocation: AppleAccountDeletionRevocationProof;
+    };
 
 export type OpenJobAuth = {
   readonly qaPasswordEnabled: boolean;
@@ -86,7 +159,7 @@ export type OpenJobAuth = {
     listener: (session: AuthSession | null) => void,
     onError?: (error: unknown) => void,
   ): () => void;
-  signIn(method: SignInMethod): Promise<void>;
+  signIn(method: SignInMethod): Promise<AuthCredentialProof | null>;
   signInWithQaPassword(email: string, password: string): Promise<void>;
   authenticateForLink(method: SignInMethod): Promise<AuthCredentialProof>;
   signOut(): Promise<void>;
@@ -155,17 +228,18 @@ export type OpenJobApi = {
   deleteTask(token: string, groupId: string, taskId: string): Promise<void>;
   deleteUser(
     token: string,
-    credentials: Array<{
-      credentialToken: string;
-      provider: SignInMethod;
-      revocation:
-        | { kind: "access_token"; value: string }
-        | { clientId: string; kind: "access_token"; value: string };
-    }>,
-  ): Promise<
-    | { completedAt: string; status: "completed" }
-    | { deadline: string; requestedAt: string; status: "pending" }
-  >;
+    statusToken: string,
+    credentials: AccountDeletionCredentialInput[],
+  ): Promise<AccountDeletionRequestResult>;
+  prepareAccountDeletion(
+    token: string,
+    credential?: AccountDeletionCredentialInput,
+  ): Promise<AccountDeletionPreflight>;
+  getAccountDeletionStatus(statusToken: string): Promise<AccountDeletionStatus>;
+  refreshAccountDeletionProvider(
+    statusToken: string,
+    credential: AccountDeletionCredentialInput,
+  ): Promise<AccountDeletionRequestResult>;
   getNotificationSubscription(
     token: string,
     installationId: string,

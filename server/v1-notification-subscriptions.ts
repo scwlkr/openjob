@@ -1,4 +1,8 @@
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
+import {
+  InactiveUserError,
+  isInactiveUserError,
+} from "../db/user-history.ts";
 import type { OpenJobUser } from "./v1-identity.ts";
 import {
   defaultRequestId,
@@ -139,6 +143,16 @@ export function createV1NotificationSubscriptionsApi({
         if (user.deletionPending) {
           return accountDeletionPendingResponse(requestId);
         }
+        const assertResponseUserIsActive = async () => {
+          const current = await users.resolve(identity);
+          if (
+            !current ||
+            current.userId !== user.userId ||
+            current.deletionPending
+          ) {
+            throw new InactiveUserError(user.userId);
+          }
+        };
         if (request.method === "PUT") {
           const registration = readRegistration(await request.json().catch(() => null));
           if (!registration) {
@@ -195,6 +209,7 @@ export function createV1NotificationSubscriptionsApi({
         }
         if (request.method !== "GET") return notFound(requestId);
         const subscription = await subscriptions.get(installationId);
+        await assertResponseUserIsActive();
         if (!subscription || subscription.userId !== user.userId) {
           return notFound(requestId);
         }
@@ -205,6 +220,9 @@ export function createV1NotificationSubscriptionsApi({
           },
         });
       } catch (error) {
+        if (isInactiveUserError(error)) {
+          return accountDeletionPendingResponse(requestId);
+        }
         if (isRateLimitError(error)) return rateLimitedErrorResponse(requestId);
         return internalErrorResponse(requestId);
       }

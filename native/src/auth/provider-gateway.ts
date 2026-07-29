@@ -192,10 +192,12 @@ export function createProviderGateway(
       if (response.kind === "cancelled") {
         throw new ProviderSignInError("cancelled");
       }
+      const idToken = requiredToken(response.idToken);
       return {
-        idToken: requiredToken(response.idToken),
+        idToken,
         provider: "google",
         revocation: {
+          idToken,
           kind: "access_token",
           value: requiredToken((await native.google.getTokens()).accessToken),
         },
@@ -230,12 +232,14 @@ export function createProviderGateway(
           requestedScopes: [],
           state,
         });
+        const idToken = requiredToken(response.identityToken);
         return {
-          idToken: requiredToken(response.identityToken),
+          idToken,
           nonce,
           provider: "apple",
           revocation: {
             clientId: config.appleIosClientId ?? config.appleServiceId,
+            idToken,
             kind: "authorization_code",
             value: requiredToken(response.authorizationCode),
           },
@@ -254,13 +258,16 @@ export function createProviderGateway(
         state,
       });
       const response = await native.appleAndroid.signIn();
+      const idToken = requiredToken(response.idToken);
       return {
-        idToken: requiredToken(response.idToken),
+        idToken,
         nonce,
         provider: "apple",
         revocation: {
           clientId: config.appleServiceId,
+          idToken,
           kind: "authorization_code",
+          redirectUri: config.appleRedirectUri,
           value: requiredToken(response.authorizationCode),
         },
       };

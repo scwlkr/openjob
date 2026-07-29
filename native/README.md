@@ -23,6 +23,34 @@ A non-secret cleanup-pending tombstone is mirrored in AsyncStorage and
 SecureStore so an interrupted purge is retried after relaunch; it contains no
 credential, User, Group, or Task data.
 
+Before account deletion can start, the API mints an opaque, User-bound status
+capability and the client persists only that capability plus a `prepared`,
+`submitting`, or `completed` phase in a separate device-only SecureStore entry.
+Preparation and its first durable receipt happen before fresh provider
+authentication. If preflight finds an already-pending job, its exact status
+capability is stored directly as `submitting`, local access ends, and no provider
+prompt or destructive POST runs. A new destructive request is never sent unless
+both its prepared receipt and immediately pre-submit phase overwrite succeed.
+If the protected write for an already-pending job is temporarily unavailable,
+the app keeps the capability in memory, blocks sign-in, asks for an immediate
+retry, and retries the SecureStore write during status refresh.
+On relaunch, the client checks the
+capability before purging: a prepared `not_started` receipt clears and restores
+normal authentication; a submitting receipt remains blocked until the API
+proves its submission window expired. After confirmed deletion and private-data
+cleanup, the receipt is durably overwritten to `completed`, so a relaunch can
+restore the final confirmation without authentication or a network request.
+Only the explicit Continue action acknowledges completion and clears that
+receipt. Pending, unavailable, or malformed status remains sign-in-blocking and
+fails closed. The capability is never written to AsyncStorage, a URL, logs, or
+the authentication credential entry.
+
+If a pending provider proof expires or becomes unusable, status names only the
+affected Google or Apple method. The blocked deletion screen collects one fresh
+provider proof, sends it with the opaque status capability to the same job, and
+purges the temporary provider/Firebase session again. Android Apple proof
+includes the configured Firebase handler redirect URI; iOS omits a redirect URI.
+
 ## Encrypted read-only Task List cache
 
 The last opened Group, Task List, membership snapshot, selected filter,

@@ -10,6 +10,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Fixed
 
+- Pending User deletion now survives signed-out relaunches through an encrypted, User-bound status capability that exposes no directly readable identity or content; final confirmation remains until acknowledged.
+
 ### Security
 
 ## [0.3.4] - 2026-07-28

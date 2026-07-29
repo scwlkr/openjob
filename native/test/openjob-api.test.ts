@@ -157,6 +157,478 @@ test("preserves API error codes and normalizes interrupted network requests", as
   );
 });
 
+test("prepares, binds, and reads a protected deletion-status capability", async () => {
+  const statusToken = "v1.deletionStatusCapability.signaturePayload";
+  const submissionExpiresAt = "2026-07-28T12:05:00.000Z";
+  const pending = {
+    deadline: "2026-08-04T12:00:00.000Z",
+    reauthenticationProviders: [] as Array<"apple" | "google">,
+    requestedAt: "2026-07-28T12:00:00.000Z",
+    status: "pending" as const,
+  };
+  const fetchImplementation = jest
+    .fn()
+    .mockResolvedValueOnce(
+      jsonResponse({
+        data: {
+          status: "not_started",
+          statusToken,
+          submissionExpiresAt,
+        },
+      }),
+    )
+    .mockResolvedValueOnce(
+      jsonResponse(
+        {
+          data: {
+            ...pending,
+            statusToken,
+          },
+        },
+        202,
+      ),
+    )
+    .mockResolvedValueOnce(jsonResponse({ data: pending }))
+    .mockResolvedValueOnce(
+      jsonResponse({ data: { status: "completed" } }),
+    )
+    .mockResolvedValueOnce(
+      jsonResponse({
+        data: {
+          status: "not_started",
+          submissionExpired: false,
+          submissionExpiresAt,
+        },
+      }),
+    )
+    .mockResolvedValueOnce(
+      jsonResponse({
+        data: {
+          status: "not_started",
+          submissionExpired: true,
+          submissionExpiresAt,
+        },
+      }),
+    );
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation,
+  });
+
+  await expect(api.prepareDeletionStatus("firebase-token")).resolves.toEqual({
+    status: "not_started",
+    statusToken,
+    submissionExpiresAt,
+  });
+  await expect(
+    api.deleteUser("firebase-token", [], statusToken),
+  ).resolves.toEqual({
+    ...pending,
+    statusToken,
+  });
+  await expect(
+    api.getDeletionStatus(statusToken),
+  ).resolves.toEqual(pending);
+  await expect(
+    api.getDeletionStatus(statusToken),
+  ).resolves.toEqual({ status: "completed" });
+  await expect(api.getDeletionStatus(statusToken)).resolves.toEqual({
+    status: "not_started",
+    submissionExpired: false,
+    submissionExpiresAt,
+  });
+  await expect(api.getDeletionStatus(statusToken)).resolves.toEqual({
+    status: "not_started",
+    submissionExpired: true,
+    submissionExpiresAt,
+  });
+
+  expect(fetchImplementation.mock.calls[0]).toEqual([
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      headers: expect.objectContaining({
+        authorization: "Bearer firebase-token",
+      }),
+      method: "PUT",
+    }),
+  ]);
+  expect(fetchImplementation.mock.calls[1]).toEqual([
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      body: JSON.stringify({ confirmation: "delete", credentials: [] }),
+      headers: expect.objectContaining({
+        authorization: "Bearer firebase-token",
+        "x-openjob-deletion-status": statusToken,
+      }),
+      method: "POST",
+    }),
+  ]);
+  expect(fetchImplementation.mock.calls[2]).toEqual([
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      headers: expect.objectContaining({
+        authorization: `Bearer ${statusToken}`,
+      }),
+      method: "GET",
+    }),
+  ]);
+});
+
+test("submits the exact fresh provider proof to deletion recovery PUT and accepts a completed race", async () => {
+  const credential = {
+    credentialToken: "fresh-firebase-id-token",
+    provider: "google" as const,
+    revocation: {
+      idToken: "raw-google-id-token",
+      kind: "access_token" as const,
+      value: "fresh-google-access-token",
+    },
+  };
+  const fetchImplementation = jest.fn(async () =>
+    jsonResponse({
+      data: {
+        completedAt: "2026-07-28T12:00:00.000Z",
+        status: "completed",
+      },
+    }),
+  );
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation,
+  });
+
+  await expect(
+    api.prepareDeletionStatus("fresh-firebase-id-token", credential),
+  ).resolves.toEqual({ status: "completed" });
+  expect(fetchImplementation).toHaveBeenCalledWith(
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      body: JSON.stringify({ credential }),
+      headers: expect.objectContaining({
+        authorization: "Bearer fresh-firebase-id-token",
+        "content-type": "application/json",
+      }),
+      method: "PUT",
+    }),
+  );
+});
+
+test("accepts a timestamped immediate deletion completion without retaining its timestamp", async () => {
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation: jest.fn(async () =>
+      jsonResponse({
+        data: {
+          completedAt: "2026-07-28T12:00:00.000Z",
+          status: "completed",
+        },
+      }),
+    ),
+  });
+
+  await expect(
+    api.deleteUser(
+      "firebase-token",
+      [],
+      "v1.deletionStatusCapability.signaturePayload",
+    ),
+  ).resolves.toEqual({ status: "completed" });
+});
+
+test("refreshes one pending provider with the status capability and exact proof", async () => {
+  const statusToken = "v1.deletionStatusCapability.signaturePayload";
+  const pending = {
+    deadline: "2026-08-04T12:00:00.000Z",
+    reauthenticationProviders: [] as Array<"apple" | "google">,
+    requestedAt: "2026-07-28T12:00:00.000Z",
+    status: "pending" as const,
+    statusToken,
+  };
+  const fetchImplementation = jest.fn(async () =>
+    jsonResponse({ data: pending }, 202),
+  );
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation,
+  });
+  const credential = {
+    credentialToken: "fresh-firebase-token",
+    provider: "google" as const,
+    revocation: {
+      idToken: "raw-google-id-token",
+      kind: "access_token" as const,
+      value: "google-access-token",
+    },
+  };
+
+  await expect(
+    api.refreshDeletionProvider(statusToken, credential),
+  ).resolves.toEqual(pending);
+  expect(fetchImplementation).toHaveBeenCalledWith(
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      body: JSON.stringify({ credential }),
+      headers: expect.objectContaining({
+        authorization: `Bearer ${statusToken}`,
+      }),
+      method: "PATCH",
+    }),
+  );
+});
+
+test("accepts an exact already-pending deletion from PUT preflight", async () => {
+  const pending = {
+    deadline: "2026-08-04T12:00:00.000Z",
+    reauthenticationProviders: [] as Array<"apple" | "google">,
+    requestedAt: "2026-07-28T12:00:00.000Z",
+    status: "pending" as const,
+    statusToken: "v1.pendingJobCapability.signaturePayload",
+  };
+  const fetchImplementation = jest.fn(async () =>
+    jsonResponse({ data: pending }, 202),
+  );
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation,
+  });
+
+  await expect(api.prepareDeletionStatus("firebase-token")).resolves.toEqual(
+    pending,
+  );
+  expect(fetchImplementation).toHaveBeenCalledWith(
+    "https://preview.example/api/v1/me/deletion",
+    expect.objectContaining({
+      headers: expect.objectContaining({
+        authorization: "Bearer firebase-token",
+      }),
+      method: "PUT",
+    }),
+  );
+  expect(pending).not.toHaveProperty("submissionExpiresAt");
+});
+
+test("rejects a pending deletion response that echoes a different status capability", async () => {
+  const preparedStatusToken =
+    "v1.deletionStatusCapability.signaturePayload";
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation: jest.fn(async () =>
+      jsonResponse(
+        {
+          data: {
+            deadline: "2026-08-04T12:00:00.000Z",
+            requestedAt: "2026-07-28T12:00:00.000Z",
+            status: "pending",
+            statusToken: "v1.differentStatusCapability.signaturePayload",
+          },
+        },
+        202,
+      ),
+    ),
+  });
+
+  await expect(
+    api.deleteUser("firebase-token", [], preparedStatusToken),
+  ).rejects.toEqual(
+    new OpenJobApiError(
+      502,
+      "invalid_response",
+      "OpenJob returned an invalid deletion status.",
+    ),
+  );
+});
+
+test.each([
+  [
+    "pending POST without a capability",
+    "deleteUser" as const,
+    {
+      deadline: "2026-08-04T12:00:00.000Z",
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  ],
+  [
+    "pending status without its metadata",
+    "getDeletionStatus" as const,
+    { status: "pending" },
+  ],
+  [
+    "completed POST without a completion timestamp",
+    "deleteUser" as const,
+    { status: "completed" },
+  ],
+  [
+    "unknown status",
+    "getDeletionStatus" as const,
+    { status: "finished" },
+  ],
+  [
+    "prepared status without a finite submission expiry",
+    "prepareDeletionStatus" as const,
+    {
+      status: "not_started",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      submissionExpiresAt: "not-a-date",
+    },
+  ],
+  [
+    "prepared status with a date-only submission expiry",
+    "prepareDeletionStatus" as const,
+    {
+      status: "not_started",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      submissionExpiresAt: "2026-07-28",
+    },
+  ],
+  [
+    "prepared status with an impossible calendar date",
+    "prepareDeletionStatus" as const,
+    {
+      status: "not_started",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      submissionExpiresAt: "2026-02-31T12:05:00.000Z",
+    },
+  ],
+  [
+    "prepared status with an unexpected key",
+    "prepareDeletionStatus" as const,
+    {
+      status: "not_started",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      submissionExpiresAt: "2026-07-28T12:05:00.000Z",
+      unexpected: true,
+    },
+  ],
+  [
+    "pending PUT status without a job capability",
+    "prepareDeletionStatus" as const,
+    {
+      deadline: "2026-08-04T12:00:00.000Z",
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  ],
+  [
+    "not-started status without submission state",
+    "getDeletionStatus" as const,
+    {
+      status: "not_started",
+      submissionExpiresAt: "2026-07-28T12:05:00.000Z",
+    },
+  ],
+  [
+    "completed status with an unexpected key",
+    "getDeletionStatus" as const,
+    { status: "completed", unexpected: true },
+  ],
+  [
+    "pending POST with an unexpected key",
+    "deleteUser" as const,
+    {
+      deadline: "2026-08-04T12:00:00.000Z",
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      unexpected: true,
+    },
+  ],
+  [
+    "non-finite pending request date",
+    "getDeletionStatus" as const,
+    {
+      deadline: "2026-08-04T12:00:00.000Z",
+      requestedAt: "not-a-date",
+      status: "pending",
+    },
+  ],
+  [
+    "pending deadline before its request",
+    "getDeletionStatus" as const,
+    {
+      deadline: "2026-07-27T12:00:00.000Z",
+      requestedAt: "2026-07-28T12:00:00.000Z",
+      status: "pending",
+    },
+  ],
+])("rejects an invalid deletion response: %s", async (_name, method, data) => {
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation: jest.fn(async () => jsonResponse({ data })),
+  });
+
+  const request =
+    method === "deleteUser"
+      ? api.deleteUser(
+          "firebase-token",
+          [],
+          "v1.deletionStatusCapability.signaturePayload",
+        )
+      : method === "prepareDeletionStatus"
+        ? api.prepareDeletionStatus("firebase-token")
+        : api.getDeletionStatus(
+            "v1.deletionStatusCapability.signaturePayload",
+          );
+  await expect(request).rejects.toEqual(
+    new OpenJobApiError(
+      502,
+      "invalid_response",
+      "OpenJob returned an invalid deletion status.",
+    ),
+  );
+});
+
+test.each([
+  [
+    "PUT",
+    "prepareDeletionStatus" as const,
+    {
+      status: "not_started",
+      statusToken: "v1.deletionStatusCapability.signaturePayload",
+      submissionExpiresAt: "2026-07-28T12:05:00.000Z",
+    },
+  ],
+  [
+    "GET",
+    "getDeletionStatus" as const,
+    { status: "completed" },
+  ],
+  [
+    "POST",
+    "deleteUser" as const,
+    {
+      completedAt: "2026-07-28T12:00:00.000Z",
+      status: "completed",
+    },
+  ],
+])("rejects an unexpected key in a successful deletion %s envelope", async (
+  _httpMethod,
+  method,
+  data,
+) => {
+  const statusToken = "v1.deletionStatusCapability.signaturePayload";
+  const api = createNativeOpenJobApi({
+    apiBaseUrl: "https://preview.example/api/v1",
+    fetchImplementation: jest.fn(async () =>
+      jsonResponse({ data, unexpected: true }),
+    ),
+  });
+
+  const request =
+    method === "prepareDeletionStatus"
+      ? api.prepareDeletionStatus("firebase-token")
+      : method === "getDeletionStatus"
+        ? api.getDeletionStatus(statusToken)
+        : api.deleteUser("firebase-token", [], statusToken);
+  await expect(request).rejects.toEqual(
+    new OpenJobApiError(
+      502,
+      "invalid_response",
+      "OpenJob returned an invalid deletion status.",
+    ),
+  );
+});
+
 test("paginates real Groups, Members, and service-ordered Tasks through the authenticated contract", async () => {
   const groups = [
     {

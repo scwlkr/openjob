@@ -2,9 +2,9 @@
 
 # Release Privacy and Store Preparation
 
-- Inventory schema version: `1.1.0`
-- Inventory version: `0.3.4`
-- Inventory fingerprint: `sha256:5afee142317d259a197a69928a40143ee20acaf4915e2484a5dc2ee3004b9b80`
+- Inventory schema version: `1.2.0`
+- Inventory version: `0.3.5`
+- Inventory fingerprint: `sha256:22e074b8f1cd7857a70d7ec2efc92dd0feeccc80b2ce446698fcaf140d999ae9`
 - Generated from: `config/release-privacy-inventory.json`
 
 Preparation status: **generated Apple and Play drafts are ready for #40 virtual-runtime reconciliation**. Saving or submitting store forms remains deferred to #41 exact-candidate Release Proof.
@@ -61,7 +61,7 @@ Required account and app-functionality rows are independent of Share diagnostics
 
 Store account deletion is required and currently `implemented` on issue #42. In-app path available: Yes. Public request path available: Yes. Do not save or submit a completed deletion claim until both paths and the public URL are live and proven.
 
-Implemented deletion policy: access ends immediate; retries are bounded to 7 days in a minimal-encrypted-retry-job; retention after completion is none. Sole-Member Groups end; shared membership is remove; final Admin replacement uses longest-tenured-stable-tie-break. Creator Tasks delete; open assignments become unassigned; completed assignments use a deleted-user-marker-without-identity. Linked providers revoke-before-completion.
+Implemented deletion policy: access ends immediate; retries are bounded to 7 days in a minimal-encrypted-retry-job; the client keeps an opaque-user-and-intent-bound-capability-with-minimal-server-intent through-submission-until-canceled-replaced-or-completion-acknowledged; retention after completion is none. Sole-Member Groups end; shared membership is remove; final Admin replacement uses longest-tenured-stable-tie-break. Creator Tasks delete; open assignments become unassigned; completed assignments use a deleted-user-marker-without-identity. Linked providers revoke-before-completion.
 
 ## Third-party declaration evidence
 

@@ -592,6 +592,48 @@ test("Account deletion atomically removes a shared Member, their Tasks, and thei
   );
 });
 
+test("overlapping account deletion clears its cleanup fence when membership was already removed", async (t) => {
+  const { claim, createGroup, firestore, groupStore, harness, join, request } =
+    await createEndGroupsHarness(["shane", "eli"]);
+  t.after(() => harness.close());
+  const shane = await claim("shane");
+  const eli = await claim("eli");
+  const group = await createGroup("Already Removed");
+  await join("eli", group.groupId);
+
+  const promoted = await request("shane", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${eli.userId}/actions/promote`,
+  });
+  assert.equal(promoted.status, 200);
+  const kicked = await request("eli", {
+    method: "POST",
+    path: `/api/v1/groups/${group.groupId}/members/${shane.userId}/actions/kick`,
+  });
+  assert.equal(kicked.status, 204);
+
+  firestore.synchronizeNextCommits();
+  assert.deepEqual(
+    await Promise.all([
+      groupStore.removeUserForDeletion(shane.userId, group.groupId),
+      groupStore.removeUserForDeletion(shane.userId, group.groupId),
+    ]),
+    [{ kind: "not_found" }, { kind: "not_found" }],
+  );
+  assert.deepEqual(await groupStore.get(eli.userId, group.groupId), {
+    ...group,
+    role: "admin",
+  });
+  const persistedGroup = [...firestore.documents.values()].find(({ name }) =>
+    name.endsWith(`/v1Groups/${group.groupId}`)
+  );
+  assert.ok(persistedGroup);
+  assert.equal(
+    Object.hasOwn(persistedGroup.fields, "deletionCleanupUserId"),
+    false,
+  );
+});
+
 test("Account deletion Ends a sole-Member Group and is idempotent", async (t) => {
   const { claim, createGroup, groupStore, harness, request } =
     await createEndGroupsHarness(["shane", "eli"]);

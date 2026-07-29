@@ -9,6 +9,7 @@ import { runV1AcceptanceScenario } from "../scripts/v1-acceptance-scenario.mjs";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 import { createFirebaseIdTokenVerifier } from "../server/firebase-id-token.ts";
 import { createV1GroupsApi } from "../server/v1-groups.ts";
+import { AccountDeletionReauthenticationRequiredError } from "../server/account-deletion-providers.ts";
 import { createV1AccountDeletionApi } from "../server/v1-account-deletion.ts";
 import { createV1IdentityApi } from "../server/v1-identity.ts";
 import { createV1NotificationSubscriptionsApi } from "../server/v1-notification-subscriptions.ts";
@@ -86,6 +87,8 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     clientEmail: "worker@openjob-dev.iam.gserviceaccount.com",
     privateKey,
   };
+  let deletionProviderAttempts = 0;
+  let retryAccountDeletions;
   const harness = createV1TestHarness({
     initialNow: NOW,
     createWorker(controls) {
@@ -138,13 +141,27 @@ test("the complete hosted backend preserves existing Groups during its two-ident
         providers: {
           assertReady() {},
           async deleteFirebaseUser() {},
-          async revokeAuthorization() {},
+          async prepareAuthorization(credential) {
+            return credential;
+          },
+          async revokeAuthorization() {
+            deletionProviderAttempts += 1;
+            if (deletionProviderAttempts === 1) {
+              throw new AccountDeletionReauthenticationRequiredError(
+                "google",
+              );
+            }
+            if (deletionProviderAttempts === 2) {
+              throw new Error("injected account-deletion provider retry");
+            }
+          },
           async revokeFirebaseSessions() {},
         },
         users,
         verifyCredentialToken: verifyIdToken.verifyToken,
         verifyIdToken,
       });
+      retryAccountDeletions = () => accountDeletionApi.retryPending();
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
@@ -173,12 +190,14 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   const coverage = new Map();
   const secretMaterial = [...tokens.values(), linkCredentialToken, privateKey];
   const deletionRevocationProof = "backend-delete-provider-proof";
-  secretMaterial.push(deletionRevocationProof);
+  const deletionProviderIdToken = "backend-delete-provider-id-token";
+  secretMaterial.push(deletionRevocationProof, deletionProviderIdToken);
   const capabilityMaterial = [
     "https://push.example.test/subscriptions/backend-acceptance-capability",
     "p256dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
     "auth_0123456789abcdef",
   ];
+  const ephemeralCapabilityMaterial = [];
   const logs = [];
   const originalConsole = {
     error: console.error,
@@ -186,27 +205,39 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     warn: console.warn,
   };
 
-  async function request({ actor, ...options }) {
+  async function request({ actor, authorization, deletionStatus, ...options }) {
     const token = tokens.get(actor);
-    return harness.request({
-      ...options,
-      headers:
-        actor === "invalid"
+    const headers = {
+      ...(authorization
+        ? { authorization: `Bearer ${authorization}` }
+        : actor === "invalid"
           ? { authorization: "Bearer invalid-production-smoke-token" }
           : token
             ? { authorization: `Bearer ${token}` }
-            : undefined,
+            : {}),
+      ...(deletionStatus
+        ? { "x-openjob-deletion-status": deletionStatus }
+        : {}),
+    };
+    return harness.request({
+      ...options,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
     });
   }
 
-  async function validate(response, path, method) {
+  async function validate(response, path, method, { allowedSecrets = [] } = {}) {
     await assertContract(response, path, method);
     const key = `${method} ${path}`;
     const categories = coverage.get(key) ?? new Set();
     categories.add(response.ok ? "success" : "error");
     coverage.set(key, categories);
     const body = await response.clone().text();
-      for (const secret of [...secretMaterial, ...capabilityMaterial]) {
+    for (const secret of [
+      ...secretMaterial,
+      ...capabilityMaterial,
+      ...ephemeralCapabilityMaterial,
+    ]) {
+      if (allowedSecrets.includes(secret)) continue;
       assert.equal(body.includes(secret), false, `${key} response exposed secret material`);
     }
   }
@@ -355,7 +386,86 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     });
     assert.equal(invalidDeletion.status, 400);
     await validate(invalidDeletion, "/api/v1/me/deletion", "post");
-    const completedDeletion = await request({
+    const missingDeletionPreparation = await request({
+      method: "PUT",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(missingDeletionPreparation.status, 401);
+    await validate(
+      missingDeletionPreparation,
+      "/api/v1/me/deletion",
+      "put",
+    );
+    const missingDeletionStatus = await request({
+      method: "GET",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(missingDeletionStatus.status, 401);
+    await validate(missingDeletionStatus, "/api/v1/me/deletion", "get");
+
+    const preparedDeletion = await request({
+      actor: "deletionUser",
+      method: "PUT",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(preparedDeletion.status, 200);
+    const preparedDeletionBody = await preparedDeletion.clone().json();
+    const statusToken = preparedDeletionBody.data.statusToken;
+    assert.match(statusToken, /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u);
+    assert.deepEqual(preparedDeletionBody.data, {
+      status: "not_started",
+      statusToken,
+      submissionExpiresAt: "2026-07-16T12:05:00.000Z",
+    });
+    await validate(preparedDeletion, "/api/v1/me/deletion", "put", {
+      allowedSecrets: [statusToken],
+    });
+    ephemeralCapabilityMaterial.push(statusToken);
+
+    const notStartedStatus = await request({
+      authorization: statusToken,
+      method: "GET",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(notStartedStatus.status, 200);
+    assert.deepEqual((await notStartedStatus.clone().json()).data, {
+      status: "not_started",
+      submissionExpired: false,
+      submissionExpiresAt: "2026-07-16T12:05:00.000Z",
+    });
+    await validate(notStartedStatus, "/api/v1/me/deletion", "get");
+
+    harness.advance(5 * 60_000);
+    const expiredNotStartedStatus = await request({
+      authorization: statusToken,
+      method: "GET",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(expiredNotStartedStatus.status, 200);
+    assert.deepEqual((await expiredNotStartedStatus.clone().json()).data, {
+      status: "not_started",
+      submissionExpired: true,
+      submissionExpiresAt: "2026-07-16T12:05:00.000Z",
+    });
+    await validate(
+      expiredNotStartedStatus,
+      "/api/v1/me/deletion",
+      "get",
+    );
+
+    const refreshedDeletionNow = Date.parse("2026-07-16T12:05:00.000Z") / 1000;
+    const refreshedDeletionToken = await authority.issue({
+      claims: {
+        auth_time: refreshedDeletionNow,
+        exp: refreshedDeletionNow + 3600,
+        iat: refreshedDeletionNow,
+      },
+      uid: "firebase_deletionUser",
+    });
+    tokens.set("deletionUser", refreshedDeletionToken);
+    secretMaterial.push(refreshedDeletionToken);
+
+    const canceledSubmission = await request({
       actor: "deletionUser",
       body: {
         confirmation: "delete",
@@ -363,16 +473,173 @@ test("the complete hosted backend preserves existing Groups during its two-ident
           credentialToken: tokens.get("deletionUser"),
           provider: "google",
           revocation: {
+            idToken: deletionProviderIdToken,
             kind: "access_token",
             value: deletionRevocationProof,
           },
         }],
       },
+      deletionStatus: statusToken,
       method: "POST",
       path: "/api/v1/me/deletion",
     });
-    assert.equal(completedDeletion.status, 200);
-    await validate(completedDeletion, "/api/v1/me/deletion", "post");
+    assert.equal(
+      canceledSubmission.status,
+      400,
+      JSON.stringify(await canceledSubmission.clone().json()),
+    );
+    await validate(canceledSubmission, "/api/v1/me/deletion", "post");
+
+    const invalidPreparationQuery = await request({
+      actor: "deletionUser",
+      method: "PUT",
+      path: "/api/v1/me/deletion?unexpected=true",
+    });
+    assert.equal(invalidPreparationQuery.status, 400);
+    await validate(
+      invalidPreparationQuery,
+      "/api/v1/me/deletion",
+      "put",
+    );
+
+    const replacementPreparation = await request({
+      actor: "deletionUser",
+      method: "PUT",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(replacementPreparation.status, 200);
+    const replacementBody = await replacementPreparation.clone().json();
+    const replacementStatusToken = replacementBody.data.statusToken;
+    assert.notEqual(replacementStatusToken, statusToken);
+    ephemeralCapabilityMaterial.push(replacementStatusToken);
+    await validate(replacementPreparation, "/api/v1/me/deletion", "put", {
+      allowedSecrets: [replacementStatusToken],
+    });
+
+    const pendingDeletion = await request({
+      actor: "deletionUser",
+      body: {
+        confirmation: "delete",
+        credentials: [{
+          credentialToken: tokens.get("deletionUser"),
+          provider: "google",
+          revocation: {
+            idToken: deletionProviderIdToken,
+            kind: "access_token",
+            value: deletionRevocationProof,
+          },
+        }],
+      },
+      deletionStatus: replacementStatusToken,
+      method: "POST",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(pendingDeletion.status, 202);
+    const pendingDeletionBody = await pendingDeletion.clone().json();
+    assert.equal(
+      pendingDeletionBody.data.statusToken,
+      replacementStatusToken,
+    );
+    await validate(pendingDeletion, "/api/v1/me/deletion", "post", {
+      allowedSecrets: [replacementStatusToken],
+    });
+
+    const pendingStatus = await request({
+      authorization: replacementStatusToken,
+      method: "GET",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(pendingStatus.status, 200);
+    assert.equal((await pendingStatus.clone().json()).data.status, "pending");
+    await validate(pendingStatus, "/api/v1/me/deletion", "get");
+
+    const missingRefreshStatus = await request({
+      body: {
+        credential: {
+          credentialToken: tokens.get("deletionUser"),
+          provider: "google",
+          revocation: {
+            idToken: deletionProviderIdToken,
+            kind: "access_token",
+            value: deletionRevocationProof,
+          },
+        },
+      },
+      method: "PATCH",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(missingRefreshStatus.status, 401);
+    await validate(missingRefreshStatus, "/api/v1/me/deletion", "patch");
+
+    const refreshedDeletion = await request({
+      authorization: replacementStatusToken,
+      body: {
+        credential: {
+          credentialToken: tokens.get("deletionUser"),
+          provider: "google",
+          revocation: {
+            idToken: deletionProviderIdToken,
+            kind: "access_token",
+            value: deletionRevocationProof,
+          },
+        },
+      },
+      method: "PATCH",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(
+      refreshedDeletion.status,
+      202,
+      await refreshedDeletion.clone().text(),
+    );
+    await validate(refreshedDeletion, "/api/v1/me/deletion", "patch", {
+      allowedSecrets: [replacementStatusToken],
+    });
+
+    const recoveredPending = await request({
+      actor: "deletionUser",
+      body: {
+        credential: {
+          credentialToken: tokens.get("deletionUser"),
+          provider: "google",
+          revocation: {
+            idToken: deletionProviderIdToken,
+            kind: "access_token",
+            value: deletionRevocationProof,
+          },
+        },
+      },
+      method: "PUT",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(recoveredPending.status, 202);
+    const recoveredPendingBody = await recoveredPending.clone().json();
+    const recoveredStatusToken = recoveredPendingBody.data.statusToken;
+    assert.equal(recoveredPendingBody.data.status, "pending");
+    assert.equal(
+      Object.hasOwn(recoveredPendingBody.data, "submissionExpiresAt"),
+      false,
+    );
+    ephemeralCapabilityMaterial.push(recoveredStatusToken);
+    await validate(recoveredPending, "/api/v1/me/deletion", "put", {
+      allowedSecrets: [recoveredStatusToken],
+    });
+
+    assert.deepEqual(await retryAccountDeletions(), {
+      completed: 1,
+      escalated: 0,
+      pending: 0,
+    });
+    const completedStatus = await request({
+      authorization: recoveredStatusToken,
+      method: "GET",
+      path: "/api/v1/me/deletion",
+    });
+    assert.equal(completedStatus.status, 200);
+    assert.deepEqual((await completedStatus.clone().json()).data, {
+      status: "completed",
+    });
+    await validate(completedStatus, "/api/v1/me/deletion", "get");
   } finally {
     Object.assign(console, originalConsole);
   }
@@ -392,5 +659,9 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   for (const capability of capabilityMaterial) {
     assert.equal(persistedState.includes(capability), true, "capability was not persisted");
     assert.equal(loggedState.includes(capability), false, "logs exposed capability material");
+  }
+  for (const capability of ephemeralCapabilityMaterial) {
+    assert.equal(persistedState.includes(capability), false, "status capability was persisted");
+    assert.equal(loggedState.includes(capability), false, "logs exposed status capability");
   }
 });

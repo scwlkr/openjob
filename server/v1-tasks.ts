@@ -1,4 +1,8 @@
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
+import {
+  InactiveUserError,
+  isInactiveUserError,
+} from "../db/user-history.ts";
 import { isGroupId, type GroupId } from "./v1-groups.ts";
 import {
   isReservedUsername,
@@ -729,6 +733,16 @@ export function createV1TasksApi({
         if (user.deletionPending) {
           return accountDeletionPendingResponse(requestId);
         }
+        const assertResponseUserIsActive = async () => {
+          const current = await users.resolve(identity);
+          if (
+            !current ||
+            current.userId !== user.userId ||
+            current.deletionPending
+          ) {
+            throw new InactiveUserError(user.userId);
+          }
+        };
         const url = new URL(request.url);
         const path = taskResourceFromPath(url.pathname);
         if (path.kind === "invalid_group") return groupNotFound(requestId);
@@ -743,7 +757,9 @@ export function createV1TasksApi({
             return invalidTaskInput(requestId, parsed.fields);
           }
           const assignee = await users.getByUsername(parsed.input.assigneeUsername);
-          if (!assignee?.username) return assigneeNotMember(requestId);
+          if (!assignee?.username || assignee.deletionPending) {
+            return assigneeNotMember(requestId);
+          }
           const result = await tasks.create(user.userId, path.groupId, {
             userId: assignee.userId,
             username: assignee.username as Username,
@@ -776,6 +792,7 @@ export function createV1TasksApi({
             options,
           );
           if (validatorMatches(request.headers.get("if-none-match"), validator)) {
+            await assertResponseUserIsActive();
             return notModified(validator);
           }
           const result = await tasks.list(user.userId, path.groupId);
@@ -816,6 +833,7 @@ export function createV1TasksApi({
           }
           const page = ordered.slice(start, start + options.limit);
           const hasMore = start + page.length < ordered.length;
+          await assertResponseUserIsActive();
           const response = jsonResponse({
             data: page,
             nextCursor:
@@ -834,6 +852,7 @@ export function createV1TasksApi({
           request.method === "GET"
         ) {
           const result = await tasks.get(user.userId, path.groupId, path.taskId);
+          await assertResponseUserIsActive();
           return result.kind === "found"
             ? jsonResponse({ data: result.task })
             : taskNotFound(requestId);
@@ -882,7 +901,9 @@ export function createV1TasksApi({
             const assigneeUser = await users.getByUsername(
               parsed.input.assigneeUsername,
             );
-            if (!assigneeUser?.username) return assigneeNotMember(requestId);
+            if (!assigneeUser?.username || assigneeUser.deletionPending) {
+              return assigneeNotMember(requestId);
+            }
             assignee = {
               userId: assigneeUser.userId,
               username: assigneeUser.username as Username,
@@ -948,6 +969,9 @@ export function createV1TasksApi({
           status: 404,
         });
       } catch (error) {
+        if (isInactiveUserError(error)) {
+          return accountDeletionPendingResponse(requestId);
+        }
         if (isRateLimitError(error)) return rateLimitedErrorResponse(requestId);
         return internalErrorResponse(requestId);
       }

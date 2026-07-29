@@ -10,14 +10,34 @@ import type {
   SignInProvider,
 } from "../server/firebase-id-token.ts";
 import type { OpenJobUser, Username } from "../server/v1-identity.ts";
+import {
+  assertActiveUser,
+  InactiveUserError,
+} from "./user-history.ts";
 
 type StoredUserDirectory = OpenJobUser & {
   deletionDeadline: string | null;
+  deletionIntentId: string | null;
   deletionRequestId: string | null;
   deletionStartedAt: string | null;
   emptyShellEligible: boolean;
   path: string;
   updateTime: string;
+};
+
+type AccountDeletionFinalization = {
+  completedSteps: string[];
+  credentials: Array<{
+    firebaseUid: string;
+    provider: "apple" | "google";
+  }>;
+  deadline: string;
+  intentId: string;
+  processingLeaseUntil?: string;
+  reauthenticationProviders: Array<"apple" | "google">;
+  requestId: string;
+  startedAt: string;
+  userId: string;
 };
 
 type StoredLegacyUser = OpenJobUser & {
@@ -39,6 +59,35 @@ type UserStoreOptions = {
 };
 
 const MAX_CONCURRENT_ATTEMPTS = 3;
+const FIRESTORE_TIMESTAMP =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}|\d{6}|\d{9}))?Z$/;
+
+function timestampInstant(value: string) {
+  const match = value.match(FIRESTORE_TIMESTAMP);
+  if (!match || match[1] === "0000") return null;
+  const [, year, month, day, hour, minute, second, fraction = ""] = match;
+  const milliseconds = Date.parse(
+    `${year}-${month}-${day}T${hour}:${minute}:${second}Z`,
+  );
+  if (
+    !Number.isFinite(milliseconds) ||
+    new Date(milliseconds).toISOString() !==
+      `${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`
+  ) {
+    return null;
+  }
+  return (
+    BigInt(milliseconds) * BigInt(1_000_000) +
+    BigInt(fraction.padEnd(9, "0") || "0")
+  );
+}
+
+function timestampsMatch(left: string | null, right: string) {
+  if (left === null) return false;
+  const leftInstant = timestampInstant(left);
+  const rightInstant = timestampInstant(right);
+  return leftInstant !== null && leftInstant === rightInstant;
+}
 
 async function sha256Key(value: string) {
   const digest = await crypto.subtle.digest(
@@ -84,6 +133,8 @@ function parseUserDirectory(
       document.fields?.emptyShellEligible?.booleanValue === true,
     deletionDeadline:
       document.fields?.deletionDeadline?.timestampValue ?? null,
+    deletionIntentId:
+      document.fields?.deletionIntentId?.stringValue ?? null,
     deletionRequestId:
       document.fields?.deletionRequestId?.stringValue ?? null,
     deletionStartedAt:
@@ -199,6 +250,51 @@ export function createFirestoreUserStore(
     return `v1UserSignInMethods/${userId}/providers/${provider}`;
   }
 
+  function deletionIntentPath(userId: string) {
+    return `v1AccountDeletionIntents/${userId}`;
+  }
+
+  function verifyNoDeletionIntent(userId: string) {
+    return {
+      verify: firestore.documentName(deletionIntentPath(userId)),
+      currentDocument: { exists: false },
+    };
+  }
+
+  async function deletionIntentBlocksMutation(userId: string) {
+    for (
+      let attempt = 0;
+      attempt < MAX_CONCURRENT_ATTEMPTS;
+      attempt += 1
+    ) {
+      const intent = await readDocument(deletionIntentPath(userId));
+      if (!intent) return false;
+      const intentId = intent.fields?.intentId?.stringValue;
+      const intentUserId = intent.fields?.userId?.stringValue;
+      const expiry = intent.fields?.submissionExpiresAt?.timestampValue;
+      const expiryInstant = expiry ? timestampInstant(expiry) : null;
+      if (
+        !intent.updateTime ||
+        !intentId ||
+        intentUserId !== userId ||
+        expiryInstant === null
+      ) {
+        return true;
+      }
+      if (expiryInstant > BigInt(now()) * BigInt(1_000_000)) return true;
+      try {
+        await commit([{
+          delete: intent.name,
+          currentDocument: { updateTime: intent.updateTime },
+        }]);
+        return false;
+      } catch (error) {
+        if (!isConcurrentWrite(error)) throw error;
+      }
+    }
+    return true;
+  }
+
   async function legacyUserPath(firebaseUid: string) {
     return `v1Users/${await legacyFirebaseIdentityKey(firebaseUid)}`;
   }
@@ -309,6 +405,9 @@ export function createFirestoreUserStore(
     if (!document) return null;
     const legacy = parseLegacyUser(document, path);
     const directory = await ensureLegacyDirectory(legacy);
+    if (directory.deletionPending) {
+      throw new InactiveUserError(directory.userId);
+    }
     const newPath = await methodPath(identity);
     const methodId = newPath.slice(newPath.lastIndexOf("/") + 1);
     const slotPath = providerSlotPath(directory.userId, identity.provider);
@@ -318,6 +417,9 @@ export function createFirestoreUserStore(
       attempt < MAX_CONCURRENT_ATTEMPTS;
       attempt += 1
     ) {
+      if (await deletionIntentBlocksMutation(directory.userId)) {
+        throw new InactiveUserError(directory.userId);
+      }
       const existing = await readSignInMethod(newPath);
       if (existing) return existing;
       const slot = await readProviderSlot(directory.userId, identity.provider);
@@ -327,6 +429,7 @@ export function createFirestoreUserStore(
       const linkedAt = new Date(now()).toISOString();
       try {
         await commit([
+          verifyNoDeletionIntent(directory.userId),
           {
             verify: firestore.documentName(legacy.path),
             currentDocument: { updateTime: legacy.updateTime },
@@ -387,26 +490,100 @@ export function createFirestoreUserStore(
     }
     const user = await readUserDirectory(method.userId);
     if (!user) {
+      if (!(await readSignInMethod(path))) return null;
       throw new Error("Firestore returned an orphaned Sign-in Method record.");
     }
     return { method, user };
   }
 
   return Object.freeze({
-    async deleteForAccount(userId: string, firebaseUids: string[]) {
+    async deleteForAccount(
+      expected: AccountDeletionFinalization,
+      firebaseUids: string[],
+    ) {
+      const userId = expected.userId;
+      const uniqueFirebaseUids = [...new Set(firebaseUids)];
       const user = await readUserDirectory(userId);
       if (!user) return false;
       const slots = await readProviderSlots(userId);
-      const [usernameClaim, deletionJob, ...legacyUsers] = await Promise.all([
+      const [usernameClaim, deletionJob, deletionIntent, ...legacyUsers] =
+        await Promise.all([
         user.username ? readDocument(`v1Usernames/${user.username}`) : null,
         readDocument(`v1AccountDeletions/${userId}`),
-        ...firebaseUids.map(async (uid) =>
+        readDocument(`v1AccountDeletionIntents/${userId}`),
+        ...uniqueFirebaseUids.map(async (uid) =>
           readDocument(await legacyUserPath(uid)),
         ),
-      ]);
+        ]);
       const methodDocuments = await Promise.all(
         slots.map((slot) => readDocument(signInMethodPath(slot.methodId))),
       );
+      const expectedProviderBindings = await Promise.all(
+        expected.credentials.map(async ({ firebaseUid, provider }) =>
+          `${provider}:${await sha256Key(`${provider}\0${firebaseUid}`)}`
+        ),
+      );
+      const actualProviderBindings = slots.map(({ methodId, provider }) =>
+        `${provider}:${methodId}`
+      );
+      const requiredCompletedSteps = expected.credentials.flatMap(({ provider }) => [
+        `firebase-sessions:${provider}`,
+        `provider-attempted:${provider}`,
+        `provider:${provider}`,
+      ]);
+      const liveCompletedSteps =
+        deletionJob?.fields?.completedSteps?.stringValue;
+      const liveReauthenticationProviders =
+        deletionJob?.fields?.reauthenticationProviders?.stringValue;
+      if (
+        !deletionJob ||
+        user.userId !== userId ||
+        !user.deletionPending ||
+        user.deletionRequestId !== expected.requestId ||
+        user.deletionIntentId !== expected.intentId ||
+        !timestampsMatch(user.deletionStartedAt, expected.startedAt) ||
+        !timestampsMatch(user.deletionDeadline, expected.deadline) ||
+        deletionJob.fields?.userId?.stringValue !== userId ||
+        deletionJob.fields?.requestId?.stringValue !== expected.requestId ||
+        deletionJob.fields?.intentId?.stringValue !== expected.intentId ||
+        !timestampsMatch(
+          deletionJob.fields?.startedAt?.timestampValue ?? null,
+          expected.startedAt,
+        ) ||
+        !timestampsMatch(
+          deletionJob.fields?.deadline?.timestampValue ?? null,
+          expected.deadline,
+        ) ||
+        !expected.processingLeaseUntil ||
+        !timestampsMatch(
+          deletionJob.fields?.processingLeaseUntil?.timestampValue ?? null,
+          expected.processingLeaseUntil,
+        ) ||
+        expected.reauthenticationProviders.length !== 0 ||
+        liveReauthenticationProviders !== "[]" ||
+        new Set(expected.completedSteps).size !==
+          requiredCompletedSteps.length ||
+        [...new Set(expected.completedSteps)].sort().join(",") !==
+          [...new Set(requiredCompletedSteps)].sort().join(",") ||
+        liveCompletedSteps !== JSON.stringify(expected.completedSteps) ||
+        new Set(expectedProviderBindings).size !==
+          expectedProviderBindings.length ||
+        new Set(actualProviderBindings).size !== actualProviderBindings.length ||
+        expectedProviderBindings.sort().join(",") !==
+          actualProviderBindings.sort().join(",") ||
+        methodDocuments.some((document, index) => {
+          const slot = slots[index];
+          return (
+            !document ||
+            !slot ||
+            document.fields?.methodId?.stringValue !== slot.methodId ||
+            document.fields?.provider?.stringValue !== slot.provider ||
+            document.fields?.userId?.stringValue !== userId
+          );
+        })
+      ) {
+        return false;
+      }
       await commit([
         ...methodDocuments
           .filter((document): document is FirestoreDocument => document !== null)
@@ -428,6 +605,12 @@ export function createFirestoreUserStore(
           ? [{
               delete: deletionJob.name,
               currentDocument: { updateTime: deletionJob.updateTime },
+            }]
+          : []),
+        ...(deletionIntent
+          ? [{
+              delete: deletionIntent.name,
+              currentDocument: { updateTime: deletionIntent.updateTime },
             }]
           : []),
         ...legacyUsers
@@ -559,6 +742,9 @@ export function createFirestoreUserStore(
         const resolved = await resolveStored(identity);
         if (!resolved) return { kind: "unrecognized" as const };
         const { user } = resolved;
+        if (user.deletionPending) {
+          return { kind: "deletion_pending" as const };
+        }
         if (user.username === username) {
           return { kind: "claimed" as const, user: publicUser(user) };
         }
@@ -599,6 +785,9 @@ export function createFirestoreUserStore(
         } catch (error) {
           if (!isConcurrentWrite(error)) throw error;
           const current = await readUserDirectory(user.userId);
+          if (current?.deletionPending) {
+            return { kind: "deletion_pending" as const };
+          }
           if (current?.username === username) {
             return { kind: "claimed" as const, user: publicUser(current) };
           }
@@ -632,6 +821,19 @@ export function createFirestoreUserStore(
           resolveStored(secondIdentity),
         ]);
         if (!first && !second) return { kind: "unrecognized" as const };
+        const resolvedUsers = [...new Map(
+          [first, second]
+            .filter((value): value is NonNullable<typeof value> => value !== null)
+            .map((value) => [value.user.userId, value.user]),
+        ).values()];
+        if (
+          resolvedUsers.some(({ deletionPending }) => deletionPending) ||
+          (await Promise.all(resolvedUsers.map(({ userId }) =>
+            deletionIntentBlocksMutation(userId)
+          ))).some(Boolean)
+        ) {
+          return { kind: "deletion_pending" as const };
+        }
 
         const linkedAt = new Date(now()).toISOString();
         if (!first || !second) {
@@ -657,6 +859,7 @@ export function createFirestoreUserStore(
 
           try {
             await commit([
+              verifyNoDeletionIntent(target.user.userId),
               {
                 verify: firestore.documentName(target.method.path),
                 currentDocument: { updateTime: target.method.updateTime },
@@ -728,6 +931,7 @@ export function createFirestoreUserStore(
           }
           try {
             await commit([
+              verifyNoDeletionIntent(first.user.userId),
               {
                 verify: firestore.documentName(first.method.path),
                 currentDocument: { updateTime: first.method.updateTime },
@@ -794,6 +998,8 @@ export function createFirestoreUserStore(
 
         try {
           await commit([
+            verifyNoDeletionIntent(source.user.userId),
+            verifyNoDeletionIntent(target.user.userId),
             {
               verify: firestore.documentName(target.method.path),
               currentDocument: { updateTime: target.method.updateTime },
@@ -860,9 +1066,11 @@ export function createFirestoreUserStore(
     },
 
     async listSignInMethods(userId: string) {
-      return (await readProviderSlots(userId))
+      const methods = (await readProviderSlots(userId))
         .map(({ provider }) => provider)
         .sort();
+      await assertActiveUser(firestore, userId);
+      return methods;
     },
   });
 }

@@ -22,8 +22,15 @@ export type ProviderCredential = {
   nonce?: string;
   provider: SignInMethod;
   revocation?:
-    | { kind: "access_token"; value: string }
-    | { clientId: string; kind: "authorization_code"; value: string };
+    | { idToken: string; kind: "access_token"; value: string }
+    | { clientId: string; kind: "access_token"; value: string }
+    | {
+        clientId: string;
+        idToken: string;
+        kind: "authorization_code";
+        redirectUri?: string;
+        value: string;
+      };
 };
 
 export type FirebaseAccessSession = {
@@ -49,6 +56,92 @@ export type StoredSession =
       version: 2;
     };
 
+export type DeletionReceipt = {
+  phase: "completed" | "prepared" | "submitting";
+  statusToken: string;
+  version: 1;
+};
+
+export type DeletionProviderCredential = {
+  credentialToken: string;
+  provider: SignInMethod;
+  revocation: NonNullable<ProviderCredential["revocation"]>;
+};
+
+export type DeletionStatus =
+  | {
+      status: "not_started";
+      submissionExpired: boolean;
+      submissionExpiresAt: string;
+    }
+  | { status: "completed" }
+  | {
+      deadline: string;
+      reauthenticationProviders: SignInMethod[];
+      requestedAt: string;
+      status: "pending";
+    };
+
+export type DeletionStartResult =
+  | { status: "completed" }
+  | (Extract<DeletionStatus, { status: "pending" }> & {
+      statusToken: string;
+    });
+
+export type DeletionPrepareResult =
+  | { status: "completed" }
+  | {
+      status: "not_started";
+      statusToken: string;
+      submissionExpiresAt: string;
+    }
+  | (Extract<DeletionStatus, { status: "pending" }> & {
+      statusToken: string;
+    });
+
+export function isDeletionStatusToken(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length >= 32 &&
+    value.length <= 8192 &&
+    /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(value)
+  );
+}
+
+const OPENJOB_RFC3339_TIMESTAMP =
+  /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.(\d{3}|\d{6}|\d{9}))?Z$/;
+
+export function isFiniteTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = OPENJOB_RFC3339_TIMESTAMP.exec(value);
+  if (!match || match[1] === "0000") return false;
+  const [, year, month, day, hour, minute, second] = match;
+  const wholeSecond = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+  const milliseconds = Date.parse(wholeSecond);
+  return (
+    Number.isFinite(milliseconds) &&
+    new Date(milliseconds).toISOString() ===
+      `${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`
+  );
+}
+
+export function hasValidDeletionTimeline(
+  value: unknown,
+): value is { deadline: string; requestedAt: string } {
+  if (!value || typeof value !== "object") return false;
+  const timeline = value as {
+    deadline?: unknown;
+    requestedAt?: unknown;
+  };
+  if (
+    !isFiniteTimestamp(timeline.requestedAt) ||
+    !isFiniteTimestamp(timeline.deadline)
+  ) {
+    return false;
+  }
+  return Date.parse(timeline.deadline) >= Date.parse(timeline.requestedAt);
+}
+
 export type SignedInResult = {
   kind: "signed-in";
   methods: SignInMethod[];
@@ -60,6 +153,26 @@ export type SignedInResult = {
 
 export type AuthFlowResult =
   | SignedInResult
+  | { kind: "deletion-completed" }
+  | {
+      kind: "deletion-clear-retry";
+      status: "completed" | "not_started";
+    }
+  | {
+      deadline: string;
+      kind: "deletion-pending";
+      reauthenticationProviders: SignInMethod[];
+      requestedAt: string;
+    }
+  | {
+      kind: "deletion-status-retry";
+      reason:
+        | "invalid-response"
+        | "offline"
+        | "proof-retry"
+        | "storage-unavailable"
+        | "unavailable";
+    }
   | {
       kind: "unrecognized";
       notice?: "fresh_authentication_required" | "link_target_changed";
@@ -120,21 +233,20 @@ export type NativeAuthDependencies = {
     username: string,
   ): Promise<OpenJobUser>;
   clearCleanupPending(): Promise<void>;
+  clearDeletionReceipt(): Promise<void>;
   clearProviderSession(): Promise<void>;
   clearStoredSession(): Promise<void>;
   createUser(idToken: string): Promise<OpenJobUser>;
   deleteUser(
     idToken: string,
-    credentials: {
-      credentialToken: string;
-      provider: SignInMethod;
-      revocation: NonNullable<ProviderCredential["revocation"]>;
-    }[],
-  ): Promise<{ status: "completed" | "pending" }>;
+    credentials: DeletionProviderCredential[],
+    statusToken: string,
+  ): Promise<DeletionStartResult>;
   exchangeProviderCredential(
     credential: ProviderCredential,
   ): Promise<FirebaseSession>;
   getMe(idToken: string): Promise<OpenJobUser>;
+  getDeletionStatus(statusToken: string): Promise<DeletionStatus>;
   linkSignInMethod(
     idToken: string,
     credentialToken: string,
@@ -155,12 +267,22 @@ export type NativeAuthDependencies = {
     ownerUserId: string,
   ): Promise<LocalTaskListCacheEntry | null>;
   loadCleanupPending(): Promise<boolean>;
+  loadDeletionReceipt(): Promise<DeletionReceipt | null>;
   loadStoredSession(): Promise<StoredSession | null>;
   markCleanupPending(): Promise<void>;
   now(): number;
+  prepareDeletionStatus(
+    idToken: string,
+    credential?: DeletionProviderCredential,
+  ): Promise<DeletionPrepareResult>;
   purgeLocalDomainCache(): Promise<void>;
+  refreshDeletionProvider(
+    statusToken: string,
+    credential: DeletionProviderCredential,
+  ): Promise<DeletionStartResult>;
   refreshSession(stored: StoredSession): Promise<FirebaseSession>;
   saveStoredSession(stored: StoredSession): Promise<void>;
+  saveDeletionReceipt(receipt: DeletionReceipt): Promise<void>;
   saveLocalTaskListCache(entry: LocalTaskListCacheEntry): Promise<void>;
   signInWithQaPassword(
     email: string,
@@ -184,23 +306,54 @@ function isUnrecognized(error: unknown) {
   );
 }
 
+function isAccountDeletionPending(error: unknown) {
+  return (
+    error instanceof OpenJobApiError &&
+    error.status === 410 &&
+    error.code === "account_deletion_pending"
+  );
+}
+
+function isTransientDeletionRecoveryError(error: unknown) {
+  return (
+    (error instanceof ProviderSignInError && error.code === "offline") ||
+    (error instanceof OpenJobApiError &&
+      error.code !== "invalid_response" &&
+      (error.status === 429 || error.status >= 500))
+  );
+}
+
 function sortedMethods(methods: SignInMethod[]) {
   return [...new Set(methods)].sort();
 }
 
 const LINK_CONFIRMATION_VALIDITY_MS = 5 * 60_000;
+const DELETION_RECOVERY_PROOF_VALIDITY_MS = 5 * 60_000;
+const MAX_DELETION_RECOVERY_ATTEMPTS = 3;
+
+type PendingDeletionRecovery = {
+  attempts: number;
+  credential: DeletionProviderCredential;
+  epoch: number;
+  expiresAt: number;
+};
 
 export class NativeAuthCoordinator implements NativeTaskListController {
   private activeResult: SignedInResult | null = null;
   private activeSession: FirebaseAccessSession | null = null;
   private candidateSession: FirebaseAccessSession | null = null;
   private existingSession: FirebaseAccessSession | null = null;
+  private deletionReceipt: DeletionReceipt | null = null;
+  private deletionReceiptNeedsSave = false;
   private linkMode: "existing-current" | "unknown-current" | null = null;
   private expectedTargetUserId: string | null = null;
   private operationEpoch = 0;
+  private pendingDeletionRecovery: PendingDeletionRecovery | null = null;
   private storedSession: StoredSession | null = null;
   private operationTails = {
+    deletion: Promise.resolve(),
     provider: Promise.resolve(),
+    receipt: Promise.resolve(),
     stored: Promise.resolve(),
   };
 
@@ -208,9 +361,12 @@ export class NativeAuthCoordinator implements NativeTaskListController {
 
   async restoreCachedSession(): Promise<SignedInResult | null> {
     const epoch = this.operationEpoch;
+    if (this.deletionReceipt) return null;
     const cleanupPending = await this.dependencies.loadCleanupPending();
     this.assertCurrentOperation(epoch);
     if (cleanupPending) return null;
+    const deletionReceipt = await this.loadDeletionReceipt(epoch);
+    if (deletionReceipt) return null;
     const stored = await this.dependencies.loadStoredSession();
     this.assertCurrentOperation(epoch);
     this.storedSession = stored;
@@ -237,6 +393,8 @@ export class NativeAuthCoordinator implements NativeTaskListController {
   async restore(): Promise<AuthFlowResult> {
     const epoch = this.operationEpoch;
     try {
+      const deletion = await this.resolveStoredDeletionReceipt(epoch);
+      if (deletion) return deletion;
       const cleanupPending =
         await this.dependencies.loadCleanupPending();
       this.assertCurrentOperation(epoch);
@@ -256,6 +414,10 @@ export class NativeAuthCoordinator implements NativeTaskListController {
       try {
         user = await this.dependencies.getMe(session.idToken);
       } catch (error) {
+        if (isAccountDeletionPending(error)) {
+          this.assertCurrentOperation(epoch);
+          return await this.blockPendingDeletionWithoutFreshProof();
+        }
         if (!isUnrecognized(error)) throw error;
         this.assertCurrentOperation(epoch);
         try {
@@ -315,6 +477,8 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     this.candidateSession = null;
     this.existingSession = null;
     try {
+      const deletion = await this.resolveStoredDeletionReceipt(epoch);
+      if (deletion) return deletion;
       const credential =
         await this.withOperationLock("provider", () =>
           this.dependencies.signInWithProvider(provider),
@@ -329,6 +493,15 @@ export class NativeAuthCoordinator implements NativeTaskListController {
       try {
         user = await this.dependencies.getMe(accessSession.idToken);
       } catch (error) {
+        if (isAccountDeletionPending(error)) {
+          this.assertCurrentOperation(epoch);
+          return await this.recoverPendingDeletion(
+            accessSession.idToken,
+            credential,
+            provider,
+            epoch,
+          );
+        }
         if (!isUnrecognized(error)) throw error;
         const session = await this.persistSession(firebaseSession, epoch);
         this.candidateSession = session;
@@ -367,6 +540,8 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     this.candidateSession = null;
     this.existingSession = null;
     try {
+      const deletion = await this.resolveStoredDeletionReceipt(epoch);
+      if (deletion) return deletion;
       const firebaseSession =
         await this.dependencies.signInWithQaPassword(email, password);
       this.assertCurrentOperation(epoch);
@@ -375,6 +550,10 @@ export class NativeAuthCoordinator implements NativeTaskListController {
       try {
         user = await this.dependencies.getMe(accessSession.idToken);
       } catch (error) {
+        if (isAccountDeletionPending(error)) {
+          this.assertCurrentOperation(epoch);
+          return await this.blockPendingDeletionWithoutFreshProof();
+        }
         if (!isUnrecognized(error)) throw error;
         const session = await this.persistSession(firebaseSession, epoch);
         this.candidateSession = session;
@@ -680,18 +859,69 @@ export class NativeAuthCoordinator implements NativeTaskListController {
   }
 
   async signOut(): Promise<AuthFlowResult> {
+    const epoch = this.operationEpoch;
+    try {
+      const deletion = await this.resolveStoredDeletionReceipt(epoch);
+      if (deletion) return deletion;
+    } catch {
+      await this.removePrivateData();
+      return { kind: "cleanup-retry" };
+    }
     return (await this.removePrivateData())
       ? { kind: "signed-out" }
       : { kind: "cleanup-retry" };
   }
 
   async deleteUser(): Promise<AuthFlowResult> {
+    return await this.withOperationLock("deletion", () =>
+      this.deleteUserOnce(),
+    );
+  }
+
+  private async deleteUserOnce(): Promise<AuthFlowResult> {
     const epoch = this.operationEpoch;
     const active = await this.currentSession(epoch);
     const methods = this.activeResult?.methods;
     if (!methods || methods.length === 0) {
       throw new Error("Linked Sign-in Methods are required for deletion.");
     }
+    const prepared = await this.dependencies.prepareDeletionStatus(
+      active.idToken,
+    );
+    this.assertCurrentOperation(epoch);
+    if (prepared.status === "completed") {
+      return (await this.removePrivateData())
+        ? { kind: "deletion-completed" }
+        : { kind: "cleanup-retry" };
+    }
+    const preparedReceipt: DeletionReceipt = {
+      phase: prepared.status === "pending" ? "submitting" : "prepared",
+      statusToken: prepared.statusToken,
+      version: 1,
+    };
+    try {
+      await this.persistDeletionReceipt(preparedReceipt, epoch);
+    } catch (error) {
+      if (prepared.status !== "pending") throw error;
+      return (await this.removePrivateData())
+        ? {
+            kind: "deletion-status-retry",
+            reason: "storage-unavailable",
+          }
+        : { kind: "cleanup-retry" };
+    }
+    if (prepared.status === "pending") {
+      if (!(await this.removePrivateData())) {
+        return { kind: "cleanup-retry" };
+      }
+      return {
+        deadline: prepared.deadline,
+        kind: "deletion-pending",
+        reauthenticationProviders: prepared.reauthenticationProviders,
+        requestedAt: prepared.requestedAt,
+      };
+    }
+
     const credentials = [];
     for (const provider of methods) {
       const providerCredential = await this.withOperationLock("provider", () =>
@@ -711,18 +941,124 @@ export class NativeAuthCoordinator implements NativeTaskListController {
         revocation: providerCredential.revocation,
       });
     }
-    const deletion = await this.dependencies.deleteUser(
-      active.idToken,
-      credentials,
-    );
-    this.assertCurrentOperation(epoch);
-    const removed = await this.removePrivateData();
-    if (!removed) return { kind: "cleanup-retry" };
-    return {
-      kind: "signed-out",
-      reason:
-        deletion.status === "completed" ? "deleted" : "deletion-pending",
+    const submittingReceipt: DeletionReceipt = {
+      ...preparedReceipt,
+      phase: "submitting",
     };
+    await this.persistDeletionReceipt(submittingReceipt, epoch);
+
+    let deletion: DeletionStartResult;
+    try {
+      deletion = await this.dependencies.deleteUser(
+        active.idToken,
+        credentials,
+        submittingReceipt.statusToken,
+      );
+      this.assertCurrentOperation(epoch);
+    } catch (error) {
+      const resolution = await this.resolveDeletionReceipt(
+        submittingReceipt,
+        epoch,
+      );
+      if (resolution) return resolution;
+      throw error;
+    }
+    return await this.finishDeletion(deletion, submittingReceipt);
+  }
+
+  async acknowledgeDeletionCompletion(): Promise<AuthFlowResult> {
+    const epoch = this.operationEpoch;
+    let receipt: DeletionReceipt | null;
+    try {
+      receipt = await this.loadDeletionReceipt(epoch);
+    } catch {
+      return { kind: "deletion-clear-retry", status: "completed" };
+    }
+    if (!receipt) return { kind: "signed-out", reason: "deleted" };
+    if (receipt.phase !== "completed") {
+      return { kind: "deletion-status-retry", reason: "unavailable" };
+    }
+    const clear = await this.clearDeletionReceipt(epoch, "completed");
+    return clear ?? { kind: "signed-out", reason: "deleted" };
+  }
+
+  async refreshDeletionStatus(): Promise<AuthFlowResult> {
+    return await this.withOperationLock("deletion", async () => {
+      const epoch = this.operationEpoch;
+      const recovery = this.pendingDeletionRecovery;
+      if (recovery) {
+        if (recovery.epoch !== epoch) {
+          this.pendingDeletionRecovery = null;
+          return await this.blockPendingDeletionWithoutFreshProof();
+        }
+        return await this.submitPendingDeletionRecovery(recovery, epoch);
+      }
+      const deletion = await this.resolveStoredDeletionReceipt(epoch);
+      return deletion ?? (await this.restore());
+    });
+  }
+
+  async reauthenticateDeletionProvider(
+    provider: SignInMethod,
+  ): Promise<AuthFlowResult> {
+    return await this.withOperationLock("deletion", async () => {
+      const initialEpoch = this.operationEpoch;
+      const receipt = await this.loadDeletionReceipt(initialEpoch);
+      if (!receipt) {
+        return { kind: "signed-out", reason: "deletion-pending" };
+      }
+      const status = await this.dependencies.getDeletionStatus(
+        receipt.statusToken,
+      );
+      this.assertCurrentOperation(initialEpoch);
+      if (status.status !== "pending") {
+        return (await this.resolveDeletionReceipt(receipt, initialEpoch)) ??
+          (await this.restore());
+      }
+      if (!(await this.removePrivateData())) {
+        return { kind: "cleanup-retry" };
+      }
+      if (!status.reauthenticationProviders.includes(provider)) {
+        return {
+          deadline: status.deadline,
+          kind: "deletion-pending",
+          reauthenticationProviders: status.reauthenticationProviders,
+          requestedAt: status.requestedAt,
+        };
+      }
+
+      const epoch = this.operationEpoch;
+      try {
+        const providerCredential = await this.withOperationLock(
+          "provider",
+          () => this.dependencies.signInWithProvider(provider),
+        );
+        this.assertCurrentOperation(epoch);
+        if (
+          providerCredential.provider !== provider ||
+          !providerCredential.revocation
+        ) {
+          throw new ProviderSignInError("unavailable");
+        }
+        const firebase = await this.dependencies.exchangeProviderCredential(
+          providerCredential,
+        );
+        this.assertCurrentOperation(epoch);
+        const deletion = await this.dependencies.refreshDeletionProvider(
+          receipt.statusToken,
+          {
+            credentialToken: firebase.idToken,
+            provider,
+            revocation: providerCredential.revocation,
+          },
+        );
+        this.assertCurrentOperation(epoch);
+        return await this.finishDeletion(deletion, receipt);
+      } catch (error) {
+        await this.removePrivateData();
+        throw error;
+      }
+    });
   }
 
   async revokeSession(): Promise<AuthFlowResult> {
@@ -1020,8 +1356,301 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     this.expectedTargetUserId = null;
   }
 
-  private async removePrivateData() {
+  private async resolveStoredDeletionReceipt(epoch: number) {
+    let receipt: DeletionReceipt | null;
+    try {
+      receipt = await this.loadDeletionReceipt(epoch);
+    } catch (error) {
+      if (!(await this.removePrivateData())) {
+        return { kind: "cleanup-retry" } as const;
+      }
+      return {
+        kind: "deletion-status-retry",
+        reason:
+          error instanceof ProviderSignInError && error.code === "offline"
+            ? "offline"
+            : "unavailable",
+      } as const;
+    }
+    return receipt
+      ? this.resolveDeletionReceipt(receipt, epoch)
+      : null;
+  }
+
+  private async recoverPendingDeletion(
+    idToken: string,
+    credential: ProviderCredential,
+    expectedProvider: SignInMethod,
+    epoch: number,
+  ): Promise<AuthFlowResult> {
+    if (
+      credential.provider !== expectedProvider ||
+      !credential.revocation
+    ) {
+      return await this.blockPendingDeletionWithoutFreshProof();
+    }
+    const recovery: PendingDeletionRecovery = {
+      attempts: 0,
+      credential: {
+        credentialToken: idToken,
+        provider: credential.provider,
+        revocation: credential.revocation,
+      },
+      epoch,
+      expiresAt:
+        this.dependencies.now() + DELETION_RECOVERY_PROOF_VALIDITY_MS,
+    };
+    this.pendingDeletionRecovery = recovery;
+    return await this.submitPendingDeletionRecovery(recovery, epoch);
+  }
+
+  private async submitPendingDeletionRecovery(
+    recovery: PendingDeletionRecovery,
+    epoch: number,
+  ): Promise<AuthFlowResult> {
+    if (
+      this.pendingDeletionRecovery !== recovery ||
+      recovery.epoch !== epoch ||
+      recovery.attempts >= MAX_DELETION_RECOVERY_ATTEMPTS ||
+      this.dependencies.now() >= recovery.expiresAt
+    ) {
+      this.pendingDeletionRecovery = null;
+      return await this.blockPendingDeletionWithoutFreshProof();
+    }
+    recovery.attempts += 1;
+    let prepared: DeletionPrepareResult;
+    try {
+      prepared = await this.dependencies.prepareDeletionStatus(
+        recovery.credential.credentialToken,
+        recovery.credential,
+      );
+      this.assertCurrentOperation(epoch);
+    } catch (error) {
+      const retryable =
+        isTransientDeletionRecoveryError(error) &&
+        recovery.attempts < MAX_DELETION_RECOVERY_ATTEMPTS &&
+        this.dependencies.now() < recovery.expiresAt;
+      if (!retryable) this.pendingDeletionRecovery = null;
+      const removed = await this.removePrivateData(
+        retryable ? recovery : undefined,
+      );
+      if (!removed) return { kind: "cleanup-retry" };
+      if (retryable) {
+        return { kind: "deletion-status-retry", reason: "proof-retry" };
+      }
+      return { kind: "signed-out", reason: "deletion-pending" };
+    }
+    if (prepared.status === "completed") {
+      this.pendingDeletionRecovery = null;
+      return (await this.removePrivateData())
+        ? { kind: "deletion-completed" }
+        : { kind: "cleanup-retry" };
+    }
+    if (prepared.status !== "pending") {
+      this.pendingDeletionRecovery = null;
+      if (!(await this.removePrivateData())) {
+        return { kind: "cleanup-retry" };
+      }
+      return {
+        kind: "deletion-status-retry",
+        reason: "invalid-response",
+      };
+    }
+    const receipt: DeletionReceipt = {
+      phase: "submitting",
+      statusToken: prepared.statusToken,
+      version: 1,
+    };
+    try {
+      await this.persistDeletionReceipt(receipt, epoch);
+    } catch {
+      this.pendingDeletionRecovery = null;
+      return (await this.removePrivateData())
+        ? {
+            kind: "deletion-status-retry",
+            reason: "storage-unavailable",
+          }
+        : { kind: "cleanup-retry" };
+    }
+    this.pendingDeletionRecovery = null;
+    return await this.finishDeletion(prepared, receipt);
+  }
+
+  private async blockPendingDeletionWithoutFreshProof(): Promise<AuthFlowResult> {
+    return (await this.removePrivateData())
+      ? { kind: "signed-out", reason: "deletion-pending" }
+      : { kind: "cleanup-retry" };
+  }
+
+  private async loadDeletionReceipt(epoch: number) {
+    if (this.deletionReceipt) return this.deletionReceipt;
+    const receipt = await this.withOperationLock("receipt", () =>
+      this.dependencies.loadDeletionReceipt(),
+    );
+    this.assertCurrentOperation(epoch);
+    if (receipt) {
+      this.deletionReceipt = receipt;
+      this.deletionReceiptNeedsSave = false;
+    }
+    return receipt;
+  }
+
+  private async persistDeletionReceipt(
+    receipt: DeletionReceipt,
+    epoch: number,
+  ) {
+    this.deletionReceipt = receipt;
+    this.deletionReceiptNeedsSave = true;
+    await this.withOperationLock("receipt", () =>
+      this.dependencies.saveDeletionReceipt(receipt),
+    );
+    this.assertCurrentOperation(epoch);
+    this.deletionReceiptNeedsSave = false;
+  }
+
+  private async clearDeletionReceipt(
+    epoch: number,
+    status: "completed" | "not_started",
+    expectedStatusToken?: string,
+  ): Promise<AuthFlowResult | null> {
+    if (
+      expectedStatusToken !== undefined &&
+      this.deletionReceipt?.statusToken !== expectedStatusToken
+    ) {
+      return { kind: "deletion-status-retry", reason: "unavailable" };
+    }
+    try {
+      await this.withOperationLock("receipt", () =>
+        this.dependencies.clearDeletionReceipt(),
+      );
+      this.assertCurrentOperation(epoch);
+    } catch {
+      return { kind: "deletion-clear-retry", status };
+    }
+    this.deletionReceipt = null;
+    this.deletionReceiptNeedsSave = false;
+    return null;
+  }
+
+  private async finishDeletion(
+    deletion: DeletionStartResult,
+    receipt: DeletionReceipt,
+  ): Promise<AuthFlowResult> {
+    if (!(await this.removePrivateData())) {
+      return { kind: "cleanup-retry" };
+    }
+    if (deletion.status === "pending") {
+      return {
+        deadline: deletion.deadline,
+        kind: "deletion-pending",
+        reauthenticationProviders: deletion.reauthenticationProviders,
+        requestedAt: deletion.requestedAt,
+      };
+    }
+    return await this.persistCompletedDeletion(receipt);
+  }
+
+  private async resolveDeletionReceipt(
+    receipt: DeletionReceipt,
+    epoch: number,
+  ): Promise<AuthFlowResult | null> {
+    if (receipt.phase === "completed") {
+      if (this.deletionReceiptNeedsSave) {
+        try {
+          await this.persistDeletionReceipt(receipt, epoch);
+        } catch {
+          return {
+            kind: "deletion-status-retry",
+            reason: "storage-unavailable",
+          };
+        }
+      }
+      return { kind: "deletion-completed" };
+    }
+    let status: DeletionStatus;
+    try {
+      status = await this.dependencies.getDeletionStatus(
+        receipt.statusToken,
+      );
+      this.assertCurrentOperation(epoch);
+    } catch (error) {
+      if (!(await this.removePrivateData())) {
+        return { kind: "cleanup-retry" };
+      }
+      return {
+        kind: "deletion-status-retry",
+        reason:
+          error instanceof ProviderSignInError && error.code === "offline"
+            ? "offline"
+            : error instanceof OpenJobApiError &&
+                error.code === "invalid_response"
+              ? "invalid-response"
+              : "unavailable",
+      };
+    }
+    if (status.status === "not_started") {
+      if (!status.submissionExpired) {
+        if (!(await this.removePrivateData())) {
+          return { kind: "cleanup-retry" };
+        }
+        return { kind: "deletion-status-retry", reason: "unavailable" };
+      }
+      return await this.clearDeletionReceipt(
+        epoch,
+        "not_started",
+        receipt.statusToken,
+      );
+    }
+    if (!(await this.removePrivateData())) {
+      return { kind: "cleanup-retry" };
+    }
+    if (status.status === "pending") {
+      if (this.deletionReceiptNeedsSave) {
+        try {
+          await this.persistDeletionReceipt(
+            receipt,
+            this.operationEpoch,
+          );
+        } catch {
+          return {
+            kind: "deletion-status-retry",
+            reason: "storage-unavailable",
+          };
+        }
+      }
+      return {
+        deadline: status.deadline,
+        kind: "deletion-pending",
+        reauthenticationProviders: status.reauthenticationProviders,
+        requestedAt: status.requestedAt,
+      };
+    }
+    return await this.persistCompletedDeletion(receipt);
+  }
+
+  private async persistCompletedDeletion(
+    receipt: DeletionReceipt,
+  ): Promise<AuthFlowResult> {
+    try {
+      await this.persistDeletionReceipt(
+        { ...receipt, phase: "completed" },
+        this.operationEpoch,
+      );
+    } catch {
+      return { kind: "deletion-status-retry", reason: "unavailable" };
+    }
+    return { kind: "deletion-completed" };
+  }
+
+  private async removePrivateData(
+    preservedRecovery?: PendingDeletionRecovery,
+  ) {
     this.operationEpoch += 1;
+    if (this.pendingDeletionRecovery !== preservedRecovery) {
+      this.pendingDeletionRecovery = null;
+    } else {
+      preservedRecovery.epoch = this.operationEpoch;
+    }
     let marked = false;
     try {
       await this.dependencies.markCleanupPending();
