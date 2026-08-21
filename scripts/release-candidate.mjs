@@ -479,8 +479,36 @@ function candidateIdentityInputs(candidate) {
     signing: candidate.signing,
     toolVersions: candidate.toolVersions,
     releasePrivacyInventoryFingerprint: candidate.releasePrivacyInventoryFingerprint,
+    releasePrivacyRequirements: candidate.releasePrivacyRequirements,
     selectedInputFingerprints: candidate.selectedInputFingerprints,
   };
+}
+
+function releasePrivacyRequirements(inventory) {
+  const evidenceInputIds = (inventory.evidencePolicy?.inputs ?? [])
+    .filter(({ candidateScoped, ownerIssue }) => candidateScoped && ownerIssue === 41)
+    .map(({ id }) => id)
+    .sort();
+  const checklistItemIds = (inventory.submissionChecklist ?? [])
+    .filter(({ ownerIssue, stage }) => ownerIssue === 41 && stage === "release-proof")
+    .map(({ id }) => id)
+    .sort();
+  for (const [label, ids] of [
+    ["candidate evidence inputs", evidenceInputIds],
+    ["release-proof checklist items", checklistItemIds],
+  ]) {
+    if (
+      ids.length === 0 ||
+      new Set(ids).size !== ids.length ||
+      !ids.every(safeIdentifier)
+    ) {
+      fail(
+        "invalid_release_input",
+        `The Release Privacy Inventory has invalid or missing ${label}.`,
+      );
+    }
+  }
+  return { evidenceInputIds, checklistItemIds };
 }
 
 function platformState(platform, identity, sourceRevision, inputFingerprint, version) {
@@ -669,8 +697,12 @@ function validRecord(record) {
     !Array.isArray(record.events) ||
     !record.releaseProof ||
     !Array.isArray(record.releaseProof.evidence) ||
+    !Array.isArray(record.releaseProof.privacyEvidence) ||
+    !Array.isArray(record.releaseProof.privacyChecklist) ||
     !Array.isArray(record.releaseProof.privacyDiscrepancies) ||
-    !Array.isArray(record.releaseProof.limitations)
+    !Array.isArray(record.releaseProof.limitations) ||
+    !validRequirementIds(record.candidate?.releasePrivacyRequirements?.evidenceInputIds) ||
+    !validRequirementIds(record.candidate?.releasePrivacyRequirements?.checklistItemIds)
   ) {
     return false;
   }
@@ -729,6 +761,9 @@ function validRecord(record) {
         !safeIdentifier(platform.identity.buildNumber) ||
         !safeTimestamp(platform.build.succeededAt) ||
         platform.build.failure !== null ||
+        platform.artifact.signingIdentityFingerprint !== fingerprint(
+          record.candidate.signing?.[platformName],
+        ) ||
         !/^sha256:[a-f0-9]{64}$/u.test(platform.artifact.checksum)
       ) {
         return false;
@@ -841,7 +876,17 @@ function validRecord(record) {
   const unapprovedLimitations = record.releaseProof.limitations.some(
     (item) => !item.approved,
   );
+  const recordedPrivacyEvidence = validRecordedPrivacyEvidence(
+    record.releaseProof.privacyEvidence,
+    record.candidate.releasePrivacyRequirements.evidenceInputIds,
+  );
+  const recordedPrivacyChecklist = validRecordedPrivacyEvidence(
+    record.releaseProof.privacyChecklist,
+    record.candidate.releasePrivacyRequirements.checklistItemIds,
+  );
   if (
+    !recordedPrivacyEvidence ||
+    !recordedPrivacyChecklist ||
     !validReviewItems(record.releaseProof.privacyDiscrepancies, "discrepancy") ||
     !validReviewItems(record.releaseProof.limitations, "limitation") ||
     (releaseProofStarted && !safeIdentifier(record.releaseProof.requestKey)) ||
@@ -851,7 +896,15 @@ function validRecord(record) {
       record.releaseProof.failure !== null) ||
     (releaseProofComplete &&
       (record.releaseProof.failure !== null ||
-        !safeEvidenceReferences(record.releaseProof.evidence))) ||
+        !safeEvidenceReferences(record.releaseProof.evidence) ||
+        !exactPrivacyEvidence(
+          record.releaseProof.privacyEvidence,
+          record.candidate.releasePrivacyRequirements.evidenceInputIds,
+        ) ||
+        !exactPrivacyEvidence(
+          record.releaseProof.privacyChecklist,
+          record.candidate.releasePrivacyRequirements.checklistItemIds,
+        ))) ||
     (record.releaseProof.state === "blocked" &&
       (!safeTimestamp(record.releaseProof.blockedAt) ||
         (!unresolvedPrivacy && !unapprovedLimitations))) ||
@@ -885,43 +938,38 @@ async function readRecord(path) {
 }
 
 async function currentCandidateMismatch(root, record) {
-  try {
-    const source = synchronizedSource(root);
-    const [{ version }, selectedInputFingerprints, privacy] = await Promise.all([
-      synchronizedVersion(root),
-      inputFingerprints(root),
-      readJson(
-        resolve(root, "config/release-privacy-inventory.json"),
-        "invalid_release_input",
-      ),
-    ]);
-    if (version !== record.candidate.version) return "the synchronized version changed";
-    if (
-      JSON.stringify(selectedInputFingerprints) !==
-      JSON.stringify(record.candidate.selectedInputFingerprints)
-    ) {
-      return "a dependency, native configuration, signing, permission, or privacy input changed";
-    }
-    if (
-      releasePrivacyFingerprint(privacy) !==
-      record.candidate.releasePrivacyInventoryFingerprint
-    ) {
-      return "the Release Privacy Inventory changed";
-    }
-    if (source.revision !== record.candidate.sourceRevision) {
-      return "the source revision changed";
-    }
-    if (
-      record.candidate.toolVersions?.node &&
-      record.candidate.toolVersions.node !== process.version
-    ) {
-      return "the Node.js runtime changed after verification";
-    }
-    return null;
-  } catch (error) {
-    if (error instanceof CandidateError) return error.message;
-    throw error;
+  const source = synchronizedSource(root);
+  const [{ version }, selectedInputFingerprints, privacy] = await Promise.all([
+    synchronizedVersion(root),
+    inputFingerprints(root),
+    readJson(
+      resolve(root, "config/release-privacy-inventory.json"),
+      "invalid_release_input",
+    ),
+  ]);
+  if (version !== record.candidate.version) return "the synchronized version changed";
+  if (
+    JSON.stringify(selectedInputFingerprints) !==
+    JSON.stringify(record.candidate.selectedInputFingerprints)
+  ) {
+    return "a dependency, native configuration, signing, permission, or privacy input changed";
   }
+  if (
+    releasePrivacyFingerprint(privacy) !==
+    record.candidate.releasePrivacyInventoryFingerprint
+  ) {
+    return "the Release Privacy Inventory changed";
+  }
+  if (source.revision !== record.candidate.sourceRevision) {
+    return "the source revision changed";
+  }
+  if (
+    record.candidate.toolVersions?.node &&
+    record.candidate.toolVersions.node !== process.version
+  ) {
+    return "the Node.js runtime changed after verification";
+  }
+  return null;
 }
 
 async function assertCurrentCandidate(root, path, record) {
@@ -1033,7 +1081,7 @@ function executeExternal(executor, request, root) {
   return response;
 }
 
-function validBuildResponse(response, record) {
+function validBuildResponse(response, record, platform) {
   return Boolean(
     response.sourceRevision === record.candidate.sourceRevision &&
       response.inputFingerprint === record.candidate.identityFingerprint &&
@@ -1041,7 +1089,10 @@ function validBuildResponse(response, record) {
       safeIdentifier(response.buildNumber) &&
       safeIdentifier(response.easBuildId) &&
       safeIdentifier(response.artifact?.id) &&
-      /^sha256:[a-f0-9]{64}$/u.test(response.artifact?.checksum)
+      /^sha256:[a-f0-9]{64}$/u.test(response.artifact?.checksum) &&
+      response.signingIdentity &&
+      fingerprint(response.signingIdentity) ===
+        fingerprint(record.candidate.signing[platform])
   );
 }
 
@@ -1116,6 +1167,42 @@ function safeEvidenceReferences(references) {
   );
 }
 
+function validRequirementIds(ids) {
+  return (
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.every(safeIdentifier) &&
+    new Set(ids).size === ids.length &&
+    ids.every((id, index) => index === 0 || ids[index - 1] < id)
+  );
+}
+
+function validPrivacyEvidence(items) {
+  return (
+    Array.isArray(items) &&
+    items.every(
+      (item) =>
+        item &&
+        Object.keys(item).length === 2 &&
+        safeIdentifier(item.id) &&
+        safeEvidenceReference(item.evidence),
+    ) &&
+    new Set(items.map(({ id }) => id)).size === items.length
+  );
+}
+
+function exactPrivacyEvidence(items, requiredIds) {
+  return (
+    validPrivacyEvidence(items) &&
+    items.length === requiredIds.length &&
+    requiredIds.every((id) => items.some((item) => item.id === id))
+  );
+}
+
+function validRecordedPrivacyEvidence(items, requiredIds) {
+  return items.length === 0 || exactPrivacyEvidence(items, requiredIds);
+}
+
 function executorCandidate(record) {
   return {
     id: record.candidate.id,
@@ -1124,6 +1211,8 @@ function executorCandidate(record) {
     version: record.candidate.version,
     environment: record.candidate.environment,
     native: record.candidate.native,
+    signing: record.candidate.signing,
+    releasePrivacyRequirements: record.candidate.releasePrivacyRequirements,
   };
 }
 
@@ -1202,7 +1291,10 @@ async function executeBuild(parsed, root) {
       candidate: executorCandidate(record),
     }, root);
     const completedAt = new Date().toISOString();
-    if (response.status !== "succeeded" || !validBuildResponse(response, record)) {
+    if (
+      response.status !== "succeeded" ||
+      !validBuildResponse(response, record, parsed.platform)
+    ) {
       const failure = response.status === "succeeded"
         ? {
             classification: "terminal",
@@ -1240,6 +1332,7 @@ async function executeBuild(parsed, root) {
       inputFingerprint: response.inputFingerprint,
       version: response.version,
       buildNumber: response.buildNumber,
+      signingIdentityFingerprint: fingerprint(response.signingIdentity),
     };
     platform.build = {
       ...platform.build,
@@ -1800,6 +1893,7 @@ async function executeReleaseProof(parsed, root) {
       candidate: executorCandidate(record),
       platforms: record.platforms,
       releaseProofIssue: 41,
+      privacyRequirements: record.candidate.releasePrivacyRequirements,
     }, root);
     const completedAt = new Date().toISOString();
     const valid =
@@ -1807,6 +1901,14 @@ async function executeReleaseProof(parsed, root) {
       matchesCandidateResponse(response, record) &&
       response.issue === 41 &&
       safeEvidenceReferences(response.evidenceReferences) &&
+      exactPrivacyEvidence(
+        response.privacyEvidence,
+        record.candidate.releasePrivacyRequirements.evidenceInputIds,
+      ) &&
+      exactPrivacyEvidence(
+        response.privacyChecklist,
+        record.candidate.releasePrivacyRequirements.checklistItemIds,
+      ) &&
       validReviewItems(response.privacyDiscrepancies, "discrepancy") &&
       validReviewItems(response.limitations, "limitation");
     if (!valid) {
@@ -1838,6 +1940,8 @@ async function executeReleaseProof(parsed, root) {
     record.releaseProof.state = blocked ? "blocked" : "succeeded";
     record.releaseProof.failure = null;
     record.releaseProof.evidence = response.evidenceReferences;
+    record.releaseProof.privacyEvidence = response.privacyEvidence;
+    record.releaseProof.privacyChecklist = response.privacyChecklist;
     record.releaseProof.privacyDiscrepancies = response.privacyDiscrepancies;
     record.releaseProof.limitations = response.limitations;
     if (blocked) {
@@ -2133,6 +2237,7 @@ async function prepare(parsed, root) {
     fail("ota_enabled", "Release Candidate preparation requires OTA delivery to remain disabled.");
   }
   const releasePrivacyInventoryFingerprint = releasePrivacyFingerprint(privacy);
+  const frozenReleasePrivacyRequirements = releasePrivacyRequirements(privacy);
   const easProfile = eas.build[buildProfile];
   const iosSigning = nativeIdentities.apple.distributionSigning[parsed.environment];
   const androidSigning = environmentIdentity.android.signing;
@@ -2169,11 +2274,12 @@ async function prepare(parsed, root) {
     },
     toolVersions: {
       ...verification.toolVersions,
-      candidateCoordinator: 1,
+      candidateCoordinator: 2,
       easCli: nativePackage.devDependencies?.["eas-cli"] ?? eas.cli?.version,
       nodeEngine: rootPackage.engines?.node,
     },
     releasePrivacyInventoryFingerprint,
+    releasePrivacyRequirements: frozenReleasePrivacyRequirements,
     selectedInputFingerprints,
   };
   const identityFingerprint = fingerprint(candidateIdentityInputs);
@@ -2217,6 +2323,7 @@ async function prepare(parsed, root) {
       signing: candidateIdentityInputs.signing,
       toolVersions: candidateIdentityInputs.toolVersions,
       releasePrivacyInventoryFingerprint,
+      releasePrivacyRequirements: frozenReleasePrivacyRequirements,
       selectedInputFingerprints,
     },
     verification: {
@@ -2231,6 +2338,8 @@ async function prepare(parsed, root) {
       issue: 41,
       state: "missing",
       evidence: [],
+      privacyEvidence: [],
+      privacyChecklist: [],
       privacyDiscrepancies: [],
       limitations: [],
     },

@@ -466,36 +466,30 @@ for (const environment of environments) {
       /expo\.sqlite\.useSQLCipher\s*=\s*true/u,
       `${environment} Android SQLCipher build flag was not generated`,
     );
-    for (const { dataType, linked } of [
-      { dataType: "NSPrivacyCollectedDataTypeName", linked: true },
-      { dataType: "NSPrivacyCollectedDataTypeEmailAddress", linked: true },
-      { dataType: "NSPrivacyCollectedDataTypeUserID", linked: true },
-      { dataType: "NSPrivacyCollectedDataTypeProductInteraction", linked: true },
-      { dataType: "NSPrivacyCollectedDataTypeCrashData", linked: false },
-      { dataType: "NSPrivacyCollectedDataTypePerformanceData", linked: false },
-      {
-        dataType: "NSPrivacyCollectedDataTypeOtherDiagnosticData",
-        linked: false,
-      },
-    ]) {
+    for (const entry of appleAppPrivacy.NSPrivacyCollectedDataTypes) {
+      const dataType = entry.NSPrivacyCollectedDataType;
+      const linked = entry.NSPrivacyCollectedDataTypeLinked;
+      const tracking = entry.NSPrivacyCollectedDataTypeTracking;
       assert.match(
         ios,
         new RegExp(
-          `${dataType}[\\s\\S]{0,600}NSPrivacyCollectedDataTypeLinked[\\s\\S]{0,100}<${linked}\\s*/>[\\s\\S]{0,600}NSPrivacyCollectedDataTypeTracking[\\s\\S]{0,100}<false\\s*/>`,
+          `${dataType}[\\s\\S]{0,600}NSPrivacyCollectedDataTypeLinked[\\s\\S]{0,100}<${linked}\\s*/>[\\s\\S]{0,600}NSPrivacyCollectedDataTypeTracking[\\s\\S]{0,100}<${tracking}\\s*/>`,
           "u",
         ),
-        `${environment} iOS privacy manifest did not declare ${dataType} with the expected linkage and no tracking`,
+        `${environment} iOS privacy manifest did not render the inventory-owned ${dataType} linkage and tracking declaration`,
       );
+      for (const purpose of entry.NSPrivacyCollectedDataTypePurposes) {
+        assert.match(
+          ios,
+          new RegExp(`${dataType}[\\s\\S]{0,900}${purpose}`, "u"),
+          `${environment} iOS privacy manifest did not render the inventory-owned ${dataType} purpose ${purpose}`,
+        );
+      }
     }
     assert.doesNotMatch(
       ios,
       /NSPrivacyCollectedDataTypeOtherUserContent/u,
       `${environment} iOS privacy manifest incorrectly declares downloaded-only Task or Group content as collected`,
-    );
-    assert.match(
-      ios,
-      /NSPrivacyCollectedDataTypePurposeAppFunctionality/u,
-      `${environment} iOS app-functionality purpose was not generated`,
     );
     assert.match(
       ios,

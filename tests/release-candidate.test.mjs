@@ -134,6 +134,46 @@ async function createCandidateFixture() {
       },
     ],
     processors: [],
+    evidencePolicy: {
+      inputs: [
+        {
+          id: "exact-dependency-inventories",
+          sourceType: "exact-dependency-inventory",
+          candidateScoped: true,
+          ownerIssue: 41,
+        },
+        {
+          id: "bundled-sdk-manifests",
+          sourceType: "sdk-manifest",
+          candidateScoped: true,
+          ownerIssue: 41,
+        },
+        {
+          id: "play-sdk-index",
+          sourceType: "sdk-index",
+          candidateScoped: true,
+          ownerIssue: 41,
+        },
+        {
+          id: "exact-candidate-provider-api-sentry-traffic",
+          sourceType: "captured-traffic",
+          candidateScoped: true,
+          ownerIssue: 41,
+        },
+      ],
+    },
+    submissionChecklist: [
+      {
+        id: "reconcile-candidate-evidence",
+        ownerIssue: 41,
+        stage: "release-proof",
+      },
+      {
+        id: "save-without-premature-claims",
+        ownerIssue: 41,
+        stage: "release-proof",
+      },
+    ],
   };
 
   await Promise.all([
@@ -265,6 +305,7 @@ async function createCandidateFixture() {
       '    checksum: `sha256:${request.platform === "ios" ? "a" : "b"}`.padEnd(71, request.platform === "ios" ? "a" : "b"),',
       '    uri: `https://artifacts.example.test/${request.platform}/1?access_token=executor-only-secret`,',
       '  },',
+      '  signingIdentity: request.candidate.signing?.[request.platform] ?? (request.platform === "ios" ? { bundleId: "dev.openjob.app", provider: "apple-developer", certificate: { id: "CERT123", fingerprintSha256: "AA:BB" }, profile: { id: "PROFILE123", uuid: "profile-uuid" } } : { configurationId: "ANDROID-SIGNING", provider: "eas-managed", sha256Fingerprint: "CC:DD" }),',
       '};',
       'if (request.action === "submit") response = { schemaVersion: 1, status: "succeeded", ...identity, submissionId: `submission-${request.platform}-1`, storeBuildId: `store-${request.platform}-${buildNumber}` };',
       'if (request.action === "status") response = { schemaVersion: 1, status: "succeeded", ...identity, storeBuildId: `store-${request.platform}-${buildNumber}`, processing: "succeeded", availability: "succeeded" };',
@@ -275,9 +316,19 @@ async function createCandidateFixture() {
       '  if (state[pendingKey] === 1) { response.processing = "pending"; response.availability = "pending"; }',
       '}',
       'if (request.action === "physical-proof") response = { schemaVersion: 1, status: "succeeded", ...identity, artifactId: request.artifact.id, evidenceReferences: [`https://github.com/scwlkr/openjob/issues/41#${request.platform}-physical`] };',
-      'if (request.action === "release-proof") response = { schemaVersion: 1, status: "succeeded", ...identity, issue: 41, evidenceReferences: ["https://github.com/scwlkr/openjob/issues/41#release-proof"], privacyDiscrepancies: [], limitations: [] };',
+      'if (request.action === "release-proof") response = { schemaVersion: 1, status: "succeeded", ...identity, issue: 41, evidenceReferences: ["https://github.com/scwlkr/openjob/issues/41#release-proof"], privacyEvidence: [',
+      '  { id: "exact-dependency-inventories", evidence: "https://github.com/scwlkr/openjob/issues/41#exact-dependencies" },',
+      '  { id: "bundled-sdk-manifests", evidence: "https://github.com/scwlkr/openjob/issues/41#bundled-sdk-manifests" },',
+      '  { id: "play-sdk-index", evidence: "https://github.com/scwlkr/openjob/issues/41#play-sdk-index" },',
+      '  { id: "exact-candidate-provider-api-sentry-traffic", evidence: "https://github.com/scwlkr/openjob/issues/41#candidate-traffic" },',
+      '], privacyChecklist: [',
+      '  { id: "reconcile-candidate-evidence", evidence: "https://github.com/scwlkr/openjob/issues/41#candidate-reconciliation" },',
+      '  { id: "save-without-premature-claims", evidence: "https://github.com/scwlkr/openjob/issues/41#store-state" },',
+      '], privacyDiscrepancies: [], limitations: [] };',
       'if (request.action === "promote") response = { schemaVersion: 1, status: "succeeded", ...identity, platforms: { ios: { promotionId: "promotion-ios-1" }, android: { promotionId: "promotion-android-1" } } };',
       'if (process.env.OPENJOB_CANDIDATE_MISMATCH === operation) response.sourceRevision = "mismatched-source-revision";',
+      'if (process.env.OPENJOB_CANDIDATE_SIGNING_DRIFT === operation) response.signingIdentity.provider = "rotated-signing-provider";',
+      'if (request.action === "release-proof" && process.env.OPENJOB_CANDIDATE_OMIT_PRIVACY_EVIDENCE === "1") response.privacyEvidence.shift();',
       'if (request.action === "release-proof" && process.env.OPENJOB_CANDIDATE_RELEASE_BLOCKERS === "1") {',
       '  response.privacyDiscrepancies = [{ id: "sdk-traffic", state: "unresolved", evidence: "https://github.com/scwlkr/openjob/issues/40#traffic" }];',
       '  response.limitations = [{ id: "android-review-delay", approved: false, evidence: "https://github.com/scwlkr/openjob/issues/41#limitation" }];',
@@ -523,6 +574,44 @@ test("build is previewed, explicitly confirmed once, and then reused", async () 
   ], environment);
   assert.equal(recovered.status, 0, recovered.stderr);
   assert.equal(recovered.report.status, "invalidated");
+});
+
+test("a source fetch failure does not invalidate an unchanged candidate", async () => {
+  const fixture = await createCandidateFixture();
+  const prepared = await runCandidate(fixture.root, [
+    "prepare",
+    "--record",
+    fixture.recordPath,
+    "--verification-result",
+    fixture.verificationPath,
+    "--environment",
+    "production",
+  ]);
+  assert.equal(prepared.status, 0, prepared.stderr);
+  const before = await readFile(fixture.recordPath, "utf8");
+  git(fixture.root, [
+    "remote",
+    "set-url",
+    "origin",
+    `${fixture.remote}-temporarily-unavailable`,
+  ]);
+
+  const result = await runCandidate(fixture.root, [
+    "execute",
+    "--record",
+    fixture.recordPath,
+    "--action",
+    "build",
+    "--platform",
+    "ios",
+    "--executor",
+    fixture.executorPath,
+  ]);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.report.error.code, "source_fetch_failed");
+  assert.equal(await readFile(fixture.recordPath, "utf8"), before);
+  assert.equal(JSON.parse(before).invalidation, null);
 });
 
 test("submission failure resumes the same artifact while platform state stays independent", async () => {
@@ -825,6 +914,25 @@ test("coequal promotion refuses incomplete Release Proof and advances both platf
   let failedRecord = JSON.parse(await readFile(fixture.recordPath, "utf8"));
   assert.equal(failedRecord.releaseProof.failure.classification, "resumable");
   assert.equal(failedRecord.releaseProof.failure.service, "github");
+  const retryAfterNetwork = await runCandidate(
+    fixture.root,
+    releaseProof,
+    environment,
+  );
+  assert.equal(retryAfterNetwork.status, 0, retryAfterNetwork.stderr);
+  const incompletePrivacyProof = await runCandidate(
+    fixture.root,
+    [...releaseProof, "--confirm", retryAfterNetwork.report.confirmationToken],
+    {
+      ...environment,
+      OPENJOB_CANDIDATE_OMIT_PRIVACY_EVIDENCE: "1",
+    },
+  );
+  assert.equal(incompletePrivacyProof.status, 1);
+  assert.equal(
+    incompletePrivacyProof.report.error.code,
+    "release_proof_mismatch",
+  );
   const retryProofPreview = await runCandidate(
     fixture.root,
     releaseProof,
@@ -933,6 +1041,40 @@ test("a mismatched platform artifact blocks both without discarding the valid pl
   ], environment);
   assert.equal(promotion.status, 1);
   assert.match(promotion.report.error.message, /android artifact identity mismatch/u);
+});
+
+test("a build signed by a different identity is rejected before artifact retention", async () => {
+  const fixture = await createCandidateFixture();
+  const environment = {
+    OPENJOB_CANDIDATE_EXECUTOR_LOG: fixture.executorLog,
+    OPENJOB_CANDIDATE_EXECUTOR_STATE: fixture.executorState,
+  };
+  await runCandidate(fixture.root, [
+    "prepare", "--record", fixture.recordPath,
+    "--verification-result", fixture.verificationPath,
+    "--environment", "production",
+  ], environment);
+  const action = [
+    "execute", "--record", fixture.recordPath,
+    "--action", "build", "--platform", "ios",
+    "--executor", fixture.executorPath,
+  ];
+  const preview = await runCandidate(fixture.root, action, environment);
+  const result = await runCandidate(
+    fixture.root,
+    [...action, "--confirm", preview.report.confirmationToken],
+    {
+      ...environment,
+      OPENJOB_CANDIDATE_SIGNING_DRIFT: "build:ios",
+    },
+  );
+
+  assert.equal(result.status, 1);
+  assert.equal(result.report.error.code, "artifact_identity_mismatch");
+  const record = JSON.parse(await readFile(fixture.recordPath, "utf8"));
+  assert.equal(record.invalidation, null);
+  assert.equal(record.platforms.ios.build.state, "failed");
+  assert.equal(record.platforms.ios.artifact, null);
 });
 
 test("changed release inputs invalidate before submission without discarding a valid artifact", async () => {

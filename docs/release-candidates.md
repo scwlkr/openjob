@@ -211,8 +211,19 @@ references, or `status: "failed"` with a non-secret error code and
 `classification` of `resumable` or `terminal`.
 
 Build executors return the EAS build ID, artifact ID, SHA-256 checksum, platform
-build/version number, source revision, input fingerprint, and release version.
+build/version number, source revision, input fingerprint, release version, and
+the signing identity inspected from the produced artifact. The coordinator
+fingerprints that certificate/profile or Android signing metadata and rejects
+the artifact unless it exactly matches the identity frozen at preparation.
 Apple/Google submission and status executors return submission/store build IDs
 and independent processing/availability states. Evidence executors return only
 short HTTPS, `local://`, or `executor://` references. The combined promotion
 executor must return matching results for both iOS and Android.
+
+The #41 release-proof executor receives the candidate-scoped evidence-input
+and release-proof checklist IDs frozen from the Release Privacy Inventory. It
+must return one safe evidence reference for every ID. Generic issue evidence,
+an empty discrepancy list, or an empty limitation list cannot substitute for
+the exact dependency inventory, bundled SDK manifests, Play SDK Index,
+candidate traffic, and store-checklist reconciliation declared by that
+inventory.

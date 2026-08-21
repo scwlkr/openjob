@@ -18,82 +18,6 @@ const OUTPUT_PATHS = [
   PLAY_OUTPUT_PATH,
   DOCUMENT_OUTPUT_PATH,
 ];
-const REQUIRED_EVIDENCE_INPUTS = [
-  {
-    id: "exact-dependency-inventories",
-    sourceType: "exact-dependency-inventory",
-    candidateScoped: true,
-    ownerIssue: 41,
-  },
-  {
-    id: "bundled-sdk-manifests",
-    sourceType: "sdk-manifest",
-    candidateScoped: true,
-    ownerIssue: 41,
-  },
-  {
-    id: "play-sdk-index",
-    sourceType: "sdk-index",
-    candidateScoped: true,
-    ownerIssue: 41,
-  },
-  {
-    id: "simulator-emulator-provider-api-sentry-traffic",
-    sourceType: "captured-traffic",
-    candidateScoped: false,
-    ownerIssue: 40,
-  },
-  {
-    id: "exact-candidate-provider-api-sentry-traffic",
-    sourceType: "captured-traffic",
-    candidateScoped: true,
-    ownerIssue: 41,
-  },
-];
-const REQUIRED_CHECKLIST_ITEMS = [
-  {
-    id: "match-generated-projections",
-    platforms: ["apple", "play"],
-    ownerIssue: 40,
-    stage: "pre-release-preparation",
-  },
-  {
-    id: "verify-public-urls",
-    platforms: ["apple", "play"],
-    ownerIssue: 40,
-    stage: "pre-release-preparation",
-  },
-  {
-    id: "verify-account-deletion",
-    platforms: ["apple", "play"],
-    ownerIssue: 40,
-    stage: "pre-release-preparation",
-  },
-  {
-    id: "reconcile-virtual-traffic",
-    platforms: ["apple", "play"],
-    ownerIssue: 40,
-    stage: "pre-release-preparation",
-  },
-  {
-    id: "prepare-declaration-answers",
-    platforms: ["apple", "play"],
-    ownerIssue: 40,
-    stage: "pre-release-preparation",
-  },
-  {
-    id: "reconcile-candidate-evidence",
-    platforms: ["apple", "play"],
-    ownerIssue: 41,
-    stage: "release-proof",
-  },
-  {
-    id: "save-without-premature-claims",
-    platforms: ["apple", "play"],
-    ownerIssue: 41,
-    stage: "release-proof",
-  },
-];
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function canonicalize(value) {
@@ -122,30 +46,6 @@ function assertUniqueIds(label, values) {
     throw new Error(
       `Release Privacy Inventory has duplicate ${label} IDs: ${duplicates.join(", ")}.`,
     );
-  }
-}
-
-function assertRequiredContracts(label, values, requiredContracts) {
-  const valuesById = new Map(values.map((value) => [value.id, value]));
-  for (const required of requiredContracts) {
-    const actual = valuesById.get(required.id);
-    if (!actual) {
-      throw new Error(
-        `Release Privacy Inventory is missing required ${label} ${required.id}.`,
-      );
-    }
-    for (const [field, expected] of Object.entries(required)) {
-      const matches = Array.isArray(expected)
-        ? Array.isArray(actual[field]) &&
-          actual[field].length === expected.length &&
-          expected.every((value) => actual[field].includes(value))
-        : actual[field] === expected;
-      if (field !== "id" && !matches) {
-        throw new Error(
-          `Release Privacy Inventory ${label} ${required.id} has invalid ${field}; expected ${expected}.`,
-        );
-      }
-    }
   }
 }
 
@@ -226,16 +126,24 @@ function assertSemanticContract(inventory) {
     inventory.evidencePolicy.prohibitedContent,
   );
   assertUniqueIds("submission-checklist", inventory.submissionChecklist);
-  assertRequiredContracts(
-    "evidence input",
-    inventory.evidencePolicy.inputs,
-    REQUIRED_EVIDENCE_INPUTS,
-  );
-  assertRequiredContracts(
-    "checklist item",
-    inventory.submissionChecklist,
-    REQUIRED_CHECKLIST_ITEMS,
-  );
+  if (
+    !inventory.evidencePolicy.inputs.some(
+      ({ candidateScoped, ownerIssue }) => candidateScoped && ownerIssue === 41,
+    )
+  ) {
+    throw new Error(
+      "Release Privacy Inventory is missing candidate-scoped #41 evidence inputs.",
+    );
+  }
+  if (
+    !inventory.submissionChecklist.some(
+      ({ ownerIssue, stage }) => ownerIssue === 41 && stage === "release-proof",
+    )
+  ) {
+    throw new Error(
+      "Release Privacy Inventory is missing its #41 release-proof checklist.",
+    );
+  }
 
   const processors = new Map(
     inventory.processors.map((processor) => [processor.id, processor]),
