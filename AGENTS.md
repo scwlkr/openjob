@@ -33,3 +33,12 @@ OpenJob uses a single-context root glossary and root ADR directory. See `docs/ag
 
 - commit frequently and ensure git is synced
 - issue-backed implementation is complete only after acceptance is verified, changes are synced, and the landed issue is closed with evidence; if a PR or blocker remains, state that gate instead of claiming completion
+
+## Linear work queue
+
+- Team: **WLKR LABS**.
+- Project: [OpenJob](https://linear.app/wlkr-labs/project/openjob-fa4830c93118).
+- Linear is the task source of truth. Existing GitHub issues and Markdown plans are historical context; this section supersedes older tracker or backlog guidance.
+- Before starting substantive work, read the Linear issue and discussion and check for existing work. Find or create a Linear issue for substantive user-requested work, not every question or minor action.
+- Keep status current, include the issue ID in branches and PRs, and post concise outcomes or blockers. Mark Done only when completion criteria are met.
+- Do not maintain a competing Markdown backlog or import or sync GitHub issues.
