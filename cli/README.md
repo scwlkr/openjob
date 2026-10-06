@@ -15,7 +15,7 @@ variables. Maintainers can select the `@scwlkr` owner Preview profile after
 loading its recorded stable Preview User ID from 1Password:
 
 ```sh
-OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://My Passwords/OpenJob Preview Owner Binding/OpenJob User ID' \
   op run -- openjob --profile preview-owner auth login
 ```
 
@@ -23,7 +23,7 @@ Wrap every Preview invocation with the same unresolved 1Password reference;
 never export the resolved User ID into a long-lived shell. For example:
 
 ```sh
-OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://My Passwords/OpenJob Preview Owner Binding/OpenJob User ID' \
   op run -- openjob --profile preview-owner group list
 ```
 

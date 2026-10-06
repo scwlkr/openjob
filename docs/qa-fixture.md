@@ -69,10 +69,10 @@ OpenJob User ID must already exist in the QA Two vault item before the
 target-fixed provisioner runs:
 
 ```sh
-OPENJOB_QA_TWO_EMAIL='op://Personal/OpenJob QA Two Preview Password/username' \
-OPENJOB_QA_TWO_PASSWORD='op://Personal/OpenJob QA Two Preview Password/password' \
-OPENJOB_QA_TWO_FIREBASE_UID='op://Personal/OpenJob QA Two Preview Password/Firebase UID' \
-OPENJOB_QA_TWO_USER_ID='op://Personal/OpenJob QA Two Preview Password/OpenJob User ID' \
+OPENJOB_QA_TWO_EMAIL='op://My Passwords/OpenJob QA Two Preview Password/username' \
+OPENJOB_QA_TWO_PASSWORD='op://My Passwords/OpenJob QA Two Preview Password/password' \
+OPENJOB_QA_TWO_FIREBASE_UID='op://My Passwords/OpenJob QA Two Preview Password/Firebase UID' \
+OPENJOB_QA_TWO_USER_ID='op://My Passwords/OpenJob QA Two Preview Password/OpenJob User ID' \
   op run -- npm run qa:user:provision
 ```
 
@@ -109,7 +109,7 @@ existing nonproduction User ID and account reference in
 value:
 
 ```sh
-OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://My Passwords/OpenJob Preview Owner Binding/OpenJob User ID' \
   op run -- openjob --profile preview-owner auth login
 ```
 
@@ -117,7 +117,7 @@ Use that unresolved `op://` wrapper for every later Preview CLI invocation too;
 do not export the resolved User ID into a long-lived shell:
 
 ```sh
-OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://Personal/OpenJob Preview Owner Binding/OpenJob User ID' \
+OPENJOB_PREVIEW_OWNER_EXPECTED_USER_ID='op://My Passwords/OpenJob Preview Owner Binding/OpenJob User ID' \
   op run -- openjob --profile preview-owner group list
 ```
 
