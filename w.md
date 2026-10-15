@@ -20,3 +20,10 @@ Features: [FEATURES.md](FEATURES.md)
 Terms: [CONTEXT.md](CONTEXT.md)
 CLI: `npm run`; `node cli/openjob.mjs --help`
 <!-- wstack:end setup -->
+
+## Local brand foundation · WLK-272
+
+- Branch `codex/wlk-272-brand-foundation`. Identity source: `docs/brand/README.md`; local visual guide: `docs/brand/index.html`.
+- Ten editable SVGs, local Inter 4.1 + OFL, original owner-supplied board, scoped light/dark CSS tokens. Geometry reconstructed; font is a documented match.
+- Runtime branding remains legacy for later adoption. No deployment in this task.
+- Desktop/tablet/phone layouts and local concept controls inspected. Final verification and repository delivery in progress.
