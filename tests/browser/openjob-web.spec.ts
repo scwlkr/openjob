@@ -45,6 +45,7 @@ type Task = {
     | { state: "deleted" };
   priority?: "high" | "normal" | "low";
   dueDate: string | null;
+  scheduledSlot?: { start: string; end: string };
   state: "open" | "done";
   createdAt: string;
   completedAt: string | null;
@@ -1330,6 +1331,7 @@ async function installApi(
         assigneeUsername?: unknown;
         priority?: unknown;
         dueDate?: unknown;
+        scheduledSlot?: Task["scheduledSlot"] | null;
       };
       const text = typeof input.text === "string" ? input.text.trim() : "";
       if (!text) {
@@ -1352,6 +1354,7 @@ async function installApi(
           ? input.priority as "high" | "normal" | "low"
           : "normal",
         dueDate: typeof input.dueDate === "string" ? input.dueDate : null,
+        ...(input.scheduledSlot ? { scheduledSlot: input.scheduledSlot } : {}),
         state: "open",
         createdAt: "2026-07-16T18:00:00.000Z",
         completedAt: null,
@@ -1379,6 +1382,7 @@ async function installApi(
         assigneeUsername?: string;
         priority?: "high" | "normal" | "low";
         dueDate?: string | null;
+        scheduledSlot?: Task["scheduledSlot"] | null;
       };
       let nextAssignee = task.assignee;
       if (input.assigneeUsername !== undefined) {
@@ -1394,6 +1398,7 @@ async function installApi(
         ...(input.text !== undefined ? { text: input.text.trim() } : {}),
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
         ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+        ...("scheduledSlot" in input ? { scheduledSlot: input.scheduledSlot ?? undefined } : {}),
         assignee: nextAssignee,
       };
       state.tasks = state.tasks.map((item) => item.taskId === taskId ? updated : item);
@@ -5609,6 +5614,10 @@ test("separates the touch-first completion control from keyboard Task editing", 
   await page.keyboard.press("Enter");
   const editor = page.getByRole("dialog", { name: "Edit Task" });
   await expect(editor).toBeVisible();
+  // Measure touch targets after translation stops, avoiding fractional rectangles.
+  await editor.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   for (const control of await editor.locator('button, input:not([type="radio"]), select, textarea').all()) {
     const box = await control.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -6354,6 +6363,8 @@ test("restores a Task editor draft after authentication recovery", async ({ page
   let editor = page.getByRole("dialog", { name: "Edit Task" });
   await editor.getByLabel("Task text").fill("Restore this exact draft");
   await editor.getByLabel("Due date").fill("2026-07-29");
+  await editor.getByLabel("Planned start (UTC)", { exact: true }).fill("2026-11-01T13:00");
+  await editor.getByLabel("Planned end (UTC)", { exact: true }).fill("2026-11-01T14:00");
   state.taskMutationFailureStatus = 401;
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your session expired. Sign in again.");
@@ -6365,6 +6376,8 @@ test("restores a Task editor draft after authentication recovery", async ({ page
   await expect(editor.getByLabel("Task text")).toHaveValue("Restore this exact draft");
   await expect(editor.getByLabel("Assignee")).toHaveValue("shane");
   await expect(editor.getByLabel("Due date")).toHaveValue("2026-07-29");
+  await expect(editor.getByLabel("Planned start (UTC)", { exact: true })).toHaveValue("2026-11-01T13:00");
+  await expect(editor.getByLabel("Planned end (UTC)", { exact: true })).toHaveValue("2026-11-01T14:00");
 });
 
 test("returns Task List authentication failures to a working sign-in path", async ({ page }) => {
@@ -6582,4 +6595,111 @@ test("keeps the approved Variant B visual hierarchy at phone and desktop sizes",
     animations: "disabled",
     fullPage: true,
   });
+});
+
+test.describe("planned Task intervals", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    test(`creates, edits and clears planned work at ${viewport.width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await startSignedIn(page);
+      const state = await installApi(page, {
+        user: signedInUser, groups: [walkerLabs],
+        members: [{ userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" }],
+      });
+      await page.goto("/");
+      await page.getByRole("button", { name: "New Task", exact: true }).click();
+      let editor = page.getByRole("dialog", { name: "New Task" });
+      await editor.getByLabel("Task text").fill("Plan provider adapter review");
+      await editor.getByLabel("Assignee").selectOption("shane");
+      await editor.getByLabel("Due date").fill("2026-11-03");
+      await editor.getByLabel("Planned start (UTC)", { exact: true }).fill("2026-11-01T13:00");
+      await editor.getByRole("button", { name: "Create", exact: true }).click();
+      await expect(editor.getByRole("alert")).toContainText("Choose both");
+      expect(state.taskMutationRequests).toBe(0);
+      await editor.getByLabel("Planned end (UTC)", { exact: true }).fill("2026-11-01T12:00");
+      await editor.getByRole("button", { name: "Create", exact: true }).click();
+      await expect(editor.getByRole("alert")).toContainText("end must follow start");
+      expect(state.taskMutationRequests).toBe(0);
+      await editor.getByLabel("Planned end (UTC)", { exact: true }).fill("2026-11-01T14:00");
+      await expectNoHorizontalOverflow(page);
+      await editor.screenshot({ path: testInfo.outputPath(`planned-work-${viewport.width}.png`) });
+      if (viewport.width === 1440) {
+        await page.setViewportSize({ width: 800, height: 900 });
+        await expectNoHorizontalOverflow(page);
+        await editor.screenshot({ path: testInfo.outputPath("planned-work-800.png") });
+        await page.setViewportSize(viewport);
+      }
+      await editor.getByRole("button", { name: "Create", exact: true }).click();
+      let card = page.getByTestId("task-card").filter({ hasText: "Plan provider adapter review" });
+      await expect(card.getByText(/Planned.*UTC/)).toBeVisible();
+      await expect(card.getByRole("button", { name: "Edit" })).toHaveAccessibleDescription(/Planned.*UTC/);
+      expect(state.tasks[0].scheduledSlot).toEqual({ start: "2026-11-01T13:00:00.000Z", end: "2026-11-01T14:00:00.000Z" });
+      expect(state.tasks[0].dueDate).toBe("2026-11-03");
+
+      await card.getByRole("button", { name: "Edit" }).click();
+      editor = page.getByRole("dialog", { name: "Edit Task" });
+      await expect(editor.getByLabel("Planned start (UTC)", { exact: true })).toHaveValue("2026-11-01T13:00");
+      await editor.getByLabel("Planned end (UTC)", { exact: true }).fill("2026-11-01T15:00");
+      state.failTaskMutationNetwork = true;
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor.getByRole("alert")).toContainText("Check your connection");
+      await expect(editor.getByLabel("Planned end (UTC)", { exact: true })).toHaveValue("2026-11-01T15:00");
+      expect(state.tasks[0].scheduledSlot?.end).toBe("2026-11-01T14:00:00.000Z");
+      state.failTaskMutationNetwork = false;
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await page.reload();
+      card = page.getByTestId("task-card").filter({ hasText: "Plan provider adapter review" });
+      await expect(card.getByText(/Planned.*15:00.*UTC/)).toBeVisible();
+      expect(state.tasks[0].scheduledSlot?.end).toBe("2026-11-01T15:00:00.000Z");
+      expect(state.tasks[0].dueDate).toBe("2026-11-03");
+
+      await card.getByRole("checkbox", { name: "Complete Plan provider adapter review" }).click();
+      await page.getByRole("button", { name: "Done 1", exact: true }).click();
+      card = page.getByTestId("task-card").filter({ hasText: "Plan provider adapter review" });
+      await expect(card.getByText(/Planned.*UTC/)).toBeVisible();
+      await expect(card.getByRole("button", { name: "Edit" })).toHaveCount(0);
+      await card.getByRole("button", { name: "Reopen" }).click();
+      await page.getByRole("button", { name: "Open 1", exact: true }).click();
+      await card.getByRole("button", { name: "Edit" }).click();
+      editor = page.getByRole("dialog", { name: "Edit Task" });
+      await editor.getByRole("button", { name: "Clear planned work", exact: true }).click();
+      await expect(editor.getByLabel("Planned start (UTC)", { exact: true })).toHaveValue("");
+      await expect(editor.getByLabel("Planned end (UTC)", { exact: true })).toHaveValue("");
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(card.getByText(/Planned.*UTC/)).toHaveCount(0);
+      expect(state.tasks[0].scheduledSlot).toBeUndefined();
+      expect(state.tasks[0].dueDate).toBe("2026-11-03");
+    });
+  }
+});
+
+test("an older editor draft preserves an existing precise scheduling slot", async ({ page }) => {
+  await startSignedIn(page);
+  const slot = { start: "2026-11-01T13:00:01.123Z", end: "2026-11-01T14:00:02.456Z" };
+  const state = await installApi(page, {
+    user: signedInUser, groups: [walkerLabs],
+    members: [{ userId: "user_shane", username: "shane", role: "admin", joinedAt: "2026-07-01T00:00:00.000Z" }],
+    tasks: [{ taskId: "task_precise", groupId: walkerLabs.groupId, text: "Precise plan",
+      assignee: { state: "assigned", userId: "user_shane", username: "shane" },
+      dueDate: "2026-11-03", priority: "normal", state: "open", createdAt: "2026-07-01T00:00:00.000Z", completedAt: null,
+      scheduledSlot: slot }],
+  });
+  await page.addInitScript((groupId) => {
+    window.sessionStorage.setItem("openjob:pending-task-editor", JSON.stringify({
+      groupId, userId: "user_shane", taskId: "task_precise", mode: "edit",
+      input: { text: "Recovered old draft", assigneeUsername: "shane", priority: "normal", dueDate: "2026-11-03" },
+    }));
+  }, walkerLabs.groupId);
+  await page.goto("/");
+  const editor = page.getByRole("dialog", { name: "Edit Task" });
+  await expect(editor.getByLabel("Task text")).toHaveValue("Recovered old draft");
+  await expect(editor.getByLabel("Planned start (UTC)", { exact: true })).toHaveValue("2026-11-01T13:00:01.123");
+  await expect(editor.getByLabel("Planned end (UTC)", { exact: true })).toHaveValue("2026-11-01T14:00:02.456");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(state.tasks[0].scheduledSlot).toEqual(slot);
+  expect(state.tasks[0].dueDate).toBe("2026-11-03");
 });

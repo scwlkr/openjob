@@ -1,4 +1,4 @@
-import { scheduledSlotField } from "../server/task-scheduling.ts";
+import { scheduledSlotField } from "../shared/task-scheduling.ts";
 import {
   createFirestoreRestClient,
   FirestoreRequestError,
