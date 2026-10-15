@@ -4,7 +4,7 @@ import packageMetadata from "../../package.json" with { type: "json" };
 // Fixture expirations are in July 2026. Keep wall time deterministic while
 // retaining real timers; timer-specific tests can install their own clock.
 test.beforeEach(async ({ page }) => {
-  await page.clock.setFixedTime(new Date("2026-07-16T17:00:00.000Z"));
+  await page.clock.setFixedTime(new Date("2026-07-28T12:00:00.000Z"));
 });
 
 type Group = {
@@ -2343,6 +2343,9 @@ test("account deletion does not POST when submitting phase cannot be saved", asy
     session: "google",
   });
 
+  // A reloaded process cannot take another page's unexpired ownership.
+  // Recover after the prepared submission expires, without submitting it.
+  await page.clock.setFixedTime(new Date("2026-07-28T12:05:00.001Z"));
   await page.reload();
 
   await expect(page.getByText("Deleting @shane.")).toBeVisible();
