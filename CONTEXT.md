@@ -1,6 +1,6 @@
 # OpenJob
 
-OpenJob coordinates small working groups through one shared task list. It intentionally stays smaller than a project-management system.
+Product direction: [Master Mission](docs/MASTER_MISSION.md). The terms below describe the existing Task domain.
 
 ## Language
 
@@ -83,6 +83,9 @@ _Avoid_: Ban
 **Ban**:
 A Group-scoped restriction that removes a Member and prevents that User from rejoining until an Admin lifts it.
 _Avoid_: Kick, global block
+
+**Scheduled Slot**:
+A Task’s optional planned start/end interval, separate from its date-only due date. It does not reserve availability or create an external calendar event.
 
 ## Release language
 

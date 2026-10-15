@@ -1,3 +1,4 @@
+import { scheduledSlotField } from "../server/task-scheduling.ts";
 import {
   createFirestoreRestClient,
   FirestoreRequestError,
@@ -54,6 +55,12 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
   const creatorUserId = document.fields?.creatorUserId?.stringValue ?? null;
   const priority = document.fields?.priority?.stringValue ?? "normal";
   const dueDate = document.fields?.dueDate?.stringValue ?? null;
+  const slotFields = document.fields?.scheduledSlot?.mapValue?.fields;
+  const slot = scheduledSlotField(slotFields ? {
+    start: slotFields.start?.timestampValue,
+    end: slotFields.end?.timestampValue,
+  } : null);
+  if ("error" in slot) throw new Error("Firestore returned an invalid scheduling slot.");
   const state = document.fields?.state?.stringValue;
   const createdAt = document.fields?.createdAt?.timestampValue;
   const completedAt = document.fields?.completedAt?.timestampValue ?? null;
@@ -98,6 +105,7 @@ function parseTask(document: FirestoreDocument, path: string): StoredTask {
     creatorUserId,
     priority: priority as TaskPriority,
     dueDate: dueDate as DueDate | null,
+    ...(slot.value ? { scheduledSlot: slot.value } : {}),
     state: state as OpenJobTask["state"],
     createdAt,
     completedAt,
@@ -114,6 +122,7 @@ function publicTask(task: PersistedTask): OpenJobTask {
     assignee: task.assignee,
     priority: task.priority,
     dueDate: task.dueDate,
+    ...(task.scheduledSlot ? { scheduledSlot: task.scheduledSlot } : {}),
     state: task.state,
     createdAt: task.createdAt,
     completedAt: task.completedAt,
@@ -168,6 +177,12 @@ function taskFields(task: PersistedTask) {
     priority: { stringValue: task.priority },
     ...(task.dueDate !== null
       ? { dueDate: { stringValue: task.dueDate } }
+      : {}),
+    ...(task.scheduledSlot
+      ? { scheduledSlot: { mapValue: { fields: {
+          start: { timestampValue: task.scheduledSlot.start },
+          end: { timestampValue: task.scheduledSlot.end },
+        } } } }
       : {}),
     state: { stringValue: task.state },
     createdAt: { timestampValue: task.createdAt },
@@ -467,6 +482,7 @@ export function createFirestoreTaskStore(
           creatorUserId: actorUserId,
           priority: input.priority,
           dueDate: input.dueDate,
+          ...(input.scheduledSlot ? { scheduledSlot: input.scheduledSlot } : {}),
           state: "open",
           createdAt,
           completedAt: null,
@@ -578,6 +594,7 @@ export function createFirestoreTaskStore(
                 ? { priority: input.priority }
                 : {}),
               ...("dueDate" in input ? { dueDate: input.dueDate ?? null } : {}),
+              ...("scheduledSlot" in input ? { scheduledSlot: input.scheduledSlot ?? undefined } : {}),
             };
             const actorMemberName = access.member.name;
             const assigneeMemberName = assigneeMember?.name;

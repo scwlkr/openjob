@@ -1,6 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 import packageMetadata from "../../package.json" with { type: "json" };
 
+// Fixture expirations are in July 2026. Keep wall time deterministic while
+// retaining real timers; timer-specific tests can install their own clock.
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-07-16T17:00:00.000Z"));
+});
+
 type Group = {
   groupId: string;
   name: string;

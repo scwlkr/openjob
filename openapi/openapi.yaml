@@ -1054,8 +1054,8 @@ paths:
       tags: [Tasks]
       summary: Edit an open Task
       description: |
-        Updates any supplied text, priority, dueDate, or assigneeUsername field using
-        last-accepted-write behavior. null clears dueDate. Assignees cannot be
+        Updates any supplied text, priority, dueDate, scheduledSlot, or assigneeUsername field using
+        last-accepted-write behavior. null clears dueDate or scheduledSlot. Assignees cannot be
         cleared manually, and done Tasks return task_done until reopened.
       operationId: updateGroupTask
       x-openjob-authorization: member
@@ -2626,6 +2626,9 @@ components:
           $ref: "#/components/schemas/Assignee"
         priority:
           $ref: "#/components/schemas/TaskPriority"
+        scheduledSlot:
+          description: Omitted when unscheduled. Send null in a mutation to clear.
+          $ref: "#/components/schemas/ScheduledSlot"
         dueDate:
           oneOf:
             - $ref: "#/components/schemas/Date"
@@ -3122,6 +3125,20 @@ components:
       properties:
         userId:
           $ref: "#/components/schemas/UserId"
+    ScheduledSlot:
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      description: >-
+        Planned work interval, independent of dueDate and Task ordering. End must
+        follow start. Accepts timestamps from 1970 through 9999 with explicit time
+        zones and up to millisecond precision; responses use UTC. This does not
+        create an external calendar event or reserve availability.
+      properties:
+        start:
+          $ref: "#/components/schemas/Timestamp"
+        end:
+          $ref: "#/components/schemas/Timestamp"
     CreateTaskInput:
       type: object
       additionalProperties: false
@@ -3133,6 +3150,11 @@ components:
           $ref: "#/components/schemas/Username"
         priority:
           $ref: "#/components/schemas/TaskPriority"
+        scheduledSlot:
+          description: Omitted when unscheduled. Send null in a mutation to clear.
+          oneOf:
+            - $ref: "#/components/schemas/ScheduledSlot"
+            - type: "null"
         dueDate:
           $ref: "#/components/schemas/Date"
     UpdateTaskInput:
@@ -3146,6 +3168,11 @@ components:
           $ref: "#/components/schemas/Username"
         priority:
           $ref: "#/components/schemas/TaskPriority"
+        scheduledSlot:
+          description: Omitted when unscheduled. Send null in a mutation to clear.
+          oneOf:
+            - $ref: "#/components/schemas/ScheduledSlot"
+            - type: "null"
         dueDate:
           oneOf:
             - $ref: "#/components/schemas/Date"

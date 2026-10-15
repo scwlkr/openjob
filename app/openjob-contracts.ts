@@ -34,6 +34,8 @@ export type InviteLink = {
 
 export type InvitePreview = { groupName: string };
 
+export type ScheduledSlot = { start: string; end: string };
+
 export type TaskPriority = "high" | "normal" | "low";
 
 export type Task = {
@@ -46,6 +48,7 @@ export type Task = {
     | { state: "deleted" };
   priority: TaskPriority;
   dueDate: string | null;
+  scheduledSlot?: ScheduledSlot;
   state: "open" | "done";
   createdAt: string;
   completedAt: string | null;
@@ -206,6 +209,7 @@ export type OpenJobApi = {
       assigneeUsername: string;
       priority?: TaskPriority;
       dueDate?: string;
+      scheduledSlot?: ScheduledSlot | null;
     },
   ): Promise<Task>;
   updateTask(
@@ -217,6 +221,7 @@ export type OpenJobApi = {
       assigneeUsername?: string;
       priority?: TaskPriority;
       dueDate?: string | null;
+      scheduledSlot?: ScheduledSlot | null;
     },
   ): Promise<Task>;
   setTaskState(

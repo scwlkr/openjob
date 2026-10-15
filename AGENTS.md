@@ -1,3 +1,12 @@
 # OpenJob
 
-**OpenJob** is getting a big overhaul before working fully read: OpenJob-Master-Mission.md
+Read [docs/MASTER_MISSION.md](docs/MASTER_MISSION.md) for the owner's product direction and [w.md](w.md) for the current handoff. The mission supersedes historical task-only scope.
+
+Use current [WStack](https://github.com/scwlkr/wstack/blob/main/skills/wstack/SKILL.md) and relevant guides. Preserve working npm/Node/TypeScript/React/Expo/Firebase/Cloudflare components unless an observed constraint justifies change. Read [CONTEXT.md](CONTEXT.md) and relevant [ADRs](docs/adr/).
+
+- Linear **WLKR LABS / openjob (P-WLK-6)** is the sole execution queue: [project](https://linear.app/wlkr-labs/project/openjob-fa4830c93118). Read the issue/discussion and Git/PR state; resume existing work. Include the Linear ID in branches and PRs. Historical GitHub/Markdown backlogs are not queues.
+- One implementation writer. Isolate changes, preserve shared work, review the diff, and verify the exact head before delivery. Keep concise evidence and the next action in Linear and w.md. Done requires acceptance and delivery criteria; report remaining gates.
+- Inspect install scripts before setup. Root `npm ci` runs native `npm ci` and patch-package. Use `npm run` for commands and `node cli/openjob.mjs --help` for the existing client. `npm test` is the deterministic repository gate; do not weaken it.
+- Cloud-only work uses isolated fixtures, no production secrets or real correspondence. No mailbox links in group-visible Tasks. Do not reset shared data, create credentials, spend money, or change hosting/security settings.
+- Never run release/deploy/Firestore publish commands as routine development. Ordinary merges require passing protections/checks and evidence they do not deploy. Human review precedes production release, including a deploying merge.
+- Preserve native release gates in [ADR 0017](docs/adr/0017-require-cross-platform-native-release-evidence.md) and [QA guidance](docs/qa-fixture.md). Cloud lint/type/unit checks do not prove simulator, emulator, or physical-device behavior; record unavailable evidence honestly.

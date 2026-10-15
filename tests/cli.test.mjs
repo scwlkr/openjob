@@ -2494,6 +2494,8 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
         "grp_tasks",
         "--text-file",
         textPath,
+        "--schedule-start", "2026-10-15T13:00:00Z",
+        "--schedule-end", "2026-10-15T14:00:00Z",
         "--assignee",
         "@scwlkr",
         "--priority",
@@ -2508,11 +2510,24 @@ test("task create accepts exactly one explicit named or JSON input mode", async 
     assert.equal(named.status, 0, named.stderr);
     assert.deepEqual(bodies[0], {
       text: "Line one\n\nLine two",
+      scheduledSlot: { start: "2026-10-15T13:00:00Z", end: "2026-10-15T14:00:00Z" },
       assigneeUsername: "scwlkr",
       priority: "high",
       dueDate: "2026-07-18",
     });
 
+    for (const flags of [
+      ["--schedule-start", "2026-10-15T13:00:00Z"],
+      ["--schedule-end", "2026-10-15T14:00:00Z"],
+      ["--clear-schedule"],
+      ["--input", "-", "--schedule-start", "2026-10-15T13:00:00Z"],
+    ]) {
+      const invalid = await runCliAsync([
+        "task", "create", "--group", "grp_tasks", "--text", "Plan", "--assignee", "scwlkr", ...flags,
+      ], { env: environment });
+      assert.equal(invalid.status, 2, invalid.stderr);
+      assert.equal(bodies.length, 1, "invalid inputs must not create Tasks");
+    }
     const input = { text: "From stdin", assigneeUsername: "maya", priority: "low" };
     const json = await runCliAsync(
       ["task", "create", "--group", "grp_tasks", "--input", "-", "--format", "json"],
@@ -2652,6 +2667,7 @@ test("task show and edit expose server state through explicit edit inputs", asyn
         "low",
         "--due",
         "none",
+        "--clear-schedule",
         "--format",
         "json",
       ],
@@ -2663,6 +2679,7 @@ test("task show and edit expose server state through explicit edit inputs", asyn
       assigneeUsername: "scwlkr",
       priority: "low",
       dueDate: null,
+      scheduledSlot: null,
     });
 
     const json = await runCliAsync(

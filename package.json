@@ -35,7 +35,7 @@
     "test:verification": "node --test tests/verification.test.mjs tests/release-candidate.test.mjs",
     "test:deterministic": "npm run build && npm run cli:types:check && npm run native:quick && node --test tests/*.test.mjs && npm run test:browser",
     "test": "npm run test:deterministic && npm run secret:check",
-    "test:browser": "playwright install chromium && playwright test --config tests/browser/playwright.config.ts",
+    "test:browser": "node scripts/test-browser.mjs",
     "secret:check": "node scripts/check-v1-secrets.mjs",
     "legacy:smoke": "node scripts/legacy-cutover.mjs smoke",
     "legacy:snapshot": "node scripts/legacy-cutover.mjs snapshot",

@@ -143,6 +143,7 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
 
   const createdResponse = await harness.request({
     body: {
+      scheduledSlot: { start: "2026-10-15T13:00:00Z", end: "2026-10-15T14:00:00Z" },
       text: "  Prepare release\r\n\r\nVerify persistence  ",
       assigneeUsername: "shane",
       dueDate: "2026-07-18",
@@ -158,7 +159,9 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     "post",
   );
   let task = (await createdResponse.json()).data;
-  assert.deepEqual(task, {
+  assert.deepEqual(task.scheduledSlot, { start: "2026-10-15T13:00:00.000Z", end: "2026-10-15T14:00:00.000Z" });
+  assert.deepEqual({ ...task, scheduledSlot: undefined }, {
+    scheduledSlot: undefined,
     taskId: "task_dddddddddddd4ddd8ddddddddddddddd",
     groupId: group.groupId,
     text: "Prepare release\n\nVerify persistence",
@@ -179,6 +182,54 @@ test("the black-box Task journey persists through the Group-scoped Firestore ada
     eli.userId,
   );
   assert.equal("creatorUserId" in task, false);
+
+  await t.test("scheduling slots persist independently, normalize offsets, validate and clear", async () => {
+    const path = `/api/v1/groups/${group.groupId}/tasks/${task.taskId}`;
+    const slot = { start: "2026-10-15T09:00:00-04:00", end: "2026-10-15T09:30:00-04:00" };
+    const normalized = { start: "2026-10-15T13:00:00.000Z", end: "2026-10-15T13:30:00.000Z" };
+    const patch = (scheduledSlot, headers = shaneHeaders) => harness.request({
+      headers, method: "PATCH", path, body: { scheduledSlot },
+    });
+    const before = await harness.request({ headers: shaneHeaders, path: `/api/v1/groups/${group.groupId}/tasks` });
+    const scheduled = await patch(slot);
+    assert.equal(scheduled.status, 200);
+    await assertContract(scheduled, "/api/v1/groups/{groupId}/tasks/{taskId}", "patch");
+    const saved = (await scheduled.json()).data;
+    assert.deepEqual(saved.scheduledSlot, normalized);
+    assert.equal(saved.dueDate, task.dueDate);
+    assert.deepEqual(firestore.documents.get(taskDocumentName).fields.scheduledSlot.mapValue.fields, {
+      start: { timestampValue: normalized.start }, end: { timestampValue: normalized.end },
+    });
+    await harness.restart();
+    const fetched = await harness.request({ headers: eliHeaders, path });
+    assert.deepEqual((await fetched.json()).data.scheduledSlot, normalized);
+    const list = await harness.request({ headers: eliHeaders, path: `/api/v1/groups/${group.groupId}/tasks` });
+    assert.notEqual(list.headers.get("etag"), before.headers.get("etag"));
+    assert.deepEqual((await list.json()).data.find((item) => item.taskId === task.taskId).scheduledSlot, normalized);
+    const editText = await harness.request({ headers: shaneHeaders, method: "PATCH", path, body: { text: task.text } });
+    assert.equal(editText.status, 200);
+    assert.deepEqual((await editText.json()).data.scheduledSlot, normalized);
+    assert.equal((await patch(null, {})).status, 401);
+    for (const invalid of [
+      {}, { start: slot.start }, { ...slot, privateMailboxUrl: "private" },
+      { ...slot, end: slot.start }, { ...slot, end: "2026-10-15T08:00:00-04:00" },
+      { ...slot, start: "2026-10-15T09:00:00" },
+      { ...slot, start: "2026-02-30T09:00:00Z" },
+      { ...slot, start: "2026-10-15T24:00:00Z" },
+    ]) assert.equal((await patch(invalid)).status, 400, JSON.stringify(invalid));
+    assert.equal((await patch(null, mayaHeaders)).status, 404);
+    assert.deepEqual((await (await harness.request({ headers: shaneHeaders, path })).json()).data.scheduledSlot, normalized);
+    const cleared = await patch(null);
+    assert.equal(cleared.status, 200);
+    assert.equal("scheduledSlot" in (await cleared.json()).data, false);
+    assert.equal("scheduledSlot" in firestore.documents.get(taskDocumentName).fields, false);
+    await harness.restart();
+    assert.equal("scheduledSlot" in (await (await harness.request({ headers: shaneHeaders, path })).json()).data, false);
+    const completed = await harness.request({ headers: shaneHeaders, path: `${path}/state`, method: "PUT", body: { state: "done" } });
+    assert.equal(completed.status, 200);
+    assert.equal((await patch(slot)).status, 409);
+    assert.equal((await harness.request({ headers: shaneHeaders, path: `${path}/state`, method: "PUT", body: { state: "open" } })).status, 200);
+  });
 
   const legacyTaskId = "task_legacy_unknown_creator";
   const legacyTaskDocumentName =
