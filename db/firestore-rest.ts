@@ -5,6 +5,7 @@ export type FirebaseConfig = {
 };
 
 export type FirestoreValue = {
+  mapValue?: { fields?: Record<string, FirestoreValue> };
   booleanValue?: boolean;
   integerValue?: number | string;
   stringValue?: string;

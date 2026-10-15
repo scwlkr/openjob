@@ -4,6 +4,8 @@ const VALUE_OPTIONS = new Set([
   "--assignee",
   "--confirm-name",
   "--due",
+  "--schedule-start",
+  "--schedule-end",
   "--format",
   "--group",
   "--input",
@@ -20,6 +22,7 @@ const VALUE_OPTIONS = new Set([
 ]);
 
 const BOOLEAN_OPTIONS = new Set([
+  "--clear-schedule",
   "--force",
   "--help",
   "--no-open",

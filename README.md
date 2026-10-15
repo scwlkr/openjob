@@ -120,3 +120,14 @@ npm run firebase:deploy:rules
 ```
 
 Production site deploys happen through `npm run release:publish`.
+
+### Planned Task intervals
+
+The API accepts `scheduledSlot: { "start": "2026-10-15T13:00:00Z", "end": "2026-10-15T14:00:00Z" }` on Task creation or editing. Both timestamps need explicit time zones and up to millisecond precision; the response uses UTC. End must follow start. Omit the field to preserve it when editing; send `null` to clear it. Unscheduled Task responses omit it. The due date and list ordering remain independent.
+
+```sh
+openjob task edit <task-id> --schedule-start 2026-10-15T13:00:00Z --schedule-end 2026-10-15T14:00:00Z
+openjob task edit <task-id> --clear-schedule
+```
+
+This stores a planned interval in OpenJob. External calendar sync and visual scheduling controls are future work in Linear.

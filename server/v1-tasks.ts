@@ -1,3 +1,4 @@
+import { scheduledSlotField, type ScheduledSlot } from "./task-scheduling.ts";
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
   InactiveUserError,
@@ -50,6 +51,7 @@ export type OpenJobTask = {
   assignee: TaskAssignee;
   priority: TaskPriority;
   dueDate: DueDate | null;
+  scheduledSlot?: ScheduledSlot;
   state: "open" | "done";
   createdAt: string;
   completedAt: string | null;
@@ -82,7 +84,12 @@ export type TaskStore = {
     actorUserId: string,
     groupId: GroupId,
     assignee: { userId: string; username: Username },
-    input: { text: TaskText; priority: TaskPriority; dueDate: DueDate | null },
+    input: {
+      text: TaskText;
+      priority: TaskPriority;
+      dueDate: DueDate | null;
+      scheduledSlot?: ScheduledSlot | null;
+    },
   ): Promise<
     | { kind: "created"; task: OpenJobTask; change: TaskMutationChange }
     | { kind: "assignee_not_member" }
@@ -106,6 +113,7 @@ export type TaskStore = {
       assignee?: { userId: string; username: Username };
       priority?: TaskPriority;
       dueDate?: DueDate | null;
+      scheduledSlot?: ScheduledSlot | null;
     },
   ): Promise<
     | { kind: "updated"; task: OpenJobTask; change: TaskMutationChange }
@@ -276,6 +284,7 @@ async function readCreateTask(
         assigneeUsername: Username;
         priority: TaskPriority;
         dueDate: DueDate | null;
+        scheduledSlot?: ScheduledSlot | null;
       };
     }
 > {
@@ -285,7 +294,7 @@ async function readCreateTask(
       return { fields: { text: "Must contain 1 to 2,000 characters." } };
     }
     const keys = Object.keys(input);
-    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate"]);
+    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate", "scheduledSlot"]);
     if (
       keys.some((key) => !allowedKeys.has(key)) ||
       !("text" in input) ||
@@ -309,6 +318,13 @@ async function readCreateTask(
       else dueDate = parsedDueDate.value;
     }
 
+    let scheduledSlot: ScheduledSlot | null = null;
+    if ("scheduledSlot" in input) {
+      const parsed = scheduledSlotField(input.scheduledSlot);
+      if ("error" in parsed) fields.scheduledSlot = parsed.error;
+      else scheduledSlot = parsed.value;
+    }
+
     let priority: TaskPriority = "normal";
     if ("priority" in input) {
       const parsedPriority = priorityField(input.priority);
@@ -329,6 +345,7 @@ async function readCreateTask(
         assigneeUsername: parsedAssignee.value,
         priority,
         dueDate,
+        scheduledSlot,
       },
     };
   } catch {
@@ -346,6 +363,7 @@ async function readUpdateTask(
         assigneeUsername?: Username;
         priority?: TaskPriority;
         dueDate?: DueDate | null;
+        scheduledSlot?: ScheduledSlot | null;
       };
     }
 > {
@@ -355,7 +373,7 @@ async function readUpdateTask(
       return { fields: { text: "Send a JSON Task object." } };
     }
     const keys = Object.keys(input);
-    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate"]);
+    const allowedKeys = new Set(["text", "assigneeUsername", "priority", "dueDate", "scheduledSlot"]);
     if (keys.length === 0 || keys.some((key) => !allowedKeys.has(key))) {
       return { fields: { text: "Send at least one documented Task field." } };
     }
@@ -366,6 +384,7 @@ async function readUpdateTask(
       assigneeUsername?: Username;
       priority?: TaskPriority;
       dueDate?: DueDate | null;
+      scheduledSlot?: ScheduledSlot | null;
     } = {};
     if ("text" in input) {
       const parsed = taskTextField(input.text);
@@ -386,6 +405,12 @@ async function readUpdateTask(
       const parsed = dueDateField(input.dueDate, true);
       if ("error" in parsed) fields.dueDate = parsed.error;
       else update.dueDate = parsed.value;
+    }
+
+    if ("scheduledSlot" in input) {
+      const parsed = scheduledSlotField(input.scheduledSlot);
+      if ("error" in parsed) fields.scheduledSlot = parsed.error;
+      else update.scheduledSlot = parsed.value;
     }
 
     return Object.keys(fields).length > 0 ? { fields } : { input: update };
@@ -916,6 +941,7 @@ export function createV1TasksApi({
               ? { priority: parsed.input.priority }
               : {}),
             ...("dueDate" in parsed.input ? { dueDate: parsed.input.dueDate } : {}),
+            ...("scheduledSlot" in parsed.input ? { scheduledSlot: parsed.input.scheduledSlot } : {}),
           });
           if (result.kind === "updated") {
             const response = jsonResponse({ data: result.task });

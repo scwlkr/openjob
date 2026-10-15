@@ -717,8 +717,8 @@ export interface paths {
         head?: never;
         /**
          * Edit an open Task
-         * @description Updates any supplied text, priority, dueDate, or assigneeUsername field using
-         *     last-accepted-write behavior. null clears dueDate. Assignees cannot be
+         * @description Updates any supplied text, priority, dueDate, scheduledSlot, or assigneeUsername field using
+         *     last-accepted-write behavior. null clears dueDate or scheduledSlot. Assignees cannot be
          *     cleared manually, and done Tasks return task_done until reopened.
          */
         patch: operations["updateGroupTask"];
@@ -1014,6 +1014,8 @@ export interface components {
             text: components["schemas"]["TaskText"];
             assignee: components["schemas"]["Assignee"];
             priority: components["schemas"]["TaskPriority"];
+            /** @description Omitted when unscheduled. Send null in a mutation to clear. */
+            scheduledSlot?: components["schemas"]["ScheduledSlot"];
             dueDate: components["schemas"]["Date"] | null;
             state: components["schemas"]["TaskState"];
             createdAt: components["schemas"]["Timestamp"];
@@ -1287,16 +1289,25 @@ export interface components {
         BanGroupUserInput: {
             userId: components["schemas"]["UserId"];
         };
+        /** @description Planned work interval, independent of dueDate and Task ordering. End must follow start. Accepts timestamps from 1970 through 9999 with explicit time zones and up to millisecond precision; responses use UTC. This does not create an external calendar event or reserve availability. */
+        ScheduledSlot: {
+            start: components["schemas"]["Timestamp"];
+            end: components["schemas"]["Timestamp"];
+        };
         CreateTaskInput: {
             text: components["schemas"]["TaskText"];
             assigneeUsername: components["schemas"]["Username"];
             priority?: components["schemas"]["TaskPriority"];
+            /** @description Omitted when unscheduled. Send null in a mutation to clear. */
+            scheduledSlot?: components["schemas"]["ScheduledSlot"] | null;
             dueDate?: components["schemas"]["Date"];
         };
         UpdateTaskInput: {
             text?: components["schemas"]["TaskText"];
             assigneeUsername?: components["schemas"]["Username"];
             priority?: components["schemas"]["TaskPriority"];
+            /** @description Omitted when unscheduled. Send null in a mutation to clear. */
+            scheduledSlot?: components["schemas"]["ScheduledSlot"] | null;
             dueDate?: components["schemas"]["Date"] | null;
         };
         SetTaskStateInput: {
