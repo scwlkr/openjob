@@ -75,4 +75,4 @@ python3 docs/brand/generate_assets.py
 
 ## Voice
 
-Use “OpenJob”, “Mail. Calendar. Tasks.”, and “Clear space. Focused work.” Explain capabilities with concrete actions and limits. Say “Can read this mailbox and create drafts. Sending is off.” Describe the broader workspace as product direction until its workflows are verified. Keep provider compatibility and platform coverage tied to observed support.
+Use “OpenJob” and “Clear space. Focused work.” The board’s “Mail. Calendar. Tasks.” descriptor belongs to future product direction until those workflows are verified. Explain capabilities with concrete actions and limits. Say “Can read this mailbox and create drafts. Sending is off.” Describe the broader workspace as product direction until its workflows are verified. Keep provider compatibility and platform coverage tied to observed support.
