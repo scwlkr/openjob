@@ -29,7 +29,6 @@
     "check": "npm run lint && npm run typecheck && npm test && npm run secret:check && npm run config:verify && npm run bundle:verify"
   },
   "dependencies": {
-    "@expo-google-fonts/geist": "0.4.2",
     "@expo/config-plugins": "57.0.6",
     "@expo/vector-icons": "15.1.1",
     "@invertase/react-native-apple-authentication": "^2.5.1",

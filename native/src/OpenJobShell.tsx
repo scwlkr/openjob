@@ -88,10 +88,10 @@ function BuildBadge({ label }: { label: string }) {
       accessibilityLabel={`${label} build`}
       style={[
         styles.buildBadge,
-        { backgroundColor: palette.blue, borderColor: palette.blue },
+        { backgroundColor: palette.selected, borderColor: palette.line },
       ]}
     >
-      <Text style={[styles.buildBadgeText, { color: palette.onBlue }]}>
+      <Text style={[styles.buildBadgeText, { color: palette.selectedText }]}>
         {label} build
       </Text>
     </View>
@@ -123,7 +123,7 @@ function IconButton({
           backgroundColor:
             pressed || hovered ? palette.card : "transparent",
           borderColor:
-            focused || hovered ? palette.blue : palette.line,
+            focused ? palette.focus : hovered ? palette.link : palette.controlLine,
           borderWidth: focused ? 3 : 1,
         },
       ]}
@@ -158,7 +158,7 @@ function ShellScreen({
         style={[
           styles.topBar,
           compactHeader && styles.topBarCompact,
-          { borderBottomColor: palette.ink },
+          { borderBottomColor: palette.line },
         ]}
         testID="openjob-top-bar"
       >
@@ -261,14 +261,12 @@ function AppearanceOption({
         styles.appearanceOption,
         {
           backgroundColor: isSelected
-            ? hovered
-              ? palette.blueStrong
-              : palette.blue
+            ? palette.selected
             : pressed || hovered
               ? palette.background
               : palette.card,
           borderColor:
-            focused || hovered || isSelected ? palette.blue : palette.line,
+            focused ? palette.focus : hovered || isSelected ? palette.link : palette.controlLine,
           borderWidth: focused ? 3 : 1,
         },
       ]}
@@ -276,7 +274,7 @@ function AppearanceOption({
       <Text
         style={[
           styles.appearanceOptionText,
-          { color: isSelected ? palette.onBlue : palette.ink },
+          { color: isSelected ? palette.selectedText : palette.ink },
         ]}
       >
         {label}
@@ -284,7 +282,7 @@ function AppearanceOption({
       <Text
         style={[
           styles.appearanceSelection,
-          { color: isSelected ? palette.onBlue : palette.muted },
+          { color: isSelected ? palette.selectedText : palette.muted },
         ]}
       >
         {isSelected ? `${label} selected` : "Select"}
@@ -388,7 +386,7 @@ function AppearanceScreen({
       edges={["top", "right", "bottom", "left"]}
       style={[styles.safeArea, { backgroundColor: palette.background }]}
     >
-      <View style={[styles.settingsHeader, { borderBottomColor: palette.ink }]}>
+      <View style={[styles.settingsHeader, { borderBottomColor: palette.line }]}>
         <IconButton
           accessibilityLabel="Back to OpenJob"
           icon="arrow-left"
@@ -397,7 +395,7 @@ function AppearanceScreen({
         <Wordmark />
       </View>
       <ScrollView contentContainerStyle={styles.settingsContent}>
-        <Text style={[styles.kicker, { color: palette.blue }]}>APPEARANCE</Text>
+        <Text style={[styles.kicker, { color: palette.link }]}>APPEARANCE</Text>
         <Text
           accessibilityRole="header"
           style={[styles.settingsTitle, { color: palette.ink }]}
@@ -430,7 +428,7 @@ function AppearanceScreen({
         <View
           style={[styles.privacySection, { borderTopColor: palette.line }]}
         >
-          <Text style={[styles.kicker, { color: palette.blue }]}>PRIVACY</Text>
+          <Text style={[styles.kicker, { color: palette.link }]}>PRIVACY</Text>
           <Text style={[styles.privacyTitle, { color: palette.ink }]}>Diagnostics</Text>
           <Text style={[styles.settingsLede, { color: palette.muted }]}>
             Crashes and hangs only. OpenJob sends scrubbed technical versions,
@@ -451,7 +449,7 @@ function AppearanceScreen({
               styles.diagnosticsSwitch,
               {
                 backgroundColor: pressed ? palette.background : palette.card,
-                borderColor: diagnostics.enabled ? palette.blue : palette.line,
+                borderColor: diagnostics.enabled ? palette.link : palette.controlLine,
               },
             ]}
           >
@@ -463,7 +461,7 @@ function AppearanceScreen({
                 Crashes and hangs only
               </Text>
             </View>
-            <Text style={[styles.diagnosticsValue, { color: palette.blue }]}>
+            <Text style={[styles.diagnosticsValue, { color: palette.link }]}>
               {diagnostics.enabled ? "On" : "Off"}
             </Text>
           </Pressable>
@@ -485,12 +483,12 @@ function AppearanceScreen({
                 style={({ pressed }) => [
                   styles.verificationButton,
                   {
-                    backgroundColor: pressed ? palette.blueStrong : palette.blue,
-                    borderColor: palette.blue,
+                    backgroundColor: pressed ? palette.actionHover : palette.action,
+                    borderColor: palette.action,
                   },
                 ]}
               >
-                <Text style={[styles.verificationButtonText, { color: palette.onBlue }]}>
+                <Text style={[styles.verificationButtonText, { color: palette.actionText }]}>
                   Send verification
                 </Text>
               </Pressable>
@@ -586,6 +584,7 @@ export function OpenJobShell({
 
 const styles = StyleSheet.create({
   appearanceOption: {
+    borderRadius: 6,
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -594,7 +593,7 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
   },
   appearanceOptionText: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
   appearanceOptions: {
@@ -602,11 +601,11 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   appearanceSelection: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 12,
   },
   diagnosticsDetail: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 13,
     lineHeight: 19,
     marginTop: 3,
@@ -616,15 +615,16 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   diagnosticsLabel: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
   diagnosticsStatus: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 13,
     lineHeight: 19,
   },
   diagnosticsSwitch: {
+    borderRadius: 6,
     alignItems: "center",
     borderWidth: 1,
     flexDirection: "row",
@@ -636,22 +636,24 @@ const styles = StyleSheet.create({
   },
   diagnosticsValue: {
     flexShrink: 0,
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 14,
     textTransform: "uppercase",
   },
   buildBadge: {
+    borderRadius: 6,
     borderWidth: 1,
     justifyContent: "center",
     minHeight: 36,
     paddingHorizontal: 11,
   },
   buildBadgeText: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 11,
     textTransform: "uppercase",
   },
   iconButton: {
+    borderRadius: 6,
     alignItems: "center",
     borderWidth: 1,
     height: 48,
@@ -659,7 +661,7 @@ const styles = StyleSheet.create({
     width: 48,
   },
   kicker: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 11,
     letterSpacing: 1.6,
   },
@@ -670,7 +672,7 @@ const styles = StyleSheet.create({
     paddingTop: 36,
   },
   privacyTitle: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 32,
     letterSpacing: -1.3,
     lineHeight: 38,
@@ -694,13 +696,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   settingsLede: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     lineHeight: 25,
     marginTop: 16,
   },
   settingsTitle: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 46,
     letterSpacing: -2.3,
     lineHeight: 50,
@@ -751,6 +753,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   verificationButton: {
+    borderRadius: 6,
     alignItems: "center",
     borderWidth: 1,
     justifyContent: "center",
@@ -759,7 +762,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   verificationButtonText: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 14,
   },
 });

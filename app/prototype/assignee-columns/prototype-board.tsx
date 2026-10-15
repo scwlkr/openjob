@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./prototype.module.css";
+import { OpenJobBrand, OpenJobMark } from "../../openjob-brand";
 
 type Status = "open" | "done" | "all";
 type TaskState = Exclude<Status, "all">;
@@ -132,7 +133,7 @@ function VariantA(props: VariantProps) {
   return (
     <main className={styles.aShell}>
       <aside className={styles.aRail}>
-        <div className={styles.aBrand}>OPENJOB<span>.</span></div>
+        <OpenJobBrand appearance="dark" className={styles.aBrand} />
         <p className={styles.kicker}>Your Groups</p>
         <nav className={styles.groupList} aria-label="Groups">
           {groups.map((group) => (
@@ -222,7 +223,7 @@ function VariantB(props: VariantProps) {
   return (
     <main className={styles.bShell}>
       <header className={styles.bTopbar}>
-        <div className={styles.bBrand}>OJ/</div>
+        <div className={styles.bBrand}><OpenJobMark /></div>
         <label>Group
           <select value={props.activeGroup} onChange={(event) => props.setActiveGroup(event.target.value)}>
             {groups.map((group) => <option key={group}>{group}</option>)}
@@ -295,7 +296,7 @@ function VariantC(props: VariantProps) {
         <select aria-label="Change Group" value={props.activeGroup} onChange={(event) => props.setActiveGroup(event.target.value)}>
           {groups.map((group) => <option key={group}>{group}</option>)}
         </select>
-        <div className={styles.cLogo}>OpenJob</div>
+        <OpenJobBrand className={styles.cLogo} />
         <button className={styles.cAdmin} type="button" onClick={props.openAdmin}>Admin</button>
       </header>
 

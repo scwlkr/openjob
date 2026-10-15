@@ -1,4 +1,8 @@
-# OpenJob cloud handoff
+# OpenJob handoff
+
+Current styling: the owner approved runtime adoption in **WLK-275 / PR #52**. [Brand standards](docs/brand/README.md) now govern web/iOS/Android. This supersedes the historical legacy-brand notes below; capability scope remains Task/Group work.
+
+## Earlier CLI handoff · WLK-274
 
 Mission: [docs/MASTER_MISSION.md](docs/MASTER_MISSION.md). Sole queue: [Linear openjob / P-WLK-6](https://linear.app/wlkr-labs/project/openjob-fa4830c93118). Current: [WLK-274](https://linear.app/wlkr-labs/issue/WLK-274), [PR #51](https://github.com/scwlkr/openjob/pull/51), branch `codex/wlk-274-owner-agent-cli`; GitHub records final integration status/SHA. Base `38a99c2faf375783cae5ac4857884aecb495cc08` / PR #49. One implementation writer; independent review read-only.
 
@@ -30,3 +34,18 @@ CLI: `npm run`; `node cli/openjob.mjs --help`
 - Root lint/typecheck and full `npm test` pass: build, generated CLI types, native lint/typecheck, 271 native tests, 457 Node tests, 131 pinned-Chromium browser tests, and secret scan (574 files). macOS on-demand dependency reads caused slow startup. Log: `output/brand-npm-test.log`.
 - The focused wrapper escalates root Wstack notes to release-candidate mode and rejects a feature branch. Its classifier/gates are unchanged; the required full suite runs directly. No native/device/release qualification is claimed.
 - Local preview `http://127.0.0.1:4027` remains available for owner review. PR #50 records final integration status; the app’s brand adoption belongs to the overhaul. No production release or deployment performed.
+
+
+## Brand adoption · WLK-275
+
+- Owner requested the supplied identity across the current web/iOS/Android apps. Branch `codex/wlk-275-brand-adoption`; [WLK-275](https://linear.app/wlkr-labs/issue/WLK-275/apply-the-approved-openjob-brand-across-web-and-mobile-apps).
+- `docs/brand/README.md` is now the standard for app styling, with an `AGENTS.md` pointer. Folded mark, mixed-case lockup, local Inter, semantic light/dark colors, browser/install icons, social card, Android adaptive/monochrome icons, and splash marks replace the old identity. Current Task/Group behavior is retained; guide concepts do not add Mail/Calendar capabilities.
+- `npm run brand:assets` regenerates 32 platform assets/adapters; `brand:check` starts the deterministic test gate. Canonical inputs, generator, and saved output hashes detect drift without rerasterizing across operating systems. The eleventh source SVG is an outlined social card.
+- Native config verification passes for development/preview/production and local embedded bundle verification passes on iOS/Android. macOS and Linux pinned-Chromium phone/desktop visual baselines now cover both appearances; action contrast and loaded local Inter are checked.
+- Root lint/typecheck and full `npm test` pass at `f2342f2`: build/generated CLI types, 272 native tests, 458 Node tests, 131 browser tests, and secret scan (633 files). Full log: `output/brand-adoption-npm-test.log`. Independent integration review found no actionable issues.
+- The focused verifier still escalates these unclassified brand/root-note files to release-candidate mode and refuses a feature branch. The classifier is unchanged; the required full suite runs directly. `output/brand-adoption-verifier.log` records that limitation.
+- Android development prebuild passed. No APK/launch proof: local dependency duplicates caused Kotlin redeclarations, then further suffixed files stalled Expo autolinking after a bounded repair. `output/brand-adoption/android-runtime-report.md` and the reversible audit record the limit; the task AVD/processes were removed and the owner AVD was preserved.
+- iOS development prebuild and Metro bundle passed. Unsigned simulator build stopped before installation: suffixed dependency TypeScript specs produced invalid rnsvg codegen identifiers; an ExpoModulesJSI framework phase also failed. Neither native app launched. `output/brand-adoption/ios-xcodebuild.log` and the dependency quarantine audit retain evidence. Original booted simulators/app data were preserved; no signing/provisioning, real auth, deployment, store build/upload, or release occurred.
+- The normal web dev server also hits a pre-existing local Workers compatibility-date mismatch (configured 2026-07-13 vs local binary support through 2026-05-22). Web interaction/visual proof uses the repository’s actual-component browser fixture; the production build passes. No dependency/date override was committed.
+
+- Delivery: [PR #52](https://github.com/scwlkr/openjob/pull/52) records the final source integration. This handoff and the final voice clarification change documentation only after the full passing implementation gate. Local guide `http://127.0.0.1:4027` remains for review.

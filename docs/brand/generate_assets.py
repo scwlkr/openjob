@@ -99,4 +99,32 @@ svg("app-icon", 512, 512,
     '<rect width="512" height="512" fill="#20242B"/>'
     '<g transform="translate(88 96) scale(4)">' + mark(True) + '</g>',
     "The folded cobalt frame on Graphite. Platforms apply their own icon mask.")
-print(f"Wrote 10 SVG masters to {OUT}")
+
+
+def outlined_text(text, size, x, baseline, fill):
+    # Static Inter 4.1 TTF from the same official archive as the variable font.
+    regular = TTFont(ROOT / "fonts/Inter-Regular.ttf")
+    letters = regular.getGlyphSet()
+    mapping = regular.getBestCmap()
+    ratio = size / regular["head"].unitsPerEm
+    cursor = x
+    art = []
+    for letter in text:
+        glyph = letters[mapping[ord(letter)]]
+        pen = SVGPathPen(letters)
+        glyph.draw(TransformPen(pen, (ratio, 0, 0, -ratio, cursor, baseline)))
+        if pen.getCommands():
+            art.append(f'<path d="{pen.getCommands()}"/>')
+        cursor += glyph.width * ratio
+    return f'<g fill="{fill}">' + "".join(art) + "</g>"
+
+
+svg("social-card", 1200, 630,
+    '<rect width="1200" height="630" fill="#F7F8FA"/>'
+    '<g transform="translate(80 102) scale(1.9)">' + mark() + '</g>'
+    '<g transform="translate(266 70) scale(2.9)">' + wordmark() + '</g>'
+    '<path d="M88 333H1112" stroke="#E7ECF4" stroke-width="2"/>'
+    + outlined_text("Clear space. Focused work.", 50, 88, 420, "#20242B")
+    + outlined_text("openjob.dev", 25, 88, 546, "#586476"),
+    "OpenJob social card. All lettering is outlined from the bundled Inter 4.1 fonts.")
+print(f"Wrote 11 SVG masters to {OUT}")

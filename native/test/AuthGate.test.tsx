@@ -1203,6 +1203,17 @@ test("returns an unknown-first changed target to existing-User authentication", 
   expect(auth.authenticateExistingUser).toHaveBeenCalledTimes(2);
 });
 
+test("keeps Cobalt actions and the outlined identity legible in dark appearance", async () => {
+  await renderGate(controller(), "dark");
+
+  expect(await screen.findByRole("button", { name: "Continue with Google" })).toHaveStyle({
+    backgroundColor: "#4169e1",
+  });
+  expect(screen.getByText("Continue with Google")).toHaveStyle({ color: "#ffffff" });
+  expect(screen.getByTestId("openjob-wordmark-canonical")).toBeOnTheScreen();
+  expect(screen.queryByText("OPENJOB.")).not.toBeOnTheScreen();
+});
+
 test("keeps Sign-in Method status and errors legible in dark appearance", async () => {
   const auth = controller({
     restore: jest.fn(async () => signedIn),
@@ -1213,6 +1224,6 @@ test("keeps Sign-in Method status and errors legible in dark appearance", async 
     await screen.findByRole("button", { name: "Manage Sign-in Methods" }),
   );
   expect(await screen.findByText("Google — Linked")).toHaveStyle({
-    color: "#f4f5ef",
+    color: "#f7f8fa",
   });
 });

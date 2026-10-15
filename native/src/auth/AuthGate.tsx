@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { OpenJobRuntimeConfig } from "../runtime-config";
 import type { NativeTaskListController } from "../task-list-contracts";
 import { useOpenJobTheme } from "../theme";
+import { OpenJobBrandmark, OpenJobWordmark } from "../brand-marks";
 import {
   type AuthFlowResult,
   NativeAuthCoordinator,
@@ -204,9 +205,9 @@ function ActionButton({
               ? palette.card
               : palette.paper
             : pressed || hovered
-              ? palette.blueStrong
-              : palette.blue,
-          borderColor: focused ? palette.ink : secondary ? palette.line : palette.blue,
+              ? palette.actionHover
+              : palette.action,
+          borderColor: focused ? palette.focus : secondary ? palette.controlLine : palette.action,
           borderWidth: focused ? 3 : 1,
           opacity: disabled ? 0.55 : 1,
         },
@@ -215,7 +216,7 @@ function ActionButton({
       <Text
         style={[
           styles.buttonText,
-          { color: secondary ? palette.ink : palette.onBlue },
+          { color: secondary ? palette.ink : palette.actionText },
         ]}
       >
         {label}
@@ -235,7 +236,7 @@ function AuthScaffold({
   message?: string | null;
   title: string;
 }) {
-  const { palette } = useOpenJobTheme();
+  const { isDark, palette } = useOpenJobTheme();
   return (
     <SafeAreaView
       edges={["top", "right", "bottom", "left"]}
@@ -250,12 +251,14 @@ function AuthScaffold({
             styles.card,
             {
               backgroundColor: palette.paper,
-              borderColor: palette.ink,
-              shadowColor: palette.blue,
+              borderColor: palette.line,
             },
           ]}
         >
-          <Text style={[styles.wordmark, { color: palette.ink }]}>OPENJOB.</Text>
+          <View style={styles.brand}>
+            <OpenJobBrandmark inverse={isDark} size={36} />
+            <OpenJobWordmark inverse={isDark} />
+          </View>
           <Text
             accessibilityRole="header"
             style={[styles.title, { color: palette.ink }]}
@@ -345,7 +348,7 @@ function UsernameClaimForm({
             styles.usernameInput,
             {
               backgroundColor: palette.paper,
-              borderColor: palette.line,
+              borderColor: palette.controlLine,
               color: palette.ink,
             },
           ]}
@@ -849,7 +852,7 @@ export function NativeAuthGate({
               styles.input,
               {
                 backgroundColor: palette.paper,
-                borderColor: palette.line,
+                borderColor: palette.controlLine,
                 color: palette.ink,
               },
             ]}
@@ -979,7 +982,7 @@ export function NativeAuthGate({
               styles.input,
               {
                 backgroundColor: palette.paper,
-                borderColor: palette.line,
+                borderColor: palette.controlLine,
                 color: palette.ink,
               },
             ]}
@@ -999,7 +1002,7 @@ export function NativeAuthGate({
               styles.input,
               {
                 backgroundColor: palette.paper,
-                borderColor: palette.line,
+                borderColor: palette.controlLine,
                 color: palette.ink,
               },
             ]}
@@ -1033,6 +1036,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   button: {
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 48,
@@ -1040,21 +1044,19 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   buttonText: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 15,
     textAlign: "center",
   },
   card: {
+    borderRadius: 14,
     borderWidth: 1,
     maxWidth: 560,
     padding: 28,
-    shadowOffset: { height: 10, width: 10 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
     width: "100%",
   },
   message: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     lineHeight: 24,
     marginTop: 16,
@@ -1063,28 +1065,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   methodText: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
   },
   input: {
+    borderRadius: 6,
     borderWidth: 1,
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     minHeight: 48,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   inputLabel: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
   guidance: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 14,
     lineHeight: 20,
   },
   onboardingText: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     lineHeight: 24,
   },
@@ -1093,7 +1096,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   qaTitle: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
   usernameForm: {
@@ -1107,7 +1110,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   usernamePrefix: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 18,
     marginRight: 8,
   },
@@ -1121,15 +1124,15 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   title: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 38,
     letterSpacing: -1.7,
     lineHeight: 42,
     marginTop: 28,
   },
-  wordmark: {
-    fontFamily: "Geist_900Black",
-    fontSize: 18,
-    letterSpacing: 1.2,
+  brand: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
   },
 });

@@ -1,112 +1,48 @@
 .page {
   min-height: 100vh;
-  padding: 2rem;
-  background: #eef0ea;
-  color: #11141a;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: var(--oj-surface);
+  color: var(--oj-text);
 }
 
-.wordmark {
-  display: inline-block;
-  margin-bottom: 2rem;
-  color: inherit;
-  font-size: 1.35rem;
-  font-weight: 800;
-  text-decoration: none;
-}
+.wordmark { display: inline-block; width: 160px; margin-bottom: 2rem; }
+.wordmark img { display: block; width: 100%; height: auto; }
 
 .card {
   width: min(100%, 44rem);
   margin: 0 auto;
   padding: clamp(1.5rem, 5vw, 3rem);
-  border: 2px solid #11141a;
-  border-radius: 1.25rem;
-  background: #fff;
-  box-shadow: .5rem .5rem 0 #11141a;
+  border: 1px solid var(--oj-line);
+  border-radius: var(--oj-radius-panel);
+  background: var(--oj-panel);
+  line-height: 1.6;
 }
 
 .card h1 {
-  margin: .25rem 0 1rem;
-  font-size: clamp(2rem, 6vw, 3.5rem);
-  line-height: 1;
+  margin: .4rem 0 1rem;
+  font-size: clamp(2rem, 6vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -.045em;
+  line-height: 1.1;
 }
 
-.kicker {
-  margin: 0;
-  color: #1e4ed8;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.actions {
-  display: grid;
-  gap: .85rem;
-  margin: 2rem 0;
-}
-
-.actions button,
-.actions input {
+.card h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; }
+.card a { color: var(--oj-link); text-underline-offset: 3px; }
+.kicker { margin: 0; color: var(--oj-link); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.actions { display: grid; gap: .85rem; margin: 2rem 0; }
+.actions button, .actions input {
   min-height: 3rem;
-  border: 2px solid #11141a;
-  border-radius: .7rem;
+  border: 1px solid var(--oj-control-line);
+  border-radius: var(--oj-radius-control);
   padding: .75rem 1rem;
-  background: #fff;
+  background: var(--oj-panel);
   color: inherit;
   font: inherit;
 }
-
-.actions button {
-  cursor: pointer;
-  font-weight: 750;
-  text-align: left;
-}
-
-.actions button:focus-visible,
-.actions input:focus-visible,
-.wordmark:focus-visible {
-  outline: 4px solid #85a5ff;
-  outline-offset: 3px;
-}
-
-.actions button:disabled {
-  cursor: not-allowed;
-  opacity: .55;
-}
-
-.actions .danger {
-  background: #a51d2d;
-  color: #fff;
-  text-align: center;
-}
-
-.error,
-.status {
-  padding: 1rem;
-  border-radius: .7rem;
-  background: #fbe8eb;
-  font-weight: 700;
-}
-
-.status {
-  background: #e4f5e8;
-}
-
-.policy {
-  margin-top: 2rem;
-  color: #4f5563;
-  font-size: .95rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  .page { background: #11141a; color: #f2f3ee; }
-  .card { border-color: #f2f3ee; background: #1d222c; box-shadow: .5rem .5rem 0 #6f87d9; }
-  .actions button, .actions input { border-color: #f2f3ee; background: #11141a; color: #f2f3ee; }
-  .policy { color: #c3c7d1; }
-  .error { background: #5a1d26; }
-  .status { background: #174a2a; }
-}
-
-@media (max-width: 36rem) {
-  .page { padding: 1rem; }
-  .card { box-shadow: .3rem .3rem 0 #11141a; }
-}
+.actions button { cursor: pointer; font-weight: 600; text-align: left; }
+.actions button:focus-visible, .actions input:focus-visible, .wordmark:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 3px; }
+.actions button:disabled { cursor: not-allowed; opacity: .55; }
+.actions .danger { border-color: #9b2638; background: #9b2638; color: #fff; text-align: center; }
+.error, .status { padding: 1rem; border-radius: var(--oj-radius-control); background: var(--danger-fill); color: var(--danger-text); font-weight: 600; }
+.status { background: var(--oj-positive-fill); color: var(--oj-positive); }
+.policy { margin-top: 2rem; color: var(--oj-muted); font-size: .95rem; }

@@ -1,4 +1,22 @@
 @import "tailwindcss";
+@import "./brand-tokens.css";
+
+:root {
+  --ink: var(--oj-text);
+  --paper: var(--oj-surface);
+  --paper-light: var(--oj-panel);
+  --blue: var(--oj-action);
+  --blue-dark: var(--oj-link);
+  --muted: var(--oj-muted);
+  --line: var(--oj-line);
+  --danger: #a13637;
+  --danger-fill: #faebec;
+  --danger-text: #782a30;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --danger: #ffb8bd; --danger-fill: #452a31; --danger-text: #ffdae0; }
+}
 
 * { box-sizing: border-box; }
 
@@ -6,17 +24,21 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: #eef0ea;
-  color: #151713;
-  font-family: var(--font-geist-sans), Arial, sans-serif;
+  background: var(--oj-surface);
+  color: var(--oj-text);
+  font-family: var(--oj-font-sans);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
-  outline: 3px solid color-mix(in srgb, #1e4ed8 42%, transparent);
+  outline: 3px solid var(--oj-focus);
   outline-offset: 3px;
 }

@@ -1,20 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const viewport: Viewport = {
-  themeColor: "#1e4ed8",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7F8FA" },
+    { media: "(prefers-color-scheme: dark)", color: "#20242B" },
+  ],
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -32,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: baseUrl,
-    title: "OpenJob — One clear list for your team",
+    title: "OpenJob — Clear space. Focused work.",
     description,
     icons: {
       icon: [
@@ -58,7 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: new URL("/og.png", baseUrl),
           width: 1200,
           height: 630,
-          alt: "OpenJob, one clear list for your team",
+          alt: "OpenJob — Clear space. Focused work.",
         },
       ],
     },
@@ -78,9 +70,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

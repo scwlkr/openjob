@@ -722,14 +722,14 @@ test("keeps selected dark-mode labels legible and exposes focus and hover states
   });
   await fireEvent(appearanceButton, "focus");
   expect(appearanceButton).toHaveStyle({
-    borderColor: "#1e4ed8",
+    borderColor: "#3155c5",
     borderWidth: 3,
   });
   await fireEvent(appearanceButton, "blur");
   await fireEvent(appearanceButton, "hoverIn");
   expect(appearanceButton).toHaveStyle({
-    backgroundColor: "#f8f8f3",
-    borderColor: "#1e4ed8",
+    backgroundColor: "#ffffff",
+    borderColor: "#4169e1",
   });
 
   await fireEvent.press(appearanceButton);
@@ -738,7 +738,7 @@ test("keeps selected dark-mode labels legible and exposes focus and hover states
   });
   await fireEvent.press(darkOption);
   expect(await screen.findByText("Dark selected")).toHaveStyle({
-    color: "#11141a",
+    color: "#c3d1ff",
   });
 
   await fireEvent(darkOption, "focus");
@@ -1119,7 +1119,7 @@ test("adapts one Task List between wide sidebar and narrow large-text layouts", 
       await screen.findByLabelText(
         "Open Task. Responsive Task. Assigned to @walker. Normal priority.",
       ),
-    ).toHaveStyle({ backgroundColor: "#151b28" });
+    ).toHaveStyle({ backgroundColor: "#282e37" });
   } finally {
     await rendered?.unmount();
     await act(() => {

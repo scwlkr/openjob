@@ -6506,7 +6506,8 @@ test("keeps done Tasks visible in Former Member sections", async ({ page }) => {
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });
 
-test("keeps the approved Variant B visual hierarchy at phone and desktop sizes", async ({ page }) => {
+test("keeps the approved Variant B layout with the standard brand in light and dark", async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "light" });
   await startSignedIn(page);
   await page.clock.setFixedTime(new Date("2026-07-17T12:00:00-05:00"));
   await installApi(page, {
@@ -6595,6 +6596,47 @@ test("keeps the approved Variant B visual hierarchy at phone and desktop sizes",
     animations: "disabled",
     fullPage: true,
   });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.evaluate(() => document.fonts.ready);
+    const brand = page.getByRole("img", { name: "OpenJob", exact: true });
+    await expect(brand).toBeVisible();
+    expect(await brand.evaluate((img: HTMLImageElement) => img.currentSrc)).toContain(
+      colorScheme === "dark" ? "openjob-lockup-inverse.svg" : "openjob-lockup.svg",
+    );
+    const contrast = await page.getByRole("button", { name: "New Task", exact: true }).evaluate((button) => {
+      const style = getComputedStyle(button);
+      const luminance = (rgb: string) => {
+        const channels = rgb.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((value) => {
+          const s = value / 255;
+          return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      };
+      const a = luminance(style.color), b = luminance(style.backgroundColor);
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
+    expect(contrast).toBeGreaterThanOrEqual(4.5);
+    expect(await page.evaluate(() => document.fonts.check("16px Inter"))).toBe(true);
+    if (colorScheme === "dark") {
+      for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
+        await page.setViewportSize(viewport);
+        await expectNoHorizontalOverflow(page);
+        await expect(page).toHaveScreenshot(`variant-b-${viewport.width === 390 ? "phone" : "desktop"}-dark.png`, {
+          animations: "disabled", fullPage: true,
+        });
+      }
+    }
+    await page.getByRole("button", { name: "New Task", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New Task" });
+    await expect(editor.getByLabel("Task text")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await editor.screenshot({ path: testInfo.outputPath(`brand-editor-${colorScheme}.png`) });
+    await editor.getByRole("button", { name: "Close Task Editor", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+  }
+
 });
 
 test.describe("planned Task intervals", () => {

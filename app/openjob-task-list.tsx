@@ -1066,7 +1066,7 @@ export function TaskList({
                           {task.assignee.state === "assigned" ? `@${task.assignee.username}` : "Unassigned"}
                         </span>
                         <span aria-hidden="true">·</span>
-                        <span className={styles.taskState}>{task.state === "open" ? "Open" : "Done"}</span>
+                        <span className={`${styles.taskState} ${task.state === "done" ? styles.taskStateDone : ""}`}>{task.state === "open" ? "Open" : "Done"}</span>
                         {priority !== "normal" ? (
                           <span className={`${styles.taskPriority} ${priority === "high" ? styles.taskPriorityHigh : styles.taskPriorityLow}`}>
                             {priority === "high" ? "High" : "Low"}

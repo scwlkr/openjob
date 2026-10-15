@@ -6,11 +6,8 @@ jest.mock("react-native-safe-area-context", () => {
   return mock.default;
 });
 
-jest.mock("@expo-google-fonts/geist", () => ({
-  Geist_400Regular: 400,
-  Geist_600SemiBold: 600,
-  Geist_700Bold: 700,
-  Geist_900Black: 900,
+jest.mock("expo-font", () => ({
+  ...jest.requireActual("expo-font"),
   useFonts: () => [true, null],
 }));
 

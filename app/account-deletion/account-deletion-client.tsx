@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFirebaseAuth } from "../firebase-auth";
 import { createOpenJobApi } from "../openjob-api";
+import { OpenJobBrand } from "../openjob-brand";
 import type {
   AccountDeletionCredentialInput,
   AccountDeletionPending,
@@ -1002,7 +1003,7 @@ export function AccountDeletionClient() {
     <main className={styles.page}>
       {/* This page also runs in the browser-only acceptance fixture. */}
       {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-      <a className={styles.wordmark} href="/">OpenJob</a>
+      <a className={styles.wordmark} href="/"><OpenJobBrand /></a>
       <section className={styles.card} aria-labelledby="deletion-title">
         <p className={styles.kicker}>Account and data</p>
         <h1 id="deletion-title">Delete your OpenJob User</h1>

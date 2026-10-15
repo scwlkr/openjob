@@ -2,10 +2,16 @@
 
 The Expo client is one strict-TypeScript React Native application for iOS and
 Android. It uses native-stack navigation with no tabs, carries the OpenJob
-blue/paper/ink identity and Geist typography, and keeps `/api/v1` as its only
+[folded Cobalt identity](../docs/brand/README.md) and bundled Inter typography, and keeps `/api/v1` as its only
 domain boundary. Google and Apple credentials resolve through the canonical
 OpenJob User API; the client never reads Firestore or duplicates service
 validation.
+
+`src/theme.tsx` maps the approved semantic roles to native surfaces and controls.
+`src/brand-assets.ts`, `src/brand-tokens.ts`, and the bundled Inter files are
+generated from `docs/brand`; run `npm run brand:assets` from the repository root
+after changing those sources. Use Cobalt with white text for actions, lighter
+links on dark surfaces, and the selected and positive roles for states.
 
 ## Authentication and restoration
 
@@ -185,7 +191,7 @@ npm --prefix native run bundle:verify -- android
 ```
 
 `bundle:verify` produces independent minified iOS and Android embedded bundles
-with all Geist/icon assets, verifies their hashes, and deletes its temporary
+with all Inter/icon assets, verifies their hashes, and deletes its temporary
 output. With no platform argument it verifies both; the impact-aware workflow
 uses the platform arguments so a reusable result stays independent. For an
 installed release smoke:
