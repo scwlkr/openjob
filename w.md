@@ -20,3 +20,13 @@ Features: [FEATURES.md](FEATURES.md)
 Terms: [CONTEXT.md](CONTEXT.md)
 CLI: `npm run`; `node cli/openjob.mjs --help`
 <!-- wstack:end setup -->
+
+## Local brand foundation · WLK-272
+
+- Branch `codex/wlk-272-brand-foundation`. Identity source: `docs/brand/README.md`; local visual guide: `docs/brand/index.html`.
+- Ten editable SVGs, local Inter 4.1 + OFL, original owner-supplied board, scoped light/dark CSS tokens. Geometry reconstructed; font is a documented match.
+- Runtime branding remains legacy for later adoption. No deployment in this task.
+- PR [#50](https://github.com/scwlkr/openjob/pull/50). Layouts at 320/390/768/1440 px, both appearances, linked tasks, permission states, and offline concept controls inspected. Local font/images and standalone SVG/reference/license audit passed.
+- Root lint/typecheck and full `npm test` pass: build, generated CLI types, native lint/typecheck, 271 native tests, 457 Node tests, 131 pinned-Chromium browser tests, and secret scan (574 files). macOS on-demand dependency reads caused slow startup. Log: `output/brand-npm-test.log`.
+- The focused wrapper escalates root Wstack notes to release-candidate mode and rejects a feature branch. Its classifier/gates are unchanged; the required full suite runs directly. No native/device/release qualification is claimed.
+- Local preview `http://127.0.0.1:4027` remains available for owner review. PR #50 records final integration status; the app’s brand adoption belongs to the overhaul. No production release or deployment performed.

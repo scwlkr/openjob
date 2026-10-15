@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="84" height="80" viewBox="0 0 84 80" role="img" aria-labelledby="title description">
+  <title id="title">OpenJob</title>
+  <desc id="description">An offset open frame with a folded ribbon construction.</desc>
+  <defs>
+    <linearGradient id="back" x1="24" y1="4" x2="76" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CA8FF"/><stop offset=".55" stop-color="#6389FF"/>
+      <stop offset="1" stop-color="#4169E1"/>
+    </linearGradient>
+    <linearGradient id="front" x1="8" y1="26" x2="62" y2="74" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6389FF"/><stop offset=".6" stop-color="#4169E1"/>
+      <stop offset="1" stop-color="#6389FF"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#back)" d="M30 4H74Q76 4 76 6V50L62 60V18H24Z"/>
+  <path fill="url(#front)" d="M8 26 26 16V60H62L52 74H8Z"/>
+  <path fill="#8CA8FF" opacity=".65" d="M30 4H41L36 18H24Z"/>
+  <path fill="#F7F8FA" opacity=".17" d="m33 4-5 14h3l5-14Z"/>
+  <path fill="#8CA8FF" opacity=".7" d="M36 60H50L44 74H30Z"/>
+  <path fill="#F7F8FA" opacity=".22" d="m40 60-6 14h3l6-14Z"/>
+</svg>
