@@ -20,7 +20,7 @@ test("defines the OpenJob sign-in and Group entry", async () => {
     readFile(new URL("../app/openjob-screens.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /OpenJob — One clear list for your team/);
+  assert.match(layout, /OpenJob — Clear space. Focused work./);
   assert.match(page, /createFirebaseAuth/);
   assert.match(page, /createOpenJobApi/);
   assert.match(screens, /Your team\. One clear list\./);
@@ -47,7 +47,8 @@ test("keeps Firebase auth, the v1 API, storage, and social metadata wired", asyn
   assert.match(layout, /\/favicon\.svg/);
   assert.match(layout, /\/apple-touch-icon\.png/);
   assert.match(layout, /\/site\.webmanifest/);
-  assert.match(layout, /themeColor: "#1e4ed8"/);
+  assert.match(layout, /prefers-color-scheme: light.*#F7F8FA/);
+  assert.match(layout, /prefers-color-scheme: dark.*#20242B/);
   assert.match(auth, /browserLocalPersistence/);
   assert.match(auth, /inMemoryPersistence/);
   assert.match(auth, /GoogleAuthProvider/);
@@ -87,12 +88,12 @@ test("publishes outlined brand masters and install-ready app icons", async () =>
     ]);
   const manifest = JSON.parse(manifestSource);
 
-  assert.match(wordmark, /Outlined from the production Geist 900 wordmark/);
-  assert.match(wordmark, /fill="#6387ff"/);
+  assert.match(wordmark, /<path/);
+  assert.match(wordmark, /#20242B/i);
   assert.doesNotMatch(wordmark, /<text\b/);
-  assert.match(brandmark, /fill="#151713"/);
-  assert.match(brandmark, /fill="#1e4ed8"/);
-  assert.equal(manifest.theme_color, "#1e4ed8");
+  assert.match(brandmark, /<linearGradient/);
+  assert.match(brandmark, /#4169E1/i);
+  assert.equal(manifest.theme_color.toLowerCase(), "#4169e1");
   assert.deepEqual(
     manifest.icons.map(({ src, sizes, purpose }) => [src, sizes, purpose]),
     [

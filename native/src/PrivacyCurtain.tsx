@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { OpenJobBrandmark, OpenJobWordmark } from "./brand-marks";
+import { brandDark } from "./brand-tokens";
 import { useAppLifecycle } from "./device-state";
 
 export function PrivacyProtectedSurface({ children }: { children: React.ReactNode }) {
@@ -39,15 +40,15 @@ const styles = StyleSheet.create({
   curtain: {
     ...StyleSheet.absoluteFill,
     alignItems: "center",
-    backgroundColor: "#11141a",
+    backgroundColor: brandDark.surface,
     gap: 22,
     justifyContent: "center",
     padding: 32,
     zIndex: 10_000,
   },
   message: {
-    color: "#aab2c3",
-    fontFamily: "Geist_600SemiBold",
+    color: brandDark.muted,
+    fontFamily: "Inter_600SemiBold",
     fontSize: 15,
     lineHeight: 22,
     textAlign: "center",

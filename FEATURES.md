@@ -1,6 +1,6 @@
 # Features
 
-- **Brand foundation:** `docs/brand/index.html` is the offline guide for the OpenJob overhaul. It includes the supplied reference board, ten editable SVG masters, scoped light/dark CSS tokens, local Inter font/license, type and voice guidance, and labeled interactive product concepts. Existing runtime branding remains legacy until adoption.
+- **Brand foundation:** `docs/brand/index.html` is the offline guide for the OpenJob overhaul. It includes the supplied reference board, eleven editable SVG masters, scoped light/dark CSS tokens, local Inter font/license, type and voice guidance, and labeled interactive product concepts. The web, iOS, and Android apps adopt this identity through shared generated assets, semantic colors, local Inter, browser/install/adaptive icons, and splash artwork. `AGENTS.md` points future UI work to the brand standards; `npm run brand:check` guards generated asset freshness.
 
 ## Task scheduling slots
 

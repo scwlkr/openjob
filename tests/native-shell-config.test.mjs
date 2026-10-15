@@ -80,6 +80,17 @@ test("native public config is isolated, branded, adaptive, and OTA-disabled", as
       );
       assert.equal(config.ios.bundleIdentifier, identity.bundleIdentifier);
       assert.equal(config.android.package, identity.applicationId);
+      assert.deepEqual(config.android.adaptiveIcon, {
+        backgroundColor: "#20242B",
+        foregroundImage: "../public/brand/android-foreground.png",
+        monochromeImage: "../public/brand/android-monochrome.png",
+      });
+      const splash = config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-splash-screen")[1];
+      assert.equal(splash.backgroundColor, "#F7F8FA");
+      assert.equal(splash.image, "../public/brand/splash-mark.png");
+      assert.deepEqual(splash.dark, {
+        backgroundColor: "#20242B", image: "../public/brand/splash-mark-reverse.png",
+      });
       assert.deepEqual(config.android.permissions, [
         "android.permission.INTERNET",
       ]);

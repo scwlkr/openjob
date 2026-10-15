@@ -1,10 +1,4 @@
-import {
-  Geist_400Regular,
-  Geist_600SemiBold,
-  Geist_700Bold,
-  Geist_900Black,
-  useFonts,
-} from "@expo-google-fonts/geist";
+import { useFonts } from "expo-font";
 import type { InitialState } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -69,50 +63,51 @@ function BootstrapRecovery({
   onRetry: () => void;
   onSignOut: () => void;
 }) {
+  const { isDark, palette } = useOpenJobTheme();
   return (
     <PrivacyProtectedSurface>
-      <SafeAreaView style={bootstrapStyles.safeArea}>
+      <SafeAreaView style={[bootstrapStyles.safeArea, { backgroundColor: palette.background }]}>
         <View
           accessibilityLabel="OpenJob could not start safely"
           accessibilityRole="alert"
           accessible
-          style={bootstrapStyles.card}
+          style={[bootstrapStyles.card, { backgroundColor: palette.paper, borderColor: palette.line }]}
         >
-          <OpenJobBrandmark inverse={false} />
-          <OpenJobWordmark inverse={false} />
-          <Text style={bootstrapStyles.title}>OpenJob could not start safely</Text>
-          <Text style={bootstrapStyles.body}>
+          <OpenJobBrandmark inverse={isDark} />
+          <OpenJobWordmark inverse={isDark} />
+          <Text style={[bootstrapStyles.title, { color: palette.ink }]}>OpenJob could not start safely</Text>
+          <Text style={[bootstrapStyles.body, { color: palette.muted }]}>
             Your data was not changed. Retry startup, or sign out safely before
             trying again.
           </Text>
-          {message ? <Text style={bootstrapStyles.status}>{message}</Text> : null}
+          {message ? <Text style={[bootstrapStyles.status, { color: palette.muted }]}>{message}</Text> : null}
           <View style={bootstrapStyles.actions}>
             <Pressable
               accessibilityLabel="Retry OpenJob"
               accessibilityRole="button"
               disabled={busy}
               onPress={onRetry}
-              style={bootstrapStyles.primaryButton}
+              style={[bootstrapStyles.primaryButton, { backgroundColor: palette.action }]}
             >
-              <Text style={bootstrapStyles.primaryButtonText}>Retry</Text>
+              <Text style={[bootstrapStyles.primaryButtonText, { color: palette.actionText }]}>Retry</Text>
             </Pressable>
             <Pressable
               accessibilityLabel="Sign out safely"
               accessibilityRole="button"
               disabled={busy}
               onPress={onSignOut}
-              style={bootstrapStyles.secondaryButton}
+              style={[bootstrapStyles.secondaryButton, { borderColor: palette.controlLine }]}
             >
-              <Text style={bootstrapStyles.secondaryButtonText}>Sign out</Text>
+              <Text style={[bootstrapStyles.secondaryButtonText, { color: palette.link }]}>Sign out</Text>
             </Pressable>
             <Pressable
               accessibilityLabel="Stop sharing diagnostics"
               accessibilityRole="button"
               disabled={busy}
               onPress={onDisableDiagnostics}
-              style={bootstrapStyles.secondaryButton}
+              style={[bootstrapStyles.secondaryButton, { borderColor: palette.controlLine }]}
             >
-              <Text style={bootstrapStyles.secondaryButtonText}>
+              <Text style={[bootstrapStyles.secondaryButtonText, { color: palette.link }]}>
                 Stop sharing diagnostics
               </Text>
             </Pressable>
@@ -173,14 +168,14 @@ function AuthDiagnosticsSetting({
           bootstrapStyles.authDiagnosticsSwitch,
           {
             backgroundColor: pressed ? palette.background : palette.card,
-            borderColor: diagnostics.enabled ? palette.blue : palette.line,
+            borderColor: diagnostics.enabled ? palette.link : palette.controlLine,
           },
         ]}
       >
         <Text style={[bootstrapStyles.authDiagnosticsLabel, { color: palette.ink }]}>
           Share diagnostics
         </Text>
-        <Text style={[bootstrapStyles.authDiagnosticsValue, { color: palette.blue }]}>
+        <Text style={[bootstrapStyles.authDiagnosticsValue, { color: palette.link }]}>
           {diagnostics.enabled ? "On" : "Off"}
         </Text>
       </Pressable>
@@ -321,10 +316,9 @@ export function OpenJobNativeApp({
   runtimeConfig?: OpenJobRuntimeConfig;
 }) {
   const [fontsLoaded, fontError] = useFonts({
-    Geist_400Regular,
-    Geist_600SemiBold,
-    Geist_700Bold,
-    Geist_900Black,
+    Inter_400Regular: require("./assets/fonts/Inter-Regular.ttf"),
+    Inter_600SemiBold: require("./assets/fonts/Inter-SemiBold.ttf"),
+    Inter_700Bold: require("./assets/fonts/Inter-Bold.ttf"),
   });
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
@@ -426,24 +420,29 @@ export function OpenJobNativeApp({
     };
     return (
       <SafeAreaProvider>
-        <BootstrapRecovery
-          busy={bootstrapBusy}
-          message={bootstrapMessage}
-          onDisableDiagnostics={() => void disableDiagnostics()}
-          onRetry={() => {
-            setBootstrap(null);
-            setBootstrapMessage(null);
-            if (!providedRuntimeConfig) {
-              try {
-                setDiscoveredRuntimeConfig(readRuntimeConfig());
-              } catch {
-                setDiscoveredRuntimeConfig(null);
+        <OpenJobThemeProvider
+          preference={bootstrap?.appearance ?? "system"}
+          setPreference={() => undefined}
+        >
+          <BootstrapRecovery
+            busy={bootstrapBusy}
+            message={bootstrapMessage}
+            onDisableDiagnostics={() => void disableDiagnostics()}
+            onRetry={() => {
+              setBootstrap(null);
+              setBootstrapMessage(null);
+              if (!providedRuntimeConfig) {
+                try {
+                  setDiscoveredRuntimeConfig(readRuntimeConfig());
+                } catch {
+                  setDiscoveredRuntimeConfig(null);
+                }
               }
-            }
-            setBootstrapAttempt((attempt) => attempt + 1);
-          }}
-          onSignOut={() => void signOutSafely()}
-        />
+              setBootstrapAttempt((attempt) => attempt + 1);
+            }}
+            onSignOut={() => void signOutSafely()}
+          />
+        </OpenJobThemeProvider>
       </SafeAreaProvider>
     );
   }
@@ -472,16 +471,18 @@ const bootstrapStyles = StyleSheet.create({
     width: "100%",
   },
   authDiagnosticsBody: {
+    fontFamily: "Inter_400Regular",
     fontSize: 14,
     lineHeight: 20,
   },
   authDiagnosticsLabel: {
     flexShrink: 1,
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold",
     marginRight: 12,
   },
   authDiagnosticsSwitch: {
+    borderRadius: 6,
     alignItems: "center",
     borderWidth: 1,
     flexDirection: "row",
@@ -492,12 +493,12 @@ const bootstrapStyles = StyleSheet.create({
   },
   authDiagnosticsTitle: {
     fontSize: 18,
-    fontWeight: "900",
+    fontFamily: "Inter_700Bold",
   },
   authDiagnosticsValue: {
     flexShrink: 0,
     fontSize: 14,
-    fontWeight: "900",
+    fontFamily: "Inter_700Bold",
   },
   actions: {
     gap: 12,
@@ -505,15 +506,14 @@ const bootstrapStyles = StyleSheet.create({
     width: "100%",
   },
   body: {
-    color: "#62675e",
+    fontFamily: "Inter_400Regular",
     fontSize: 16,
     lineHeight: 24,
     textAlign: "center",
   },
   card: {
+    borderRadius: 14,
     alignItems: "center",
-    backgroundColor: "#f8f8f3",
-    borderColor: "#c6cac1",
     borderWidth: 1,
     gap: 18,
     maxWidth: 480,
@@ -521,46 +521,41 @@ const bootstrapStyles = StyleSheet.create({
     width: "100%",
   },
   primaryButton: {
+    borderRadius: 6,
     alignItems: "center",
-    backgroundColor: "#1e4ed8",
     minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   primaryButtonText: {
-    color: "#ffffff",
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold",
   },
   safeArea: {
     alignItems: "center",
-    backgroundColor: "#eef0ea",
     flex: 1,
     justifyContent: "center",
     padding: 20,
   },
   secondaryButton: {
+    borderRadius: 6,
     alignItems: "center",
-    borderColor: "#1e4ed8",
     borderWidth: 1,
     minHeight: 48,
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   secondaryButtonText: {
-    color: "#1e4ed8",
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Inter_700Bold",
   },
   status: {
-    color: "#62675e",
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
   },
   title: {
-    color: "#151713",
     fontSize: 28,
-    fontWeight: "900",
+    fontFamily: "Inter_700Bold",
     lineHeight: 34,
     textAlign: "center",
   },

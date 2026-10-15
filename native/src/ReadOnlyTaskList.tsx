@@ -100,12 +100,12 @@ function GroupButton({
         styles.groupButton,
         {
           backgroundColor: selected
-            ? palette.blue
+            ? palette.selected
             : pressed || hovered
               ? palette.card
               : palette.paper,
           borderColor:
-            focused || hovered || selected ? palette.blue : palette.line,
+            focused ? palette.focus : hovered || selected ? palette.link : palette.controlLine,
           borderWidth: focused ? 3 : 1,
         },
       ]}
@@ -114,7 +114,7 @@ function GroupButton({
         <Text
           style={[
             styles.groupButtonName,
-            { color: selected ? palette.onBlue : palette.ink },
+            { color: selected ? palette.selectedText : palette.ink },
           ]}
         >
           {group.name}
@@ -122,14 +122,14 @@ function GroupButton({
         <Text
           style={[
             styles.groupButtonRole,
-            { color: selected ? palette.onBlue : palette.muted },
+            { color: selected ? palette.selectedText : palette.muted },
           ]}
         >
           {group.role === "admin" ? "Admin" : "Member"}
         </Text>
       </View>
       <Feather
-        color={selected ? palette.onBlue : palette.blue}
+        color={selected ? palette.selectedText : palette.link}
         name="chevron-right"
         size={20}
       />
@@ -196,13 +196,13 @@ function ActionButton({
         styles.actionButton,
         {
           backgroundColor:
-            pressed || hovered ? palette.blueStrong : palette.blue,
-          borderColor: focused ? palette.ink : palette.blue,
+            pressed || hovered ? palette.actionHover : palette.action,
+          borderColor: focused ? palette.focus : palette.action,
           borderWidth: focused ? 3 : 1,
         },
       ]}
     >
-      <Text style={[styles.actionButtonText, { color: palette.onBlue }]}>
+      <Text style={[styles.actionButtonText, { color: palette.actionText }]}>
         {label}
       </Text>
     </K.Pressable>
@@ -232,9 +232,9 @@ function GroupChooser({
     >
       <View style={styles.chooserHeader}>
         <View style={styles.chooserBrandmark}>
-          <OpenJobBrandmark inverse={isDark} />
+          <OpenJobBrandmark inverse={isDark} size={54} />
         </View>
-        <Text style={[styles.kicker, { color: palette.blue }]}>
+        <Text style={[styles.kicker, { color: palette.link }]}>
           SHARED TASK LIST
         </Text>
         <Text
@@ -252,7 +252,7 @@ function GroupChooser({
             accessibilityRole="alert"
             style={[
               styles.notice,
-              { backgroundColor: palette.card, borderColor: palette.blue },
+              { backgroundColor: palette.card, borderColor: palette.action },
             ]}
           >
             <Text style={[styles.noticeText, { color: palette.ink }]}>
@@ -268,7 +268,7 @@ function GroupChooser({
           accessibilityRole="progressbar"
           style={styles.centeredState}
         >
-          <ActivityIndicator color={palette.blue} size="large" />
+          <ActivityIndicator color={palette.link} size="large" />
           <Text style={[styles.stateTitle, { color: palette.ink }]}>
             Loading Groups…
           </Text>
@@ -335,12 +335,12 @@ function FilterTab({
         styles.filterTab,
         {
           backgroundColor: selected
-            ? palette.blue
+            ? palette.selected
             : pressed || hovered
               ? palette.card
               : palette.paper,
           borderColor:
-            focused || hovered || selected ? palette.blue : palette.line,
+            focused ? palette.focus : hovered || selected ? palette.link : palette.controlLine,
           borderWidth: focused ? 3 : 1,
         },
       ]}
@@ -348,7 +348,7 @@ function FilterTab({
       <Text
         style={[
           styles.filterLabel,
-          { color: selected ? palette.onBlue : palette.ink },
+          { color: selected ? palette.selectedText : palette.ink },
         ]}
       >
         {name}
@@ -356,7 +356,7 @@ function FilterTab({
       <Text
         style={[
           styles.filterCount,
-          { color: selected ? palette.onBlue : palette.muted },
+          { color: selected ? palette.selectedText : palette.muted },
         ]}
       >
         {count}
@@ -487,7 +487,7 @@ const TaskRow = memo(function TaskRow({
             <Text
               style={[
                 styles.taskMetaText,
-                { color: due.overdue ? palette.blueStrong : palette.muted },
+                { color: due.overdue ? palette.link : palette.muted },
               ]}
             >
               {due.overdue ? `Overdue · ${due.display}` : `Due ${due.display}`}
@@ -512,10 +512,13 @@ const TaskRow = memo(function TaskRow({
         <View
           style={[
             styles.taskBadge,
-            { backgroundColor: palette.card, borderColor: palette.line },
+            {
+              backgroundColor: task.state === "done" ? palette.positiveFill : palette.card,
+              borderColor: palette.line,
+            },
           ]}
         >
-          <Text style={[styles.taskBadgeText, { color: palette.ink }]}>
+          <Text style={[styles.taskBadgeText, { color: task.state === "done" ? palette.positive : palette.ink }]}>
             {task.state === "open" ? "Open" : "Done"}
           </Text>
         </View>
@@ -646,9 +649,9 @@ function TaskListHeader({
               backgroundColor:
                 pressed || switcherHovered ? palette.card : palette.paper,
               borderColor:
-                switcherFocused || switcherHovered
-                  ? palette.blue
-                  : palette.line,
+                switcherFocused ? palette.focus : switcherHovered
+                  ? palette.link
+                  : palette.controlLine,
               borderWidth: switcherFocused ? 3 : 1,
             },
           ]}
@@ -661,11 +664,11 @@ function TaskListHeader({
               {group.name}
             </Text>
           </View>
-          <Feather color={palette.blue} name="chevron-down" size={21} />
+          <Feather color={palette.link} name="chevron-down" size={21} />
         </K.Pressable>
       ) : null}
       <View style={styles.taskListTitleBlock}>
-        <Text style={[styles.kicker, { color: palette.blue }]}>TASK LIST</Text>
+        <Text style={[styles.kicker, { color: palette.link }]}>TASK LIST</Text>
         <Text
           accessibilityLabel={`${group.name} Task List`}
           accessibilityRole="header"
@@ -701,7 +704,7 @@ function TaskListHeader({
           accessibilityRole="alert"
           style={[
             styles.notice,
-            { backgroundColor: palette.card, borderColor: palette.blue },
+            { backgroundColor: palette.card, borderColor: palette.action },
           ]}
         >
           <Text style={[styles.noticeText, { color: palette.ink }]}>
@@ -1317,7 +1320,7 @@ export function ReadOnlyTaskList({
       accessibilityRole="progressbar"
       style={styles.centeredState}
     >
-      <ActivityIndicator color={palette.blue} size="large" />
+      <ActivityIndicator color={palette.link} size="large" />
       <Text style={[styles.stateTitle, { color: palette.ink }]}>
         Loading {selectedGroup.name}…
       </Text>
@@ -1369,6 +1372,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionButton: {
+    borderRadius: 6,
     alignItems: "center",
     alignSelf: "flex-start",
     justifyContent: "center",
@@ -1377,7 +1381,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   actionButtonText: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 15,
   },
   centeredState: {
@@ -1404,13 +1408,13 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   chooserLede: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 17,
     lineHeight: 26,
     marginTop: 14,
   },
   chooserTitle: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 42,
     letterSpacing: -2,
     lineHeight: 47,
@@ -1423,11 +1427,11 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   filterCount: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 13,
   },
   filterLabel: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 15,
   },
   filters: {
@@ -1436,6 +1440,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterTab: {
+    borderRadius: 6,
     alignItems: "center",
     flexDirection: "row",
     gap: 8,
@@ -1446,11 +1451,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   freshness: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 13,
     lineHeight: 19,
   },
   groupButton: {
+    borderRadius: 6,
     alignItems: "center",
     flexDirection: "row",
     gap: 12,
@@ -1464,11 +1470,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   groupButtonName: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 16,
   },
   groupButtonRole: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 12,
   },
   groupChoices: {
@@ -1479,7 +1485,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   kicker: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 11,
     letterSpacing: 1.6,
   },
@@ -1488,6 +1494,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   narrowSwitcher: {
+    borderRadius: 6,
     alignItems: "center",
     borderWidth: 1,
     flexDirection: "row",
@@ -1498,18 +1505,19 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   notice: {
+    borderRadius: 6,
     borderLeftWidth: 4,
     gap: 14,
     marginTop: 22,
     padding: 16,
   },
   noticeText: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 15,
     lineHeight: 23,
   },
   sectionHeader: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 18,
     paddingBottom: 10,
     paddingTop: 24,
@@ -1524,7 +1532,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sidebarTitle: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 24,
     letterSpacing: -0.8,
   },
@@ -1532,33 +1540,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stateMessage: {
-    fontFamily: "Geist_400Regular",
+    fontFamily: "Inter_400Regular",
     fontSize: 15,
     lineHeight: 23,
     maxWidth: 440,
     textAlign: "center",
   },
   stateTitle: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 22,
     textAlign: "center",
   },
   switcherLabel: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 10,
     letterSpacing: 1.1,
   },
   switcherName: {
-    fontFamily: "Geist_700Bold",
+    fontFamily: "Inter_700Bold",
     fontSize: 18,
   },
   taskBadge: {
+    borderRadius: 6,
     borderWidth: 1,
     paddingHorizontal: 9,
     paddingVertical: 6,
   },
   taskBadgeText: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 11,
   },
   taskBadges: {
@@ -1581,7 +1590,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   taskListTitle: {
-    fontFamily: "Geist_900Black",
+    fontFamily: "Inter_700Bold",
     fontSize: 40,
     letterSpacing: -1.8,
     lineHeight: 44,
@@ -1590,7 +1599,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   taskMetaText: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 12,
   },
   taskMetadata: {
@@ -1599,6 +1608,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   taskRow: {
+    borderRadius: 14,
     alignItems: "flex-start",
     borderWidth: 1,
     flexDirection: "row",
@@ -1607,7 +1617,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   taskText: {
-    fontFamily: "Geist_600SemiBold",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 16,
     lineHeight: 23,
   },

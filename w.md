@@ -30,3 +30,12 @@ CLI: `npm run`; `node cli/openjob.mjs --help`
 - Root lint/typecheck and full `npm test` pass: build, generated CLI types, native lint/typecheck, 271 native tests, 457 Node tests, 131 pinned-Chromium browser tests, and secret scan (574 files). macOS on-demand dependency reads caused slow startup. Log: `output/brand-npm-test.log`.
 - The focused wrapper escalates root Wstack notes to release-candidate mode and rejects a feature branch. Its classifier/gates are unchanged; the required full suite runs directly. No native/device/release qualification is claimed.
 - Local preview `http://127.0.0.1:4027` remains available for owner review. PR #50 records final integration status; the app’s brand adoption belongs to the overhaul. No production release or deployment performed.
+
+
+## Brand adoption · WLK-275
+
+- Owner requested the supplied identity across the current web/iOS/Android apps. Branch `codex/wlk-275-brand-adoption`; [WLK-275](https://linear.app/wlkr-labs/issue/WLK-275/apply-the-approved-openjob-brand-across-web-and-mobile-apps).
+- `docs/brand/README.md` is now the standard for app styling, with an `AGENTS.md` pointer. Folded mark, mixed-case lockup, local Inter, semantic light/dark colors, browser/install icons, social card, Android adaptive/monochrome icons, and splash marks replace the old identity. Current Task/Group behavior is retained; guide concepts do not add Mail/Calendar capabilities.
+- `npm run brand:assets` regenerates 32 platform assets/adapters; `brand:check` starts the deterministic test gate. Canonical inputs, generator, and saved output hashes detect drift without rerasterizing across operating systems. The eleventh source SVG is an outlined social card.
+- Native config verification passes for development/preview/production and local embedded bundle verification passes on iOS/Android. macOS and Linux pinned-Chromium phone/desktop visual baselines now cover both appearances; action contrast and loaded local Inter are checked.
+- Full repository gate and practical local platform checks are in progress. Local verification only; no production release, deployment, store build/upload, or auth with real accounts.

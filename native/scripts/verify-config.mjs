@@ -179,6 +179,7 @@ async function copyProject(targetRoot) {
       join(repositoryRoot, "public", "icon-maskable-512.png"),
       join(targetRoot, "public", "icon-maskable-512.png"),
     ),
+    cp(join(repositoryRoot, "public", "brand"), join(targetRoot, "public", "brand"), { recursive: true }),
     cp(join(nativeRoot, "app.config.mjs"), join(targetNative, "app.config.mjs")),
     cp(join(nativeRoot, "metro.config.cjs"), join(targetNative, "metro.config.cjs")),
     cp(join(nativeRoot, "package.json"), join(targetNative, "package.json")),

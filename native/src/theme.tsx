@@ -7,45 +7,51 @@ import {
 import { useColorScheme } from "react-native";
 import type { Theme as NavigationTheme } from "@react-navigation/native";
 import type { AppearancePreference } from "./storage";
+import { brandDark, brandLight } from "./brand-tokens";
 
+// Semantic colors are generated from docs/brand/tokens.css for both clients.
 export type OpenJobPalette = {
+  action: string;
+  actionHover: string;
+  actionText: string;
   background: string;
-  blue: string;
-  blueStrong: string;
   card: string;
+  controlLine: string;
+  focus: string;
   ink: string;
   line: string;
+  link: string;
   muted: string;
-  onBlue: string;
   paper: string;
-  wordmarkPeriod: string;
+  positive: string;
+  positiveFill: string;
+  selected: string;
+  selectedText: string;
 };
 
-const lightPalette: OpenJobPalette = {
-  background: "#eef0ea",
-  blue: "#1e4ed8",
-  blueStrong: "#153caf",
-  card: "#f8f8f3",
-  ink: "#151713",
-  line: "#c6cac1",
-  muted: "#62675e",
-  onBlue: "#ffffff",
-  paper: "#ffffff",
-  wordmarkPeriod: "#6387ff",
-};
+function paletteFromBrand(brand: typeof brandLight | typeof brandDark): OpenJobPalette {
+  return {
+    action: brand.action,
+    actionHover: brand.actionHover,
+    actionText: brand.actionText,
+    background: brand.surface,
+    card: brand.panel,
+    controlLine: brand.controlLine,
+    focus: brand.focus,
+    ink: brand.text,
+    line: brand.line,
+    link: brand.link,
+    muted: brand.muted,
+    paper: brand.panel,
+    positive: brand.positive,
+    positiveFill: brand.positiveFill,
+    selected: brand.selected,
+    selectedText: brand.selectedText,
+  };
+}
 
-const darkPalette: OpenJobPalette = {
-  background: "#11141a",
-  blue: "#6387ff",
-  blueStrong: "#86a1ff",
-  card: "#1a2030",
-  ink: "#f4f5ef",
-  line: "#3a4358",
-  muted: "#aab2c3",
-  onBlue: "#11141a",
-  paper: "#151b28",
-  wordmarkPeriod: "#6387ff",
-};
+const lightPalette = paletteFromBrand(brandLight);
+const darkPalette = paletteFromBrand(brandDark);
 
 type ThemeContextValue = {
   isDark: boolean;
@@ -79,25 +85,25 @@ export function OpenJobThemeProvider({
           background: palette.background,
           border: palette.line,
           card: palette.card,
-          notification: palette.blue,
-          primary: palette.blue,
+          notification: palette.action,
+          primary: palette.link,
           text: palette.ink,
         },
         fonts: {
           bold: {
-            fontFamily: "Geist_700Bold",
+            fontFamily: "Inter_700Bold",
             fontWeight: "700",
           },
           heavy: {
-            fontFamily: "Geist_900Black",
-            fontWeight: "900",
+            fontFamily: "Inter_700Bold",
+            fontWeight: "700",
           },
           medium: {
-            fontFamily: "Geist_600SemiBold",
+            fontFamily: "Inter_600SemiBold",
             fontWeight: "600",
           },
           regular: {
-            fontFamily: "Geist_400Regular",
+            fontFamily: "Inter_400Regular",
             fontWeight: "400",
           },
         },

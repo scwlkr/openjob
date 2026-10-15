@@ -200,12 +200,12 @@ export default function createAppConfig({ config = {} } = {}) {
       [
         "expo-splash-screen",
         {
-          backgroundColor: "#eef0ea",
+          backgroundColor: "#F7F8FA",
           dark: {
-            backgroundColor: "#11141a",
-            image: "../public/icon-512.png",
+            backgroundColor: "#20242B",
+            image: "../public/brand/splash-mark-reverse.png",
           },
-          image: "../public/icon-512.png",
+          image: "../public/brand/splash-mark.png",
           imageWidth: 156,
           resizeMode: "contain",
         },
@@ -233,9 +233,9 @@ export default function createAppConfig({ config = {} } = {}) {
     android: {
       ...config.android,
       adaptiveIcon: {
-        backgroundColor: "#eef0ea",
-        foregroundImage: "../public/icon-maskable-512.png",
-        monochromeImage: "../public/icon-maskable-512.png",
+        backgroundColor: "#20242B",
+        foregroundImage: "../public/brand/android-foreground.png",
+        monochromeImage: "../public/brand/android-monochrome.png",
       },
       blockedPermissions: [
         ...new Set([

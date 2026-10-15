@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { OpenJobBrand } from "../openjob-brand";
 import styles from "../account-deletion/account-deletion.module.css";
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className={styles.page}>
-      <Link className={styles.wordmark} href="/">OpenJob</Link>
+      <Link className={styles.wordmark} href="/"><OpenJobBrand /></Link>
       <article className={styles.card}>
         <p className={styles.kicker}>Privacy</p>
         <h1>Built for a clear shared list, not surveillance.</h1>

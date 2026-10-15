@@ -2,12 +2,12 @@
   "id": "/",
   "name": "OpenJob",
   "short_name": "OpenJob",
-  "description": "Private Group task lists that keep small teams clear on who is doing what.",
+  "description": "Clear space. Focused work.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#eef0ea",
-  "theme_color": "#1e4ed8",
+  "background_color": "#f7f8fa",
+  "theme_color": "#4169e1",
   "icons": [
     {
       "src": "/icon-192.png",

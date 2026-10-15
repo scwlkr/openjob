@@ -1,31 +1,9 @@
 # OpenJob brand assets
 
-The [brand foundation](brand/index.html) and [editable masters](brand/README.md) now define the identity for the OpenJob overhaul: folded Cobalt frame, mixed-case **OpenJob** lettering, and the five-color owner-supplied palette. The original board is preserved in `docs/brand/source/`.
+[Brand standards and editable sources](brand/README.md) are the authority for the web, iOS, and Android apps. [Open the visual guide](brand/index.html) for the supplied board, logo variants, colors, type, and usage examples.
 
-## Legacy shipped assets
+The standard is the folded Cobalt mark, mixed-case **OpenJob** lettering without a period, local Inter, and shared light/dark semantic colors. The previous square `O.` and uppercase wordmark have been replaced.
 
-The files below remain in use by the existing product and are preserved for that runtime. They are superseded as brand direction by `docs/brand/`; adoption across web and native belongs to the overhaul.
+Run `npm run brand:assets` after source changes and `npm run brand:check` to verify generated assets. The generator keeps existing public URLs stable and produces the web CSS adapter, native geometry and color adapters, local native fonts, browser/install icons, Android adaptive/monochrome artwork, native splash marks, and social card. Edit canonical sources under `docs/brand/`; do not hand-edit generated files.
 
-The legacy identity is the outlined `OPENJOB.` wordmark and the square `O.` brandmark. The period connects both marks; it stays light blue in the wordmark and uses the stronger product blue at icon sizes.
-
-## Vector masters
-
-- `/public/brand/openjob-wordmark.svg` — primary outlined wordmark
-- `/public/brand/openjob-wordmark-inverse.svg` — wordmark for dark surfaces
-- `/public/brand/openjob-brandmark.svg` — primary transparent brandmark
-- `/public/brand/openjob-brandmark-mono.svg` — one-color brandmark
-- `/public/brand/openjob-brandmark-inverse.svg` — brandmark for dark surfaces
-- `/public/brand/openjob-app-icon.svg` — square app-icon master
-- `/public/brand/openjob-app-icon-maskable.svg` — safe-zone app-icon master
-
-The wordmark uses outlined paths and does not require Geist to be installed. Do not add a container, shadow, gradient, or rounded mask to the vector masters. Platforms should apply their own icon mask.
-
-## Core colors
-
-- Ink: `#151713`
-- Product blue: `#1e4ed8`
-- Wordmark period: `#6387ff`
-- Paper: `#eef0ea`
-- Light paper: `#f8f8f3`
-
-Use the square mark at 16 px and above. Prefer the wordmark when its rendered width can remain at least 88 px.
+Mail, Calendar, and agent-mail examples in the guide illustrate product direction. They do not establish current app capabilities.

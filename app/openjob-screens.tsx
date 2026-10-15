@@ -15,6 +15,7 @@ import { GroupGovernance } from "./openjob-governance";
 import { OPENJOB_VERSION } from "./release";
 import { useReleaseUpdate } from "./release-update";
 import { TaskList } from "./openjob-task-list";
+import { OpenJobBrand, OpenJobMark } from "./openjob-brand";
 import {
   NotificationInvitation,
   NotificationSettings,
@@ -33,8 +34,8 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function Brand() {
-  return <span className={styles.brand}>OPENJOB<span>.</span></span>;
+function Brand({ inverse = false }: { inverse?: boolean }) {
+  return <OpenJobBrand appearance={inverse ? "dark" : "auto"} className={styles.brand} />;
 }
 
 function signInMethodName(method: AuthenticationMethod) {
@@ -45,7 +46,7 @@ function signInMethodName(method: AuthenticationMethod) {
 export function LoadingScreen() {
   return (
     <main className={styles.centeredScreen} aria-busy="true">
-      <div className={styles.loadingMark} aria-hidden="true">OJ</div>
+      <OpenJobMark className={styles.loadingMark} />
       <p>Loading your OpenJob…</p>
     </main>
   );
@@ -87,7 +88,7 @@ export function SignedOut({
   return (
     <main className={styles.authShell}>
       <aside className={styles.authRail} aria-label="OpenJob introduction">
-        <Brand />
+        <Brand inverse />
         <div className={styles.railStatement}>
           <p className={styles.kicker}>Private Groups</p>
           <p>Shared work stays with the people doing it.</p>
