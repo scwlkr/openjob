@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFirestoreAgentGrantStore } from '../db/agent-grants.ts';
@@ -190,4 +190,85 @@ test('actual CLI task list/show use the explicit agent token file with no human 
   assert.equal((await run(['task', 'delete', 'task_one', ...options])).status, 2);
   assert.ok(paths.every(path => path.startsWith(collection)), JSON.stringify(paths));
   assert.equal((listed.stdout + shown.stdout + denied.stderr).includes(token), false);
+});
+
+test('actual owner CLI lists and confirms revocation through the shared API without broadening agent access', async t => {
+  const f = await fixture();
+  const { agent, token } = (await (await f.issue()).json()).data;
+  const directory = await mkdtemp(join(tmpdir(), 'openjob-owner-cli-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const credential = join(directory, 'human-credential');
+  await writeFile(credential, 'fixture-refresh', { mode: 0o600 });
+  let humanToken = 'fixture-human';
+  let failDelete = false;
+  const calls = [];
+  const server = createServer(async (req, res) => {
+    calls.push({ method: req.method, path: req.url });
+    if (req.url === '/firebase/token?key=fixture') {
+      for await (const chunk of req) { void chunk; }
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ id_token: humanToken, refresh_token: 'fixture-refresh' }));
+      return;
+    }
+    if (failDelete && req.method === 'DELETE') {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: 'internal_error', message: 'Fixture failure.', requestId: 'req_fixture' } }));
+      return;
+    }
+    const response = await f.admin.fetch(new Request(`http://fixture.invalid${req.url}`, { method: req.method, headers: req.headers }));
+    res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text());
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const run = args => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['cli/openjob.mjs', ...args], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = ''; child.stdout.on('data', c => stdout += c); child.stderr.on('data', c => stderr += c); child.on('error', reject); child.on('close', status => resolve({ status, stdout, stderr }));
+  });
+  const outputs = [];
+  const json = await run(['agent', 'list', '--format', 'json']); outputs.push(json);
+  assert.equal(json.status, 0, json.stderr);
+  assert.deepEqual(JSON.parse(json.stdout).data, [agent]);
+  const table = await run(['agent', 'list']); outputs.push(table);
+  assert.equal(table.status, 0, table.stderr);
+  for (const value of ['AGENT_ID', 'GROUP_ID', 'SCOPE', 'EXPIRES_AT', agent.agentId, agent.name, agent.groupId, agent.scope, agent.expiresAt]) assert.ok(table.stdout.includes(value), value);
+  const jsonl = await run(['agent', 'list', '--format', 'jsonl']); outputs.push(jsonl);
+  assert.equal(jsonl.status, 0, jsonl.stderr); assert.deepEqual(JSON.parse(jsonl.stdout), agent);
+  const output = join(directory, 'grants.json');
+  const fileResult = await run(['agent', 'list', '--format', 'json', '--out', output]); outputs.push(fileResult);
+  assert.equal(fileResult.status, 0, fileResult.stderr); assert.equal(fileResult.stdout, '');
+  assert.deepEqual(JSON.parse(await readFile(output, 'utf8')).data, [agent]);
+  assert.equal((await stat(output)).mode & 0o777, 0o600);
+  const callCount = calls.length;
+  for (const args of [
+    ['agent', 'revoke', agent.agentId], ['agent', 'revoke', 'agt_invalid', '--yes'],
+    ['agent', 'revoke', '../me', '--yes'], ['agent', 'list', '--agent-token-file', '/absent'],
+    ['agent', 'revoke', agent.agentId, '--yes', '--agent-token-file', '/absent'],
+    ['agent', 'list', '--group', GROUP], ['agent', 'revoke', agent.agentId, '--yes', '--out', output],
+  ]) {
+    const result = await run(args); outputs.push(result);
+    assert.equal(result.status, 2, JSON.stringify(args) + result.stderr);
+  }
+  assert.equal(calls.length, callCount, 'invalid or unconfirmed commands do not authenticate or mutate');
+  humanToken = 'fixture-other';
+  const foreignList = await run(['agent', 'list', '--format', 'json']); outputs.push(foreignList);
+  assert.deepEqual(JSON.parse(foreignList.stdout).data, []);
+  const foreignRevoke = await run(['agent', 'revoke', agent.agentId, '--yes']); outputs.push(foreignRevoke);
+  assert.notEqual(foreignRevoke.status, 0); assert.match(foreignRevoke.stderr, /not_found/); assert.equal(foreignRevoke.stdout, '');
+  assert.equal((await f.request(collection, { token })).status, 200);
+  humanToken = 'fixture-human'; failDelete = true;
+  const deleteCount = calls.filter(c => c.method === 'DELETE').length;
+  const failed = await run(['agent', 'revoke', agent.agentId, '--yes']); outputs.push(failed);
+  assert.notEqual(failed.status, 0); assert.equal(failed.stdout, '');
+  assert.equal(calls.filter(c => c.method === 'DELETE').length, deleteCount + 1, 'failed mutation is not retried');
+  assert.equal((await f.request(collection, { token })).status, 200);
+  failDelete = false;
+  const revoked = await run(['agent', 'revoke', agent.agentId, '--yes', '--format', 'json']); outputs.push(revoked);
+  assert.equal(revoked.status, 0, revoked.stderr); assert.deepEqual(JSON.parse(revoked.stdout).data, { agentId: agent.agentId, revoked: true });
+  assert.equal((await f.request(collection, { token })).status, 403);
+  const repeated = await run(['agent', 'revoke', agent.agentId, '--yes']); outputs.push(repeated);
+  assert.notEqual(repeated.status, 0); assert.match(repeated.stderr, /not_found/); assert.equal(repeated.stdout, '');
+  const empty = await run(['agent', 'list', '--format', 'json']); outputs.push(empty);
+  assert.deepEqual(JSON.parse(empty.stdout).data, []);
+  for (const secret of [token, 'fixture-refresh', 'fixture-human', 'fixture-other', 'tokenHash', 'membershipId']) assert.equal(JSON.stringify(outputs).includes(secret), false, secret);
 });
