@@ -1,3 +1,5 @@
+import { createFirestoreAgentGrantStore } from "@/db/agent-grants";
+import { createV1AgentGrantsApi } from "./v1-agent-grants";
 import { env, waitUntil } from "cloudflare:workers";
 import { createFirestoreGroupStore } from "@/db/groups";
 import { createFirestoreAccountDeletionJobStore } from "@/db/account-deletions";
@@ -44,6 +46,7 @@ type FirebaseBindings = QaPasswordRuntimeBindings & {
 };
 
 type V1Runtime = {
+  agentGrantsApi: ReturnType<typeof createV1AgentGrantsApi>;
   accountDeletionApi: ReturnType<typeof createV1AccountDeletionApi>;
   groupsApi: ReturnType<typeof createV1GroupsApi>;
   identityApi: ReturnType<typeof createV1IdentityApi>;
@@ -75,6 +78,7 @@ function getRuntime() {
   const users = createFirestoreUserStore(firebase);
   const groups = createFirestoreGroupStore(firebase);
   const tasks = createFirestoreTaskStore(firebase);
+  const agentGrants = createFirestoreAgentGrantStore(firebase);
   const notificationSubscriptions =
     createFirestoreNotificationSubscriptionStore(firebase);
   const accountDeletionJobs = createFirestoreAccountDeletionJobStore(
@@ -124,7 +128,9 @@ function getRuntime() {
     qaPassword: qaPasswordIdentityConfig(bindings, projectId),
   });
   runtime = {
+    agentGrantsApi: createV1AgentGrantsApi({ grants: agentGrants, users, verifyIdToken }),
     accountDeletionApi: createV1AccountDeletionApi({
+      agentGrants,
       groups,
       jobs: accountDeletionJobs,
       notifications: notificationSubscriptions,
@@ -149,6 +155,7 @@ function getRuntime() {
       verifyIdToken,
     }),
     tasksApi: createV1TasksApi({
+      agents: agentGrants,
       notifications: {
         dispatch: notificationDispatcher.dispatch,
         schedule(delivery) {
@@ -217,4 +224,8 @@ export function retryAccountDeletion(userId: string, requestId: string) {
     throw new Error("Account deletion operator target is invalid.");
   }
   return getAccountDeletionApi().retryPending(target);
+}
+
+export async function handleV1AgentGrantsRequest(request: Request) {
+  return getRuntime().agentGrantsApi.fetch(request);
 }

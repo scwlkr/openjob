@@ -299,6 +299,16 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
         throttleNextRequest = false;
         return error(429, "RESOURCE_EXHAUSTED", "Firestore rate limited.");
       }
+      if (url.pathname.endsWith("/documents:runQuery")) {
+        const query = JSON.parse(init.body).structuredQuery;
+        assert.deepEqual(query.from, [{ collectionId: "v1AgentGrants" }]);
+        assert.equal(query.where.fieldFilter.field.fieldPath, "ownerUserId");
+        assert.equal(query.where.fieldFilter.op, "EQUAL");
+        const owner = query.where.fieldFilter.value.stringValue;
+        return Response.json(directCollectionDocuments(documents, "v1AgentGrants")
+          .filter(document => document.fields?.ownerUserId?.stringValue === owner)
+          .slice(0, query.limit ?? Infinity).map(document => ({ document })));
+      }
       if (url.pathname.endsWith("/documents:beginTransaction")) {
         transactionSequence += 1;
         const transaction = Buffer.from(

@@ -66,9 +66,9 @@ const GROUP_SCOPED_OPTIONS = [...OUTPUT_OPTIONS, "--group"];
 const TASK_COMMON_OPTIONS = GROUP_SCOPED_OPTIONS;
 const TASK_FIELD_OPTIONS = ["--text", "--text-file", "--assignee", "--priority", "--due", "--schedule-start", "--schedule-end", "--clear-schedule"];
 const TASK_OPTIONS = new Map([
-  ["list", new Set([...TASK_COMMON_OPTIONS, "--status", "--assignee", "--limit"])],
+  ["list", new Set([...TASK_COMMON_OPTIONS, "--agent-token-file", "--status", "--assignee", "--limit"])],
   ["create", new Set([...TASK_COMMON_OPTIONS, "--input", ...TASK_FIELD_OPTIONS])],
-  ["show", new Set(TASK_COMMON_OPTIONS)],
+  ["show", new Set([...TASK_COMMON_OPTIONS, "--agent-token-file"])],
   ["edit", new Set([...TASK_COMMON_OPTIONS, "--input", ...TASK_FIELD_OPTIONS])],
   ["done", new Set(TASK_COMMON_OPTIONS)],
   ["reopen", new Set(TASK_COMMON_OPTIONS)],
@@ -116,7 +116,7 @@ Resources:
   member     List Members and govern membership or Admin status
   ban        List, add, or remove Group-scoped bans
   invite     Inspect, join through, show, or rotate Invite Links
-  task       List and manage Tasks
+  task       List and manage Tasks; scoped reads: openjob help task
 
 Global options:
   --group <group-id>          Override the client-local current Group
@@ -164,15 +164,19 @@ const RESOURCE_HELP = {
   openjob invite inspect <token-or-url>
   openjob invite join <token-or-url>`,
   task: `Usage:
-  openjob task list [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
+  openjob task list [--agent-token-file <path|-> --group <group-id>] [--status <open|done|all>] [--assignee <username|unassigned|all>] [--limit <count>]
   openjob task create (--text <text> | --text-file <path|->) --assignee <username> [--priority <high|normal|low>] [--due <YYYY-MM-DD>] [--schedule-start <timestamp> --schedule-end <timestamp>]
   openjob task create --input <path|->
-  openjob task show <task-id>
+  openjob task show <task-id> [--agent-token-file <path|-> --group <group-id>]
   openjob task edit <task-id> [--text <text> | --text-file <path|->] [--assignee <username>] [--priority <high|normal|low>] [--due <YYYY-MM-DD|none>] [--schedule-start <timestamp> --schedule-end <timestamp> | --clear-schedule]
   openjob task edit <task-id> --input <path|->
   openjob task done <task-id>
   openjob task reopen <task-id>
-  openjob task delete <task-id> [--yes]`,
+  openjob task delete <task-id> [--yes]
+
+Agent list/show reads require an explicit Group and token file (or stdin -).
+Grants expire after 24 hours and stop on revocation or owner membership loss.
+Agent reads never refresh or fall back to human credentials.`,
 };
 
 /** @param {string} resource @param {string} command */
@@ -418,9 +422,18 @@ async function main(raw) {
     parsed.options.get(PROFILE_OPTION),
     process.env,
   );
-  const storedApi = createApiClient(process.env, undefined, profile);
+  const agentTokenFile = parsed.options.get("--agent-token-file");
+  let agentToken;
+  if (typeof agentTokenFile === "string") {
+    if (!parsed.options.has("--group")) throw new CliError("usage_error", "Agent reads require explicit --group.", 2);
+    agentToken = readTextSource(agentTokenFile);
+    if (!/^oj_agent_agt_[a-f0-9]{32}\.[A-Za-z0-9_-]{43}$/.test(agentToken)) {
+      throw new CliError("input_invalid", "Agent token file must contain one valid agent credential.", 2);
+    }
+  }
+  const storedApi = createApiClient(process.env, agentToken, profile, { allowCredentialRefresh: agentToken === undefined });
   const hasBoundIdentity =
-    profile.expectedUsername !== null || profile.expectedUserId !== null;
+    agentToken === undefined && (profile.expectedUsername !== null || profile.expectedUserId !== null);
   /** @type {Promise<CurrentUserResponse> | undefined} */
   let selectedIdentityPromise;
   const selectedIdentity = () => {

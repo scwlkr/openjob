@@ -1,3 +1,4 @@
+import { AgentAccessDenied, agentBearer, type AgentGrantStore } from "./agent-grants.ts";
 import { scheduledSlotField, type ScheduledSlot } from "../shared/task-scheduling.ts";
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
@@ -156,6 +157,7 @@ type UserStore = {
 };
 
 type TasksApiOptions = {
+  agents?: AgentGrantStore;
   notifications?: {
     dispatch(intent: TaskNotificationIntent): Promise<void>;
     schedule(delivery: () => Promise<void>): void;
@@ -675,6 +677,7 @@ function compareTasks(left: OpenJobTask, right: OpenJobTask) {
 }
 
 export function createV1TasksApi({
+  agents,
   notifications,
   requestId = defaultRequestId,
   tasks,
@@ -745,36 +748,42 @@ export function createV1TasksApi({
   return Object.freeze({
     async fetch(request: Request) {
       try {
-        const identity = await verifyIdToken(request);
-        if (!identity) {
-          return errorResponse(requestId, {
-            code: "authentication_required",
-            message: "Authentication is required.",
-            status: 401,
-          });
-        }
-        const user = await users.resolve(identity);
-        if (!user) return signInMethodUnrecognizedResponse(requestId);
-        if (user.deletionPending) {
-          return accountDeletionPendingResponse(requestId);
-        }
-        const assertResponseUserIsActive = async () => {
-          const current = await users.resolve(identity);
-          if (
-            !current ||
-            current.userId !== user.userId ||
-            current.deletionPending
-          ) {
-            throw new InactiveUserError(user.userId);
-          }
-        };
         const url = new URL(request.url);
         const path = taskResourceFromPath(url.pathname);
+        const token = agentBearer(request);
+        let actorUserId: string;
+        let assertResponseUserIsActive: () => Promise<void>;
+        if (token !== null) {
+          const grant = await agents?.authorize(token);
+          if (!grant || request.method !== "GET" || path.kind !== "valid" || path.state || path.groupId !== grant.groupId) {
+            throw new AgentAccessDenied();
+          }
+          actorUserId = grant.ownerUserId;
+          assertResponseUserIsActive = async () => {
+            const current = await agents?.authorize(token);
+            if (!current || current.agentId !== grant.agentId || current.ownerUserId !== grant.ownerUserId || current.groupId !== grant.groupId) {
+              throw new AgentAccessDenied();
+            }
+          };
+        } else {
+          const identity = await verifyIdToken(request);
+          if (!identity) return errorResponse(requestId, {
+            code: "authentication_required", message: "Authentication is required.", status: 401,
+          });
+          const user = await users.resolve(identity);
+          if (!user) return signInMethodUnrecognizedResponse(requestId);
+          if (user.deletionPending) return accountDeletionPendingResponse(requestId);
+          actorUserId = user.userId;
+          assertResponseUserIsActive = async () => {
+            const current = await users.resolve(identity);
+            if (!current || current.userId !== actorUserId || current.deletionPending) throw new InactiveUserError(actorUserId);
+          };
+        }
         if (path.kind === "invalid_group") return groupNotFound(requestId);
         if (path.kind === "invalid_task") return taskNotFound(requestId);
 
         if (path.kind === "valid" && path.taskId === null && request.method === "POST") {
-          if (!(await tasks.hasAccess(user.userId, path.groupId))) {
+          if (!(await tasks.hasAccess(actorUserId, path.groupId))) {
             return groupNotFound(requestId);
           }
           const parsed = await readCreateTask(request);
@@ -785,7 +794,7 @@ export function createV1TasksApi({
           if (!assignee?.username || assignee.deletionPending) {
             return assigneeNotMember(requestId);
           }
-          const result = await tasks.create(user.userId, path.groupId, {
+          const result = await tasks.create(actorUserId, path.groupId, {
             userId: assignee.userId,
             username: assignee.username as Username,
           }, parsed.input);
@@ -793,7 +802,7 @@ export function createV1TasksApi({
             const response = jsonResponse({ data: result.task }, 201);
             scheduleAssignment(
               result.task,
-              user.userId,
+              actorUserId,
               result.change?.previousAssigneeUserId ?? null,
             );
             return response;
@@ -805,7 +814,7 @@ export function createV1TasksApi({
         }
 
         if (path.kind === "valid" && path.taskId === null && request.method === "GET") {
-          const state = await tasks.readState(user.userId, path.groupId);
+          const state = await tasks.readState(actorUserId, path.groupId);
           if (state.kind === "not_found") return groupNotFound(requestId);
           const options = readTaskListOptions(url);
           if ("fields" in options) {
@@ -820,7 +829,7 @@ export function createV1TasksApi({
             await assertResponseUserIsActive();
             return notModified(validator);
           }
-          const result = await tasks.list(user.userId, path.groupId);
+          const result = await tasks.list(actorUserId, path.groupId);
           if (result.kind === "not_found") return groupNotFound(requestId);
           const ordered = result.tasks
             .filter(
@@ -876,7 +885,7 @@ export function createV1TasksApi({
           !path.state &&
           request.method === "GET"
         ) {
-          const result = await tasks.get(user.userId, path.groupId, path.taskId);
+          const result = await tasks.get(actorUserId, path.groupId, path.taskId);
           await assertResponseUserIsActive();
           return result.kind === "found"
             ? jsonResponse({ data: result.task })
@@ -890,7 +899,7 @@ export function createV1TasksApi({
           request.method === "DELETE"
         ) {
           const result = await tasks.delete(
-            user.userId,
+            actorUserId,
             path.groupId,
             path.taskId,
           );
@@ -909,7 +918,7 @@ export function createV1TasksApi({
           request.method === "PATCH"
         ) {
           const current = await tasks.get(
-            user.userId,
+            actorUserId,
             path.groupId,
             path.taskId,
           );
@@ -934,7 +943,7 @@ export function createV1TasksApi({
               username: assigneeUser.username as Username,
             };
           }
-          const result = await tasks.update(user.userId, path.groupId, path.taskId, {
+          const result = await tasks.update(actorUserId, path.groupId, path.taskId, {
             ...(parsed.input.text !== undefined ? { text: parsed.input.text } : {}),
             ...(assignee ? { assignee } : {}),
             ...(parsed.input.priority !== undefined
@@ -947,7 +956,7 @@ export function createV1TasksApi({
             const response = jsonResponse({ data: result.task });
             scheduleAssignment(
               result.task,
-              user.userId,
+              actorUserId,
               result.change?.previousAssigneeUserId ?? null,
             );
             return response;
@@ -966,7 +975,7 @@ export function createV1TasksApi({
           request.method === "PUT"
         ) {
           const current = await tasks.get(
-            user.userId,
+            actorUserId,
             path.groupId,
             path.taskId,
           );
@@ -978,14 +987,14 @@ export function createV1TasksApi({
             return invalidTaskInput(requestId, parsed.fields);
           }
           const result = await tasks.setState(
-            user.userId,
+            actorUserId,
             path.groupId,
             path.taskId,
             parsed.state,
           );
           if (result.kind !== "updated") return taskNotFound(requestId);
           const response = jsonResponse({ data: result.task });
-          scheduleCompletion(result.task, user.userId, result.change);
+          scheduleCompletion(result.task, actorUserId, result.change);
           return response;
         }
 
@@ -995,6 +1004,9 @@ export function createV1TasksApi({
           status: 404,
         });
       } catch (error) {
+        if (error instanceof AgentAccessDenied || (agentBearer(request) !== null && isInactiveUserError(error))) {
+          return errorResponse(requestId, { code: "agent_access_denied", message: "Agent access is denied.", status: 403 });
+        }
         if (isInactiveUserError(error)) {
           return accountDeletionPendingResponse(requestId);
         }

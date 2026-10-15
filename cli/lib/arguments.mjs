@@ -1,6 +1,7 @@
 import { CliError } from "./errors.mjs";
 
 const VALUE_OPTIONS = new Set([
+  "--agent-token-file",
   "--assignee",
   "--confirm-name",
   "--due",

@@ -12,6 +12,9 @@ const EXPECTED_RELEASE_VERSION = JSON.parse(
 ).version;
 
 const expectedOperations = [
+  "get /api/v1/agent-grants listAgentGrants",
+  "post /api/v1/agent-grants createAgentGrant",
+  "delete /api/v1/agent-grants/{agentId} revokeAgentGrant",
   "delete /api/v1/groups/{groupId}/tasks/{taskId} deleteGroupTask",
   "get /api/v1/groups listGroups",
   "get /api/v1/groups/{groupId} getGroup",
@@ -92,7 +95,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 23);
+  assert.equal(Object.keys(contract.paths).length, 25);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -533,6 +536,9 @@ test("contract schemas enforce normalized domain rules and status-specific error
     false,
   );
   const signInConflictOperations = [
+    "createAgentGrant",
+    "listAgentGrants",
+    "revokeAgentGrant",
     "banGroupUser",
     "claimUsername",
     "createCurrentUser",

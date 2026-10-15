@@ -4,9 +4,9 @@ info:
   version: 0.3.7
   summary: Shared backend contract for equal web and CLI clients
   description: |
-    OpenJob exposes one versioned JSON API. Firebase Authentication is the only
-    identity issuer, and every request is authorized against current service
-    state. The web and CLI are presentation clients; validation, authorization,
+    OpenJob exposes one versioned JSON API. Firebase Authentication issues human
+    identities; owner-issued agent credentials permit scoped Task reads only.
+    Every request is authorized against current service state. The web and CLI are presentation clients; validation, authorization,
     ordering, privacy, and domain transitions live in this service.
   license:
     name: MIT
@@ -21,6 +21,7 @@ tags:
   - name: Membership
   - name: Invite Links
   - name: Tasks
+  - name: Agents
 security:
   - firebaseBearer: []
 paths:
@@ -957,6 +958,9 @@ paths:
         unassigned, or pass an exact Username. Every current Member has equal
         Task permissions.
       operationId: listGroupTasks
+      security:
+        - firebaseBearer: []
+        - agentBearer: []
       x-openjob-authorization: member
       x-openjob-retryable: true
       parameters:
@@ -971,6 +975,18 @@ paths:
           schema:
             type: string
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "200":
           $ref: "#/components/responses/TaskCollectionResponse"
         "304":
@@ -1007,6 +1023,18 @@ paths:
       requestBody:
         $ref: "#/components/requestBodies/CreateTaskRequest"
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "201":
           $ref: "#/components/responses/TaskResponse"
         "400":
@@ -1033,9 +1061,24 @@ paths:
       summary: Get one Task
       description: Returns a Task to any current Member of its Group.
       operationId: getGroupTask
+      security:
+        - firebaseBearer: []
+        - agentBearer: []
       x-openjob-authorization: member
       x-openjob-retryable: true
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "200":
           $ref: "#/components/responses/TaskResponse"
         "401":
@@ -1063,6 +1106,18 @@ paths:
       requestBody:
         $ref: "#/components/requestBodies/UpdateTaskRequest"
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "200":
           $ref: "#/components/responses/TaskResponse"
         "400":
@@ -1089,6 +1144,18 @@ paths:
       x-openjob-authorization: member
       x-openjob-retryable: false
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "204":
           description: Task permanently deleted; no response body.
         "401":
@@ -1120,6 +1187,18 @@ paths:
       requestBody:
         $ref: "#/components/requestBodies/SetTaskStateRequest"
       responses:
+        "403":
+          description: Agent credential is invalid, expired, revoked or outside its fixed
+            Task read scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: agent_access_denied
+                  message: Agent access is denied.
+                  requestId: req_fixture
         "200":
           $ref: "#/components/responses/TaskResponse"
         "400":
@@ -1137,8 +1216,181 @@ paths:
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
 
+  /api/v1/agent-grants:
+    get:
+      tags:
+        - Agents
+      summary: List only the signed-in owner’s agent grants
+      operationId: listAgentGrants
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      responses:
+        "200":
+          description: Successful owner operation. Responses are never cached.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items: &a1
+                      type: object
+                      additionalProperties: false
+                      required:
+                        - agentId
+                        - ownerUserId
+                        - groupId
+                        - name
+                        - scope
+                        - createdAt
+                        - expiresAt
+                      properties:
+                        agentId:
+                          type: string
+                        ownerUserId:
+                          type: string
+                        groupId:
+                          type: string
+                        name:
+                          type: string
+                        scope:
+                          type: string
+                          const: tasks:read
+                        createdAt:
+                          type: string
+                          format: date-time
+                        expiresAt:
+                          type: string
+                          format: date-time
+              example:
+                data:
+                  - &a2
+                    agentId: agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                    ownerUserId: user_fixture
+                    groupId: grp_fixture
+                    name: Planning assistant
+                    scope: tasks:read
+                    createdAt: 2026-10-15T12:00:00.000Z
+                    expiresAt: 2026-10-16T12:00:00.000Z
+        "401": &a3
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "409": &a4
+          $ref: "#/components/responses/SignInMethodUnrecognizedResponse"
+        "410": &a5
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429": &a6
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500": &a7
+          $ref: "#/components/responses/InternalErrorResponse"
+    post:
+      tags:
+        - Agents
+      summary: Issue one revocable 24-hour Task Group read credential
+      operationId: createAgentGrant
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      responses:
+        "201":
+          description: Successful owner operation. Responses are never cached.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    required:
+                      - agent
+                      - token
+                    properties:
+                      agent: *a1
+                      token:
+                        type: string
+              example:
+                data:
+                  agent: *a2
+                  token: oj_agent_agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401": *a3
+        "404": &a8
+          description: Resource unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                error:
+                  code: not_found
+                  message: The requested resource was not found.
+                  requestId: req_fixture
+        "409": *a4
+        "410": *a5
+        "429": *a6
+        "500": *a7
+      description: Human Firebase authentication only. Requires current Group
+        membership with a membership generation. Fixed tasks:read scope, one
+        Group, 24-hour lifetime. Token is returned once; only its hash is stored.
+        Owner membership loss, rejoin, account deletion, expiry or explicit
+        revocation deny subsequent reads. No Mail, Calendar, writes or
+        administration access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - groupId
+                - name
+              properties:
+                groupId:
+                  $ref: "#/components/schemas/GroupId"
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+            example:
+              groupId: grp_fixture
+              name: Planning assistant
+  /api/v1/agent-grants/{agentId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^agt_[a-f0-9]{32}$
+    delete:
+      tags:
+        - Agents
+      summary: Revoke only the signed-in owner’s grant
+      operationId: revokeAgentGrant
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      responses:
+        "204":
+          description: Revoked. No response body.
+        "401": *a3
+        "404": *a8
+        "409": *a4
+        "410": *a5
+        "429": *a6
+        "500": *a7
+
 components:
   securitySchemes:
+    agentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque scoped agent credential
+      description: Fixed read-only access to one Task Group; no human identity or refresh fallback.
     firebaseBearer:
       type: http
       scheme: bearer
@@ -2692,6 +2944,8 @@ components:
     ErrorCode:
       type: string
       enum:
+        - agent_access_denied
+        - not_found
         - invalid_request
         - authentication_required
         - fresh_authentication_required

@@ -756,6 +756,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List only the signed-in owner’s agent grants */
+        get: operations["listAgentGrants"];
+        put?: never;
+        /**
+         * Issue one revocable 24-hour Task Group read credential
+         * @description Human Firebase authentication only. Requires current Group membership with a membership generation. Fixed tasks:read scope, one Group, 24-hour lifetime. Token is returned once; only its hash is stored. Owner membership loss, rejoin, account deletion, expiry or explicit revocation deny subsequent reads. No Mail, Calendar, writes or administration access.
+         */
+        post: operations["createAgentGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-grants/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke only the signed-in owner’s grant */
+        delete: operations["revokeAgentGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1050,7 +1090,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -3285,6 +3325,24 @@ export interface operations {
             };
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -3310,6 +3368,24 @@ export interface operations {
             201: components["responses"]["TaskResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupNotFoundResponse"];
             409: components["responses"]["CreateTaskConflictResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -3339,6 +3415,24 @@ export interface operations {
         responses: {
             200: components["responses"]["TaskResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -3374,6 +3468,24 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -3404,6 +3516,24 @@ export interface operations {
             200: components["responses"]["TaskResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
             409: components["responses"]["UpdateTaskConflictResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -3434,7 +3564,210 @@ export interface operations {
             200: components["responses"]["TaskResponse"];
             400: components["responses"]["ValidationErrorResponse"];
             401: components["responses"]["UnauthorizedResponse"];
+            /** @description Agent credential is invalid, expired, revoked or outside its fixed Task read scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "agent_access_denied",
+                     *         "message": "Agent access is denied.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             404: components["responses"]["ConcealedGroupOrTaskNotFoundResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    listAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful owner operation. Responses are never cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "agentId": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                     *           "ownerUserId": "user_fixture",
+                     *           "groupId": "grp_fixture",
+                     *           "name": "Planning assistant",
+                     *           "scope": "tasks:read",
+                     *           "createdAt": "2026-10-15T12:00:00.000Z",
+                     *           "expiresAt": "2026-10-16T12:00:00.000Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            agentId: string;
+                            ownerUserId: string;
+                            groupId: string;
+                            name: string;
+                            /** @constant */
+                            scope: "tasks:read";
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    createAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "groupId": "grp_fixture",
+                 *       "name": "Planning assistant"
+                 *     }
+                 */
+                "application/json": {
+                    groupId: components["schemas"]["GroupId"];
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful owner operation. Responses are never cached. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "agent": {
+                     *           "agentId": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                     *           "ownerUserId": "user_fixture",
+                     *           "groupId": "grp_fixture",
+                     *           "name": "Planning assistant",
+                     *           "scope": "tasks:read",
+                     *           "createdAt": "2026-10-15T12:00:00.000Z",
+                     *           "expiresAt": "2026-10-16T12:00:00.000Z"
+                     *         },
+                     *         "token": "oj_agent_agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            agent: {
+                                agentId: string;
+                                ownerUserId: string;
+                                groupId: string;
+                                name: string;
+                                /** @constant */
+                                scope: "tasks:read";
+                                /** Format: date-time */
+                                createdAt: string;
+                                /** Format: date-time */
+                                expiresAt: string;
+                            };
+                            token: string;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "not_found",
+                     *         "message": "The requested resource was not found.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: components["responses"]["SignInMethodUnrecognizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    revokeAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. No response body. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "not_found",
+                     *         "message": "The requested resource was not found.",
+                     *         "requestId": "req_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
