@@ -1,5 +1,5 @@
 import { basename, dirname, resolve } from "node:path";
-import { realpathSync } from "node:fs";
+import { accessSync, constants, lstatSync, realpathSync, statSync } from "node:fs";
 import { CliError } from "./errors.mjs";
 import { preflightOutput, writeEnvelope } from "./output.mjs";
 
@@ -12,10 +12,25 @@ export function prepareAgentGrant(options) {
       !name || [...name].length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || !tokenPath || tokenPath === "-") {
     throw new CliError("usage_error", "Agent grant requires explicit --group, a 1–80 character --name, and a new --token-out file (not stdout).", 2);
   }
+  const preflight = path => {
+    preflightOutput(new Map([["--out", path]]));
+    try {
+      const parent = dirname(resolve(path));
+      if (!statSync(parent).isDirectory()) throw new Error("Not a directory");
+      accessSync(parent, constants.W_OK | constants.X_OK);
+      if (lstatSync(path, { throwIfNoEntry: false })) {
+        throw new CliError("output_exists", `Output file already exists: ${path}`, 2);
+      }
+    } catch (error) {
+      if (error instanceof CliError) throw error;
+      throw new CliError("output_write_failed", "Output requires a writable, accessible parent directory.", 2);
+    }
+  };
   const tokenOptions = new Map([["--out", tokenPath]]);
-  preflightOutput(tokenOptions);
+  preflight(tokenPath);
   const output = options.get("--out");
   if (output && output !== "-") {
+    preflight(output);
     const canonical = path => resolve(realpathSync(dirname(resolve(path))), basename(path));
     if (canonical(output) === canonical(tokenPath)) {
       throw new CliError("usage_error", "Public output and the private token require different files.", 2);

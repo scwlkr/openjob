@@ -566,9 +566,16 @@ async function main(raw) {
   }
   if (resource === "agent" && command === "grant" && rest.length === 0) {
     const prepared = prepareAgentGrant(parsed.options);
-    const issued = /** @type {CreateAgentGrantResponse} */ (await apiRequest(
-      "/agent-grants", { method: "POST", body: JSON.stringify(prepared.body) },
-    ));
+    /** @type {CreateAgentGrantResponse} */
+    let issued;
+    try {
+      issued = /** @type {CreateAgentGrantResponse} */ (await apiRequest(
+        "/agent-grants", { method: "POST", body: JSON.stringify(prepared.body) },
+      ));
+    } catch (error) {
+      if (error instanceof CliError && error.exitStatus !== 8) throw error;
+      throw new CliError("agent_grant_uncertain", "Grant issuance could not be confirmed. Inspect openjob agent list and revoke any uncertain grant before retrying. No automatic retry was made.", 8);
+    }
     writeResult({ data: deliverAgentGrant(issued, prepared) });
     return;
   }
