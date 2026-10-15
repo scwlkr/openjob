@@ -10,7 +10,7 @@ Open `http://127.0.0.1:4027`. Mail, Calendar, Tasks, Agents, and appearance cont
 
 ## Authority and adoption
 
-Shane supplied [this original brand board](source/openjob-brand-board.png) on 15 October 2026 and asked to use its direction. This folder is the identity source for the OpenJob overhaul. [OpenJob-Master-Mission.md](../../OpenJob-Master-Mission.md) remains the product direction.
+Shane supplied [this original brand board](source/openjob-brand-board.png) on 15 October 2026 and asked to use its direction. This folder is the identity source for the OpenJob overhaul. [The master mission](../MASTER_MISSION.md) remains the product direction.
 
 The original is preserved unchanged. The folded mark is a geometric reconstruction from the raster image; fine folds and shading are approximations. The board’s exact font is unknown. Inter 4.1 is the chosen match; the wordmark uses outlined Inter Display 700 letterforms with tightened spacing. These SVGs are editable paths and shapes, with no embedded raster image or font dependency.
 

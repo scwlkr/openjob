@@ -1,4 +1,4 @@
-"""Rebuild editable identity masters. Requires fonttools[woff] 4.60.1.
+"""Rebuild editable identity masters. Verified with fonttools[woff] 4.67.0.
 
 Run: python3 docs/brand/generate_assets.py
 The bundled Inter 4.1 font and its license are in fonts/.
