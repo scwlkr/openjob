@@ -86,3 +86,7 @@ export type SetTaskStateRequest =
 export type SetTaskStateResponse = JsonResponse<
   operations["setGroupTaskState"]["responses"][200]
 >;
+
+export type ListAgentGrantsResponse = JsonResponse<
+  operations["listAgentGrants"]["responses"][200]
+>;

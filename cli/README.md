@@ -47,7 +47,19 @@ An authenticated human owner uses `POST /api/v1/agent-grants` with
 `tasks:read` credential. Save the returned `data.token` once to a private file
 (mode 0600); do not put it in URLs, arguments, logs or shared Tasks. Only its
 hash is retained by OpenJob. Owner-only `GET /api/v1/agent-grants` lists grants;
-`DELETE /api/v1/agent-grants/{agentId}` revokes one immediately.
+`DELETE /api/v1/agent-grants/{agentId}` revokes one immediately. The selected
+human CLI profile can inspect and revoke these grants without direct API calls:
+
+```sh
+openjob agent list --format json
+openjob agent revoke agt_0123456789abcdef0123456789abcdef --yes
+```
+
+Listing includes IDs, names, Groups, scopes and expiry times, never tokens.
+Revocation requires confirmation (or `--yes` for scripts); a failed or absent
+grant returns an error. Revocation stops later reads but cannot recall data
+already read. These owner commands reject `--agent-token-file`; they use the
+selected human profile and preserve its identity checks.
 
 ```sh
 openjob task list --group grp_example --agent-token-file /private/path/token
@@ -59,6 +71,6 @@ commands use the selected profile's API and never refresh or fall back to a
 human credential. Only Task collection/item reads in that Group are allowed;
 writes, administration and other APIs are denied. Expiry, owner account
 deletion, leaving the Group and rejoining with a new membership invalidate the
-grant. A new grant requires the human owner's authorization. Owner management
-is currently API-only; this change requires a separately reviewed release to
+grant. A new grant requires the human owner's authorization. Grant issuance
+is currently API-only; these controls require a separately reviewed release to
 reach hosted clients.

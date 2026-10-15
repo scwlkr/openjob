@@ -34,6 +34,7 @@ import packageJson from "./package.json" with { type: "json" };
 /** @typedef {import("./openapi-types.ts").ClaimUsernameRequest} ClaimUsernameRequest */
 /** @typedef {import("./openapi-types.ts").ClaimUsernameResponse} ClaimUsernameResponse */
 /** @typedef {import("./openapi-types.ts").ListGroupsResponse} ListGroupsResponse */
+/** @typedef {import("./openapi-types.ts").ListAgentGrantsResponse} ListAgentGrantsResponse */
 /** @typedef {import("./openapi-types.ts").CreateGroupRequest} CreateGroupRequest */
 /** @typedef {import("./openapi-types.ts").CreateGroupResponse} CreateGroupResponse */
 /** @typedef {import("./openapi-types.ts").GetGroupResponse} GetGroupResponse */
@@ -75,6 +76,8 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["agent list", new Set(OUTPUT_OPTIONS)],
+  ["agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
   ["auth login", new Set([...OUTPUT_OPTIONS, "--no-open"])],
   ["auth status", new Set(OUTPUT_OPTIONS)],
   ["auth logout", new Set([...OUTPUT_OPTIONS, "--yes"])],
@@ -117,6 +120,7 @@ Resources:
   ban        List, add, or remove Group-scoped bans
   invite     Inspect, join through, show, or rotate Invite Links
   task       List and manage Tasks; scoped reads: openjob help task
+  agent      List and revoke your agent grants
 
 Global options:
   --group <group-id>          Override the client-local current Group
@@ -131,6 +135,13 @@ Global options:
 
 /** @type {Record<string, string>} */
 const RESOURCE_HELP = {
+  agent: `Usage:
+  openjob agent list
+  openjob agent revoke <agent-id> [--yes]
+
+Uses the selected human profile. Listing never returns agent tokens.
+Revocation stops subsequent reads; it cannot recall data already read.
+Non-interactive revocation requires --yes. Agent token files are not accepted.`,
   auth: `Usage:
   openjob auth login [--no-open]
   openjob auth status
@@ -545,6 +556,26 @@ async function main(raw) {
         body: JSON.stringify(body),
       })),
     );
+    return;
+  }
+  if (resource === "agent" && command === "list" && rest.length === 0) {
+    writeResult(/** @type {ListAgentGrantsResponse} */ (await apiRequest(
+      "/agent-grants", {}, { retryable: true, quiet: parsed.options.has("--quiet") },
+    )));
+    return;
+  }
+  if (resource === "agent" && command === "revoke" && rest.length === 1) {
+    const agentId = rest[0];
+    if (!/^agt_[a-f0-9]{32}$/.test(agentId)) {
+      throw new CliError("usage_error", "Use an Agent ID returned by openjob agent list.", 2);
+    }
+    await confirmDestructiveAction(
+      `Revoke agent grant ${agentId}?`,
+      "Non-interactive agent revocation requires --yes.",
+      parsed.options,
+    );
+    await apiRequest(`/agent-grants/${encodeURIComponent(agentId)}`, { method: "DELETE" });
+    writeResult({ data: { agentId, revoked: true } });
     return;
   }
   if (resource === "group" && command === "list" && rest.length === 0) {
