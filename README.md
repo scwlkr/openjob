@@ -130,4 +130,4 @@ openjob task edit <task-id> --schedule-start 2026-10-15T13:00:00Z --schedule-end
 openjob task edit <task-id> --clear-schedule
 ```
 
-This stores a planned interval in OpenJob. External calendar sync and visual scheduling controls are future work in Linear.
+The web Task editor also provides planned start/end controls in explicit UTC and an independent clear action. Task cards show the stored interval in UTC. This stores a planned interval in OpenJob; external calendar sync and native scheduling controls remain future work.

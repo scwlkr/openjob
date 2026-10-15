@@ -1,4 +1,4 @@
-import { scheduledSlotField, type ScheduledSlot } from "./task-scheduling.ts";
+import { scheduledSlotField, type ScheduledSlot } from "../shared/task-scheduling.ts";
 import type { FirebaseTokenIdentity } from "./firebase-id-token";
 import {
   InactiveUserError,

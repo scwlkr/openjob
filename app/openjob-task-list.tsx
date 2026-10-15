@@ -22,6 +22,7 @@ import {
 } from "./openjob-contracts";
 import { TASK_EDITOR_DRAFT_KEY } from "./openjob-private-state";
 import styles from "./openjob.module.css";
+import { TaskScheduleFields, scheduleInput, scheduledSlotForInput, formatScheduledSlot } from "./openjob-task-schedule";
 
 type StatusFilter = "open" | "done" | "all";
 type NamedMember = Member & { username: string };
@@ -34,6 +35,8 @@ type TaskFormInput = {
   assigneeUsername: string;
   priority: TaskPriority;
   dueDate: string;
+  scheduledStart: string;
+  scheduledEnd: string;
 };
 type EditorAction = "save" | "delete";
 type TaskStateAction = "complete" | "reopen" | "undo";
@@ -140,12 +143,13 @@ function taskFormInput(task: Task): TaskFormInput {
     assigneeUsername: task.assignee.state === "assigned" ? task.assignee.username : "",
     priority: task.priority ?? "normal",
     dueDate: task.dueDate ?? "",
+    ...scheduleInput(task.scheduledSlot),
   };
 }
 
 function editorFormInput(editor: Editor): TaskFormInput {
   return editor.mode === "new"
-    ? { text: "", assigneeUsername: editor.username, priority: "normal", dueDate: "" }
+    ? { text: "", assigneeUsername: editor.username, priority: "normal", dueDate: "", scheduledStart: "", scheduledEnd: "" }
     : taskFormInput(editor.task);
 }
 
@@ -181,6 +185,8 @@ function readEditorDraft(): StoredEditorDraft | null {
       typeof value.input.assigneeUsername !== "string" ||
       !["high", "normal", "low"].includes(value.input.priority ?? "normal") ||
       typeof value.input.dueDate !== "string" ||
+      (value.input.scheduledStart !== undefined && typeof value.input.scheduledStart !== "string") ||
+      (value.input.scheduledEnd !== undefined && typeof value.input.scheduledEnd !== "string") ||
       !["new", "edit", "assign"].includes(value.mode ?? "") ||
       !(value.taskId === null || typeof value.taskId === "string")
     ) return null;
@@ -199,6 +205,8 @@ function TaskForm({
   initialAssignee,
   initialDueDate = "",
   initialPriority = "normal",
+  initialScheduledStart = "",
+  initialScheduledEnd = "",
   initialText = "",
   keyboardOpen,
   members,
@@ -212,6 +220,8 @@ function TaskForm({
   initialAssignee: string;
   initialDueDate?: string;
   initialPriority?: TaskPriority;
+  initialScheduledStart?: string;
+  initialScheduledEnd?: string;
   initialText?: string;
   keyboardOpen: boolean;
   members: NamedMember[];
@@ -224,6 +234,9 @@ function TaskForm({
   const [assignee, setAssignee] = useState(initialAssignee);
   const [priority, setPriority] = useState<TaskPriority>(initialPriority);
   const [dueDate, setDueDate] = useState(initialDueDate);
+  const [scheduledStart, setScheduledStart] = useState(initialScheduledStart);
+  const [scheduledEnd, setScheduledEnd] = useState(initialScheduledEnd);
+  const input = { text, assigneeUsername: assignee, priority, dueDate, scheduledStart, scheduledEnd };
   const [validationError, setValidationError] = useState("");
   const formFields = useRef<HTMLDivElement | null>(null);
   const taskText = useRef<HTMLTextAreaElement | null>(null);
@@ -256,7 +269,12 @@ function TaskForm({
           setValidationError("Choose a current Member before saving.");
           return;
         }
-        onSave({ text, assigneeUsername: assignee, priority, dueDate });
+        const slot = scheduledSlotForInput(scheduledStart, scheduledEnd);
+        if ("error" in slot) {
+          setValidationError(slot.error);
+          return;
+        }
+        onSave(input);
       }}
       noValidate
     >
@@ -270,7 +288,7 @@ function TaskForm({
               const nextText = event.target.value;
               setText(nextText);
               setValidationError("");
-              onInputChange({ text: nextText, assigneeUsername: assignee, priority, dueDate });
+              onInputChange({ ...input, text: nextText });
             }}
             required
           />
@@ -288,7 +306,7 @@ function TaskForm({
                 const nextAssignee = event.target.value;
                 setAssignee(nextAssignee);
                 setValidationError("");
-                onInputChange({ text, assigneeUsername: nextAssignee, priority, dueDate });
+                onInputChange({ ...input, assigneeUsername: nextAssignee });
               }}
               required
             >
@@ -312,7 +330,7 @@ function TaskForm({
                     onChange={() => {
                       setPriority(choice);
                       setValidationError("");
-                      onInputChange({ text, assigneeUsername: assignee, priority: choice, dueDate });
+                      onInputChange({ ...input, priority: choice });
                     }}
                   />
                   <PriorityIcon priority={choice} />
@@ -337,7 +355,7 @@ function TaskForm({
                     const nextDueDate = event.target.value;
                     setDueDate(nextDueDate);
                     setValidationError("");
-                    onInputChange({ text, assigneeUsername: assignee, priority, dueDate: nextDueDate });
+                    onInputChange({ ...input, dueDate: nextDueDate });
                   }}
                 />
               </label>
@@ -349,7 +367,7 @@ function TaskForm({
                   onClick={() => {
                     setDueDate("");
                     setValidationError("");
-                    onInputChange({ text, assigneeUsername: assignee, priority, dueDate: "" });
+                    onInputChange({ ...input, dueDate: "" });
                   }}
                 >
                   <CloseIcon />
@@ -358,6 +376,16 @@ function TaskForm({
             </div>
           </div>
         </div>
+        <TaskScheduleFields
+          start={scheduledStart}
+          end={scheduledEnd}
+          onChange={(start, end) => {
+            setScheduledStart(start);
+            setScheduledEnd(end);
+            setValidationError("");
+            onInputChange({ ...input, scheduledStart: start, scheduledEnd: end });
+          }}
+        />
         {validationError || error ? <p className={styles.fieldError} role="alert">{validationError || error}</p> : null}
       </div>
       <div className={styles.taskFormActions}>
@@ -813,12 +841,15 @@ export function TaskList({
   function saveEditor(input: TaskFormInput) {
     if (!editor) return;
     storeEditorDraft(input);
+    const slot = scheduledSlotForInput(input.scheduledStart, input.scheduledEnd);
+    if ("error" in slot) return;
     if (editor.mode === "new") {
       void runEditorMutation((token) => api.createTask(token, group.groupId, {
         text: input.text,
         assigneeUsername: input.assigneeUsername,
         priority: input.priority,
         ...(input.dueDate ? { dueDate: input.dueDate } : {}),
+        ...(slot.value ? { scheduledSlot: slot.value } : {}),
       }), "save");
       return;
     }
@@ -827,6 +858,7 @@ export function TaskList({
       assigneeUsername: input.assigneeUsername,
       priority: input.priority,
       dueDate: input.dueDate || null,
+      scheduledSlot: slot.value,
     }), "save");
   }
 
@@ -1046,6 +1078,11 @@ export function TaskList({
                             {overdue ? <b>Overdue</b> : null}
                           </span>
                         ) : null}
+                        {task.scheduledSlot ? (
+                          <span className={styles.taskScheduled} id={`task-schedule-${task.taskId}`}>
+                            {formatScheduledSlot(task.scheduledSlot)}
+                          </span>
+                        ) : null}
                       </span>
                     </>
                   );
@@ -1072,6 +1109,7 @@ export function TaskList({
                             className={styles.taskBodyButton}
                             type="button"
                             aria-label={`${task.assignee.state === "unassigned" ? "Assign" : "Edit"} Task: ${task.text}`}
+                            aria-describedby={task.scheduledSlot ? `task-schedule-${task.taskId}` : undefined}
                             onClick={(event) => openEditor(
                               task.assignee.state === "unassigned" ? { mode: "assign", task } : { mode: "edit", task },
                               event.currentTarget,
@@ -1149,6 +1187,8 @@ export function TaskList({
               error={actionError}
               initialAssignee={displayedEditorInput?.assigneeUsername ?? ""}
               initialDueDate={displayedEditorInput?.dueDate ?? ""}
+              initialScheduledStart={displayedEditorInput?.scheduledStart ?? editorFormInput(editor).scheduledStart}
+              initialScheduledEnd={displayedEditorInput?.scheduledEnd ?? editorFormInput(editor).scheduledEnd}
               initialPriority={displayedEditorInput?.priority ?? "normal"}
               initialText={displayedEditorInput?.text ?? ""}
               keyboardOpen={editorViewport.keyboardOpen}
