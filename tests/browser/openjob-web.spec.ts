@@ -5614,6 +5614,10 @@ test("separates the touch-first completion control from keyboard Task editing", 
   await page.keyboard.press("Enter");
   const editor = page.getByRole("dialog", { name: "Edit Task" });
   await expect(editor).toBeVisible();
+  // Measure touch targets after translation stops, avoiding fractional rectangles.
+  await editor.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
   for (const control of await editor.locator('button, input:not([type="radio"]), select, textarea').all()) {
     const box = await control.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
