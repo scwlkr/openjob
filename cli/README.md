@@ -48,12 +48,18 @@ An authenticated human owner uses `POST /api/v1/agent-grants` with
 (mode 0600); do not put it in URLs, arguments, logs or shared Tasks. Only its
 hash is retained by OpenJob. Owner-only `GET /api/v1/agent-grants` lists grants;
 `DELETE /api/v1/agent-grants/{agentId}` revokes one immediately. The selected
-human CLI profile can inspect and revoke these grants without direct API calls:
+human CLI profile can issue, inspect and revoke grants without direct API calls:
 
 ```sh
+openjob agent grant --group grp_example --name "Planning assistant" --token-out /private/path/token
 openjob agent list --format json
 openjob agent revoke agt_0123456789abcdef0123456789abcdef --yes
 ```
+
+Grant requires an explicit Group/name and a new `--token-out` file. It saves
+the token atomically as plain text with mode 0600; stdout/stderr contain only
+public metadata. Existing token files, stdout token delivery and `--force` are
+rejected. Public `--out` and private `--token-out` must be different files.
 
 Listing includes IDs, names, Groups, scopes and expiry times, never tokens.
 Revocation requires confirmation (or `--yes` for scripts); a failed or absent
@@ -71,6 +77,12 @@ commands use the selected profile's API and never refresh or fall back to a
 human credential. Only Task collection/item reads in that Group are allowed;
 writes, administration and other APIs are denied. Expiry, owner account
 deletion, leaving the Group and rejoining with a new membership invalidate the
-grant. A new grant requires the human owner's authorization. Grant issuance
-is currently API-only; these controls require a separately reviewed release to
-reach hosted clients.
+grant. A new grant requires the human owner's authorization. These controls
+require a separately reviewed release to reach hosted clients.
+
+Issuance is not retried after transient or ambiguous failures. Inspect
+`openjob agent list` before retrying an uncertain request. If a file race or
+write failure prevents token delivery after issuance, the error identifies
+the new grant and its revoke command without exposing the credential; revoke
+it and issue a new grant to a fresh file. The token is not recoverable from
+the service.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 
+import { prepareAgentGrant, deliverAgentGrant } from "./lib/agent-grant.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
 import {
   apiRequestWithIdToken as requestApiWithIdToken,
@@ -35,6 +36,7 @@ import packageJson from "./package.json" with { type: "json" };
 /** @typedef {import("./openapi-types.ts").ClaimUsernameResponse} ClaimUsernameResponse */
 /** @typedef {import("./openapi-types.ts").ListGroupsResponse} ListGroupsResponse */
 /** @typedef {import("./openapi-types.ts").ListAgentGrantsResponse} ListAgentGrantsResponse */
+/** @typedef {import("./openapi-types.ts").CreateAgentGrantResponse} CreateAgentGrantResponse */
 /** @typedef {import("./openapi-types.ts").CreateGroupRequest} CreateGroupRequest */
 /** @typedef {import("./openapi-types.ts").CreateGroupResponse} CreateGroupResponse */
 /** @typedef {import("./openapi-types.ts").GetGroupResponse} GetGroupResponse */
@@ -76,6 +78,7 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--group", "--name", "--token-out"])],
   ["agent list", new Set(OUTPUT_OPTIONS)],
   ["agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
   ["auth login", new Set([...OUTPUT_OPTIONS, "--no-open"])],
@@ -120,7 +123,7 @@ Resources:
   ban        List, add, or remove Group-scoped bans
   invite     Inspect, join through, show, or rotate Invite Links
   task       List and manage Tasks; scoped reads: openjob help task
-  agent      List and revoke your agent grants
+  agent      Grant, list and revoke scoped agent access
 
 Global options:
   --group <group-id>          Override the client-local current Group
@@ -136,10 +139,13 @@ Global options:
 /** @type {Record<string, string>} */
 const RESOURCE_HELP = {
   agent: `Usage:
+  openjob agent grant --group <group-id> --name <name> --token-out <new-path>
   openjob agent list
   openjob agent revoke <agent-id> [--yes]
 
-Uses the selected human profile. Listing never returns agent tokens.
+Uses the selected human profile. Grant writes a private token file, never stdout.
+Grant requires an explicit Group, a name and a new token file; --force is rejected.
+Only public grant metadata is printed. Listing never returns agent tokens.
 Revocation stops subsequent reads; it cannot recall data already read.
 Non-interactive revocation requires --yes. Agent token files are not accepted.`,
   auth: `Usage:
@@ -556,6 +562,14 @@ async function main(raw) {
         body: JSON.stringify(body),
       })),
     );
+    return;
+  }
+  if (resource === "agent" && command === "grant" && rest.length === 0) {
+    const prepared = prepareAgentGrant(parsed.options);
+    const issued = /** @type {CreateAgentGrantResponse} */ (await apiRequest(
+      "/agent-grants", { method: "POST", body: JSON.stringify(prepared.body) },
+    ));
+    writeResult({ data: deliverAgentGrant(issued, prepared) });
     return;
   }
   if (resource === "agent" && command === "list" && rest.length === 0) {
