@@ -39,3 +39,26 @@ Before deploying Preview, bind the matching Desktop OAuth client secret with
 only the binding name with `wrangler secret list --env preview`. Never put the
 secret in Git, a command argument, or terminal output. Provider passwords, MFA,
 and recovery material remain in their 1Password items.
+
+## Scoped agent reads
+
+An authenticated human owner uses `POST /api/v1/agent-grants` with
+`{"groupId":"grp_…","name":"Planning assistant"}` to issue a 24-hour
+`tasks:read` credential. Save the returned `data.token` once to a private file
+(mode 0600); do not put it in URLs, arguments, logs or shared Tasks. Only its
+hash is retained by OpenJob. Owner-only `GET /api/v1/agent-grants` lists grants;
+`DELETE /api/v1/agent-grants/{agentId}` revokes one immediately.
+
+```sh
+openjob task list --group grp_example --agent-token-file /private/path/token
+openjob task show task_example --group grp_example --agent-token-file /private/path/token
+```
+
+`-` reads the token from stdin. Explicit Group selection is required. These
+commands use the selected profile's API and never refresh or fall back to a
+human credential. Only Task collection/item reads in that Group are allowed;
+writes, administration and other APIs are denied. Expiry, owner account
+deletion, leaving the Group and rejoining with a new membership invalidate the
+grant. A new grant requires the human owner's authorization. Owner management
+is currently API-only; this change requires a separately reviewed release to
+reach hosted clients.

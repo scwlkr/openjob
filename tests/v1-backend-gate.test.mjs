@@ -1,3 +1,5 @@
+import { createFirestoreAgentGrantStore } from "../db/agent-grants.ts";
+import { createV1AgentGrantsApi } from "../server/v1-agent-grants.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createFirestoreGroupStore } from "../db/groups.ts";
@@ -126,14 +128,17 @@ test("the complete hosted backend preserves existing Groups during its two-ident
         verifyCredentialToken: verifyIdToken.verifyToken,
         verifyIdToken,
       });
+      const agentGrants = createFirestoreAgentGrantStore(config, firestore.fetch, { now: () => Date.parse(controls.clock.now()) });
+      const agentGrantsApi = createV1AgentGrantsApi({ grants: agentGrants, users, verifyIdToken, now: () => Date.parse(controls.clock.now()) });
       const groupsApi = createV1GroupsApi({ groups, users, verifyIdToken });
-      const tasksApi = createV1TasksApi({ tasks, users, verifyIdToken });
+      const tasksApi = createV1TasksApi({ agents: agentGrants, tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
         subscriptions: notificationSubscriptions,
         users,
         verifyIdToken,
       });
       const accountDeletionApi = createV1AccountDeletionApi({
+        agentGrants,
         groups,
         jobs: accountDeletionJobs,
         notifications: notificationSubscriptions,
@@ -165,6 +170,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname.startsWith("/api/v1/agent-grants")) return agentGrantsApi.fetch(request);
           if (pathname === "/api/v1/me/deletion") {
             return accountDeletionApi.fetch(request);
           }
@@ -282,6 +288,33 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     });
     assert.equal(baselineTaskResponse.status, 201);
     const baselineTask = (await baselineTaskResponse.json()).data;
+
+    const issued = await request({ actor: "initialAdmin", method: "POST", path: "/api/v1/agent-grants", body: { groupId: baselineGroup.groupId, name: "Fixture agent" } });
+    assert.equal(issued.status, 201);
+    const { agent, token: agentToken } = (await issued.clone().json()).data;
+    ephemeralCapabilityMaterial.push(agentToken);
+    await validate(issued, "/api/v1/agent-grants", "post", { allowedSecrets: [agentToken] });
+    const listedGrants = await request({ actor: "initialAdmin", method: "GET", path: "/api/v1/agent-grants" });
+    assert.equal(listedGrants.status, 200);
+    await validate(listedGrants, "/api/v1/agent-grants", "get");
+    const delegatedRead = await request({ authorization: agentToken, method: "GET", path: `/api/v1/groups/${baselineGroup.groupId}/tasks/${baselineTask.taskId}` });
+    assert.equal(delegatedRead.status, 200);
+    await validate(delegatedRead, "/api/v1/groups/{groupId}/tasks/{taskId}", "get");
+    for (const method of ["GET", "POST"]) {
+      const denied = await request({ authorization: agentToken, method, path: "/api/v1/agent-grants", ...(method === "POST" ? { body: { groupId: baselineGroup.groupId, name: "Denied" } } : {}) });
+      assert.equal(denied.status, 401);
+      await validate(denied, "/api/v1/agent-grants", method.toLowerCase());
+    }
+    const revokePath = `/api/v1/agent-grants/${agent.agentId}`;
+    const revoked = await request({ actor: "initialAdmin", method: "DELETE", path: revokePath });
+    assert.equal(revoked.status, 204);
+    await validate(revoked, "/api/v1/agent-grants/{agentId}", "delete");
+    const alreadyRevoked = await request({ actor: "initialAdmin", method: "DELETE", path: revokePath });
+    assert.equal(alreadyRevoked.status, 404);
+    await validate(alreadyRevoked, "/api/v1/agent-grants/{agentId}", "delete");
+    const revokedRead = await request({ authorization: agentToken, method: "GET", path: `/api/v1/groups/${baselineGroup.groupId}/tasks/${baselineTask.taskId}` });
+    assert.equal(revokedRead.status, 403);
+    await validate(revokedRead, "/api/v1/groups/{groupId}/tasks/{taskId}", "get");
 
     const linkResponse = await request({
       actor: "initialAdmin",
