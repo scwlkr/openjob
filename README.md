@@ -92,6 +92,7 @@ rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 
 ## Where things live
 
+- `docs/brand/index.html` — offline brand guide for the overhaul, with editable SVG masters and scoped theme tokens
 - `app/page.tsx` — authenticated web entry
 - `app/globals.css` — global reset, typography, and legacy public-board styling
 - `app/openjob.module.css` — authenticated OpenJob screens and Task List styling

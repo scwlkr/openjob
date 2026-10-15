@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OpenJob brand foundation: identity, color, type, voice, and product direction.">
+  <title>OpenJob — Brand foundation</title>
+  <link rel="icon" href="assets/openjob-mark-small.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="guide.css">
+  <script src="guide.js" defer></script>
+</head>
+<body class="openjob-brand">
+  <a class="skip-link" href="#main">Skip to brand guide</a>
+  <header class="site-header page-width">
+    <a class="home" href="#main" aria-label="OpenJob brand foundation"><img src="assets/openjob-lockup.svg" alt="OpenJob" width="147" height="34"></a>
+    <nav aria-label="Brand guide"><a href="#identity">Identity</a><a href="#color">Color</a><a href="#type">Type</a><a href="#voice">Voice</a><a href="#source">Source</a></nav>
+    <span class="edition">Brand foundation / 01</span>
+  </header>
+  <main id="main" class="page-width">
+    <section class="cover" aria-labelledby="cover-title">
+      <div class="cover-copy">
+        <p class="eyebrow">OpenJob · openjob.dev</p>
+        <h1 id="cover-title">Clear space.<br>Focused work.</h1>
+        <p class="cover-description">Mail. Calendar. Tasks.<br>A shared workspace for people<br class="desktop-break"> and their personal agents.</p>
+      </div>
+      <div class="cover-mark"><img src="assets/openjob-mark.svg" alt="Folded cobalt OpenJob frame" width="202" height="192"><p>Your accounts. Your agents. Your control.</p></div>
+    </section>
+
+    <section class="application" aria-labelledby="application-title">
+      <div class="section-caption"><h2 id="application-title">A little more room to think.</h2><span>Interactive brand concept · sample data</span></div>
+      <div class="workspace" id="workspace" data-theme="light">
+        <aside class="app-rail">
+          <div class="app-brand"><img src="assets/openjob-mark-small.svg" alt="" width="23" height="23"><strong>OpenJob</strong></div>
+          <nav class="module-nav" aria-label="Concept modules">
+            <button type="button" data-module="mail" aria-pressed="true"><span aria-hidden="true">✉</span> Mail <span class="count">4</span></button>
+            <button type="button" data-module="calendar" aria-pressed="false"><span aria-hidden="true">▦</span> Calendar</button>
+            <button type="button" data-module="tasks" aria-pressed="false"><span aria-hidden="true">✓</span> Tasks <span class="count" id="task-count">2</span></button>
+            <button type="button" data-module="agents" aria-pressed="false"><span aria-hidden="true">♧</span> Agents</button>
+          </nav>
+          <div class="accounts"><p>Accounts</p><span><i class="account-dot personal"></i>Personal<small>you@example.com</small></span><span><i class="account-dot work"></i>Work<small>you@company.example</small></span><span><i class="account-dot research"></i>Research<small>research@example.com</small></span></div>
+          <p class="rail-note">Mail. Calendar. Tasks.</p>
+        </aside>
+        <div class="app-main">
+          <div class="app-toolbar"><span class="workspace-label">Personal workspace</span><button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">Dark appearance <span aria-hidden="true">◐</span></button></div>
+          <section class="module-panel" data-panel="mail" aria-label="Mail concept">
+            <div class="panel-heading"><h3>Inbox <span class="pill">4</span></h3><span class="muted">All accounts</span></div>
+            <div class="mail-layout">
+              <div class="mail-list">
+                <div class="mail-row selected"><span class="sender-icon">D</span><div><strong>Design team</strong><b>A clearer place to work</b><p>The updated direction is ready…</p></div><time>9:24 AM</time></div>
+                <div class="mail-row"><span class="sender-icon sage">R</span><div><strong>Research</strong><b>Papers for your review</b><p>Three ideas for the next chapter.</p></div><time>8:41 AM</time></div>
+                <div class="mail-row"><span class="sender-icon neutral">A</span><div><strong>Alex Morgan</strong><b>Friday planning</b><p>Let’s make some space for this.</p></div><time>8:16 AM</time></div>
+                <div class="mail-row"><img src="assets/openjob-mark-small.svg" alt="" width="30" height="30"><div><strong>OpenJob</strong><b>Your workspace, connected</b><p>Start with the accounts you use.</p></div><time>Yesterday</time></div>
+              </div>
+              <article class="message"><p class="message-account">Work / Design team</p><h4>A clearer place to work</h4><p>Hi there,</p><p>Here’s the direction for OpenJob: mail, calendars, and tasks in one calm workspace.</p><p>Keep your accounts. Give your agents the access they need. Leave a little room to think.</p><p>Next up: review the brand direction together.</p><button type="button" class="primary-button" id="create-task">✓ &nbsp; Create linked task</button><p class="task-feedback" id="task-feedback" role="status"></p></article>
+            </div>
+          </section>
+          <section class="module-panel" data-panel="calendar" aria-label="Calendar concept" hidden>
+            <div class="panel-heading"><h3>A week with room</h3><span class="muted">Sample week</span></div>
+            <div class="calendar-grid"><div><strong>Mon <b>12</b></strong><span class="event blue">Design sync<small>9–10 AM</small></span></div><div><strong>Tue <b>13</b></strong><span class="event later">Focus time<small>11 AM–1 PM</small></span></div><div><strong>Wed <b>14</b></strong><span class="event sage later">Research review<small>11 AM–12 PM</small></span></div><div><strong>Thu <b>15</b></strong><span class="event blue">Brand review<small>9–10 AM</small></span></div><div><strong>Fri <b>16</b></strong><span class="event later">Weekly planning<small>11 AM–12 PM</small></span></div></div>
+            <p class="concept-note">Concept: linked work keeps the original account and conversation in view.</p>
+          </section>
+          <section class="module-panel" data-panel="tasks" aria-label="Tasks concept" hidden>
+            <div class="panel-heading"><h3>A clear next step</h3><span class="muted">Today</span></div>
+            <div class="task-list"><label><input type="checkbox"><span>Review agent permissions<small>Research · Today</small></span></label><label><input type="checkbox"><span>Make time for weekly planning<small>Personal · Friday</small></span></label><label id="linked-task" hidden><input type="checkbox"><span>Review the OpenJob brand direction<small>Work · Linked to “A clearer place to work”</small></span></label></div>
+            <p class="concept-note">Concept: create a task from the Mail view, then find its conversation here.</p>
+          </section>
+          <section class="module-panel" data-panel="agents" aria-label="Agent permission concept" hidden>
+            <div class="panel-heading"><h3>Research agent</h3><span class="active-label">● Active</span></div>
+            <div class="agent-layout"><div><p class="agent-intro">Useful access.<br>Clear boundaries.</p><p class="muted">Mailbox scope<br><strong>research@example.com</strong></p><p id="permission-summary" class="permission-summary" role="status">Can read this mailbox and create drafts. Sending is off.</p></div><fieldset class="permissions"><legend>Mailbox permissions</legend><label><span>Read<small>View and search emails</small></span><input type="checkbox" role="switch" id="allow-read" checked></label><label><span>Draft<small>Create and edit drafts</small></span><input type="checkbox" role="switch" id="allow-draft" checked></label><label><span>Send<small>Send from this mailbox</small></span><input type="checkbox" role="switch" id="allow-send"></label></fieldset></div>
+          </section>
+        </div>
+      </div>
+      <div class="application-footer"><p>Quiet surfaces. Clear actions. People in control.</p><p>Concept controls run locally. Mail, calendar, and agent sending shown here describe the overhaul direction.</p></div>
+    </section>
+
+    <section id="identity" class="guide-section" aria-labelledby="identity-title">
+      <div class="section-intro"><p class="eyebrow">01 / Identity</p><h2 id="identity-title">An open frame.<br>A connected workspace.</h2><p>Two offset planes form one clear opening. Cobalt folds give the mark its character; the center stays open.</p></div>
+      <div class="identity-grid">
+        <figure class="logo-display"><img src="assets/openjob-lockup.svg" alt="Primary OpenJob lockup" width="380" height="88"><figcaption>Primary lockup · Chalk / Graphite</figcaption></figure>
+        <figure class="logo-display dark"><img src="assets/openjob-lockup-reverse.svg" alt="OpenJob reverse lockup" width="380" height="88"><figcaption>Reverse lockup · Graphite</figcaption></figure>
+        <figure class="mark-display"><img src="assets/openjob-mark-mono.svg" alt="Monochrome mark" width="70" height="67"><img src="assets/openjob-mark-mono-reverse.svg" class="mono-dark" alt="Reverse monochrome mark" width="86" height="82"><figcaption>One color for print and simple reproduction</figcaption></figure>
+        <figure class="size-display"><div class="size-pair"><img src="assets/openjob-mark-small.svg" alt="16 pixel mark" width="16" height="16"><span>16</span></div><div class="size-pair"><img src="assets/openjob-mark-small.svg" alt="24 pixel mark" width="24" height="24"><span>24</span></div><div class="size-pair"><img src="assets/openjob-mark.svg" alt="48 pixel mark" width="48" height="46"><span>48</span></div><img class="app-icon" src="assets/openjob-app-icon.svg" alt="OpenJob app icon example" width="82" height="82"><figcaption>Flat mark below 32 px · platform mask shown</figcaption></figure>
+      </div>
+      <div class="usage-notes"><p><strong>Space to breathe.</strong> Leave at least one ribbon width around the mark. Give the lockup half the mark’s height in clear space.</p><p><strong>Keep its shape.</strong> Preserve the open center, fold direction, and proportions. Use the lockup at 120 px wide or above. Use the mark alone below that.</p><p><strong>Write OpenJob.</strong> Capital O, capital J. No period. The mark stands on its own; keep extra effects out of the logo.</p></div>
+      <p class="asset-links"><a href="assets/openjob-mark.svg">Mark SVG ↗</a><a href="assets/openjob-wordmark.svg">Wordmark SVG ↗</a><a href="assets/openjob-lockup.svg">Lockup SVG ↗</a><a href="assets/openjob-app-icon.svg">App icon SVG ↗</a><a href="README.md">All assets &amp; usage ↗</a></p>
+    </section>
+
+    <section id="color" class="guide-section" aria-labelledby="color-title">
+      <div class="section-intro"><p class="eyebrow">02 / Color</p><h2 id="color-title">A cool, clear foundation.</h2><p>Chalk gives the work room. Graphite carries the words. Cobalt identifies the next action. Blue Gray and Sage support selection, accounts, and calendar blocks.</p></div>
+      <div class="palette">
+        <div class="swatch chalk"><span>Aa</span><strong>Chalk</strong><code>#F7F8FA</code><p>Workspace ground</p></div>
+        <div class="swatch graphite"><span>Aa</span><strong>Graphite</strong><code>#20242B</code><p>Text / dark surfaces</p></div>
+        <div class="swatch cobalt"><span>Aa</span><strong>Cobalt</strong><code>#4169E1</code><p>Actions / identity</p></div>
+        <div class="swatch blue-gray"><span>Aa</span><strong>Blue Gray</strong><code>#E7ECF4</code><p>Selected surfaces</p></div>
+        <div class="swatch sage"><span>Aa</span><strong>Sage</strong><code>#83A18C</code><p>Account / calendar fill</p></div>
+      </div>
+      <div class="color-guidance"><div><h3>Pair color with purpose.</h3><p>Keep most of the workspace neutral. Reserve filled Cobalt for the main action. Add labels or symbols alongside account colors and permission states.</p><a href="tokens.css">Scoped CSS tokens ↗</a></div><div class="contrast-table"><table><caption>Contrast for normal text</caption><thead><tr><th>Pair</th><th>Ratio</th><th>Use</th></tr></thead><tbody><tr><td>Graphite / Chalk</td><td>14.65:1</td><td>Body text</td></tr><tr><td>White / Cobalt</td><td>4.85:1</td><td>Buttons</td></tr><tr><td>Cobalt / Chalk</td><td>4.56:1</td><td>Links</td></tr><tr><td>Graphite / Sage</td><td>5.52:1</td><td>Labels</td></tr></tbody></table><p>Sage on Chalk is 2.66:1. Use a darker semantic green for text. Blue Gray alone cannot define an essential control boundary.</p></div></div>
+    </section>
+
+    <section id="type" class="guide-section" aria-labelledby="type-title">
+      <div class="section-intro"><p class="eyebrow">03 / Typography</p><h2 id="type-title">Inter. Clear at every size.</h2><p>A practical match to the board’s sans serif. Use the same family for product and brand writing, with system monospace for commands and technical values.</p></div>
+      <div class="type-specimen"><div class="alphabet">Aa Bb Cc Dd Ee Ff Gg<br>0123456789</div><div><p class="type-large">Clear space.<br>Focused work.</p><p class="type-body">A message becomes a task.<br>A task finds time on your calendar.</p><p class="type-label">Mail &nbsp; Calendar &nbsp; Tasks &nbsp; Agents</p></div></div>
+      <div class="type-rules"><p><strong>Display · 56–72 / 700</strong><br>Tight leading, −0.05em tracking. Scale to 40 px on phones.</p><p><strong>Heading · 24–36 / 600</strong><br>Sentence case. Short enough to scan.</p><p><strong>Body · 16 / 400</strong><br>1.55 line height. UI labels 13–14 px / 500; do not shrink long content to make it fit.</p></div>
+      <p class="fine-print">Inter 4.1 by Rasmus Andersson and contributors. Bundled locally under the <a href="fonts/LICENSE.txt">SIL Open Font License 1.1</a>. The board’s exact font is unknown; Inter is a chosen match. Wordmark lettering is outlined for portability.</p>
+    </section>
+
+    <section id="voice" class="guide-section" aria-labelledby="voice-title">
+      <div class="section-intro"><p class="eyebrow">04 / Voice</p><h2 id="voice-title">Say what happens.</h2><p>Calm, direct, and useful. Name the account, action, and limit. Give people enough information to decide what comes next.</p></div>
+      <div class="voice-grid"><div><span class="small-label">Brand line</span><p class="brand-line">Clear space.<br>Focused work.</p><span class="small-label">Short descriptor</span><p>Mail. Calendar. Tasks.</p><span class="small-label">Product description</span><p>OpenJob is an open-source workspace for people and their personal agents. Bring your accounts. Manage mail, calendars, and tasks under permissions you control.</p></div><div class="voice-examples"><p><span>Permission</span>“Can read this mailbox and create drafts. Sending is off.”</p><p><span>Action completed</span>“Task created. The original conversation is linked.”</p><p><span>Connection problem</span>“This account needs you to sign in again. Your tasks are still here.”</p><p><span>Access changed</span>“Access removed. This agent can no longer use this mailbox.”</p></div></div>
+      <div class="cli-concept"><div><img src="assets/openjob-mark-reverse.svg" alt="" width="30" height="29"><strong>OpenJob, wherever work happens.</strong><p>The same clear identity carries into mobile, desktop, and the CLI.</p></div><pre aria-label="Future CLI concept"><code><span>$ openjob mail list</span>
+ACCOUNT     SUBJECT
+Work        A clearer place to work
+Research    Papers for your review
+<span class="cli-note">Illustrative command · future mail interface</span></code></pre></div>
+    </section>
+
+    <section id="source" class="guide-section source-section" aria-labelledby="source-title">
+      <div class="section-intro"><p class="eyebrow">05 / Source &amp; handoff</p><h2 id="source-title">Built from your board.</h2><p>The original is the visual reference. These editable masters turn its direction into reusable assets for the OpenJob overhaul.</p></div>
+      <a href="source/openjob-brand-board.png" aria-label="Open the original supplied brand board"><img class="source-board" src="source/openjob-brand-board.png" alt="Original OpenJob brand board supplied by Shane: folded blue mark, mail workspace, calendar, tasks, agent permissions, mobile and dark concepts, and the five-color palette." width="1536" height="1024" loading="lazy"></a>
+      <div class="source-notes"><p><strong>Preserved.</strong> Original board, supplied palette values, name, core descriptors, and visual direction.</p><p><strong>Reconstructed.</strong> Fold geometry and highlights. Inter is a chosen type match. These are new editable vectors, not original vector files.</p><p><strong>Ready for the overhaul.</strong> This kit is the brand reference. The shipped app still uses legacy assets; these concepts do not certify product capabilities or platform support.</p></div>
+    </section>
+  </main>
+  <footer class="site-footer page-width"><img src="assets/openjob-lockup.svg" alt="OpenJob" width="147" height="34"><p>Clear space. Focused work.</p><span>Brand foundation · October 2026</span></footer>
+</body>
+</html>

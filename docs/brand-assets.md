@@ -1,6 +1,12 @@
 # OpenJob brand assets
 
-The OpenJob identity is the outlined `OPENJOB.` wordmark and the square `O.` brandmark. The period connects both marks; it stays light blue in the wordmark and uses the stronger product blue at icon sizes.
+The [brand foundation](brand/index.html) and [editable masters](brand/README.md) now define the identity for the OpenJob overhaul: folded Cobalt frame, mixed-case **OpenJob** lettering, and the five-color owner-supplied palette. The original board is preserved in `docs/brand/source/`.
+
+## Legacy shipped assets
+
+The files below remain in use by the existing product and are preserved for that runtime. They are superseded as brand direction by `docs/brand/`; adoption across web and native belongs to the overhaul.
+
+The legacy identity is the outlined `OPENJOB.` wordmark and the square `O.` brandmark. The period connects both marks; it stays light blue in the wordmark and uses the stronger product blue at icon sizes.
 
 ## Vector masters
 

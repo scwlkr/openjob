@@ -1,0 +1,51 @@
+/* OpenJob brand foundation. Scoped: importing this file does not retheme an app. */
+@font-face {
+  font-family: "Inter";
+  src: url("./fonts/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+.openjob-brand {
+  --oj-chalk: #f7f8fa;
+  --oj-graphite: #20242b;
+  --oj-cobalt: #4169e1;
+  --oj-blue-gray: #e7ecf4;
+  --oj-sage: #83a18c;
+  --oj-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --oj-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --oj-radius-control: 6px;
+  --oj-radius-panel: 14px;
+  --oj-space-unit: 4px;
+  --oj-surface: var(--oj-chalk);
+  --oj-panel: #ffffff;
+  --oj-text: var(--oj-graphite);
+  --oj-muted: #586476;
+  --oj-line: #d7deea;
+  --oj-control-line: #7b8799;
+  --oj-action: var(--oj-cobalt);
+  --oj-action-hover: #3155c5;
+  --oj-action-text: #ffffff;
+  --oj-link: var(--oj-cobalt);
+  --oj-selected: var(--oj-blue-gray);
+  --oj-selected-text: #2346ac;
+  --oj-focus: #3155c5;
+  --oj-positive: #356244;
+  --oj-positive-fill: #e8f1eb;
+}
+
+.openjob-brand[data-theme="dark"], .openjob-brand [data-theme="dark"] {
+  --oj-surface: var(--oj-graphite);
+  --oj-panel: #282e37;
+  --oj-text: var(--oj-chalk);
+  --oj-muted: #b3bfd0;
+  --oj-line: #414b5a;
+  --oj-control-line: #9aa8bc;
+  --oj-link: #9bb4ff;
+  --oj-selected: #303f61;
+  --oj-selected-text: #c3d1ff;
+  --oj-focus: #b9caff;
+  --oj-positive: #b5d7bf;
+  --oj-positive-fill: #293d32;
+}
