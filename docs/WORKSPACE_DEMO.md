@@ -22,18 +22,24 @@ The prototype also opens at `/` in explicit fixture mode. Ordinary builds retain
 
 ## Walkthrough
 
-1. Start as Alex. Filter among the three simulated mailboxes, open the launch
+1. Start as Alex. Use Inbox, Drafts and Simulated Sent folders; search subjects,
+   people or message bodies within the selected mailbox. Filter among the three simulated mailboxes, open the launch
    checklist message, and save a reply draft. Create a personal Task from it.
 2. In Tasks, schedule that Task on the Work calendar with explicit UTC start
    and end times, then mark it complete. In Calendar, inspect its linked block.
-3. Create a separate calendar block, edit its title/time and delete it.
+3. Use Calendar Agenda, Day or Week; select a UTC date, navigate Previous/Next
+   or Today, and filter the owned calendars. Create a separate calendar block,
+   edit its title/time and delete it. Editing keeps the original calendar.
 4. Compose a new draft from the Studio mailbox. Reopen a saved draft, change its
    body and save it again. Its ID and original sending account remain the same.
    Choose **Simulate send** to move it into **Simulated Sent**, then inspect
    the saved From, To and body. No delivery occurs outside this fixture service.
 5. In Agents, grant `tasks:read` on Personal tasks to a named simulated agent.
    Inspect access: Tasks appear, mailbox messages do not. Revoke it; inspection
-   fails immediately.
+   fails immediately. Grant a second agent tasks:read and tasks:write on Personal
+   tasks. Inspect it, enter a Task title and choose Create task as agent. The Task
+   appears in Tasks. A read-only or revoked agent cannot create it; no human
+   identity fallback occurs.
 6. Switch to Sam. Alex's mail, tasks, calendars, drafts and agent controls are
    absent. Switch back to Alex, refresh, or restart the launcher: saved work
    remains available.
@@ -70,7 +76,16 @@ retrieval, durable restart, isolation, scope denial and revocation. Functional
 theme/responsive checks replace historical pixel comparisons under
 [the owner-approved prototype policy](PROTOTYPE_DELIVERY.md).
 
-Provider OAuth/sync/search/attachments, real sending, production authentication
+Provider OAuth/sync/remote search/attachments, real sending, production authentication
 for the new workspace, multi-user hosting, offline conflict resolution and
 native workspace screens remain unimplemented. Native quick checks cover the
 existing app only; device/store evidence remains a release requirement.
+
+## Owner review outside this environment
+
+The available cloud tools do not expose an authenticated port-forward or share
+URL for this saved environment. Loopback addresses above are environment-local,
+not owner-accessible preview links. A portable capture walkthrough is delivered
+through ChatGPT Library; it shows actual fixture-app behavior, not a deployed
+service. The one-command launcher remains the reproducible interactive demo
+inside this environment. No public tunnel or hosting configuration was created.

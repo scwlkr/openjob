@@ -1,0 +1,83 @@
+import { expect, test, type APIRequestContext } from "@playwright/test";
+import type { WorkspaceCommand } from "../../shared/workspace-contracts";
+
+async function command(request: APIRequestContext, input: WorkspaceCommand) {
+  const response = await request.post("/api/workspace/commands", { headers: { "x-openjob-fixture-owner": "demo_alex" }, data: input });
+  expect(response.ok()).toBe(true);
+  return (await response.json() as { data: { id: string } }).data;
+}
+
+test("calendar day/week navigation crosses months and years and filters owned calendars", async ({ page, request }) => {
+  const marker = `Calendar navigation ${Date.now()}`;
+  await command(request, { type: "calendar.create", calendarId: "alex_personal", title: `${marker} December`, start: "2026-12-31T23:00:00Z", end: "2026-12-31T23:30:00Z" });
+  await command(request, { type: "calendar.create", calendarId: "alex_work", title: `${marker} January`, start: "2027-01-01T09:00:00Z", end: "2027-01-01T09:30:00Z" });
+  await page.goto("/workspace");
+  await expect(page.getByTestId("mail-row").first()).toBeVisible();
+  await page.getByRole("button", { name: /^Calendar/ }).click();
+  const period = page.getByTestId("calendar-period");
+  await expect(page.getByRole("button", { name: "Agenda", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("calendar-event").filter({ hasText: marker })).toHaveCount(2);
+  await page.getByRole("button", { name: "Day", exact: true }).click();
+  await page.getByLabel("Calendar date", { exact: true }).fill("2026-12-31");
+  await expect(period).toContainText("Day · Dec 31, 2026 · UTC");
+  await expect(page.getByTestId("calendar-event").filter({ hasText: `${marker} December` })).toBeVisible();
+  await expect(page.getByTestId("calendar-event").filter({ hasText: `${marker} January` })).toHaveCount(0);
+  await page.getByRole("button", { name: "Next period", exact: true }).click();
+  await expect(page.getByLabel("Calendar date", { exact: true })).toHaveValue("2027-01-01");
+  await expect(page.getByTestId("calendar-event").filter({ hasText: `${marker} January` })).toBeVisible();
+  await page.getByLabel("Show calendar").selectOption("alex_personal");
+  await expect(page.getByText("No events match this calendar and period.", { exact: true })).toBeVisible();
+  await page.getByLabel("Show calendar").selectOption("");
+  await page.getByRole("button", { name: "Previous period", exact: true }).click();
+  await expect(page.getByLabel("Calendar date", { exact: true })).toHaveValue("2026-12-31");
+  await page.getByRole("button", { name: "Week", exact: true }).click();
+  await expect(period).toContainText("Dec 28, 2026 – Jan 3, 2027");
+  await expect(page.getByTestId("calendar-event").filter({ hasText: marker })).toHaveCount(2);
+  await page.getByRole("button", { name: "Next period", exact: true }).click();
+  await expect(period).toContainText("Jan 4, 2027 – Jan 10, 2027");
+  await page.getByRole("button", { name: "Day", exact: true }).click();
+  await page.getByLabel("Calendar date", { exact: true }).fill("2027-01-31");
+  await page.getByRole("button", { name: "Next period", exact: true }).click();
+  await expect(page.getByLabel("Calendar date", { exact: true })).toHaveValue("2027-02-01");
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  const today = await page.evaluate(() => new Date().toISOString().slice(0, 10));
+  await expect(page.getByLabel("Calendar date", { exact: true })).toHaveValue(today);
+  await page.getByRole("button", { name: "Agenda", exact: true }).click();
+  await expect(page.getByTestId("calendar-event").filter({ hasText: marker })).toHaveCount(2);
+});
+
+test("calendar CRUD retains original calendar and Agenda includes scheduled tasks", async ({ page, request }, testInfo) => {
+  const marker = `Calendar edit ${Date.now()}`;
+  const task = await command(request, { type: "task.create", title: `${marker} task` });
+  await command(request, { type: "task.schedule", taskId: task.id, calendarId: "alex_work", start: "2028-02-29T10:00:00Z", end: "2028-02-29T10:30:00Z" });
+  await page.goto("/workspace");
+  await expect(page.getByTestId("mail-row").first()).toBeVisible();
+  await page.getByRole("button", { name: /^Calendar/ }).click();
+  await expect(page.getByTestId("calendar-event").filter({ hasText: `${marker} task` })).toContainText("linked task");
+  await page.getByLabel("Block title", { exact: true }).fill(`${marker} block`);
+  await page.getByLabel("Calendar", { exact: true }).selectOption("alex_personal");
+  await page.getByLabel("Start (UTC)", { exact: true }).fill("2027-03-01T12:00");
+  await page.getByLabel("End (UTC)", { exact: true }).fill("2027-03-01T12:45");
+  await page.getByRole("button", { name: "Create block", exact: true }).click();
+  const block = page.getByTestId("calendar-event").filter({ hasText: `${marker} block` });
+  await expect(block).toContainText("Personal");
+  await block.getByRole("button", { name: "Edit block", exact: true }).click();
+  await expect(page.getByLabel("Calendar", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Calendar", { exact: true })).toHaveValue("alex_personal");
+  await page.getByLabel("Block title", { exact: true }).fill(`${marker} revised`);
+  await page.getByLabel("Start (UTC)", { exact: true }).fill("2027-03-02T13:00");
+  await page.getByLabel("End (UTC)", { exact: true }).fill("2027-03-02T13:45");
+  await page.getByRole("button", { name: "Save block", exact: true }).click();
+  const revised = page.getByTestId("calendar-event").filter({ hasText: `${marker} revised` });
+  await expect(revised).toContainText("Mar 2, 2027");
+  await page.reload();
+  await expect(page.getByTestId("mail-row").first()).toBeVisible();
+  await page.getByRole("button", { name: /^Calendar/ }).click();
+  await expect(revised).toBeVisible();
+  await expect(page.getByTestId("calendar-event").filter({ hasText: `${marker} task` })).toContainText("linked task");
+  await page.screenshot({ path: testInfo.outputPath("workspace-calendar-navigation.png"), fullPage: true });
+  page.once("dialog", dialog => dialog.accept());
+  await revised.getByRole("button", { name: "Delete block", exact: true }).click();
+  await expect(revised).toHaveCount(0);
+  await expect(page.getByLabel("Calendar", { exact: true })).toBeEnabled();
+});
