@@ -9,14 +9,21 @@ atomic save-before-success, serialized operations, rollback on precommit failure
 pause on uncertain durability, one-writer lock and non-destructive invalid/stale
 lock recovery. UI labels saved/temporary. See docs/NPM_INSTALL.md.
 
-Source restart/failure suite7/7 PASS; focused existing workspace/agent suite18/18
-PASS before final cancellation fix. Installed tarball restart suite6/6 and actual
-asset/API create/schedule/complete/isolation/Host-Origin/shutdown smoke PASS.
-Final rebuilt installed cancellation proof and exact-head checks pending.
+Source restart/failure suite7/7 PASS. Reviewed functional head1b46b455e29b23609c8e66db2fde2388c73aa620
+passed final focused core/distribution22/22 and clean-prefix installed restart,
+failure and startup-cancellation7/7; actual asset/API create/schedule/complete,
+isolation, Host-Origin and shutdown smoke PASS. Prefix /tmp/openjob-304-exact-prefix.
+Tarball SHA256 7aa3cdca717cb75cd4c77bd1127f2e07bb80f4c05a266e553230d9cf816ee40a.
 Independent review found startup lock cancellation and parent continuation races;
 fixed by early signal registration, initialization drain and stopping guards.
-Cheap compile/brand passed; final secret scan pending. No native/device/full-suite
-acceptance claimed. Current useful demo5193 remains unchanged.
+Cheap compile/brand PASS; secret scan PASS613 files. No native/device/full-suite
+acceptance claimed. Original useful demo5193 remains unchanged. Verified installed saved-mode demo
+is available at http://127.0.0.1:5194/workspace with
+/tmp/openjob-304-demo/workspace.json (session38617); actual Chrome UI shows saved,
+local, unencrypted and synthetic labels. PR82 was created draft and attached;
+final exact head/base/protection/merge receipts are in Linear. Only PR82 open,
+main37c322b, no protection/rulesets/status checks; sole main workflow only builds
+artifacts, never publishes/deploys. Reviewed nonproduction merge authorized.
 
 WLK-303 publication: Shane approved @scwlkr/openjob, signed into existing account;
 read-only npm whoami=scwlkr and org owner verified. Exact approved archives in
