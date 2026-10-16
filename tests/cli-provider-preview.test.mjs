@@ -50,7 +50,7 @@ test('existing human CLI reads the shared synthetic adapter with scoped account 
   const ok = async args => { const result = await f.run(['--format', 'json', ...args]); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
   const initial = await ok([]);
   assert.equal(initial.mode, 'synthetic'); assert.equal(initial.messages.length, 2); assert.ok(initial.nextCursor);
-  assert.equal(initial.connectors.length, 2);
+  assert.equal(initial.connectors.length, 3);
   assert.deepEqual(Object.keys(initial.connectors[0]).sort(), ['adapter', 'consent', 'implementedOperations', 'liveExecutionEnabled', 'message', 'provider', 'status', 'unsupportedOperations']);
   assert.equal(initial.connectors[0].adapter, 'gmail-rest-read'); assert.equal(initial.connectors[0].status, 'not_connected');
   assert.equal(initial.connectors[0].consent, 'required'); assert.equal(initial.connectors[0].liveExecutionEnabled, false);
@@ -129,10 +129,24 @@ test('existing CLI reads Outlook Graph mock pages and denies foreign/revoked acc
   const first = await ok(['--account', f.mock.accountIds.outlookAlex]);
   assert.equal(first.messages.length, 2); assert.equal(first.messages[0].subject, 'Outlook fixture: prepare the launch'); assert.match(first.messages[0].body, /Outlook Graph wire mapper for alex/);
   const next = await ok(['--account', f.mock.accountIds.outlookAlex, '--cursor', first.nextCursor]); assert.equal(next.messages.length, 1); assert.equal(next.nextCursor, null); assert.equal(next.syncCursor, null);
-  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter]), [['gmail', 'gmail-rest-read'], ['outlook', 'outlook-graph-read']]);
+  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter]), [['gmail', 'gmail-rest-read'], ['outlook', 'outlook-graph-read'], ['imap', 'imap-inbox-read']]);
   for (const secret of ['fixture_outlook_ref_', 'mock_outlook_access_', '"accessToken"', '"credentialRef"', '"scopes"', '"revision"']) assert.equal(JSON.stringify([first, next]).includes(secret), false);
   const before = { ...f.mock.counters };
   const consent = await ok(['--account', f.mock.accountIds.outlookConsent]); assert.deepEqual(consent.messages, []); assert.deepEqual(f.mock.counters, before);
   await f.owner('b'); const denied = await f.run(['--account', f.mock.accountIds.outlookAlex, '--format', 'json']); assert.notEqual(denied.status, 0); assert.match(denied.stderr, /forbidden/); assert.equal(denied.stdout, ''); assert.deepEqual(f.mock.counters, before);
   await f.owner('a'); f.mock.controls.revoke(f.mock.accountIds.outlookAlex); const revoked = await ok(['--account', f.mock.accountIds.outlookAlex]); assert.deepEqual(revoked.messages, []); assert.deepEqual(f.mock.counters, before); assert.deepEqual(f.failures, []);
+});
+
+test('existing CLI reads IMAP mock raw-byte pages and denies foreign/revoked accounts without private configuration', async t => {
+  const f = await harness(t, { mockConnections: true });
+  const ok = async args => { const result = await f.run(['--format', 'json', ...args]); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const first = await ok(['--account', f.mock.accountIds.imapAlex]);
+  assert.equal(first.messages.length, 2); assert.equal(first.messages[0].subject, 'IMAP fixture: prepare the launch'); assert.match(first.messages[0].body, /IMAP wire mapper for alex/);
+  const next = await ok(['--account', f.mock.accountIds.imapAlex, '--cursor', first.nextCursor]); assert.equal(next.messages.length, 1); assert.equal(next.nextCursor, null); assert.equal(next.syncCursor, null);
+  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter]), [['gmail', 'gmail-rest-read'], ['outlook', 'outlook-graph-read'], ['imap', 'imap-inbox-read']]);
+  for (const secret of ['fixture_imap_ref_', 'mock_imap_session_', 'fixture_server_', 'fixture_imap_user_', '"serverId"', '"username"', '"accessToken"', '"credentialRef"', '"scopes"', '"revision"']) assert.equal(JSON.stringify([first, next]).includes(secret), false, secret);
+  const before = { ...f.mock.counters };
+  const consent = await ok(['--account', f.mock.accountIds.imapConsent]); assert.deepEqual(consent.messages, []); assert.deepEqual(f.mock.counters, before);
+  await f.owner('b'); const denied = await f.run(['--account', f.mock.accountIds.imapAlex, '--format', 'json']); assert.notEqual(denied.status, 0); assert.match(denied.stderr, /forbidden/); assert.equal(denied.stdout, ''); assert.deepEqual(f.mock.counters, before);
+  await f.owner('a'); f.mock.controls.revoke(f.mock.accountIds.imapAlex); const revoked = await ok(['--account', f.mock.accountIds.imapAlex]); assert.deepEqual(revoked.messages, []); assert.deepEqual(f.mock.counters, before); assert.deepEqual(f.failures, []);
 });

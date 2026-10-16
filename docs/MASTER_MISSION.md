@@ -48,15 +48,16 @@ The manifest also contains existing build, API, CLI, native, verification, and r
 
 ### Verified implementation checkpoint — 16 October 2026
 
-The initial baseline above is historical. Cloud implementation through WLK-300
+The initial baseline above is historical. Cloud implementation through WLK-301
 now connects authenticated personal Mail, Tasks, Calendar and scoped agents
 through shared APIs/CLI, with a reproducible invented-data workflow. Web and
 native Tasks/Calendar support explicit offline edits, sync and conflict review;
 web can retain authored unfinished Mail text separately. Calendar files provide
 bounded iCalendar export and reviewed import through the app, API and CLI,
 without a provider connection. Provider Mail remains
-simulated. Gmail REST and Outlook Graph Mail read translation share the existing
-owner/connection/vault boundary and have injected-transport proof; the mock OAuth
+simulated. Gmail REST, Outlook Graph and bounded IMAP Inbox read translation
+share the existing owner/connection/vault boundary with injected-transport proof.
+IMAP has no live TLS/login or full MIME implementation; the mock OAuth
 lifecycle remains Google-only. Production connections are unconfigured. Live
 provider/database behavior, production Firebase offline startup and native
 device/release acceptance remain unverified. Current delivery evidence and

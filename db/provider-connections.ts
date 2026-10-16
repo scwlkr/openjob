@@ -1,6 +1,6 @@
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from "./firestore-rest.ts";
 import { activeUserHistoryWrite, assertActiveUser } from "./user-history.ts";
-import { effectiveProvider, providerConnectionFingerprint, validateProviderConnection, type ProviderConnection, type ProviderConnectionStore } from "../server/providers/provider-connections.ts";
+import { providerConnectionSubjectKey, providerConnectionFingerprint, validateProviderConnection, type ProviderConnection, type ProviderConnectionStore } from "../server/providers/provider-connections.ts";
 
 export type ProviderConnectionInput = Omit<ProviderConnection, "ownerId" | "revision">;
 export type DurableProviderConnectionStore = ProviderConnectionStore & {
@@ -33,8 +33,8 @@ export function createFirestoreProviderConnectionStore(config: FirebaseConfig, f
     let records: ProviderConnection[]; try { records = data.map(row => validateProviderConnection(row, owner)); } catch { return fail("invalid_state"); }
     const accounts = new Set<string>(); const subjects = new Set<string>(); const refs = new Set<string>(); const revisions = new Set<string>();
     for (const row of records) {
-      if (!validRevision(row.revision) || accounts.has(row.accountId) || subjects.has(`${effectiveProvider(row)}:${row.subject}`) || refs.has(row.credentialRef) || revisions.has(row.revision)) fail("invalid_state");
-      accounts.add(row.accountId); subjects.add(`${effectiveProvider(row)}:${row.subject}`); refs.add(row.credentialRef); revisions.add(row.revision);
+      if (!validRevision(row.revision) || accounts.has(row.accountId) || subjects.has(providerConnectionSubjectKey(row)) || refs.has(row.credentialRef) || revisions.has(row.revision)) fail("invalid_state");
+      accounts.add(row.accountId); subjects.add(providerConnectionSubjectKey(row)); refs.add(row.credentialRef); revisions.add(row.revision);
     }
     return records;
   }
@@ -64,13 +64,13 @@ export function createFirestoreProviderConnectionStore(config: FirebaseConfig, f
     async getForOwner(owner, account) { if (!validId(account)) fail("invalid_input"); return (await list(owner)).find(row => row.accountId === account) ?? null; },
     async putForOwner(owner, input, expectedRevision) {
       path(owner); if (expectedRevision !== null && !validRevision(expectedRevision)) fail("invalid_input");
-      if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).filter(key => key !== "provider").sort().join(",") !== "accountId,address,credentialRef,expiresAt,label,mode,scopes,state,subject") fail("invalid_input");
+      if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).filter(key => !["provider", "imap"].includes(key)).sort().join(",") !== "accountId,address,credentialRef,expiresAt,label,mode,scopes,state,subject") fail("invalid_input");
       let candidate: ProviderConnection; try { candidate = validateProviderConnection({ ...input, ownerId: owner, revision: "pending" }, owner); } catch { return fail("invalid_input"); }
       return await mutate(owner, records => {
         const current = records.find(row => row.accountId === candidate.accountId);
         if (expectedRevision === null ? !!current : !current || current.revision !== expectedRevision) fail("conflict");
         if (!current && records.length >= 100) fail("connection_capacity");
-        if (records.some(row => row.accountId !== candidate.accountId && (effectiveProvider(row) === effectiveProvider(candidate) && row.subject === candidate.subject || row.credentialRef === candidate.credentialRef))) fail("conflict");
+        if (records.some(row => row.accountId !== candidate.accountId && (providerConnectionSubjectKey(row) === providerConnectionSubjectKey(candidate) || row.credentialRef === candidate.credentialRef))) fail("conflict");
         const updated = { ...candidate, revision: nextRevision(records) };
         return { records: [...records.filter(row => row.accountId !== candidate.accountId), updated], result: updated };
       }) as ProviderConnection;

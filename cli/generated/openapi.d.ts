@@ -909,7 +909,7 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ProviderConnectorStatus: components["schemas"]["GmailConnectorStatus"] | components["schemas"]["OutlookConnectorStatus"];
+        ProviderConnectorStatus: components["schemas"]["GmailConnectorStatus"] | components["schemas"]["OutlookConnectorStatus"] | components["schemas"]["ImapConnectorStatus"];
         GmailConnectorStatus: {
             /** @constant */
             provider: "gmail";
@@ -938,6 +938,21 @@ export interface components {
             liveExecutionEnabled: false;
             implementedOperations: ("mail.read" | "mail.folders")[];
             unsupportedOperations: ("calendar.read" | "calendar.write" | "mail.draft" | "mail.send" | "mail.delta" | "reconnect")[];
+            message: string;
+        };
+        ImapConnectorStatus: {
+            /** @constant */
+            provider: "imap";
+            /** @constant */
+            adapter: "imap-inbox-read";
+            /** @constant */
+            status: "not_connected";
+            /** @constant */
+            consent: "required";
+            /** @constant */
+            liveExecutionEnabled: false;
+            implementedOperations: ("mail.read" | "mail.inbox")[];
+            unsupportedOperations: ("calendar.read" | "calendar.write" | "mail.draft" | "mail.send" | "mail.delta" | "mail.threads" | "reconnect")[];
             message: string;
         };
         ProviderPreviewCapability: {

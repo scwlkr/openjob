@@ -12,10 +12,11 @@ type Page = { accountId?: string; cursor?: string; history: (string | undefined)
 const statusLabels = { ready: "Ready (synthetic)", reconnect_required: "Reconnect required", error: "Provider error", unsupported: "Unsupported", not_connected: "Not connected", needs_consent: "Mail consent required", revoked: "Access revoked", disabled: "Connection disabled" };
 const capabilities: [keyof ProviderAccount["capabilities"], string][] = [["mailRead", "Mail read"], ["draft", "Mail draft"], ["send", "Mail send"], ["calendarRead", "Calendar read"], ["calendarWrite", "Calendar write"], ["reconnect", "Reconnect"]];
 const operationLabels: Record<string, string> = {
-  "mail.read": "Read messages", "mail.labels": "Read labels", "mail.folders": "Read folders", "mail.draft": "Create drafts", "mail.send": "Send mail",
+  "mail.read": "Read messages", "mail.labels": "Read labels", "mail.folders": "Read folders", "mail.inbox": "Read Inbox", "mail.threads": "Conversation threading", "mail.draft": "Create drafts", "mail.send": "Send mail",
   "mail.write": "Change mailbox data", "mail.history": "Mail history synchronization", "mail.delta": "Mail change synchronization",
   "calendar.read": "Read provider calendars", "calendar.write": "Change provider calendars",
 };
+const providerLabels = { gmail: "Gmail", outlook: "Outlook", imap: "IMAP" };
 const operationLabel = (operation: string) => operationLabels[operation] || operation.replaceAll(".", " ");
 const exampleTime = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
@@ -32,7 +33,7 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
   const selectedAccount = data?.accounts.find((account) => account.id === data.selectedAccountId);
   const displayAccount = selectedAccount || accountOptions.find((account) => account.id === page.accountId);
   const isMock = displayAccount?.mode === "mock";
-  const providerName = displayAccount?.provider === "outlook" ? "Outlook" : "Gmail";
+  const providerName = displayAccount ? providerLabels[displayAccount.provider] : "Mail";
   const readable = selectedAccount?.status === "ready" && selectedAccount.capabilities.mailRead.available;
   const messages = readable ? data?.messages || [] : [];
   const events = selectedAccount?.status === "ready" && selectedAccount.capabilities.calendarRead.available ? data?.events || [] : [];
@@ -67,18 +68,19 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
   return <section aria-label="Authenticated provider preview">
     <button disabled={signal.aborted} onClick={() => { requestController.current?.abort(); setPage({ accountId: page.accountId || data?.selectedAccountId, history: [] }); setRevision((value) => value + 1); setSelectedMessageId(""); }}>Refresh preview</button>
     <p className={styles.banner} data-testid="provider-mode">{isMock ? `Mock ${providerName} protocol · invented data · no live connection or sending. The read adapter and credential broker use invented ${providerName} responses and mock consent records.` : "Synthetic Mail preview · fictional provider data returned through your authenticated API. No live provider connection, credentials, drafts or sending. These examples are not saved Mail."}</p>
-    {data && <section className={styles.panel} aria-label="Provider connections"><div className={styles.reader}>
+    {data && <section className={styles.panel} aria-label="Provider connections"><details className={styles.reader}>
+      <summary>Provider connection status · no live accounts</summary>
       <h2>Provider connections</h2>
       {data.connectors.map((connector) => <article key={connector.adapter} data-testid="provider-connection">
-        <h3>{connector.provider === "outlook" ? "Outlook" : "Gmail"} read adapter</h3><p><strong>Implemented · not connected</strong></p>
-        <p>{connector.provider === "outlook" ? "Outlook" : "Gmail"} Mail-read consent required · live execution disabled.</p>
-        <p>{connector.provider === "outlook" ? "Microsoft" : "Gmail"} consent is separate from your OpenJob sign-in.</p>
+        <h3>{providerLabels[connector.provider]} read adapter</h3><p><strong>Implemented · not connected</strong></p>
+        <p>{providerLabels[connector.provider]} Mail-read {connector.provider === "imap" ? "approval" : "consent"} required · live execution disabled.</p>
+        <p>{connector.provider === "imap" ? "Mailbox access needs a separately approved IMAP connection. OpenJob sign-in alone cannot connect Mail." : `${connector.provider === "outlook" ? "Microsoft" : "Gmail"} consent is separate from your OpenJob sign-in.`}</p>
         <p>{connector.message}</p>
         <dl className={styles.providerCapabilities}><div><dt><strong>Implemented reads</strong></dt><dd>{connector.implementedOperations.map(operationLabel).join(", ")}</dd></div><div><dt><strong>Not supported</strong></dt><dd>{connector.unsupportedOperations.map(operationLabel).join(", ")}</dd></div></dl>
-        <p className={styles.small}>Next step: finish production credential/runtime bindings and provider OAuth setup, then approve a test account for read-only Mail consent. OpenJob sign-in alone cannot connect Mail.</p>
+        <p className={styles.small}>{connector.provider === "imap" ? "Next step: review secure transport and mailbox authentication, then approve a test Inbox for read-only access. No live IMAP login is configured." : "Next step: finish production credential/runtime bindings and provider OAuth setup, then approve a test account for read-only Mail consent. OpenJob sign-in alone cannot connect Mail."}</p>
       </article>)}
       {!data.connectors.length && <p>No provider connections are available in this build.</p>}
-    </div></section>}
+    </details></section>}
     <label className={styles.filter}>Preview account<select aria-label="Preview account" value={page.accountId || data?.selectedAccountId || ""} disabled={!accountOptions.length} onChange={(event) => selectAccount(event.target.value)}>{!accountOptions.length && <option value="">Loading preview accounts…</option>}{accountOptions.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.provider} · {account.mode === "mock" ? "mock protocol" : "synthetic"}</option>)}</select></label>
     {failed && <p role="alert" className={styles.error}>Provider preview could not be loaded. Your saved Tasks and Calendar are unchanged. Choose another available account or reopen Mail preview.</p>}
     {!data && !failed && <p role="status">Loading authenticated provider preview…</p>}
@@ -97,7 +99,7 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
           {!messages.length && <p className={styles.empty}>{selectedAccount.capabilities.mailRead.available ? "No example messages on this page." : `Message preview unavailable: ${selectedAccount.capabilities.mailRead.reason}`}</p>}
           <div className={`${styles.actions} ${styles.providerPaging}`}><button disabled={!page.history.length} onClick={previousPage}>Previous messages</button><button disabled={!readable || !data.nextCursor} onClick={nextPage}>Next messages</button>{page.history.length > 0 && <button onClick={() => { requestController.current?.abort(); setPage({ accountId: data.selectedAccountId, history: [] }); setSelectedMessageId(""); }}>First page</button>}</div>
         </section>
-        <section className={styles.panel} aria-label={isMock ? `Mock ${providerName} message reader` : "Synthetic message reader"}>{selectedMessage ? <div className={styles.reader}><h2>{selectedMessage.subject}</h2><p>From: {selectedMessage.from}<br />To: {selectedMessage.to}</p><p className={styles.small}>{isMock ? "Mock message timestamp" : "Fixed example received time"}: {exampleTime(selectedMessage.receivedAt)}</p><pre className={styles.body}>{selectedMessage.body}</pre><dl className={styles.providerReferences}><dt>Folders</dt><dd>{selectedMessage.folderIds.map((id) => data.folders.find((folder) => folder.id === id)?.name || id).join(", ")}</dd><dt>Thread reference</dt><dd>{selectedMessage.threadId}</dd><dt>Provider thread reference</dt><dd>{selectedMessage.upstreamThreadId}</dd><dt>Provider message reference</dt><dd>{selectedMessage.upstreamId}</dd></dl><button disabled={busy} onClick={() => command({ type: "task.create", title: selectedMessage.subject }, `Task created from a ${isMock ? "mock" : "synthetic"} example; no mailbox link was saved`)}>Create personal task from example</button></div> : <p className={styles.empty}>Select a fictional message to read its plain text and provider context.</p>}</section>
+        <section className={styles.panel} aria-label={isMock ? `Mock ${providerName} message reader` : "Synthetic message reader"}>{selectedMessage ? <div className={styles.reader}><h2>{selectedMessage.subject}</h2><p>From: {selectedMessage.from}<br />To: {selectedMessage.to}</p><p className={styles.small}>{isMock ? "Mock message timestamp" : "Fixed example received time"}: {exampleTime(selectedMessage.receivedAt)}</p><pre className={styles.body}>{selectedMessage.body}</pre><dl className={styles.providerReferences}><dt>Folders</dt><dd>{selectedMessage.folderIds.map((id) => data.folders.find((folder) => folder.id === id)?.name || id).join(", ")}</dd><dt>{selectedAccount.provider === "imap" ? "Message grouping reference (no conversation threading)" : "Thread reference"}</dt><dd>{selectedMessage.threadId}</dd><dt>{selectedAccount.provider === "imap" ? "IMAP singleton message reference" : "Provider thread reference"}</dt><dd>{selectedMessage.upstreamThreadId}</dd><dt>Provider message reference</dt><dd>{selectedMessage.upstreamId}</dd></dl><button disabled={busy} onClick={() => command({ type: "task.create", title: selectedMessage.subject }, `Task created from a ${isMock ? "mock" : "synthetic"} example; no mailbox link was saved`)}>Create personal task from example</button></div> : <p className={styles.empty}>Select a fictional message to read its plain text and provider context.</p>}</section>
       </div>
       <section className={styles.panel} aria-label="Read-only provider calendar"><h2 className={styles.sectionHeading}>Provider calendar examples · read only</h2><p className={styles.inset}>{isMock ? `This mock ${providerName} protocol provides no calendar access. Your saved OpenJob Calendar is separate.` : "These synthetic events stay in this preview. They are not merged into your saved OpenJob Calendar and cannot be edited or scheduled here."}</p>{events.map((event) => <article key={event.id} className={styles.event} data-testid="provider-event"><strong>{event.title}</strong><span>{data.calendars.find((calendar) => calendar.id === event.calendarId)?.name}</span><small>{exampleTime(event.start)} – {exampleTime(event.end)} · fixed example time</small></article>)}{!events.length && <p className={styles.empty}>{selectedAccount.capabilities.calendarRead.available ? "No example calendar events for this account." : `Calendar preview unavailable: ${selectedAccount.capabilities.calendarRead.reason}`}</p>}</section>
     </>}
