@@ -34,7 +34,11 @@ member rights/policy; OpenJob does not host persistent Workspace agents. Home ca
 show labeled authorized tasks/events/unread counts, entering a Workspace for actions.
 OpenJob accounts initially have no hosted mailbox. These confirmed decisions and
 actual discussion references are in [architecture alignment](ARCHITECTURE_ALIGNMENT.md).
-Detailed roles, schemas/runtime/privacy/offline proposals still await review.
+The later [C09–C10 pilot clarification](ARCHITECTURE_ALIGNMENT.md) prioritizes
+Shane’s daily use, incremental actual account onboarding and early iOS TestFlight;
+shared work online-first, personal offline Task/Calendar retained and full offline
+Mail deferred with initial on-demand bodies. Hosting remains undecided; detailed
+roles/schemas/runtime/retention/offline mechanics still await review.
 
 ### Product principles
 

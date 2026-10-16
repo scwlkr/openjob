@@ -1,7 +1,8 @@
 # Owner-confirmed workspace architecture
 
 **Confirmed core, 16 October 2026.** These decisions supersede conflicting PR #87
-proposals. They do not adopt its runtime/storage/offline choices, role presets,
+proposals. The later C09–C10 pilot/staging decisions below also apply. These confirmations
+do not adopt hosting, exact storage/retention choices, role presets,
 full specification, or ADRs 0019/0021, and do not authorize feature implementation.
 
 ## Confirmed decisions
@@ -16,6 +17,8 @@ full specification, or ADRs 0019/0021, and do not authorize feature implementati
 | C06 | Externally connected agent identity has independent revocable grants per Workspace; members may delegate subsets of current rights when policy permits | No persistent Workspace-hosted agent/runtime; no inherited human/provider credentials or cross-Workspace grant |
 | C07 | OpenJob accounts initially have no hosted mailbox; existing providers connect | Hosted inboxes remain a possible future product, not current scope |
 | C08 | Home may show labeled authorized tasks/events/unread counts across Workspaces; opening work enters its Workspace | Actions remain Workspace-scoped; no blanket unified Mail/content/search or agent authority |
+| C09 | Build the first usable Mail/Calendar/Tasks/agent-permission loop for Shane’s daily use; progressively onboard real accounts/connectors/mailboxes with his participation; include an early usable iOS TestFlight path | Do not wait for broad multi-user/provider/platform readiness; advanced Calendar and company SSO stage later. No present feature-work, provider-grant, credential, real-send or TestFlight distribution authority |
+| C10 | Online-first shared work; retain existing personal offline Task/Calendar support; initially fetch Mail bodies on demand and defer full offline email | Exact cache caps, retention, storage/crypto and later offline mechanics remain Proposed; online-first does not select hosting |
 
 ## Actual confirmation record
 
@@ -49,11 +52,32 @@ this reconciliation uses the explicit conversation decisions as authority and do
 not infer extra acceptance from the diagram. Sean subsequently confirmed receipt
 and authorized this documentation-only update; no further relay retry is needed.
 
+## Pilot clarification — 16 October, 4:36 p.m. Central
+
+Sean relayed the following exact owner message from parent thread
+`01a0f838-a174-70eb-a090-8bdce60620f1` (source time 21:36 UTC):
+
+> 1. what are hosting options
+> 2. yea that sounds fine, instead of trying to build the system for everyone at first. Just approach the developoment cycle as building for me so as you get to connector stages and setting up accounts etc have me setup an account and progressively attach connectors and mailboxes so we can test and see how things work with real life and it starts being useful and physical for me. this includes getting a test flight ios app out that i can use and interact with proabbly
+> 3. agreed
+
+Numbered context: (1) hosting options remained under discussion; no hosting choice
+was accepted. (2) the recommendation was a first useful real Mail/Calendar/Tasks/
+agent-permissions release, staging advanced Calendar/company SSO later; Shane
+refined it into an owner-first progressive pilot with early iOS TestFlight.
+(3) the agreed recommendation was online-first shared work, retaining personal
+offline Task/Calendar and deferring full offline Mail with on-demand bodies initially.
+This records C09–C10 only, not adoption of the whole blueprint or permission to
+begin features, configure accounts/credentials, send externally, distribute a
+TestFlight build or publish production releases. Specific approvals still apply.
+
 ## What remains proposed
 
 Detailed role presets/default resources, identity eligibility protocol, exact API
 schemas, hosting, repositories, encrypted credential storage, jobs, retention,
-offline/platform strategy and release approach remain at their prior authority.
+later offline/platform mechanics and release approach remain at their prior
+authority. C09–C10 settle pilot priority and online/offline staging only; hosting
+is expressly undecided.
 See [DECISIONS](build-spec/DECISIONS.md). Stable OJ and R IDs retain their intent
 where applicable, with wording revised to this Workspace boundary. Design status,
 implementation proof, merge and release are separate facts.
@@ -72,6 +96,8 @@ Stable OJ and R IDs describe revised design intent, not completed implementation
 | C06 | OJ-A1, OJ-A2, OJ-A3, OJ-A4 | R22, R30, R43 | DOMAIN external principal/delegation; EXPERIENCE grants |
 | C07 | OJ-C1, OJ-C2, OJ-X1 | R20, R31, R50 | PRODUCT initial non-goals; EXPERIENCE first run |
 | C08 | OJ-I3, OJ-X1 | R20 | EXPERIENCE Home; DOMAIN authorized projections |
+| C09 | OJ-C1, OJ-C2, OJ-M1, OJ-T1, OJ-K1, OJ-A1, OJ-X1, OJ-X3, OJ-X7 | R11, R12, R20, R22, R31, R33, R40, R41, R43, R53 | Owner-first pilot path; EXPERIENCE onboarding; early R53 milestone |
+| C10 | OJ-C3, OJ-M1, OJ-X2, OJ-X5 | R21, R32, R52, R53 | RUNTIME confirmed staging versus proposed mechanics |
 
 Blueprint/Companies/ADR 0020 describe the same boundary. RUNTIME/ADRs 0019/0021
 retain their Proposed technical status. COMPLETENESS/HANDOFF/SOURCE preserve this

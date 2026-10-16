@@ -1,19 +1,49 @@
 # Dependency-ordered build roadmap
 
-**Design artifact, not an execution queue.** [C01–C08](../ARCHITECTURE_ALIGNMENT.md) are confirmed core; other design defaults remain Proposed and feature development is still paused. Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
+**Design artifact, not an execution queue.** [C01–C10](../ARCHITECTURE_ALIGNMENT.md) are confirmed core; other design defaults remain Proposed and feature development is still paused. Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
 
 ## Stage outcomes
 
 | Phase | Outcome | Exit proof |
 |---|---|---|
 | P0 · Adopt and reconcile | Reviewed product/architecture defaults and one current handoff | Confirmed core distinguished from remaining Proposed detail; development authorization recorded before implementation; current PR/code/Linear reconciled; no unnecessary rediscovery |
-| P1 · Establish ownership | Personal and multiple Workspaces, explicit grants, safe membership lifecycle | Three people/two Workspaces isolation/departure scenario passes |
-| P2 · Unify the product | Coherent shell and owned Task/Calendar work with scoped agents | Human/API/CLI workflow on durable isolated fixtures, no UI-only policy |
-| P3 · Connect real accounts | One authorized provider's live read/sync with secure credentials and minimal retained data | Real paged Inbox, reconnect/revocation, cleanup and restart proof |
+| P1 · Establish ownership | Personal and multiple Workspaces, explicit grants, safe membership lifecycle | Owner-first identity/resource isolation for enabled paths; full three-person/two-Workspace scenario remains broader-readiness proof |
+| P2 · Unify the product | Coherent shell and owned Task/Calendar work with scoped agents | Shane’s usable owned-work loop with API/CLI policy, preserving personal offline; early iOS adaptation alongside it |
+| P3 · Connect real accounts | One authorized provider's live read/sync with secure credentials and minimal retained data | Shane participates in incremental approved account/mailbox onboarding; real read/reconnect/cleanup plus early iOS pilot evidence |
 | P4 · Close the real work loop | Real Calendar planning, draft/send, useful agent subset and honest uncertain effects | Receive/read → Task → provider Calendar → complete → authorized reply; deny/revoke tests |
-| P5 · Complete the platform | Provider breadth, richer Calendar, Workspace offline, native and full npm experience | Capability matrix and named-platform release evidence, not a single successful demo |
+| P5 · Complete the platform | Provider breadth, richer Calendar, Workspace offline, native and full npm experience | Broader provider/multi-user/platform completion and late offline/advanced Calendar; early iOS pilot is not deferred to this phase |
 
-Critical dependency spine: R00 → R01 → R10 → R11/R12 → R20/R21/R22 → R30/R31 → R32/R33 → R40/R41/R42/R43 → R50–R55. Some work can run independently: UI shell follows context contracts; connector read/write adapters can be fixture-tested before credentials; native/npm client work can start after contract stabilization. One integration owner merges these results and verifies the exact head. Do not create parallel task engines or duplicate ownership models to parallelize.
+## Confirmed owner-first pilot path
+
+C09 makes Shane’s daily-use pilot the first delivery target, not a broad launch.
+After remaining review and explicit development authority, complete the minimum
+R10–R12 ownership/access foundations needed for enabled paths, R20/R21/R22 owned
+work/permissions, then incrementally connect real resources through R30–R33 and
+R40–R43. At each connector step, ask Shane to set up/authorize the particular
+account/mailbox/calendar and verify its identity and actual behavior together.
+Do not request every provider/account up front or imply a connected demo is live.
+
+R53 has an **early iOS pilot milestone** alongside R20–R33 and the evolving live
+loop, so Shane can use the app physically before broad provider/multi-user/native
+completion. It may first expose only verified owned-work/read-connected features,
+then gain the approved Calendar/send/agent capabilities as those pass. Full R53
+platform parity and R55 whole-product readiness remain later outcomes; an early
+milestone does not mark those entire slices Done. Actual TestFlight distribution
+and required native/privacy/device/artifact gates still apply separately.
+
+Full invitation/admin UI, role breadth, the complete three-person lifecycle matrix,
+Android/desktop breadth, advanced Calendar (R51), company SSO and full offline Mail
+(R52) must not become prerequisites for the first narrow owner pilot unless an
+enabled path actually depends on them. Do not weaken account/context isolation,
+current-rights/revocation checks, safe Mail rendering or send-safety boundaries.
+Keep unverified features unavailable. Preserve personal offline Task/Calendar;
+shared work starts online and Mail bodies are initially on demand (C10).
+
+Dependencies below distinguish **minimum pilot foundations** from full slice
+acceptance. Keep the same IDs and one Linear execution queue; select bounded
+milestones in existing issues rather than creating a second pilot backlog.
+Hosting remains undecided: choose/review actual runtime before live bindings; this
+path does not select Cloudflare, local authority or a deployment automatically.
 
 ## P0 · Adopt and reconcile
 
@@ -45,19 +75,19 @@ Dependencies: R10. Trace: OJ-I1, OJ-I2.
 
 Deliver: personal-anchor eligibility handling, Workspace creation with single human owner and proposed default resources, explicit intended-recipient invitation acceptance and per-workspace membership. Keep workspace SSO disabled and preserve existing Personal identity during assessment.
 
-Acceptance: Alex/Sam/Jo can create/join the specified two-Workspace fixture; existing User adds a membership rather than duplicate login; wrong recipient, expired/canceled/replayed invitation and known managed-only identity cannot acquire wider access; single owner, explicit permission sets/internal groups, and proposed role limits enforced; callback/context interruption tested.
+Pilot acceptance: Shane’s existing identity and selected Workspaces retain explicit ownership/access without duplicate login; disabled multi-user features remain unavailable. Full slice acceptance: Alex/Sam/Jo can create/join the specified two-Workspace fixture; existing User adds a membership rather than duplicate login; wrong recipient, expired/canceled/replayed invitation and known managed-only identity cannot acquire wider access; single owner, explicit permission sets/internal groups, and proposed role limits enforced; callback/context interruption tested.
 
 ### R12 · Enforce resource grants and Workspace lifecycle
-Dependencies: R11. Trace: OJ-I3–I5, OJ-C1, OJ-A2, OJ-X4.
+Dependencies: minimum R11 identity/membership foundations for enabled pilot paths; complete broader invitations/lifecycle later. Trace: OJ-I3–I5, OJ-C1, OJ-A2, OJ-X4.
 
 Deliver: named resource operations, explicit connection ownership/controller metadata, guest visibility, suspension/departure, successor transfer and lifecycle cleanup coordination.
 
-Acceptance: Admin cannot inspect restricted employee Mail; guest has only named resources; Workspace B learns nothing from employee's guest role in A; departure first denies new A actions and preserves A work plus Personal/B; sole owner cannot depart before recipient accepts transfer; transfer preserves resource homes/grants; pending provider cleanup is visible. Test API and repository paths, not just hidden controls.
+Pilot acceptance: foreign-resource access and unauthorized read/send/grant operations fail, with current sponsoring-right revocation on enabled paths. Full slice acceptance: Admin cannot inspect restricted employee Mail; guest has only named resources; Workspace B learns nothing from employee's guest role in A; departure first denies new A actions and preserves A work plus Personal/B; sole owner cannot depart before recipient accepts transfer; transfer preserves resource homes/grants; pending provider cleanup is visible. Test API and repository paths, not just hidden controls.
 
 ## P2 · Unify the product
 
 ### R20 · Build the context-aware app shell
-Dependencies: R11/R12. Trace: OJ-X1, OJ-I3, OJ-C2.
+Dependencies: minimum R11/R12 ownership/access foundations for enabled pilot paths; full multi-user breadth is not required for the early pilot. Trace: OJ-X1, OJ-I3, OJ-C2.
 
 Deliver: authorized labeled cross-Workspace Home, Workspace Today/Mail/Tasks/Calendar/Agents/settings and account-level authorized Connections, durable selected context, deep links and first-run empty states. Keep examples visibly separate and retain old Groups access.
 
@@ -71,7 +101,7 @@ Deliver: consistent useful shared + Personal/workspace task fields; TaskSource p
 Acceptance: create/edit/assign/complete/reopen/delete and list filters work in UI/API/CLI; repeating source creation opens existing task or explicitly creates another; shared task does not expose source; schedule/reschedule/unschedule/delete leave no orphan link; concurrent edit and DST/invalid interval reject or recover correctly. Completion neither sends Mail nor deletes calendar history. Export omits provider credentials, hidden source metadata and unauthorized drafts; Workspace Admin status cannot export restricted Mail.
 
 ### R22 · Extend scoped agent/API/CLI contracts
-Dependencies: R12/R21. Trace: OJ-A1–A4, OJ-I3.
+Dependencies: relevant R12 access checks and R21 owned operations; pilot scope first. Trace: OJ-A1–A4, OJ-I3.
 
 Deliver: connected external agent identity with independent per-Workspace operation-granular grants, reviewed mailbox sets, expiry/revoke UI, context selection/structured CLI output, additive OpenAPI endpoints/adapters.
 
@@ -80,16 +110,16 @@ Acceptance: one allowed and one denied operation per resource family; write-only
 ## P3 · Connect real accounts
 
 ### R30 · Implement durable integration execution
-Dependencies: R10/R12/R22. Trace: OJ-C3, OJ-M3, OJ-A3, OJ-X4.
+Dependencies: relevant R10/R12/R22 ownership/permission foundations for enabled pilot operations. Trace: OJ-C3, OJ-M3, OJ-A3, OJ-X4.
 
 Deliver: Operation/outbox/job/lease repositories, conditional updates/idempotency fences, scheduler entry point, connection/binding revision checks, observable failures and durable cleanup. Implement against synthetic providers first.
 
 Acceptance: restart after enqueue resumes; two runners cannot double-dispatch the same leased intent; crash at each dispatch/receipt boundary produces confirmed/rejected/unknown honestly; revocation before dispatch prevents provider call; same key/different payload conflicts; expired receipt never makes a send replay fresh. No provider calls in transaction callbacks.
 
 ### R31 · Bind one authorized live connection
-Dependencies: R30; approved hosted/data defaults and specific resource/credential authorization. Trace: OJ-C1, OJ-C2, OJ-I1.
+Dependencies: R30; separately reviewed selected runtime/data defaults and specific resource/credential authorization. Trace: OJ-C1, OJ-C2, OJ-I1.
 
-Deliver: secure credential repository/broker, central authorized connection management, explicit resource-home bindings, provider consent callback or supported standards authentication, upstream identity verification, refresh serialization, reconnect and durable revoke cleanup for the selected provider. Finish crypto/key-rotation and runtime binding design before touching real tokens.
+Deliver: incrementally onboard one Shane-approved account/resource with his participation; implement only the separately reviewed credential/runtime design, central authorized connection management, explicit resource-home bindings, provider consent callback or supported standards authentication, upstream identity verification, refresh serialization, reconnect and durable revoke cleanup for the selected provider. Finish the chosen credential/runtime design before real tokens; existing encrypted-repository/key-rotation proposal is not accepted by pilot approval.
 
 Acceptance: cancel/replay/wrong-state/wrong-subject paths fail closed; original context remains bound during login; tokens stay server-side/redacted; expired refresh or removed scope becomes reconnect-required; credential rotation/revocation and cleanup retry proven in isolated setup. Prove resource-detach versus whole-provider revocation impact/authority across any shared upstream binding; central navigation must not grant global credentials/content. Production remains disabled until authorized bindings and verification exist.
 
@@ -103,9 +133,9 @@ Acceptance: actual test account identity matches; second page and duplicate/coll
 ### R33 · Complete the first connected human journey
 Dependencies: R20/R21/R32. Trace: OJ-X1, OJ-T2, OJ-T3, OJ-M2, OJ-C2.
 
-Deliver: unified connected Mail instead of disconnected provider preview, live source-linked Task, OpenJob planning block and durable local draft through the coherent shell.
+Deliver: Shane’s read-connected useful daily slice and early R53 iOS handoff; unified connected Mail instead of disconnected provider preview, live source-linked Task, OpenJob planning block and durable local draft through the coherent shell.
 
-Acceptance: sign in → connect → read → linked Task → plan locally → prepare reply works; source unavailable after disconnect while Task remains; repeated navigation preserves draft and From identity; an empty real account stays empty rather than loading examples. This milestone is read-connected, not completed provider Calendar/send.
+Acceptance: sign in → connect → read → linked Task → plan locally → prepare reply works; source unavailable after disconnect while Task remains; repeated navigation preserves draft and From identity; an empty real account stays empty rather than loading examples. Record what Shane actually used and the next specific account/resource to attach. This milestone is read-connected, not completed provider Calendar/send; those extend the same pilot rather than waiting for broad launch.
 
 ## P4 · Close the real work loop
 
@@ -160,12 +190,12 @@ Deliver: per-context offline policy, opt-in bounded Mail cache on supported secu
 
 Acceptance: encrypted cache/key handling verified on each supported client; lock/logout/disconnect disables access; departing Workspace cannot upload queued work; concurrent version conflict retains authored changes safely; context switch never exposes cached other-workspace Mail; browser limitation is explicit where platform protection is inadequate. State claims list what was actually exercised.
 
-### R53 · Verify the native clients end to end
-Dependencies: stable R20–R43 contracts; R51/R52 for their advertised features. Trace: OJ-X3, OJ-X5, OJ-X7.
+### R53 · Early owner iOS pilot, then complete native verification
+Dependencies: early iOS milestone follows stable enabled R20/R21/R22 contracts and relevant R31–R33 read-connected capabilities; full parity follows relevant R40–R43 and R51/R52 only for features actually advertised. Trace: OJ-X3, OJ-X5, OJ-X7.
 
-Deliver: iOS and Android native feature parity for Workspace/context, connected Mail/Tasks/Calendar/Agents and authorized offline scope. Apply existing accessibility, privacy, encryption, notification, OTA-signing and device-release ADRs.
+Deliver: early usable iOS TestFlight candidate for Shane, incrementally reflecting verified owned/read-connected/live capabilities, with a per-build supported/limited list. After this pilot milestone, complete iOS and Android native feature parity for Workspace/context, connected Mail/Tasks/Calendar/Agents and authorized offline scope. Apply existing accessibility, privacy, encryption, notification, OTA-signing and device-release ADRs.
 
-Acceptance: simulator/emulator plus required physical-device evidence for exact artifacts; login interruption, deep link/context switch, keyboard/touch/screen reader, background/foreground, offline restart, grant revocation and update recovery; record unavailable checks as blockers. Store submission/OTA release remains separately authorized.
+Early iOS acceptance: exact candidate runs on Shane’s supported device with usable enabled flow, correct identity/Workspace and permission denial/revoke behavior, interrupted login/reconnect, preserved personal offline Task/Calendar and clear online-only shared/Mail states. Distribution, credentials/provider effects and production release need applicable separate approvals. Preserve required native/privacy/device/artifact gates; if an existing gate blocks a narrow TestFlight pilot, report that exact gate for review rather than bypass it or silently defer iOS. Full slice acceptance: simulator/emulator plus required physical-device evidence for exact artifacts; login interruption, deep link/context switch, keyboard/touch/screen reader, background/foreground, offline restart, grant revocation and update recovery; record unavailable checks as blockers. Store submission/OTA release remains separately authorized.
 
 ### R54 · Deliver the full npm-installed desktop experience
 Dependencies: stable R20–R43 contracts; R52 for claimed offline features. Trace: OJ-X6, OJ-X7.
@@ -177,7 +207,7 @@ Acceptance: fresh install/login/connected workflow/restart on each claimed platf
 ### R55 · Pass whole-product release and recovery evidence
 Dependencies: accepted applicable R50–R54 outcomes. Trace: OJ-X3, OJ-X4, all core requirements.
 
-Deliver: full requirement/capability/platform matrix, privacy/data inventory, isolated backup/restore proof, cleanup/reporting, user-facing support limits and observed workflow validation with intended pilot users. Set operational objectives only after measured behavior, not invented availability promises.
+Deliver: full requirement/capability/platform matrix, privacy/data inventory, isolated backup/restore proof, cleanup/reporting, user-facing support limits and Shane’s observed pilot learnings plus later broader-user validation; no invented general demand. Set operational objectives only after measured behavior, not invented availability promises.
 
 Acceptance: critical negative permission tests and source-link retention checks pass on release head; authorized real provider workflow complete; restore cannot revive revoked grants; no unresolved ambiguous send hidden as success; exact published/deployed artifacts verified; production rollout permission separate. Market value claims remain hypotheses until actual user evidence is recorded.
 

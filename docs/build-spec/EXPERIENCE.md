@@ -20,6 +20,24 @@ switch clears transient results, never retargets drafts/consent/jobs. Inaccessib
 links say “Unavailable in this context” without title/address leakage. Home grants
 no unified Mail search, agent aggregation or additional resource access.
 
+## Owner-first onboarding and early iOS
+
+C09 starts with Shane using the actual product. Offer an immediately useful owned
+Task/Calendar flow; as each connector is ready, guide him to create/authorize one
+specific account or mailbox and attach its resources to reviewed Workspace homes.
+Show real identity, capabilities, freshness and disconnected/empty states. Add the
+next account from observed use rather than a universal-provider onboarding wizard.
+Do not wait for broad employee/guest administration to make the owner pilot useful;
+keep unavailable features explicit while enforcing the same access boundaries.
+
+An early R53 iOS TestFlight candidate follows enabled contracts and joins the pilot
+before full provider/platform readiness. Each build names actual usable flows and
+limits. Actual distribution requires its specific approval and applicable native
+artifact/device/privacy gates; a design request does not publish a build. Shared
+work is online-first; preserve personal offline Task/Calendar, fetch initial Mail
+bodies on demand and label unavailable offline content without losing authored text.
+Hosting remains undecided and is not selected by onboarding or online-first behavior.
+
 ## Screen contracts
 
 | Screen / IDs | Primary content and actions | States and guardrails |
@@ -111,4 +129,4 @@ Test repeated clicks, Back/Forward, deep links, reload, Cancel/Close/reopen, con
 
 R51 adds an attendee section to supported provider-event editing with explicit organizer, recipients, availability and “send invitations/update/cancellation” preview. Saving an OpenJob block never sends invitations. RSVP shows the provider invitation and whether the response notifies the organizer. Series editing starts with “this occurrence” or “entire series,” previews the effect and preserves exceptions; “this and following” is offered only when faithfully supported. New local recurring blocks can use the same recurrence UI without external notification. A Task can link to one specific occurrence; recurrence does not create recurring Tasks automatically.
 
-R52 adds per-context offline settings with mailbox/calendar selection, cached range/size, storage protection, last sync and clear-cache control. Workspace policy limits choices. A denied queued shared-Workspace edit opens an explicit recovery state tied to its original context; it is never relabeled Personal. R53 adapts all these flows to native controls. R54 adds installed-app account/profile/version/channel and update-available notice; “update” gives the explicit npm action and restart guidance rather than silently replacing the running app.
+R52 adds per-context offline settings with mailbox/calendar selection, cached range/size, storage protection, last sync and clear-cache control. Workspace policy limits choices. A denied queued shared-Workspace edit opens an explicit recovery state tied to its original context; it is never relabeled Personal. R53 starts early iOS adaptation with currently verified pilot flows, then completes native parity as later capabilities arrive; it is not deferred entirely until R51/R52. R54 adds installed-app account/profile/version/channel and update-available notice; “update” gives the explicit npm action and restart guidance rather than silently replacing the running app.

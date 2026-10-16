@@ -1,10 +1,10 @@
 # Runtime, deployment and data policy
 
-**Runtime/storage/offline choices remain Proposed.** The [confirmed core](../ARCHITECTURE_ALIGNMENT.md) selects Workspace/account/agent boundaries, not hosting or credential storage. This selects a maintainable first live profile and concrete full-client target. It does not provision infrastructure, upload credentials, authorize real accounts or publish anything.
+**Hosting is undecided; runtime/storage mechanics remain Proposed.** The [confirmed decisions](../ARCHITECTURE_ALIGNMENT.md) include C09 owner-first/early-iOS priority and C10 online-first shared work, retained personal offline Task/Calendar, initial on-demand Mail bodies and deferred full offline Mail. They do not select hosting or credential storage. This describes a candidate runtime and later client target, not an accepted profile. It does not provision infrastructure, upload credentials, authorize real accounts or publish anything.
 
-## Recommendation: hosted authority, installable clients
+## Unselected option: hosted authority, installable clients
 
-Use the existing Cloudflare application/API plus Firebase identity and Firestore repositories as the first live authoritative service. Keep React web, Expo mobile and the existing npm/Node CLI. Add a production-mode npm-installed app client to that service; retain the current synthetic local app as an explicitly separate demo mode. Local Mac CI/package/publish is a delivery preference, independent of where the authoritative app runs.
+The existing hosted-first recommendation would use Cloudflare application/API plus Firebase identity and Firestore repositories as authoritative service; Shane asked for hosting options and has not selected this proposal. Keep React web, Expo mobile and the existing npm/Node CLI. Add a production-mode npm-installed app client to that service; retain the current synthetic local app as an explicitly separate demo mode. Local Mac CI/package/publish is a delivery preference, independent of where the authoritative app runs.
 
 This choice serves the product beyond preserving code: a shared Workspace needs access changes and ownership to apply consistently while its members are on different devices; agents need an endpoint that remains available when one member's laptop sleeps; provider callbacks, token refresh and sync need one accountable execution owner; and scheduling conflicts need one authoritative version. Hosting centralizes those boundaries. It does not require every feature to be online or justify indefinite storage of Mail content. An offline client can keep bounded authorized projections and pending edits without becoming a second Workspace authority.
 
@@ -37,7 +37,7 @@ Firestore transactions may retry and must keep reads before writes; provider eff
 
 ## Proposed pilot data policy
 
-These are concrete proposed defaults, not legal compliance claims or currently configured retention. Accept them with the hosting decision; implement and test cleanup before importing real data.
+C10 confirms initial on-demand body retrieval and online/offline staging. Remaining values below are proposed technical defaults, not adopted retention, legal compliance claims or current configuration. Accept them with the hosting decision; implement and test cleanup before importing real data.
 
 | Data | Proposed storage/retention | Disconnect/deletion handling |
 |---|---|---|
@@ -68,7 +68,7 @@ The full npm app serves the real UI using an authenticated local client bridge, 
 
 Installation is managed through npm. `@latest` follows reviewed releases; `@dev` follows authorized builds from main with unique source/version identity. On startup/check, automatically detect available updates and notify; installation is separate and never silently replaces the running app. Show current version/channel/source and available version, preserve local state, offer exact npm update command, and test interruption/rollback. The user's update request does not imply automatic security/credential changes or production deploy permission.
 
-macOS/Windows/Linux first desktop distribution can use the npm-installed browser app where its local bridge/keyring/runtime works; label it an installed browser application rather than a native binary. An Electron shell is optional only when measured OS integration need justifies it. iOS/Android use existing Expo clients with real network/offline acceptance. Every named platform gets explicit supported/limited/unverified entries and actual runtime evidence, not an inference from shared TypeScript compiling.
+macOS/Windows/Linux first desktop distribution can use the npm-installed browser app where its local bridge/keyring/runtime works; label it an installed browser application rather than a native binary. An Electron shell is optional only when measured OS integration need justifies it. C09 puts an early usable iOS TestFlight candidate alongside the owner-first live loop, using existing Expo surfaces as appropriate. Do not wait for all providers/Android/desktop parity. Actual TestFlight distribution and applicable native/privacy/device/artifact gates remain separate; full iOS/Android parity and later offline features follow with actual evidence. Every named platform gets explicit supported/limited/unverified entries and actual runtime evidence, not an inference from shared TypeScript compiling.
 
 ## Alternatives and trigger conditions
 

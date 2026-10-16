@@ -9,6 +9,11 @@
 The [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md) governs resource homes
 and grants; the technical execution/data defaults here remain Proposed.
 
+C10 confirms online-first shared work, retained personal offline Task/Calendar,
+initial on-demand Mail bodies and deferred full offline Mail. Exact metadata/cache
+caps, retention, encrypted storage and job mechanics here remain Proposed; hosting
+is undecided. C09’s owner pilot does not authorize real provider effects.
+
 ## Context
 
 OpenJob owns Tasks, grants and its calendar blocks. Existing Mail and calendars

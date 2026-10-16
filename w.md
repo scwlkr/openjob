@@ -17,24 +17,30 @@ by current sponsoring member rights/policy; no hosted persistent Workspace agent
 Labeled authorized cross-Workspace Home opens actions inside their Workspace.
 Accounts initially host no Mail. These specific decisions supersede prior proposals.
 
-Blueprint/Companies/ADR0020, all10 build-spec docs and mission pointer reconciled.
-ADR0020 records confirmed core plus Proposed details; ADR0019/0021 remain Proposed.
-Role presets/default resources/identity eligibility/runtime/storage/retention/offline
-and other scope proposals are NOT adopted. Feature development remains paused.
-Existing OJ33/D20/R22 IDs retained; one P0–P5 dependency map, Linear sole queue.
-Library ZIP/deck/PDF retain historical provenance; memo marked superseded where
-conflicting. Current editable design is repository Markdown. Prior source checksum
-and verification details remain docs/build-spec/SOURCE.md and Linear310.
+Latest owner clarification (16Oct4:36p.m.Central, relayed21:36UTC by Sean) recorded
+verbatim in ARCHITECTURE_ALIGNMENT C09–C10. Build for Shane’s daily use first;
+progressively have him set up/authorize specific real accounts/mailboxes when
+connectors are ready; include an early usable iOS TestFlight candidate. Broad
+multi-user/provider/platform readiness is not an initial pilot prerequisite.
+Shared work starts online; keep personal offline Task/Calendar; Mail bodies fetched
+on demand initially and full offline Mail deferred. Hosting remains UNDECIDED:
+Shane asked for options, researched separately by Sean. No whole-blueprint adoption.
 
-Independent review caught/fixed account-deactivation ordering: proposed deletion-pending
-permits only owner transfer/approved closure before deactivation, avoiding ownerless
-Workspaces. Verification: revised requirement/slice/confirmation trace, local links/fences,
-diff/secret checks and independent review recorded with pushed exact head in
-PR/Linear. Documentation-only; no app build/runtime/device campaign or heavy Mac
-process/browser use. Local CI/manual-only Actions and explicit npm installation
-remain. No automatic publication. Next: owner review of remaining detailed proposals
-and explicit development authorization; C01–C08 need no repeat questionnaire.
-Actual provider/credential/effect and release gates remain separate.
+Existing OJ33/D20/R22 IDs retained. R53 has early pilot milestone alongside owned/
+read-connected/live work and later full parity; partial milestone is not full Done.
+Minimum pilot foundations keep ownership/access/send-safety; broad invite/admin/
+lifecycle matrix later unless needed by an enabled path. Advanced Calendar/SSO
+staged later. Actual TestFlight distribution/native gates, provider grants/credentials,
+external sending/effects and production releases retain specific approvals.
+No features start from this documentation update. Linear remains sole queue.
+
+Blueprint/ADRs/build-spec/mission/handoff/source reconciled. Confirmed core/pilot
+staging distinguished from Proposed role presets/default resources/identity,
+hosting/storage/retention/crypto/jobs and later offline mechanics. Approved npm
+artifact and WLK302 preserved. Checks/review/exact pushed head in PR87/Linear310;
+no heavy builds/browser/device/runtime campaign for docs. LocalCI/manualActions,
+explicit npm installation unchanged. Next: hosting options and remaining detailed
+review/development authority; do not re-ask C01–C10 as unsettled questions.
 
 ## Separate publication blocker
 

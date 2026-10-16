@@ -9,6 +9,10 @@
 The [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md) governs Workspace and
 connected-agent boundaries; this runtime/modularity ADR otherwise remains Proposed.
 
+C09 prioritizes Shane’s daily-use pilot and early usable iOS; C10 confirms initial
+online/offline staging. Hosting remains undecided after his request for options;
+this ADR’s hosted-first recommendation is not adopted by those decisions.
+
 ## Context
 
 OpenJob has a working TypeScript/React/Expo product with hosted Cloudflare API

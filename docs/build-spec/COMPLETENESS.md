@@ -1,6 +1,6 @@
 # Specification completeness and readiness audit
 
-**Assessment: C01–C08 core confirmed; detailed proposals remain under review. Implementation is still paused pending applicable review and development authorization. Not production-ready and not a promise of question-free engineering.**
+**Assessment: C01–C10 core confirmed; detailed proposals remain under review. Implementation is still paused pending applicable review and development authorization. Not production-ready and not a promise of question-free engineering.**
 
 ## What is specified well enough to implement
 
@@ -12,7 +12,7 @@
 | Contracts | Current code seam map, additive context endpoints, legacy compatibility, revisions/idempotency/error/state rules, CLI and adapter strategy | CONTRACTS |
 | Runtime | Hosted authority on retained stack, normalized Firestore, durable runner, encrypted credential repository and full npm client profile | RUNTIME |
 | Data handling | Concrete proposed minimal pilot cache/retention, source cleanup, authored draft distinction, later controlled offline scope | RUNTIME |
-| Delivery | 22 bounded slices, dependencies, proof, traceability and named native/npm/provider outcomes | ROADMAP |
+| Delivery | 22 bounded slices with owner-first minimum milestones, early R53 iOS and later broader acceptance; traceability and named platform/provider evidence | ROADMAP |
 | Continuity | Authority order, resume prompt, current code/Linear checks, compact cycle record and escalation boundary | README, HANDOFF |
 
 After remaining detailed choices are reviewed and development is authorized, the specification supplies the product/scope/architecture defaults needed to start R10–R22 in isolated development without another discovery interview. It also defines the live/full-product targets and their safety/acceptance gates. Future technical evidence can still require a deliberate revision.
@@ -37,7 +37,7 @@ No endpoint or field-level schema above is claimed to exist already. The live pr
 
 ## Remaining owner choices versus execution gates
 
-Do not reopen C01–C08 without new evidence. Remaining review: (1) detailed policy, presets and full-product target, (2) hosted-first + full installed clients, (3) privacy and online-first Mail followed by controlled offline capability. Technical cache/cleanup defaults are supplied, not a storage-knob questionnaire. Suggested defaults are complete, not a list of unanswered alternatives.
+Do not reopen C01–C10 without new evidence. Remaining review: detailed presets/full-product policy, hosting options (expressly undecided), exact storage/retention/security and later offline/client mechanics. C09 accepts owner-first incremental live onboarding and early iOS; C10 accepts online-first shared work, personal offline Task/Calendar preservation and deferred full offline Mail with on-demand bodies initially. Do not re-ask those staging decisions or treat them as full blueprint acceptance. Technical cache/cleanup defaults are supplied, not a storage-knob questionnaire. Suggested defaults are complete, not a list of unanswered alternatives.
 
 Execution gates later: connected authorized environment, provider/test accounts, OAuth or standards credentials, permitted test recipients/Calendar effects, key setup, real hosting/data-location confirmation, production migration, publication/deployment/native release permissions. Lack of these does not prevent accepting the design or completing isolated contracts/UI/fixtures. It does prevent claiming live/production completion.
 
@@ -51,7 +51,7 @@ Execution gates later: connected authorized environment, provider/test accounts,
 
 ## Package review checks
 
-Before delivery, verify local document links, requirement/slice coverage, no acceptance beyond the actual C01–C08 confirmations, source refs, consistent pilot/full scope, runtime/client distinction and permission gates. These checks validate the document package only. They do not substitute for application tests, owner approval or a successful release.
+Before delivery, verify local document links, requirement/slice coverage, no acceptance beyond the actual C01–C10 confirmations, source refs, consistent pilot/full scope, runtime/client distinction and permission gates. These checks validate the document package only. They do not substitute for application tests, owner approval or a successful release.
 
 ## Source register
 
@@ -72,3 +72,8 @@ Company hierarchy and hosted-Workspace-agent proposals. Check single-owner accep
 transfer, explicit resource homes/grants, account-level authorized Connections,
 independent external-agent grants and labeled Home across DOMAIN/EXPERIENCE/API and
 R10–R22/R31. Preserve stable IDs; their prior counts alone do not prove alignment.
+
+C09 does not waive release gates or select hosting. R53 has an early owner-pilot
+milestone and later full parity; no full-slice Done claim follows from partial
+iOS progress. Broad multi-user acceptance is later; relevant isolation and live
+safety proof still precede exposing each pilot capability.

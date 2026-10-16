@@ -1,10 +1,10 @@
 # Product requirements
 
-**Detailed requirements Proposed under the [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md).** Confirmed Workspace/owner/grant/Connections/agent/Home/no-hosted-Mail decisions govern conflicting earlier wording; unrelated scope, fields and technical defaults still await review. IDs are stable traceability anchors, not issue IDs. “Core” is the complete in-scope product outcome, delivered through several slices; it is not a claim that the prototype already implements it. The first live pilot is deliberately smaller than that full outcome. Later required capabilities are specified below, not left as an indefinite wish list.
+**Detailed requirements Proposed under the [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md).** Confirmed Workspace/owner/grant/Connections/agent/Home/no-hosted-Mail decisions govern conflicting earlier wording; unrelated scope, fields and technical defaults still await review. C09–C10 also confirm owner-first/early-iOS priority and online/offline staging; hosting remains undecided. IDs are stable traceability anchors, not issue IDs. “Core” is the complete in-scope product outcome, delivered through several slices; it is not a claim that the prototype already implements it. The first live pilot is deliberately smaller than that full outcome. Later required capabilities are specified below, not left as an indefinite wish list.
 
 ## Product promise and intended user
 
-OpenJob gives a person and their separately authorized agents a coherent place to handle Mail, Calendar and Tasks across existing provider accounts and explicitly owned personal/company contexts. A useful human app works without an AI subscription. Initial pilot fit is an independent professional or small organization able to authorize its own accounts, including people working in several companies. That segment and value proposition are hypotheses to test, not demonstrated demand.
+OpenJob gives a person and their separately authorized agents a coherent place to handle Mail, Calendar and Tasks across existing provider accounts and explicitly owned personal/company contexts. A useful human app works without an AI subscription. C09 makes Shane’s own daily use the first pilot: incrementally attach actual accounts/mailboxes with him as each connector is ready, and provide an early usable iOS TestFlight path. Broader independent-professional/small-organization fit remains a hypothesis, not a prerequisite or demonstrated demand.
 
 A company is a Workspace, with one accountable human owner, internal groups/permission sets, explicit resource grants and membership/departure. There is no separate Company → Workspace hierarchy. Google Workspace/Microsoft 365 are analogies for company-level organization, not an instruction to recreate their office suites, identity administration or storage products.
 
@@ -37,8 +37,8 @@ A company is a Workspace, with one accountable human owner, internal groups/perm
 | OJ-A3 | Effective access/activity and independent per-Workspace expiry/revocation; queued dispatch rechecks current sponsoring rights | Revoke A blocks A effects before provider call while unrelated B grant remains valid; membership loss invalidates derived grants |
 | OJ-A4 | App, existing openjob CLI and versioned API share operations/auth; useful JSON/JSONL, IDs, errors and pagination | Equivalent authorized request has equivalent result/receipt on each surface; CLI cannot bypass UI policy |
 | OJ-X1 | Labeled authorized cross-Workspace Home, Workspace-scoped Today/Mail/Tasks/Calendar/Agents and settings, central authorized Connections | First-run useful task/block needs no provider; Home item enters correct Workspace; no blanket unified Mail/search or agent access |
-| OJ-X2 | Explicit offline, pending, conflict, reconnect and uncertain-operation states; preserve existing personal offline capability | Offline edits reconcile or stay visible for review; nothing sends or connects providers offline |
-| OJ-X3 | Accessible responsive web; semantic parity for native clients; verified platform-specific release gates | Keyboard/screen reader/touch flows and interrupted navigation tested; unsupported platforms honestly labeled |
+| OJ-X2 | Online-first shared work, explicit pending/conflict/reconnect/uncertain states; retain personal offline Task/Calendar; initial Mail bodies on demand and full offline Mail deferred | Offline edits reconcile or stay visible for review; nothing sends or connects providers offline |
+| OJ-X3 | Accessible responsive web and early usable iOS pilot alongside enabled features; complete native parity later, with applicable platform release gates | Early iOS TestFlight candidate supports Shane’s verified flow; actual distribution separately approved; keyboard/screen reader/touch/interruption and supported limits recorded |
 | OJ-X4 | Data lifecycle, redacted activity, export, deletion and cleanup state follow ownership and policy | Disconnect hides source content, task survives with unavailable reference, cleanup failure remains visible |
 
 ### Required full-product extension after the first live loop
@@ -81,10 +81,23 @@ The core product targets all three families, but capabilities become available o
 
 Initial hosted Mail/domain routing (hosted inboxes are only a possible future product), provisioning provider employee accounts, documents/spreadsheets/chat/storage suites, generic agent execution/planning, AI model subscription, billing, marketplace, custom enterprise policy language, SAML/SCIM/enterprise directory, organization hierarchy, blanket cross-Workspace Mail/content/search or agent aggregation, external task-list two-way sync, recurring-task rules, task dependency graphs, rich-text email authoring, mass mail, delayed-send automation, permanent provider purge, legal-hold/eDiscovery, multi-region architecture and production local/self-hosted synchronization.
 
-First-live-pilot limits, separately: no invitation sending/series authoring, no persistent provider-body cache and no shared-Workspace offline write expansion until their full-product slices pass. Calendar invitations/series and shared-Workspace/offline/native/npm experiences are explicitly in the later required scope above.
+First-live-pilot limits, separately: no invitation sending/series authoring, no persistent provider-body cache and no shared-Workspace offline write expansion until their full-product slices pass. Advanced Calendar and full offline/platform breadth remain later outcomes. Early iOS is part of the owner pilot, not deferred to full native parity. Company SSO stages later; no broad multi-user readiness requirement blocks the narrow owner pilot.
 
 These can become explicit future decisions after evidence. “Not first core” does not authorize removing an already useful supported behavior; preserve it or document a deliberate replacement.
 
-## End-to-end acceptance story
+## Owner-first pilot and eventual full acceptance
+
+First, deliver a useful real Mail/Calendar/Tasks/agent-permission loop for Shane,
+progressively adding specifically authorized accounts/resources and an early iOS
+TestFlight candidate. Record actual daily-use observations and limits. Basic
+read-connected work may precede approved provider writes; do not call those writes
+complete or send without approval. Broader three-person/provider/platform acceptance
+below remains a later full-slice target, not an up-front launch requirement.
+
+Hosting is still undecided. Provider grants/credentials, external sends/Calendar
+effects, TestFlight distribution and production releases need specific approvals.
+Feature work remains paused in this documentation reconciliation.
+
+## Full acceptance story
 
 Proposed acceptance fixture: Alex has Personal, contribution rights in Workspace A and administration rights in B; Sam is the sole owner of A with no B membership; Jo is the sole owner of B and has named collaborator grants in A. Employee/Admin/Guest labels are proposed presets, not separately confirmed policy. Alex connects approved accounts in their declared contexts. Alex reads a message, creates a private source-linked task, schedules it in an explicitly chosen calendar, completes it and sends an authorized reply from the right identity. A narrowly granted agent can do its assigned subset through the existing CLI/API; denied source reads/send/admin actions make no external call. Sam’s owner status cannot silently read Alex’s restricted mailbox; Jo’s A grants give B nothing. Revoke the agent and depart Alex from A while work is queued: new A actions stop, A’s Workspace resources stay, Personal/B stay usable. Repeat the workflow across supported provider families and two accounts of one provider; show offline/conflict/unknown-send recovery honestly.

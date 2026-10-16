@@ -1,7 +1,7 @@
 # OpenJob platform blueprint
 
 **Status: owner-confirmed core with Proposed technical/detail choices — 16 October 2026.** This is a target
-architecture, not implementation authority. [C01–C08](ARCHITECTURE_ALIGNMENT.md)
+architecture, not implementation authority. [C01–C10](ARCHITECTURE_ALIGNMENT.md)
 record actual owner confirmations; unrelated proposals await review. The
 [master mission](MASTER_MISSION.md) remains the product mandate; Linear remains
 the execution queue. New feature implementation remains paused pending owner review and authorization. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
@@ -32,7 +32,7 @@ Platform scope: Mail, Calendar, Tasks, Connections, identities, permissions,
 agent activity and the integration mechanisms that join them. Web and native
 clients share semantics. Required full scope includes supported offline Mail/shared-Workspace
 work, Calendar invitations/series and real authenticated npm-installed desktop clients;
-the first live pilot is smaller (see OJ-K5–K6/OJ-X5–X7). Existing Group work
+the owner-first pilot is smaller, with early usable iOS (C09–C10). Existing Group work
 remains useful. A company is a Workspace, not a container of Workspaces. This ownership/membership
 model is confirmed, though the prototype does not implement it.
 
@@ -233,7 +233,7 @@ The installed Node app currently packages a synthetic local API, not a privately
 hosted production account server. Hosted, local demo and eventual self-hosted
 profiles must have explicit identity, storage, secret and background-job bindings.
 Recommended first live-provider profile: the existing hosted service, because
-identity and remote API clients already exist. This is proposed, not accepted.
+identity and remote API clients already exist. Hosting remains undecided: Shane asked for options; this is unselected.
 A secure local-service-first choice would instead need explicit identity, local
 secret storage, background lifecycle and remote-agent access decisions before
 implementation. Local CI/publishing preference does not determine where the app
@@ -278,7 +278,7 @@ provide the proposed workspace platform or real connected-account experience.
 
 [ROADMAP](build-spec/ROADMAP.md) is the single detailed dependency map: P0 review,
 P1 ownership, P2 coherent app/Task/Calendar/agents, P3 real reads, P4 live work loop,
-P5 required provider/Calendar/offline/native/npm completion. Its 22 stable slices
+P5 broader provider/Calendar/offline/native/npm completion, with early R53 iOS alongside the owner pilot. Its 22 stable slices
 are design references, not a second execution queue. Select/reconcile a Linear
 item only after review and development authorization.
 
@@ -288,9 +288,9 @@ owner of B and a named collaborator in A. Role labels/presets remain Proposed.
 Each retains Personal work. Show invitations, role/resource visibility and context
 switching; Alex leaving A preserves Personal and B.
 
-C01–C08 are confirmed. Remaining review in [DECISIONS](build-spec/DECISIONS.md)
-covers detailed policy/full scope, hosted-first runtime with installed clients,
-and privacy/online-first pilot followed by controlled offline capability. Proposed
+C01–C10 are confirmed. Build for Shane first with progressive real onboarding and
+early iOS; shared work online, personal offline Tasks/Calendar retained, full offline
+Mail deferred. Hosting and technical detail remain under review in DECISIONS. Proposed
 technical defaults cover repositories, encrypted credentials, bounded runner,
 retention and cleanup. Specific accounts/keys/provider effects and releases are
 later execution gates. Provider order follows approved access and evidence; it
