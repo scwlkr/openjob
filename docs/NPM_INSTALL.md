@@ -41,7 +41,12 @@ Do not assume today's public `openjob` package belongs to this repository.
 Do not use these registry commands until ownership and artifact identity are
 confirmed. The local tarball above is the verified distribution path.
 
-The artifact records its selected channel. Automatic checks use that channel
+The artifact records its selected channel. Registry checks stay disabled while
+package ownership is unverified (`registryVerified: false`); explicit checks
+return `unavailable` with `registry_not_verified`, and no registry install is
+recommended. Separately approved publication must enable this baked metadata
+only after verifying the package identity. For verified distributions, automatic
+checks use the recorded channel
 at app startup and every six hours while running; interactive CLI invocations
 also check. Notices go to stderr and print a manual upgrade command. JSON/stdout
 results remain unchanged. `openjob updates` explicitly checks and prints JSON

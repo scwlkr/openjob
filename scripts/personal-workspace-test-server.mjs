@@ -36,6 +36,8 @@ const providerHarness = await createMockProviderConnectionHarness({
 });
 const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken, connections: providerHarness.reader });
 const server = createServer(async (incoming, outgoing) => {
+  // Packaged mode accepts only its parent proxy; direct/rebound browser requests fail.
+  if (process.env.OPENJOB_LOCAL_API_TOKEN && incoming.headers['x-openjob-local-api'] !== process.env.OPENJOB_LOCAL_API_TOKEN) { outgoing.writeHead(403).end(); return; }
   try {
     const url = new URL(incoming.url, `http://${incoming.headers.host || '127.0.0.1:4181'}`);
     const owner = url.pathname.match(/^\/__test\/session\/(alex|sam)$/)?.[1];

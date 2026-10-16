@@ -5,6 +5,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { once } from 'node:events';
+import { request as httpRequest } from 'node:http';
 const binary = process.argv[2];
 if (!binary) throw new Error('Use smoke-npm-app.mjs <installed-openjob>');
 const reservation = createServer();
@@ -36,11 +37,15 @@ try {
   };
   const task = await request(alex, 'commands', { type: 'task.create', title: 'Clean npm install smoke' });
   await request(alex, 'commands', { type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2027-04-06T09:00:00Z', end: '2027-04-06T09:30:00Z' });
-  await request(alex, 'commands', { type: 'task.complete', taskId: task.id });
-  assert.ok((await request(alex, 'snapshot')).tasks.some(row => row.id === task.id && row.title === 'Clean npm install smoke'));
+  await request(alex, 'commands', { type: 'task.complete', taskId: task.id, completed: true });
+  assert.ok((await request(alex, 'snapshot')).tasks.some(row => row.id === task.id && row.title === 'Clean npm install smoke' && row.completed === true && !!row.scheduledSlot));
   assert.equal((await request(sam, 'snapshot')).tasks.some(row => row.id === task.id), false);
   assert.equal((await fetch(`${origin}/__test/session/alex`, { headers: { origin: 'https://untrusted.example' } })).status, 403);
-  assert.equal((await fetch(`${origin}/__test/session/alex`, { headers: { host: 'untrusted.example' } })).status, 403);
+  const invalidHostStatus = await new Promise((accept, reject) => {
+    const req = httpRequest(`${origin}/__test/session/alex`, { headers: { host: 'untrusted.example' } }, response => { response.resume(); accept(response.statusCode); });
+    req.once('error', reject); req.end();
+  });
+  assert.equal(invalidHostStatus, 403);
   assert.equal((await fetch(`${origin}/package.json`)).status, 404);
   console.log(JSON.stringify({ installedBinary: resolve(binary), staticAssets: assets.length, createScheduleComplete: true, ownerIsolation: true, hostOriginDenial: true, sourceCheckoutRequired: false }));
 } finally {

@@ -29,7 +29,7 @@ const { private: _private, ...manifest } = pkg;
 manifest.description = 'OpenJob workspace prototype and command-line client';
 manifest.version = identity.version;
 manifest.files = [...pkg.files, 'app'];
-manifest.openjobDistribution = identity;
+manifest.openjobDistribution = { ...identity, registryVerified: false };
 manifest.publishConfig = { access: 'public', tag: identity.channel };
 manifest.repository = { type: 'git', url: 'git+https://github.com/scwlkr/openjob.git' };
 await writeFile(join(output, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');

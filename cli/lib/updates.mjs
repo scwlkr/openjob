@@ -30,6 +30,7 @@ export function newerVersion(candidate, installed) {
 export async function checkForUpdates(pkg, { fetchImplementation = fetch, timeout = 1500 } = {}) {
   const channel = selectedChannel(pkg);
   const result = { installed: pkg.version, channel, available: null, status: 'unavailable' };
+  if (pkg.openjobDistribution?.registryVerified !== true) return { ...result, reason: 'registry_not_verified' };
   try {
     // Fetch only public dist-tags. Never use an account token or npm configuration.
     const response = await fetchImplementation(`https://registry.npmjs.org/-/package/${encodeURIComponent(pkg.name)}/dist-tags`, { signal: AbortSignal.timeout(timeout), redirect: 'error', headers: { accept: 'application/json' } });

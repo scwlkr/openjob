@@ -1,5 +1,6 @@
 import { createServer, request as proxyRequest } from 'node:http';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, resolve, sep } from 'node:path';
@@ -10,7 +11,8 @@ export async function runApp(args, pkg) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Use openjob app [--port 1-65535].');
   const root = fileURLToPath(new URL('../app/', import.meta.url));
   try { await readFile(resolve(root, 'web/index.html')); } catch { throw new Error('Packaged app assets are missing. From a source checkout use npm run app:pack, then install its tarball.'); }
-  const api = spawn(process.execPath, [resolve(root, 'api/server.mjs'), '--test-only', '--port', '0'], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  const apiToken = randomBytes(32).toString('hex');
+  const api = spawn(process.execPath, [resolve(root, 'api/server.mjs'), '--test-only', '--port', '0'], { env: { ...process.env, OPENJOB_LOCAL_API_TOKEN: apiToken }, stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
   let server, interval, stopping = false;
   const stop = () => {
     if (stopping) return; stopping = true;
@@ -36,7 +38,7 @@ export async function runApp(args, pkg) {
       try {
         const url = new URL(incoming.url, `http://${host}`);
         if (url.pathname.startsWith('/api/v1/') || url.pathname.startsWith('/__test/')) {
-          const proxy = proxyRequest({ hostname: '127.0.0.1', port: apiPort, path: url.pathname + url.search, method: incoming.method, headers: incoming.headers }, response => { outgoing.writeHead(response.statusCode, response.headers); response.pipe(outgoing); });
+          const proxy = proxyRequest({ hostname: '127.0.0.1', port: apiPort, path: url.pathname + url.search, method: incoming.method, headers: { ...incoming.headers, 'x-openjob-local-api': apiToken } }, response => { outgoing.writeHead(response.statusCode, response.headers); response.pipe(outgoing); });
           proxy.on('error', () => { if (!outgoing.headersSent) outgoing.writeHead(502); outgoing.end(); }); incoming.pipe(proxy); return;
         }
         if (!['GET', 'HEAD'].includes(incoming.method)) { outgoing.writeHead(405).end(); return; }

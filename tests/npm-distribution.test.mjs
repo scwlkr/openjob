@@ -27,7 +27,7 @@ test('semver compares numeric prereleases, stable releases and invalid registry 
   for (const [next, current] of [['0.3.7', '0.3.7'], ['0.3.6', '0.3.7'], ['0.3.8-dev.9.abc', '0.3.8'], ['garbage', '0.3.7'], ['0.3.8-dev.01', '0.3.7']]) assert.equal(newerVersion(next, current), false);
 });
 test('checks retain dev even when latest is newer and never install or switch', async () => {
-  const pkg = { name: 'openjob', version: '0.3.8-dev.9.abc', openjobDistribution: { channel: 'dev' } };
+  const pkg = { name: 'openjob', version: '0.3.8-dev.9.abc', openjobDistribution: { channel: 'dev', registryVerified: true } };
   const before = structuredClone(pkg); let calls = 0;
   const fetchImplementation = async (url, init) => {
     calls++; assert.equal(url, 'https://registry.npmjs.org/-/package/openjob/dist-tags'); assert.equal(init.redirect, 'error'); assert.deepEqual(init.headers, { accept: 'application/json' });
@@ -41,7 +41,7 @@ test('checks retain dev even when latest is newer and never install or switch', 
   assert.deepEqual(pkg, before); assert.equal(calls, 2);
 });
 test('offline, HTTP errors, invalid tags, downgrades and equal versions are quiet', async () => {
-  const pkg = { name: 'openjob', version: '0.3.7' };
+  const pkg = { name: 'openjob', version: '0.3.7', openjobDistribution: { channel: 'latest', registryVerified: true } };
   for (const fetchImplementation of [async () => { throw new Error('offline'); }, async () => new Response('', { status: 404 }), async () => Response.json({ latest: '0.3.8-dev.1' }), async () => Response.json({ latest: 'bad\ncommand' })]) {
     const result = await checkForUpdates(pkg, { fetchImplementation }); assert.equal(result.status, 'unavailable'); assert.equal(updateNotice(result), '');
   }
@@ -56,4 +56,10 @@ test('artifact workflow tracks main and published releases without registry publ
 test('detached main checkout resolves through fetched origin/main; tags remain exact', () => {
   assert.equal(sourceRef('refs/heads/main'), 'refs/remotes/origin/main');
   assert.equal(sourceRef('refs/tags/v0.3.7'), 'refs/tags/v0.3.7');
+});
+
+test('unpublished artifacts never query or recommend the unverified registry name', async () => {
+  let calls = 0;
+  const result = await checkForUpdates({ name: 'openjob', version: '0.3.7', openjobDistribution: { channel: 'latest', registryVerified: false } }, { fetchImplementation: async () => { calls++; return Response.json({ latest: '99.0.0' }); } });
+  assert.equal(calls, 0); assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'registry_not_verified'); assert.equal(updateNotice(result), '');
 });
