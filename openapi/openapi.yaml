@@ -1886,7 +1886,7 @@ paths:
     get:
       tags:
         - Providers
-      summary: Read an owner-scoped synthetic provider adapter preview
+      summary: Read an owner-scoped synthetic or mock provider workspace
       operationId: getProviderPreview
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
@@ -1895,7 +1895,11 @@ paths:
         requests, writes or sending. Fixture headers and all agent credentials are denied or ignored;
         no human authentication fallback for agent tokens. The separate connector catalog describes
         the implemented Gmail read adapter as not_connected, consent required and live execution
-        disabled. It never adds an unconnected account or permits provider execution.
+        disabled. It never adds an unconnected account or permits provider execution. An injected
+        server-owned connection reader may add explicitly mock accounts that exercise Gmail protocol
+        mapping with synthetic HTTP responses. Clients choose owned account IDs only. No source,
+        token, broker metadata or execution-enable input is accepted. Upstream provider authentication
+        failures are provider_unavailable, never human-session authentication errors.
       parameters:
         - name: accountId
           in: query
@@ -1929,83 +1933,164 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/ProviderPreview"
-              example:
-                data:
-                  mode: synthetic
-                  accounts:
-                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
-                      provider: gmail
-                      label: Personal Gmail preview
-                      address: alex@gmail.example.invalid
+              examples:
+                synthetic:
+                  value:
+                    data:
                       mode: synthetic
-                      status: ready
-                      statusReason: Invented preview; no live provider connection.
-                      capabilities:
-                        mailRead:
-                          available: true
-                          reason: Synthetic read adapter only.
-                        calendarRead:
-                          available: true
-                          reason: Synthetic read adapter only.
-                        draft:
-                          available: false
-                          reason: Live integration is unavailable.
-                        send:
-                          available: false
-                          reason: Live integration is unavailable.
-                        calendarWrite:
-                          available: false
-                          reason: Live integration is unavailable.
-                        reconnect:
-                          available: false
-                          reason: Live integration is unavailable.
-                      sync:
-                        state: synthetic_ready
-                        asOf: 2026-10-16T03:00:00.000Z
-                        reason: Synthetic fixture snapshot.
-                      upstreamId: account_personal
-                  selectedAccountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
-                  messages:
-                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1
-                      accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
-                      upstreamId: upstream_message_1
-                      threadId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1
-                      folderIds:
-                        - pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
-                      subject: Invented planning message
-                      from: mia@example.invalid
-                      to: alex@gmail.example.invalid
-                      body: Synthetic example only.
-                      receivedAt: 2026-10-16T03:00:00.000Z
-                      read: false
-                      upstreamThreadId: thread_shared
-                  folders:
-                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
-                      accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
-                      upstreamId: INBOX
-                      name: Inbox
-                  calendars: []
-                  events: []
-                  nextCursor: null
-                  syncCursor: pv1.synthetic_example
-                  connectors:
-                    - provider: gmail
-                      adapter: gmail-rest-read
-                      status: not_connected
-                      consent: required
-                      liveExecutionEnabled: false
-                      implementedOperations:
-                        - mail.read
-                        - mail.labels
-                      unsupportedOperations:
-                        - calendar.read
-                        - calendar.write
-                        - mail.draft
-                        - mail.send
-                        - sync.history
-                        - reconnect
-                      message: Read-only Gmail adapter implemented; no approved account or provider read consent. Live
-                        execution disabled.
+                      accounts:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          provider: gmail
+                          label: Personal Gmail preview
+                          address: alex@gmail.example.invalid
+                          mode: synthetic
+                          status: ready
+                          statusReason: Invented preview; no live provider connection.
+                          capabilities:
+                            mailRead:
+                              available: true
+                              reason: Synthetic read adapter only.
+                            calendarRead:
+                              available: true
+                              reason: Synthetic read adapter only.
+                            draft:
+                              available: false
+                              reason: Live integration is unavailable.
+                            send:
+                              available: false
+                              reason: Live integration is unavailable.
+                            calendarWrite:
+                              available: false
+                              reason: Live integration is unavailable.
+                            reconnect:
+                              available: false
+                              reason: Live integration is unavailable.
+                          sync:
+                            state: synthetic_ready
+                            asOf: 2026-10-16T03:00:00.000Z
+                            reason: Synthetic fixture snapshot.
+                          upstreamId: account_personal
+                      selectedAccountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                      messages:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1
+                          accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          upstreamId: upstream_message_1
+                          threadId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1
+                          folderIds:
+                            - pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                          subject: Invented planning message
+                          from: mia@example.invalid
+                          to: alex@gmail.example.invalid
+                          body: Synthetic example only.
+                          receivedAt: 2026-10-16T03:00:00.000Z
+                          read: false
+                          upstreamThreadId: thread_shared
+                      folders:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                          accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          upstreamId: INBOX
+                          name: Inbox
+                      calendars: []
+                      events: []
+                      nextCursor: null
+                      syncCursor: pv1.synthetic_example
+                      connectors:
+                        - provider: gmail
+                          adapter: gmail-rest-read
+                          status: not_connected
+                          consent: required
+                          liveExecutionEnabled: false
+                          implementedOperations:
+                            - mail.read
+                            - mail.labels
+                          unsupportedOperations:
+                            - calendar.read
+                            - calendar.write
+                            - mail.draft
+                            - mail.send
+                            - sync.history
+                            - reconnect
+                          message: Read-only Gmail adapter implemented; no approved account or provider read consent. Live
+                            execution disabled.
+                mock:
+                  value:
+                    data:
+                      mode: mock
+                      accounts:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          provider: gmail
+                          label: Gmail mock protocol account
+                          address: alex@gmail.example.invalid
+                          mode: mock
+                          status: ready
+                          statusReason: Server-owned mock connection exercising invented HTTP responses. No live account
+                            connected.
+                          capabilities:
+                            mailRead:
+                              available: true
+                              reason: Synthetic read adapter only.
+                            calendarRead:
+                              available: false
+                              reason: Gmail mock reader supports message and label reads only.
+                            draft:
+                              available: false
+                              reason: Live integration is unavailable.
+                            send:
+                              available: false
+                              reason: Live integration is unavailable.
+                            calendarWrite:
+                              available: false
+                              reason: Live integration is unavailable.
+                            reconnect:
+                              available: false
+                              reason: Live integration is unavailable.
+                          sync:
+                            state: blocked
+                            asOf: null
+                            reason: No live synchronization or Gmail history support.
+                          upstreamId: account_personal
+                      selectedAccountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                      messages:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1
+                          accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          upstreamId: upstream_message_1
+                          threadId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1
+                          folderIds:
+                            - pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                          subject: Invented planning message
+                          from: mia@example.invalid
+                          to: alex@gmail.example.invalid
+                          body: Synthetic example only.
+                          receivedAt: 2026-10-16T03:00:00.000Z
+                          read: false
+                          upstreamThreadId: thread_shared
+                      folders:
+                        - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                          accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                          upstreamId: INBOX
+                          name: Inbox
+                      calendars: []
+                      events: []
+                      nextCursor: null
+                      syncCursor: null
+                      connectors:
+                        - provider: gmail
+                          adapter: gmail-rest-read
+                          status: not_connected
+                          consent: required
+                          liveExecutionEnabled: false
+                          implementedOperations:
+                            - mail.read
+                            - mail.labels
+                          unsupportedOperations:
+                            - calendar.read
+                            - calendar.write
+                            - mail.draft
+                            - mail.send
+                            - sync.history
+                            - reconnect
+                          message: Read-only Gmail adapter implemented; no approved account or provider read consent. Live
+                            execution disabled.
         "400":
           $ref: "#/components/responses/ValidationErrorResponse"
         "401":
@@ -3128,7 +3213,9 @@ components:
           format: email
         mode:
           type: string
-          const: synthetic
+          enum:
+            - synthetic
+            - mock
         status:
           type: string
           enum:
@@ -3136,6 +3223,9 @@ components:
             - reconnect_required
             - error
             - unsupported
+            - not_connected
+            - needs_consent
+            - revoked
         statusReason:
           type: string
         capabilities:
@@ -3175,8 +3265,10 @@ components:
                 - synthetic_ready
                 - blocked
             asOf:
-              type: string
-              format: date-time
+              oneOf:
+                - type: string
+                  format: date-time
+                - type: "null"
             reason:
               type: string
         upstreamId:
@@ -3342,7 +3434,9 @@ components:
       properties:
         mode:
           type: string
-          const: synthetic
+          enum:
+            - synthetic
+            - mock
         accounts:
           type: array
           items:

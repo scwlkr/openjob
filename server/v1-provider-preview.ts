@@ -1,7 +1,8 @@
 import type { FirebaseTokenIdentity } from "./firebase-id-token.ts";
 import type { OpenJobUser } from "./v1-identity.ts";
-import { createProviderPreview } from "../shared/provider-preview.ts";
+import { createProviderWorkspacePreview } from "./provider-workspace-preview.ts";
 import type { ProviderPreview } from "../shared/provider-contracts.ts";
+import type { ProviderConnectionReader } from "./providers/provider-connections.ts";
 import { describeGmailReadAdapter } from "./providers/gmail-read-adapter.ts";
 import { isInactiveUserError } from "../db/user-history.ts";
 import {
@@ -14,10 +15,11 @@ type Options = {
   users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> };
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   preview?: (ownerUserId: string, input: { accountId?: string; cursor?: string }) => Promise<ProviderPreview>;
+  connections?: ProviderConnectionReader;
   requestId?: () => string;
 };
 
-export function createV1ProviderPreviewApi({ users, verifyIdToken, preview = (ownerId, input) => createProviderPreview({ ownerId, ...input }), requestId = defaultRequestId }: Options) {
+export function createV1ProviderPreviewApi({ users, verifyIdToken, connections, preview = createProviderWorkspacePreview({ connections }), requestId = defaultRequestId }: Options) {
   const fail = (code: string, message: string, status: number) => errorResponse(requestId, { code, message, status });
   return Object.freeze({
     async fetch(request: Request): Promise<Response> {
@@ -50,7 +52,8 @@ export function createV1ProviderPreviewApi({ users, verifyIdToken, preview = (ow
         const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
         if (code === "invalid_input" || code === "invalid_cursor") return fail("invalid_request", "The provider preview request is invalid.", 400);
         if (code === "forbidden" || code === "not_found") return fail("forbidden", "The provider preview resource is unavailable.", 403);
-        if (code === "provider_unavailable") return fail("provider_unavailable", "This provider preview is unavailable.", 409);
+        if (code === "rate_limited") return rateLimitedErrorResponse(requestId);
+        if (["provider_unavailable", "authentication_required", "consent_required", "execution_disabled", "connection_changed", "provider_forbidden", "provider_error", "network_error", "timeout", "malformed_response", "unsupported_operation"].includes(String(code))) return fail("provider_unavailable", "This provider preview is unavailable. Review its connection and consent status.", 409);
         return internalErrorResponse(requestId);
       }
     },

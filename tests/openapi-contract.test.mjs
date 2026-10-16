@@ -748,6 +748,15 @@ test("provider preview response schemas preserve opaque Unicode upstream identit
   assert.equal(validate({ data: { ...data, syncCursor: null } }), true);
   assert.equal(validate({ data: { ...data, nextCursor: "x".repeat(4096) } }), true);
   assert.equal(validate({ data: { ...data, nextCursor: "x".repeat(4097) } }), false);
+  const mockAccount = { ...data.accounts[0], mode: "mock", status: "ready", sync: { state: "blocked", asOf: null, reason: "Mock protocol read only; no live synchronization." } };
+  assert.equal(validate({ data: { ...data, mode: "mock", accounts: [mockAccount] } }), true);
+  assert.equal(validate({ data: { ...data, mode: "provider", accounts: [mockAccount] } }), false);
+  for (const status of ["needs_consent", "revoked", "not_connected", "reconnect_required"]) {
+    assert.equal(validate({ data: { ...data, mode: "mock", accounts: [{ ...mockAccount, status }] } }), true);
+  }
+  for (const privateField of ["credentialRef", "scopes", "revision", "accessToken", "broker"]) {
+    assert.equal(validate({ data: { ...data, mode: "mock", accounts: [{ ...mockAccount, [privateField]: "private" }] } }), false);
+  }
 });
 
 test("validation rejects broken operations and examples", async () => {

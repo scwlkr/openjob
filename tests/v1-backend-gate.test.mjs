@@ -27,6 +27,7 @@ import {
 } from "./support/fake-firestore.mjs";
 import { createOpenApiResponseValidator } from "./support/openapi-response.mjs";
 import { createV1TestHarness } from "./support/v1-harness.mjs";
+import { createMockProviderConnectionHarness } from "./support/mock-provider-connections.mjs";
 
 const NOW = "2026-07-16T12:00:00.000Z";
 const HTTP_METHODS = new Set(["delete", "get", "patch", "post", "put"]);
@@ -95,6 +96,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
   };
   let deletionProviderAttempts = 0;
   let retryAccountDeletions;
+  let providerConnectionHarness;
   const harness = createV1TestHarness({
     initialNow: NOW,
     createWorker(controls) {
@@ -138,7 +140,19 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       const personalWorkspaces = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
       const personalWorkspaceApi = createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken });
       const personalAgentGrantsApi = createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken });
-      const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken });
+      const mockProviders = new Map();
+      const ownedMock = owner => {
+        if (!mockProviders.has(owner)) mockProviders.set(owner, createMockProviderConnectionHarness({ owners: { alex: owner },
+          isOwnerActive: async ownerId => { const user = await users.getById(ownerId); return !!user && !user.deletionPending; },
+          now: () => Date.parse(controls.clock.now()),
+        }));
+        return mockProviders.get(owner);
+      };
+      providerConnectionHarness = ownedMock;
+      const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken, connections: {
+        listAccounts: async owner => (await ownedMock(owner)).reader.listAccounts(owner),
+        listMessages: async input => (await ownedMock(input.ownerId)).reader.listMessages(input),
+      } });
       const tasksApi = createV1TasksApi({ agents: agentGrants, tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
         subscriptions: notificationSubscriptions,
@@ -421,6 +435,33 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(foreignPreview.status, 403); await validate(foreignPreview, previewPath, "get");
     const invalidPreviewQuery = await request({ actor: "initialAdmin", method: "GET", path: `${previewPath}?ownerId=foreign` });
     assert.equal(invalidPreviewQuery.status, 400); await validate(invalidPreviewQuery, previewPath, "get");
+    const mockAccount = preview.accounts.find(account => account.mode === "mock" && account.status === "ready");
+    assert.ok(mockAccount);
+    const mockCall = async (actor, accountId, cursor) => {
+      const query = new URLSearchParams({ accountId, ...(cursor ? { cursor } : {}) });
+      const response = await request({ actor, method: "GET", path: `${previewPath}?${query}` });
+      await validate(response.clone(), previewPath, "get"); return response;
+    };
+    const mockRead = await mockCall("initialAdmin", mockAccount.id);
+    assert.equal(mockRead.status, 200); const mockPage = (await mockRead.json()).data;
+    assert.equal(mockPage.mode, "mock"); assert.equal(mockPage.messages.length, 2);
+    assert.equal(mockPage.messages[0].subject, "Protocol fixture: prepare the launch");
+    assert.match(mockPage.messages[0].body, /wire mapper for alex/);
+    const mockNext = await mockCall("initialAdmin", mockAccount.id, mockPage.nextCursor);
+    assert.equal(mockNext.status, 200); assert.equal((await mockNext.json()).data.messages.length, 1);
+    const mockHarness = await providerConnectionHarness(canonicalUser.userId);
+    const beforeBlocked = { ...mockHarness.counters };
+    assert.equal((await mockCall("memberUser", mockAccount.id)).status, 403);
+    const consent = preview.accounts.find(account => account.mode === "mock" && account.status === "needs_consent");
+    assert.ok(consent); const blockedConsent = await mockCall("initialAdmin", consent.id);
+    assert.equal(blockedConsent.status, 200); assert.deepEqual((await blockedConsent.json()).data.messages, []);
+    assert.equal(mockHarness.controls.revoke(mockAccount.id), true);
+    const revokedMock = await mockCall("initialAdmin", mockAccount.id);
+    assert.equal(revokedMock.status, 200); const revokedMockData = (await revokedMock.json()).data;
+    assert.equal(revokedMockData.accounts.find(account => account.id === mockAccount.id).status, "revoked");
+    assert.deepEqual(revokedMockData.messages, []); assert.deepEqual(mockHarness.counters, beforeBlocked);
+    assert.equal(JSON.stringify(mockPage).includes("credentialRef"), false);
+    assert.equal(JSON.stringify(mockPage).includes("mock_access_"), false);
     const personalGrantPath = "/api/v1/workspace/agent-grants";
     const issuedPersonal = await request({ actor: "initialAdmin", method: "POST", path: personalGrantPath, body: { name: "Personal planner", scopes: ["tasks:read", "tasks:write", "calendar:read", "calendar:write"], resourceIds: ["tasks:personal", "calendar:personal"] } });
     assert.equal(issuedPersonal.status, 201);
