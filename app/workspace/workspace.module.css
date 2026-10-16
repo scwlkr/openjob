@@ -1,0 +1,69 @@
+.workspace { min-height: 100vh; background: var(--oj-surface); color: var(--oj-text); font-family: var(--oj-font-sans); }
+.workspace button, .workspace select, .workspace input, .workspace textarea { font: inherit; }
+.workspace button { min-height: 44px; border: 1px solid var(--oj-control-line); border-radius: 7px; background: var(--oj-panel); color: var(--oj-text); padding: 8px 14px; cursor: pointer; }
+.workspace button:hover { background: var(--oj-selected); }
+.workspace button:disabled { opacity: .5; cursor: default; }
+.workspace input:not([type=checkbox]), .workspace select, .workspace textarea { min-height: 44px; width: 100%; border: 1px solid var(--oj-control-line); border-radius: 7px; color: var(--oj-text); background: var(--oj-panel); padding: 10px; }
+.workspace input[type=checkbox] { accent-color: var(--oj-action); width: 19px; height: 19px; flex-shrink: 0; }
+.workspace label { display: grid; gap: 6px; font-size: 14px; }
+.workspace h1 { font-size: 32px; letter-spacing: -1px; margin: 0; }
+.workspace h2 { font-size: 21px; letter-spacing: -.5px; margin: 0 0 16px; }
+.workspace small, .small { color: var(--oj-muted); font-size: 12px; }
+.workspace pre { font-family: inherit; }
+.header { display: flex; align-items: center; padding: 20px 32px; gap: 24px; border-bottom: 1px solid var(--oj-line); background: var(--oj-panel); }
+.badge { color: var(--oj-positive); background: var(--oj-positive-fill); border-radius: 20px; font-size: 12px; padding: 6px 12px; }
+.owner { margin-left: auto; min-width: 140px; }
+.banner { font-size: 13px; padding: 10px 32px; background: var(--oj-selected); color: var(--oj-selected-text); }
+.layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: calc(100vh - 155px); }
+.sidebar { border-right: 1px solid var(--oj-line); padding: 30px 18px; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 1.7px; color: var(--oj-muted); margin: 0 0 9px; }
+.tabs { display: grid; gap: 6px; }
+.tabs button { display: flex; justify-content: space-between; border-color: transparent; text-align: left; background: transparent; }
+.tabs button[aria-current] { background: var(--oj-selected); color: var(--oj-selected-text); font-weight: 600; }
+.tabs span { color: var(--oj-muted); font-size: 12px; padding: 3px; }
+.connection { margin-top: 40px; font-size: 13px; }
+.connection > div { margin-top: 14px; }
+.connection small { display: block; padding-left: 14px; }
+.dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: var(--oj-positive); margin-right: 8px; }
+.sidebar > p:last-child { margin-top: 40px; }
+.main { padding: 30px; max-width: 1600px; width: 100%; }
+.title { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 24px; }
+.panel { border: 1px solid var(--oj-line); background: var(--oj-panel); border-radius: var(--oj-radius-panel); overflow: hidden; margin-bottom: 20px; min-width: 0; }
+.mailGrid { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.5fr); gap: 20px; }
+.calendarGrid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
+.filter { max-width: 420px; margin-bottom: 20px; }
+.workspace .message { display: grid; gap: 6px; width: 100%; border: 0; border-bottom: 1px solid var(--oj-line); text-align: left; border-radius: 0; padding: 20px; overflow-wrap: anywhere; }
+.message span { font-size: 13px; color: var(--oj-muted); }
+.workspace .selected { background: var(--oj-selected); }
+.reader { padding: 26px; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin: 30px 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.workspace .primary { background: var(--oj-action); border-color: var(--oj-action); color: var(--oj-action-text); }
+.workspace .primary:hover { background: var(--oj-action-hover); }
+.empty { padding: 30px; color: var(--oj-muted); }
+.reader form { border-top: 1px solid var(--oj-line); padding-top: 24px; margin-top: 28px; }
+.reader form button { margin-top: 12px; }
+.inlineForm { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 20px; }
+.grow { flex: 1; }
+.task { padding: 20px; border-bottom: 1px solid var(--oj-line); }
+.task label { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+.task > div { margin-top: 10px; padding-left: 31px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.task button { margin-left: auto; }
+.completed { text-decoration: line-through; color: var(--oj-muted); }
+.sectionHeading { padding: 22px 22px 0; }
+.form { display: grid; gap: 18px; padding: 0 22px 22px; }
+.form fieldset { border: 1px solid var(--oj-line); border-radius: 8px; display: grid; gap: 4px; max-height: 270px; overflow: auto; }
+.workspace .check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.event, .agent { display: grid; gap: 6px; padding: 20px 22px; border-bottom: 1px solid var(--oj-line); }
+.event strong { font-size: 17px; }
+.event span { font-size: 13px; color: var(--oj-muted); }
+.inset, .inspection { padding: 0 22px 20px; }
+.inspection { padding-top: 18px; background: var(--oj-selected); overflow-wrap: anywhere; }
+.inspection ul { padding-left: 20px; }
+.error, .success { padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--oj-control-line); }
+.error { color: var(--danger-text, #782a30); background: var(--danger-fill, #faebec); }
+.success { color: var(--oj-positive); background: var(--oj-positive-fill); }
+.activity { color: var(--oj-muted); font-size: 13px; margin-top: 24px; }
+.activity summary { cursor: pointer; padding: 10px 0; }
+@media(max-width: 1050px) { .calendarGrid { grid-template-columns: 1fr; } .layout { grid-template-columns: 180px minmax(0, 1fr); } .main { padding: 24px 18px; } .mailGrid { grid-template-columns: 1fr; } }
+@media(max-width: 640px) { .header { padding: 16px; flex-wrap: wrap; gap: 12px; } .header img { width: 135px; height: auto; } .badge { order: 3; width: 100%; text-align: center; } .owner { min-width: 110px; } .banner { padding: 12px 16px; } .layout { display: block; } .sidebar { padding: 12px; border-right: 0; border-bottom: 1px solid var(--oj-line); } .sidebar > p, .connection { display: none; } .tabs { display: flex; } .tabs button { flex: 1; padding: 8px; font-size: 14px; } .tabs span { display: none; } .main { padding: 24px 16px; } .reader { padding: 20px; } .inlineForm { flex-wrap: wrap; } .grow { min-width: 180px; } }

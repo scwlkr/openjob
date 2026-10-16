@@ -1,0 +1,94 @@
+import { expect, test } from "@playwright/test";
+
+test("fixture workspace connects mail, drafts, tasks, calendar and revocable agents across owners", async ({ page }, testInfo) => {
+  const unique = `Browser ${Date.now()}`;
+  await page.goto("/workspace");
+  await expect(page.getByText("Prototype · simulated providers")).toBeVisible();
+  await expect(page.getByTestId("mail-row").filter({ hasText: "Launch checklist for Friday" })).toBeVisible();
+  await page.getByLabel("Mailbox", { exact: true }).selectOption("alex_outlook");
+  await expect(page.getByTestId("mail-row")).toHaveCount(1);
+  await expect(page.getByTestId("mail-row")).toContainText("Design review notes");
+  await page.getByLabel("Mailbox", { exact: true }).selectOption("alex_gmail");
+  await page.getByTestId("mail-row").filter({ hasText: "Launch checklist for Friday" }).click();
+  await expect(page.getByRole("region", { name: "Message reader" })).toContainText("reserve half an hour");
+  await page.getByRole("button", { name: "Mark read", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Mark unread", exact: true })).toBeVisible();
+  await page.getByLabel("Reply draft", { exact: true }).fill(`Review ready. ${unique}`);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("No message sent");
+  await page.screenshot({ path: testInfo.outputPath("workspace-mail.png"), fullPage: true });
+  await page.getByRole("button", { name: "Create task from mail" }).click();
+  await expect(page.getByRole("status")).toContainText("Private task created");
+  await page.getByRole("button", { name: "Compose draft", exact: true }).click();
+  await page.getByLabel("From mailbox").selectOption("alex_imap");
+  await page.getByLabel("To", { exact: true }).fill("reviewer@example.invalid");
+  await page.getByLabel("Subject", { exact: true }).fill(unique);
+  await page.getByLabel("Message", { exact: true }).fill("Invented correspondence; saved only.");
+  await page.getByRole("button", { name: "Save new draft" }).click();
+  await expect(page.getByRole("status")).toContainText("Nothing sent");
+
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).first()).toContainText("From private mail");
+  await page.getByLabel("New task", { exact: true }).fill(unique);
+  await page.getByRole("button", { name: "Add task" }).click();
+  const task = page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).first();
+  await task.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByLabel("Calendar", { exact: true }).selectOption("alex_work");
+  await page.getByLabel("Start (UTC)", { exact: true }).fill("2026-10-17T10:00");
+  await page.getByLabel("End (UTC)", { exact: true }).fill("2026-10-17T10:30");
+  await page.getByRole("button", { name: "Save schedule" }).click();
+  await expect(task).toContainText("UTC");
+  await task.getByRole("checkbox").click();
+  await expect(task.getByRole("checkbox")).toBeChecked();
+  await page.reload();
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).first().getByRole("checkbox")).toBeChecked();
+  await page.getByRole("button", { name: /^Calendar/ }).click();
+  await expect(page.getByTestId("calendar-event").filter({ hasText: "Launch checklist for Friday" }).first()).toContainText("linked task");
+  await page.screenshot({ path: testInfo.outputPath("workspace-calendar.png"), fullPage: true });
+  await page.getByLabel("Block title").fill(`${unique} block`);
+  await page.getByRole("button", { name: "Create block", exact: true }).click();
+  const block = page.getByTestId("calendar-event").filter({ hasText: `${unique} block` });
+  await block.getByRole("button", { name: "Edit block" }).click();
+  await page.getByLabel("Block title").fill(`${unique} revised`);
+  await page.getByRole("button", { name: "Save block", exact: true }).click();
+  const revised = page.getByTestId("calendar-event").filter({ hasText: `${unique} revised` });
+  await expect(revised).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await revised.getByRole("button", { name: "Delete block" }).click();
+  await expect(revised).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Agents/ }).click();
+  await page.getByLabel("Agent name").fill(unique);
+  await page.getByLabel("Personal tasks", { exact: true }).check();
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  const agent = page.getByTestId("agent-row").filter({ hasText: unique });
+  await agent.getByRole("button", { name: "Inspect access" }).click();
+  const inspection = page.getByRole("region", { name: "Agent access result" });
+  await expect(inspection.getByTestId("agent-counts")).toContainText("0 messages");
+  await expect(inspection).toContainText(`Task: ${unique}`);
+  await agent.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(agent).toContainText("Revoked");
+  await expect(inspection.getByRole("alert")).toBeVisible();
+
+  await page.getByLabel("Fixture owner").selectOption("demo_sam");
+  await page.getByRole("button", { name: /^Mail/ }).click();
+  await expect(page.getByTestId("mail-row")).toHaveCount(1);
+  await expect(page.getByTestId("mail-row")).toContainText("Sam's private planning");
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(page.getByTestId("task-row")).not.toContainText(unique);
+  await page.getByLabel("Fixture owner").selectOption("demo_alex");
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(page.getByTestId("task-row").filter({ hasText: unique })).toBeVisible();
+});
+
+
+test("fixture workspace is usable on a phone", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/workspace");
+  await expect(page.getByTestId("mail-row").first()).toBeVisible();
+  await page.getByTestId("mail-row").first().click();
+  await expect(page.getByRole("button", { name: "Create task from mail" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("workspace-phone.png"), fullPage: true });
+});

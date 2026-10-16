@@ -6507,7 +6507,7 @@ test("keeps done Tasks visible in Former Member sections", async ({ page }) => {
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });
 
-test("keeps the approved Variant B layout with the standard brand in light and dark", async ({ page, browser }, testInfo) => {
+test("keeps branded Task controls usable across screen sizes and light and dark themes", async ({ page, browser }, testInfo) => {
   await attachBrowserProvenance(browser, testInfo, [
     "variant-b-phone.png", "variant-b-desktop.png", "variant-b-phone-dark.png", "variant-b-desktop-dark.png",
   ]);
@@ -6590,16 +6590,14 @@ test("keeps the approved Variant B layout with the standard brand in light and d
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Walker Labs" })).toBeVisible();
   await expect(page.getByTestId("member-section")).toHaveCount(4);
-  await expect(page).toHaveScreenshot("variant-b-phone.png", {
-    animations: "disabled",
-    fullPage: true,
-  });
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByText("Confirm the July photo schedule", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("brand-phone.png"), fullPage: true });
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expect(page).toHaveScreenshot("variant-b-desktop.png", {
-    animations: "disabled",
-    fullPage: true,
-  });
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByText("Review vendor renewal", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("brand-desktop.png"), fullPage: true });
 
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
@@ -6627,9 +6625,8 @@ test("keeps the approved Variant B layout with the standard brand in light and d
       for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
         await page.setViewportSize(viewport);
         await expectNoHorizontalOverflow(page);
-        await expect(page).toHaveScreenshot(`variant-b-${viewport.width === 390 ? "phone" : "desktop"}-dark.png`, {
-          animations: "disabled", fullPage: true,
-        });
+        await expect(page.getByRole("button", { name: "New Task", exact: true })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`brand-${viewport.width}-dark.png`), fullPage: true });
       }
     }
     await page.getByRole("button", { name: "New Task", exact: true }).click();

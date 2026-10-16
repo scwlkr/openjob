@@ -1,8 +1,14 @@
 # Features
 
+## Integrated workspace prototype
+
+`npm run dev:workspace` opens `/workspace`: simulated Gmail/Outlook/IMAP Mail, Calendar, personal Tasks and scoped agent controls backed by one persistent local HTTP service and shared domain/CLI. Read/compose/save drafts, turn mail into a private Task, schedule/complete work, edit/delete calendar blocks, inspect resource-limited agent access and revoke it. Owner views are isolated. Sending is always disabled. This is fixture-only application behavior; provider OAuth/sync, new production authentication and native workspace screens are not implemented. See [the demo walkthrough](docs/WORKSPACE_DEMO.md).
+
 - **Brand foundation:** `docs/brand/index.html` is the offline guide for the OpenJob overhaul. It includes the supplied reference board, eleven editable SVG masters, scoped light/dark CSS tokens, local Inter font/license, type and voice guidance, and labeled interactive product concepts. The web, iOS, and Android apps adopt this identity through shared generated assets, semantic colors, local Inter, browser/install/adaptive icons, and splash artwork. `AGENTS.md` points future UI work to the brand standards; `npm run brand:check` guards generated asset freshness.
 
 ## Task scheduling slots
+
+CLI tables preserve optional fields found in later rows, including scheduled slots and due dates, with blank cells for missing values. JSON/JSONL shapes remain unchanged.
 
 The shared Task API and CLI accept an optional planned work interval independently of the date-only due date. Explicit time zones normalize to UTC; both endpoints are required, end follows start, and clearing the slot preserves the Task and due date. Existing membership and completed-Task rules apply. This stores an OpenJob plan; it does not create provider calendar events. The web editor creates, edits and clears slots with explicit UTC inputs; Task cards show the interval in UTC, including an accessible description. Validation, network failure and authentication recovery preserve the entered interval. Native visual scheduling controls remain unimplemented.
 
