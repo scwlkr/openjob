@@ -12,9 +12,33 @@ Work is scattered across Outlook, Gmail, Purelymail, calendars, and task tools. 
 
 OpenJob should make these services feel like one coherent workspace. Users keep their providers and identities. OpenJob connects the work and gives both people and authorized agents practical ways to act on it.
 
+Platform design is proposed in [the platform blueprint](PLATFORM_ARCHITECTURE.md)
+and ADRs 0019–0021, with [detailed build specification](build-spec/README.md). The [owner-confirmed Workspace core](ARCHITECTURE_ALIGNMENT.md) supersedes
+conflicting earlier proposals; other details remain Proposed. No feature or
+infrastructure implementation follows automatically.
+
 ### The experience to build
 
 A message arrives in a connected mailbox. A person or permitted agent turns it into a task with a link to the original conversation, schedules the work on a connected calendar, completes it, and replies from the correct account. The person can see what happened and change or revoke the agent’s access.
+
+### Workspaces and personal identity
+
+One personal identity participates in multiple independent Workspaces. A company
+is a Workspace initially, with internal member groups/permission sets and exactly
+one accountable human owner. Transfer needs the recipient member’s acceptance
+before owner departure; resources remain attached to the Workspace. Membership
+and ownership do not automatically expose restricted Mail or provider credentials.
+Central authorized Connections management has no master Workspace. Connected
+external agents receive independently revocable Workspace grants under current
+member rights/policy; OpenJob does not host persistent Workspace agents. Home can
+show labeled authorized tasks/events/unread counts, entering a Workspace for actions.
+OpenJob accounts initially have no hosted mailbox. These confirmed decisions and
+actual discussion references are in [architecture alignment](ARCHITECTURE_ALIGNMENT.md).
+The later [C09–C10 pilot clarification](ARCHITECTURE_ALIGNMENT.md) prioritizes
+Shane’s daily use, incremental actual account onboarding and early iOS TestFlight;
+shared work online-first, personal offline Task/Calendar retained and full offline
+Mail deferred with initial on-demand bodies. C11 selects portable Linux hosting; exact target/configuration remains unresolved; detailed
+roles/schemas/runtime/retention/offline mechanics still await review.
 
 ### Product principles
 
