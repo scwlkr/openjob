@@ -48,11 +48,13 @@ The manifest also contains existing build, API, CLI, native, verification, and r
 
 ### Verified implementation checkpoint — 16 October 2026
 
-The initial baseline above is historical. Cloud implementation through PR77
+The initial baseline above is historical. Cloud implementation through PR78
 now connects authenticated personal Mail, Tasks, Calendar and scoped agents
 through shared APIs/CLI, with a reproducible invented-data workflow. Web and
 native Tasks/Calendar support explicit offline edits, sync and conflict review;
-web can retain authored unfinished Mail text separately. Provider Mail remains
+web can retain authored unfinished Mail text separately. Calendar files provide
+bounded iCalendar export and reviewed import through the app, API and CLI,
+without a provider connection. Provider Mail remains
 simulated. Gmail REST read translation and owner/OAuth/vault boundaries have
 synthetic-transport proof, but production connections are unconfigured. Live
 provider/database behavior, production Firebase offline startup and native
