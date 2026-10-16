@@ -18,6 +18,7 @@ export type WorkspaceCommand =
   | { type: "task.unschedule"; taskId: string }
   | { type: "task.delete"; taskId: string }
   | { type: "task.complete"; taskId: string; completed: boolean }
+  | { type: "task.schedule-available"; taskId: string; calendarId: string; start: string; end: string }
   | { type: "task.schedule"; taskId: string; calendarId: string; start: string; end: string }
   | { type: "calendar.create"; calendarId: string; title: string; start: string; end: string }
   | { type: "calendar.update"; eventId: string; title: string; start: string; end: string }

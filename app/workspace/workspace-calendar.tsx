@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { WorkspaceCommand, WorkspaceEvent, WorkspaceView } from "../../shared/workspace-contracts";
 import styles from "./workspace.module.css";
 import calendarStyles from "./workspace-calendar.module.css";
+import WorkspaceFindTime from "./workspace-find-time";
 import { linkedTask, type CalendarTaskSource } from "./workspace-links";
 
 type CalendarMode = "Agenda" | "Day" | "Week";
@@ -59,6 +60,7 @@ export default function WorkspaceCalendar({ view, busy, command, active = true, 
 
   if (!active) return null;
   return <>
+    <WorkspaceFindTime view={view} busy={busy} command={command} />
     <section className={`${styles.panel} ${calendarStyles.toolbar}`} aria-label="Calendar navigation">
       <div className={calendarStyles.controls}><div role="group" aria-label="Calendar view">{(["Agenda", "Day", "Week"] as CalendarMode[]).map(value => <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{value}</button>)}</div>
         <label>Show calendar<select aria-label="Show calendar" value={filter} onChange={event => setFilter(event.target.value)}><option value="">All calendars</option>{view.calendars.map(calendar => <option key={calendar.id} value={calendar.id}>{calendar.name}</option>)}</select></label>

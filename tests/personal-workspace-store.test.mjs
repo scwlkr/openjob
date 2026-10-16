@@ -140,3 +140,18 @@ test('encoded storage bound rejects growing state before any commit', async () =
   assert.equal(f.firestore.commitAttempts(), attempts);
   assert.throws(() => applyPersonalWorkspaceCommand('user_alex', createEmptyPersonalWorkspace('user_alex'), { type: 'task.create', title: '' }), error => error.code === 'invalid_input');
 });
+
+test('availability scheduling rechecks each CAS retry so concurrent reservations cannot take the same slot', async () => {
+  const f = await fixture();
+  const first = await f.store.command('user_alex', create('First reserved work'));
+  const second = await f.store.command('user_alex', create('Second reserved work'));
+  f.firestore.synchronizeNextCommits();
+  const reserve = taskId => ({ ...schedule(taskId), type: 'task.schedule-available' });
+  const results = await Promise.allSettled([f.store.command('user_alex', reserve(first.id)), f.reopen().command('user_alex', reserve(second.id))]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(results.find(result => result.status === 'rejected').reason.code, 'schedule_conflict');
+  const saved = await f.reopen().snapshot('user_alex');
+  assert.equal(saved.events.length, 1); assert.equal(saved.tasks.filter(task => task.scheduledSlot).length, 1);
+  assert.ok(f.firestore.preconditionFailures() >= 1);
+  assert.deepEqual((await f.store.snapshot('user_sam')).events, []);
+});

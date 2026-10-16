@@ -99,3 +99,24 @@ test('personal tokens cannot administer grants or authenticate to Group Tasks an
   const response = await groups.fetch(new Request('https://openjob.test/api/v1/groups/grp_synthetic/tasks', { headers: { authorization: `Bearer ${token}` } }));
   assert.equal(response.status, 401); assert.equal(groupStoreCalls, 0);
 });
+
+test('available-time scheduling requires a human, isolates owners and returns a safe stale-slot conflict', async () => {
+  const f = await fixture();
+  const human = f.tokens.alex;
+  const create = await f.call('commands', human, 'POST', { type: 'task.create', title: 'Human chooses a slot' });
+  const task = (await create.json()).data;
+  const input = { type: 'task.schedule-available', taskId: task.id, calendarId: 'personal', start: '2027-05-11T09:00:00Z', end: '2027-05-11T09:30:00Z' };
+  const grant = await f.grant(['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write']);
+  const before = await (await f.call('snapshot', human)).json();
+  assert.equal((await f.call('commands', grant.token, 'POST', input)).status, 403);
+  assert.equal((await f.call('commands', f.tokens.sam, 'POST', input)).status, 403);
+  assert.deepEqual(await (await f.call('snapshot', human)).json(), before);
+  assert.equal((await f.call('commands', human, 'POST', { type: 'calendar.create', calendarId: 'personal', title: 'Private competing work', start: input.start, end: input.end })).status, 200);
+  const conflict = await f.call('commands', human, 'POST', input);
+  assert.equal(conflict.status, 409); const body = await conflict.json();
+  assert.equal(body.error.code, 'schedule_conflict'); assert.doesNotMatch(JSON.stringify(body), /Private competing work/);
+  const moved = await f.call('commands', human, 'POST', { ...input, start: input.end, end: '2027-05-11T10:00:00Z' });
+  assert.equal(moved.status, 200);
+  const saved = (await (await f.call('snapshot', human)).json()).data;
+  assert.equal(saved.events.length, 2); assert.equal(saved.tasks[0].scheduledSlot.start, '2027-05-11T09:30:00.000Z');
+});

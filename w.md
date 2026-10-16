@@ -1,3 +1,104 @@
+# npm channels verified13:27 UTC / WLK-306 final delivery
+
+After Shane's tag-only npm security completion, cache-bypassed public metadata200:
+latest=0.3.7, dev=0.3.8-dev.1792154226.37c322be4d3d. Previously fresh-installed exact
+stable/dev binaries now both report selected-channel current. Reused verified
+integrities and full registry smoke; no repeated install/broadsuite, publish or
+tag mutation. Commands npm install -g @scwlkr/openjob@latest (or @dev), openjob app.
+Initial published packages exclude WLK-304 persistence and WLK-306 planner.
+Future main/release registry publication is NOT configured; CI artifacts only,
+needs separately approved publishing authentication/serialization/stale-run rules.
+
+WLK-306 PR83 created draft and attached. Reviewed functional code6e9e612 and
+final doc/test delta d3b9283 independently clean. Actual installed suite7/7 now
+uses schedule-available for persisted linked Task, plus installed CLI availability/
+stale conflict/reserve/owner proof1/1 PASS. Core39/39, CLI5/5, compile/brand/secret
+PASS. Final exact-head tarball/install receipts and merge in Linear. Native HTTP
+unavailable due absent Expo dependencies; no fullsuite/device claim. Useful saved
+planner5195 stays; original5193/5194 and approved archives preserved.
+
+---
+
+# WLK-306 ready for final exact-head integration
+
+Branch codex/wlk-306-find-time from main30760ac. Human-only Calendar Find time:
+shared bounded UTC finder, existing CLI availability, final task.schedule-available
+current-owner overlap check inside CAS retries. All saved owner calendars count;
+only exact current Task link is excluded. Manual scheduling unchanged. API
+409 schedule_conflict and web/native activity contracts updated. No live calendar,
+external booking, credentials/grants/TLS or npm publication.
+
+Functional checkpoint6e9e612: focused domain/store/contracts/API/distribution39/39
+PASS; CLI5/5 PASS after fixing missing global ErrorCode schema enum. Independent
+static review clean. Root compile, brand and secrets PASS. Native HTTP test
+unavailable because native Expo dependencies/tsconfig absent; no native install,
+full suite or device acceptance claim. Actual installed UI5195: create Task,
+saved09:00 block, finder suggests09:30, add newer09:30 block, stale suggestion
+visibly rejects/Task unchanged, Refresh/finder selects10:00, Task linked block
+saves. Phone390px rendered without overflow (scrollWidth390); viewport restored.
+Screenshot /tmp/openjob-306-planner.png. Installed restart/CLI proof and finalhead
+receipts in Linear before merge. Own saved demo5195 separate file
+/tmp/openjob-306-demo/workspace.json (session26836); original5193/5194 preserved.
+
+npm handoff unchanged: approved initial stable/dev artifacts publicly verified;
+latest tag misassigned to dev, tag-only correction awaiting Shane's npm security
+prompt. No retries/mutations/polling while waiting. Initial packages exclude
+WLK-304/WLK-306. Staged archives untouched. WLK-302 TLS/login unrecovered/excluded.
+
+---
+
+# npm registry verified13:19 UTC / latest tag correction needs human npm prompt
+
+Public exact-version reads now200. Stable0.3.7 and dev0.3.8-dev.1792154226.37c322be4d3d
+SHA512/shasums exactly match approved archives; source5502ebd/37c322b and channel
+metadata latest/dev are correct, registryVerified:true. Cache-bypassed packument
+shows latest AND dev point to dev version. One tag-only correction attempt
+npm dist-tag add @scwlkr/openjob@0.3.7 latest --registry=https://registry.npmjs.org
+stopped EOTP. No confirmed tag change; no retry/publish/version bump. Shane must
+complete this tag-only command security prompt; never share OTP/token/password.
+Fresh isolated registry installs and actual full UI-assets/API Task-create,
+schedule, completion, owner isolation, Host-Origin and shutdown smoke PASS both:
+/tmp/openjob-303-registry-stable (explicit0.3.7), /tmp/openjob-303-registry-dev (@dev).
+Dev updates returns current with exactdev; stable updates safely unavailable
+because live latest points to prerelease. Initial registry packages exclude
+WLK-304 persistence and WLK-306 work. Approved staged files/demos unchanged.
+Do not repoll registry until new evidence. Public npm URL:
+https://www.npmjs.com/package/@scwlkr/openjob
+
+WLK-306 checkpoint now has helper/domain/store/OpenAPI20 PASS, signed API9 PASS,
+and scoped CLI conflict regression fixed by adding missing ErrorCode enum.
+Native HTTP check cannot bundle because native Expo dependencies absent; no heavy
+install performed/no native claim. Independent static implementation review clean.
+Actual installed/UI/restart proof, final focused checks and integration pending.
+
+---
+
+# WLK-306 checkpoint / npm handoff readback13:13 UTC
+
+After parent reports Shane's13:12 'done', unauthenticated public registry GET and
+explicit npm view @scwlkr/openjob dist-tags versions against registry.npmjs.org
+BOTH return404. Neither package/version/tag currently readable. No publication
+retry and no changes to /tmp/openjob-303-publish-approved. Registry installs/update
+checks cannot be verified until actual publication completes. Parent thread is
+cloud-backed; local send_message_to_thread returned thread-not-found. Receipt in
+Linear WLK-303; report via delegated final outcome. Need non-secret command result,
+never OTP/token/password. Source WLK-304 demo5194 and original5193 preserved.
+
+Independent next workflow WLK-306: Find time for an open Task across all saved
+owner Calendar blocks. New isolated branch codex/wlk-306-find-time from merged
+main30760ac. Implementation checkpoint only: shared bounded finder (existing CLI
+runtime/facade packaging pattern), Calendar UI, existing CLI availability command,
+human-only task.schedule-available with final current-state overlap check inside
+existing CAS mutation, API/OpenAPI contracts. Type generation + root compile PASS.
+Not yet behavior-tested/reviewed/merged/published. Review design chose final server
+overlap check over advisory-only scheduling. Next: helper interval tests, CAS
+concurrency/owner-agent denial, CLI and actual packaged UI proof, narrow review,
+focused checks, draftPR/exact-head nondeploying merge. Check parse/options/help,
+activity validators across web/native, persistence, and useful error behavior.
+No live provider calendars/TLS/sends/new grants; no claims of complete feature.
+
+---
+
 # WLK-304 local persistence review checkpoint
 
 Branch `codex/wlk-304-local-workspace-persistence`, base37c322b (merged PR81).

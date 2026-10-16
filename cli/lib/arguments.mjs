@@ -5,6 +5,8 @@ const VALUE_OPTIONS = new Set([
   "--account",
   "--cursor",
   "--calendar",
+  "--task",
+  "--minutes",
   "--file",
   "--assignee",
   "--confirm-name",

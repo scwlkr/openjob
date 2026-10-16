@@ -1,3 +1,4 @@
+import { assertTaskSlotAvailable } from "./workspace-availability.ts";
 import type { WorkspaceActor, WorkspaceAgent, WorkspaceCommand, WorkspaceEngine, WorkspaceScope, WorkspaceState } from "./workspace-contracts.ts";
 import { createFixtureWorkspace } from "./workspace-fixtures.ts";
 
@@ -13,7 +14,7 @@ function parse(input: unknown): WorkspaceCommand {
   const fields: Record<string, string[]> = {
     "task.create": ["title", "messageId"], "task.complete": ["taskId", "completed"],
     "task.update": ["taskId", "title"], "task.unschedule": ["taskId"], "task.delete": ["taskId"],
-    "task.schedule": ["taskId", "calendarId", "start", "end"], "calendar.create": ["calendarId", "title", "start", "end"],
+    "task.schedule-available": ["taskId", "calendarId", "start", "end"], "task.schedule": ["taskId", "calendarId", "start", "end"], "calendar.create": ["calendarId", "title", "start", "end"],
     "calendar.update": ["eventId", "title", "start", "end"], "calendar.delete": ["eventId"],
     "mail.compose": ["accountId", "to", "subject", "body"],
     "mail.draft.update": ["draftId", "to", "subject", "body"], "mail.simulate-send": ["draftId"],
@@ -127,7 +128,12 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
         break;
       }
       case "task.complete": { need("tasks:write", "tasks:personal"); const found = task(cmd.taskId); found.completed = cmd.completed; result = found; break; }
+      case "task.schedule-available":
       case "task.schedule": {
+        if (cmd.type === "task.schedule-available") {
+          if (grant) fail("forbidden", "Finding and reserving open time requires a human session");
+          assertTaskSlotAvailable(snapshot(actor), cmd);
+        }
         need("tasks:write", "tasks:personal"); need("calendar:write", cmd.calendarId); const found = task(cmd.taskId); calendar(cmd.calendarId);
         let event = found.calendarEventId ? next.events.find(e => e.id === found.calendarEventId) : undefined;
         if (event) { calendar(event.calendarId); need("calendar:write", event.calendarId); }

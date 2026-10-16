@@ -2,6 +2,7 @@
 // @ts-check
 
 import { prepareAgentGrant, deliverAgentGrant, preparePrivateTokenOutput } from "./lib/agent-grant.mjs";
+import { findAvailableTaskSlots } from "./lib/workspace-availability.mjs";
 import { parseCalendarIcal, previewCalendarIcalImport } from "./lib/calendar-ical.mjs";
 import { openSync, fstatSync, closeSync, readSync } from "node:fs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
@@ -88,6 +89,7 @@ const TASK_OPTIONS = new Map([
 ]);
 const COMMAND_OPTIONS = new Map([
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
+  ["workspace availability", new Set([...OUTPUT_OPTIONS, "--task", "--schedule-start", "--schedule-end", "--minutes"])],
   ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
   ["workspace providers", new Set([...OUTPUT_OPTIONS, "--account", "--cursor"])],
   ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
@@ -164,6 +166,7 @@ Global options:
 const RESOURCE_HELP = {
   workspace: `Usage:
   openjob workspace snapshot
+  openjob workspace availability --task <id> --schedule-start <ISO> --schedule-end <ISO> --minutes <5-480>
   openjob workspace tasks [--status <all|open|completed>] [--search <literal-title>] [--scheduled-on <YYYY-MM-DD>]
   openjob workspace providers [--account <account-id>] [--cursor <cursor>]
   openjob workspace command --input <path|->
@@ -587,6 +590,15 @@ async function main(raw) {
     const response = await apiRequest("/workspace/commands", { method: "POST", body: JSON.stringify({ type: "calendar.import", calendarId, ical, expectedRevision: preview.expectedRevision }) });
     writeResult(response); return;
   }
+  if (resource === "workspace" && command === "availability" && rest.length === 0) {
+    const taskId = parsed.options.get("--task"), start = parsed.options.get("--schedule-start"), end = parsed.options.get("--schedule-end");
+    const durationMinutes = Number(parsed.options.get("--minutes"));
+    if (typeof taskId !== "string" || typeof start !== "string" || typeof end !== "string") throw new CliError("usage_error", "Use workspace availability --task ID --schedule-start ISO --schedule-end ISO --minutes 5-480.", 2);
+    const snapshot = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    try { writeResult({ data: findAvailableTaskSlots(snapshot.data, { taskId, start, end, durationMinutes }) }); }
+    catch { throw new CliError("input_invalid", "Choose an open Task and a valid ISO window of at most seven days, duration 5-480 minutes. Suggestions cover saved visible Calendar blocks only.", 2); }
+    return;
+  }
   if (resource === "workspace" && command === "tasks" && rest.length === 0) {
     let query;
     try { query = normalizeWorkspaceTaskQuery({ status: parsed.options.get("--status"), search: parsed.options.get("--search"), scheduledOn: parsed.options.get("--scheduled-on") }); }
@@ -643,6 +655,7 @@ async function main(raw) {
     const fields = {
       "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
       "task.complete": ["type", "taskId", "completed"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
+      "task.schedule-available": ["type", "taskId", "calendarId", "start", "end"],
       "task.unschedule": ["type", "taskId"], "task.delete": ["type", "taskId"],
       "calendar.create": ["type", "calendarId", "title", "start", "end"],
       "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
