@@ -8,7 +8,7 @@ import { filterWorkspaceTasks } from "../../shared/workspace-task-query.mjs";
 import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
-export type WorkspaceTasksHandle = { openLinkedTask: (source: CalendarTaskSource) => boolean; openMailTask: (source: MailTaskSource) => boolean };
+export type WorkspaceTasksHandle = { openTask: (id: string) => boolean; openLinkedTask: (source: CalendarTaskSource) => boolean; openMailTask: (source: MailTaskSource) => boolean };
 type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
 const defaults = () => { const day = new Date().toISOString().slice(0, 10); return { start: `${day}T14:00`, end: `${day}T14:30` }; };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
@@ -37,7 +37,10 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
 
   function clearFilters() { setStatus("all"); setSearch(""); setScheduledOn(""); }
 
-  useImperativeHandle(ref, () => ({ openLinkedTask(source) {
+  useImperativeHandle(ref, () => ({ openTask(id) {
+    if (!view.tasks.some(task => task.id === id)) return false;
+    clearFilters(); setOpenedTask(id); setNavigation(value => value + 1); return true;
+  }, openLinkedTask(source) {
     const task = linkedTask(view, source);
     if (!task) return false;
     setStatus("all"); setSearch(""); setScheduledOn("");
