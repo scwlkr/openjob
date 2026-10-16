@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AuthSession, OpenJobAuth, SignInMethod } from "../../../app/openjob-contracts";
 import PersonalWorkspaceApp from "../../../app/workspace/personal-workspace-app";
 import "../../../app/globals.css";
@@ -48,6 +48,15 @@ window.personalWorkspaceFixture = fixture;
 
 function Harness() {
   const [selected, setSelected] = useState(owner);
-  return <><p style={{ margin: 0, padding: 12 }}>Isolated signed-identity demo · invented Mail and temporary fake Firestore · no live provider or sending.</p><label style={{ display: "block", padding: 12 }}>Test identity<select aria-label="Test identity" value={selected} onChange={(event) => { setSelected(event.target.value); selectOwner(event.target.value); }}><option value="alex">Alex</option><option value="sam">Sam</option></select></label><PersonalWorkspaceApp auth={auth} /></>;
+  const [storageMode, setStorageMode] = useState<"saved" | "temporary" | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch("/__test/state-mode", { cache: "no-store" }).then(response => response.json() as Promise<{ mode?: string }>).then(value => {
+      const mode = value.mode;
+      if (active && (mode === "saved" || mode === "temporary")) setStorageMode(mode);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  return <><p style={{ margin: 0, padding: 12 }}>Isolated signed-identity demo · invented Mail and local fake Firestore · no live provider or sending.</p><p style={{ margin: 0, padding: 12 }} data-testid="local-state-mode">{storageMode === "saved" ? "Saved workspace on this computer · local file is not encrypted." : storageMode === "temporary" ? "Temporary workspace · quitting clears server work." : "Synthetic local workspace"}</p><label style={{ display: "block", padding: 12 }}>Test identity<select aria-label="Test identity" value={selected} onChange={(event) => { setSelected(event.target.value); selectOwner(event.target.value); }}><option value="alex">Alex</option><option value="sam">Sam</option></select></label><PersonalWorkspaceApp auth={auth} /></>;
 }
 createRoot(document.getElementById("root")!).render(<Harness />);

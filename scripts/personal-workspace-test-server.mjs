@@ -6,8 +6,9 @@ import { createV1PersonalWorkspaceApi } from '../server/v1-personal-workspace.ts
 import { createV1PersonalAgentGrantsApi } from '../server/v1-personal-agent-grants.ts';
 import { createV1ProviderPreviewApi } from '../server/v1-provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
-import { createFakeFirestore, createPrivateKey } from '../tests/support/fake-firestore.mjs';
+import { createPrivateKey } from '../tests/support/fake-firestore.mjs';
 import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens.mjs';
+import { openPersonalWorkspaceState } from './personal-workspace-state.mjs';
 import { createMockProviderConnectionHarness } from '../tests/support/mock-provider-connections.mjs';
 
 if (!process.argv.includes('--test-only')) throw new Error('This isolated synthetic server requires --test-only.');
@@ -16,7 +17,24 @@ const port = portIndex < 0 ? 4181 : Number(process.argv[portIndex + 1]);
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Use an explicit loopback port from 0 to 65535.');
 const now = new Date().toISOString();
 const authority = await createTestFirebaseAuthority({ now });
-const firestore = createFakeFirestore();
+const stateIndex = process.argv.indexOf('--state-file');
+if (stateIndex >= 0 && !process.argv[stateIndex + 1]) throw new Error('Use --state-file PATH.');
+// Register before acquiring the lock: cancellation must drain initialization before closing it.
+let localState, server, stopping = false, finishStartup;
+const startupDone = new Promise(resolve => { finishStartup = resolve; });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+  if (stopping) return;
+  stopping = true;
+  void (async () => {
+    await startupDone;
+    if (server?.listening) await new Promise(resolve => server.close(resolve));
+    await localState?.close();
+    process.exit(0);
+  })();
+});
+try {
+localState = await openPersonalWorkspaceState(stateIndex >= 0 ? process.argv[stateIndex + 1] : undefined);
+const firestore = localState.firestore;
 const config = { projectId: 'openjob-dev', clientEmail: 'browser-fixture@example.invalid', privateKey: await createPrivateKey() };
 const users = createFirestoreUserStore(config, firestore.fetch);
 const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectId, fetchImplementation: authority.fetch, now: () => Date.parse(now) });
@@ -35,11 +53,13 @@ const providerHarness = await createMockProviderConnectionHarness({
   isOwnerActive: async ownerId => { const user = await users.getById(ownerId); return !!user && !user.deletionPending; },
 });
 const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken, connections: providerHarness.reader });
-const server = createServer(async (incoming, outgoing) => {
+await localState.persist();
+server = createServer(async (incoming, outgoing) => {
   // Packaged mode accepts only its parent proxy; direct/rebound browser requests fail.
   if (process.env.OPENJOB_LOCAL_API_TOKEN && incoming.headers['x-openjob-local-api'] !== process.env.OPENJOB_LOCAL_API_TOKEN) { outgoing.writeHead(403).end(); return; }
   try {
     const url = new URL(incoming.url, `http://${incoming.headers.host || '127.0.0.1:4181'}`);
+    if (url.pathname === '/__test/state-mode' && incoming.method === 'GET') { outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify({ mode: localState.filePath ? 'saved' : 'temporary' })); return; }
     const owner = url.pathname.match(/^\/__test\/session\/(alex|sam)$/)?.[1];
     if (owner && incoming.method === 'GET') {
       outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -65,16 +85,26 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.writeHead(user ? 200 : 401, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       outgoing.end(JSON.stringify(user ? { data: { ...user, usernameRequired: !user.username, groups: [] } } : { error: { code: 'authentication_required' } })); return;
     }
-    const response = await (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request);
+    const response = await localState.execute(() => (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request), !['GET', 'HEAD'].includes(incoming.method));
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));
     outgoing.end(Buffer.from(await response.arrayBuffer()));
-  } catch {
-    outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end('{"error":{"code":"test_server_failure"}}');
+  } catch (error) {
+    outgoing.writeHead(500, { 'content-type': 'application/json' });
+    outgoing.end(JSON.stringify({ error: error.localStateError ? { code: error.uncertain ? 'local_state_uncertain' : 'local_state_save_failed', message: error.uncertain ? 'Local save is uncertain. Stop and restart to inspect saved work.' : 'Local save failed. Previous work was preserved; check disk access before trying again.' } : { code: 'test_server_failure' } }));
   }
 });
-server.listen(port, '127.0.0.1', () => {
-  const actualPort = server.address().port;
-  console.log(`Synthetic signed identity + fake Firestore API: http://127.0.0.1:${actualPort}`);
-  process.send?.({ type: 'openjob-personal-fixture-ready', port: actualPort });
-});
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
+if (!stopping) {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', resolve);
+  });
+  server.once('error', () => { void localState.close().finally(() => process.exit(1)); });
+  if (!stopping) {
+    const actualPort = server.address().port;
+    if (localState.filePath) console.log(`Local prototype state: ${localState.filePath}`);
+    console.log(`Synthetic signed identity + fake Firestore API: http://127.0.0.1:${actualPort}`);
+    process.send?.({ type: 'openjob-personal-fixture-ready', port: actualPort });
+  }
+}
+} catch (error) { await localState?.close(); throw error; }
+finally { finishStartup(); }

@@ -1,3 +1,41 @@
+# WLK-304 local persistence review checkpoint
+
+Branch `codex/wlk-304-local-workspace-persistence`, base37c322b (merged PR81).
+Implemented opt-in `openjob app --state-file PATH` using the actual packaged UI/API
+and existing domain/fake Firestore. Stable synthetic owner records and workspace,
+grant hashes/revocations and sync receipts persist; RSA keys/session/provider
+secrets do not. Default remains temporary. Private bounded unencrypted JSON,
+atomic save-before-success, serialized operations, rollback on precommit failure,
+pause on uncertain durability, one-writer lock and non-destructive invalid/stale
+lock recovery. UI labels saved/temporary. See docs/NPM_INSTALL.md.
+
+Source restart/failure suite7/7 PASS. Reviewed functional head1b46b455e29b23609c8e66db2fde2388c73aa620
+passed final focused core/distribution22/22 and clean-prefix installed restart,
+failure and startup-cancellation7/7; actual asset/API create/schedule/complete,
+isolation, Host-Origin and shutdown smoke PASS. Prefix /tmp/openjob-304-exact-prefix.
+Tarball SHA256 7aa3cdca717cb75cd4c77bd1127f2e07bb80f4c05a266e553230d9cf816ee40a.
+Independent review found startup lock cancellation and parent continuation races;
+fixed by early signal registration, initialization drain and stopping guards.
+Cheap compile/brand PASS; secret scan PASS613 files. No native/device/full-suite
+acceptance claimed. Original useful demo5193 remains unchanged. Verified installed saved-mode demo
+is available at http://127.0.0.1:5194/workspace with
+/tmp/openjob-304-demo/workspace.json (session38617); actual Chrome UI shows saved,
+local, unencrypted and synthetic labels. PR82 was created draft and attached;
+final exact head/base/protection/merge receipts are in Linear. Only PR82 open,
+main37c322b, no protection/rulesets/status checks; sole main workflow only builds
+artifacts, never publishes/deploys. Reviewed nonproduction merge authorized.
+
+WLK-303 publication: Shane approved @scwlkr/openjob, signed into existing account;
+read-only npm whoami=scwlkr and org owner verified. Exact approved archives in
+/tmp/openjob-303-publish-approved remain unchanged. Initial latest publish exited
+EOTP, registry still404; dev not attempted. Parent handed Shane commands for human
+security completion. Do not retry while waiting or publish WLK-304 artifacts.
+Registry readback/fresh installs and separately approved continuous publishing
+remain gates. WLK-302 TLS/login cloud checkpoint unrecovered and excluded;
+PatriBible and unrelated original checkout untouched.
+
+---
+
 # Local WLK-303 integration checkpoint
 
 Isolated Mac checkout/branch `codex/wlk-303-npm-distribution` from main `5358f6cc0c030d478aafea7d4762fdab68d799e3`. Existing Desktop/dev/openjob and PatriBible remain untouched. WLK-302 cloud stop was accepted per parent; final TLS/login checkpoint is not recovered and is excluded here. Linear WLK-303 remains the execution record. Parent authorized non-overlapping integration after fresh main/PR/branch verification; inaccessible WLK-302 is no longer a generic merge blocker. No WLK-302 branch or PR is published; preserve any cloud-only work for later recovery.

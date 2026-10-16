@@ -133,7 +133,7 @@ Usage:
   openjob [global options] <resource> <command> [arguments]
 
 Local app and updates:
-  openjob app [--port 5191]   Run the packaged workspace prototype
+  openjob app [--port 5191] [--state-file PATH]   Run the packaged workspace prototype
   openjob updates             Check the installed latest/dev channel (JSON)
   OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 

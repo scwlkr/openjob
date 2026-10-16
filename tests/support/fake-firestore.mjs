@@ -202,6 +202,11 @@ export function createFakeFirestore({ projectId = "openjob-dev" } = {}) {
   }
 
   return {
+    exportState() { return { revision, documents: structuredClone([...documents]) }; },
+    restoreState(state) {
+      revision = state.revision; documents.clear();
+      for (const [name, document] of structuredClone(state.documents)) documents.set(name, document);
+    },
     documents,
     commitAttempts() {
       return commitAttemptCount;
