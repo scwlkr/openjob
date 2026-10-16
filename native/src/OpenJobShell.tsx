@@ -28,6 +28,8 @@ import {
   resolveAppearanceKey,
 } from "./appearance-keyboard";
 import { ReadOnlyTaskList } from "./ReadOnlyTaskList";
+import { NativePersonalWorkspace } from "./personal-workspace/NativePersonalWorkspace";
+import type { NativePersonalWorkspaceController } from "./personal-workspace-contracts";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
 import type { NativeTaskListController } from "./task-list-contracts";
 import {
@@ -51,6 +53,7 @@ type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
   signedInUser: SignedInUser;
   sessionReady: boolean;
   taskListController: NativeTaskListController;
+  personalWorkspaceController?: NativePersonalWorkspaceController;
   runtimeConfig: OpenJobRuntimeConfig;
 };
 
@@ -143,11 +146,13 @@ function ShellScreen({
   sessionReady,
   signedInUser,
   taskListController,
+  personalWorkspaceController,
 }: ShellProps) {
   const { fontScale, width } = useWindowDimensions();
   const { palette } = useOpenJobTheme();
   const compactHeader = width < 520;
   const largeTextHeader = compactHeader && fontScale >= 1.2;
+  const [surface, setSurface] = useState<"personal" | "groups">(personalWorkspaceController ? "personal" : "groups");
 
   return (
     <SafeAreaView
@@ -206,7 +211,15 @@ function ShellScreen({
           </View>
         </View>
       </View>
-      <ReadOnlyTaskList
+      {personalWorkspaceController ? <View style={[styles.surfaceTabs, { borderBottomColor: palette.line }]} accessibilityLabel="Workspace selection">
+        {(["personal", "groups"] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={value === "personal" ? "Personal workspace" : "Existing Groups"} accessibilityState={{ selected: surface === value }} onPress={() => setSurface(value)} style={[styles.surfaceTab, { backgroundColor: surface === value ? palette.selected : palette.card, borderColor: palette.controlLine }]}>
+          <Text style={{ color: surface === value ? palette.selectedText : palette.ink, fontFamily: "Inter_600SemiBold" }}>{value === "personal" ? "Personal workspace" : "Existing Groups"}</Text>
+        </Pressable>)}
+      </View> : null}
+      {personalWorkspaceController ? <View style={{ flex: 1, display: surface === "personal" ? "flex" : "none" }} accessibilityElementsHidden={surface !== "personal"} importantForAccessibility={surface === "personal" ? "auto" : "no-hide-descendants"}>
+        <NativePersonalWorkspace key={`${ownerUserId}:${sessionReady ? "ready" : "restoring"}`} controller={personalWorkspaceController} ownerUserId={ownerUserId} sessionReady={sessionReady} onRestoreSession={onRestoreSession} onSessionRevoked={signedInUser.onSessionRevoked} />
+      </View> : null}
+      {surface === "groups" || !personalWorkspaceController ? <ReadOnlyTaskList
         controller={taskListController}
         key={ownerUserId}
         onRestoreSession={onRestoreSession}
@@ -215,7 +228,7 @@ function ShellScreen({
         reducedMotion={reducedMotion}
         restoreReason={restoreReason}
         sessionReady={sessionReady}
-      />
+      /> : null}
     </SafeAreaView>
   );
 }
@@ -528,6 +541,7 @@ export function OpenJobShell({
   signedInUser,
   sessionReady,
   taskListController,
+  personalWorkspaceController,
 }: {
   diagnostics: DiagnosticsSettings;
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
@@ -539,6 +553,7 @@ export function OpenJobShell({
   signedInUser: SignedInUser;
   sessionReady: boolean;
   taskListController: NativeTaskListController;
+  personalWorkspaceController?: NativePersonalWorkspaceController;
 }) {
   const { navigationTheme, palette } = useOpenJobTheme();
   const screenOptions = useMemo(
@@ -562,6 +577,7 @@ export function OpenJobShell({
         <Stack.Screen name="Shell">
           {(props) => (
             <ShellScreen
+              key={ownerUserId}
               {...props}
               onRestoreSession={onRestoreSession}
               ownerUserId={ownerUserId}
@@ -571,6 +587,7 @@ export function OpenJobShell({
               sessionReady={sessionReady}
               signedInUser={signedInUser}
               taskListController={taskListController}
+              personalWorkspaceController={personalWorkspaceController}
             />
           )}
         </Stack.Screen>
@@ -583,6 +600,8 @@ export function OpenJobShell({
 }
 
 const styles = StyleSheet.create({
+  surfaceTabs: { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 12, borderBottomWidth: 1 },
+  surfaceTab: { minHeight: 48, padding: 12, justifyContent: "center", borderRadius: 8, borderWidth: 1 },
   appearanceOption: {
     borderRadius: 6,
     borderWidth: 1,

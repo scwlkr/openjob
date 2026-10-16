@@ -23,6 +23,7 @@ import {
   type SignedInResult,
 } from "./coordinator";
 import { createNativeAuthController } from "./dependencies";
+import type { NativePersonalWorkspaceController } from "../personal-workspace-contracts";
 
 export type { AuthFlowResult, SignedInResult } from "./coordinator";
 
@@ -54,6 +55,7 @@ export type NativeAuthController = Pick<
   reauthenticateDeletionProvider?:
     NativeAuthCoordinator["reauthenticateDeletionProvider"];
   refreshDeletionStatus?: NativeAuthCoordinator["refreshDeletionStatus"];
+  getPersonalWorkspaceController?: NativeAuthCoordinator["getPersonalWorkspaceController"];
 };
 
 type SignedInViewProps = {
@@ -66,6 +68,7 @@ type SignedInViewProps = {
   restoreReason?: "offline" | "unavailable";
   sessionReady: boolean;
   taskListController: NativeTaskListController;
+  personalWorkspaceController?: NativePersonalWorkspaceController;
 };
 
 type AuthGateState = AuthFlowResult | { kind: "restoring" };
@@ -817,6 +820,7 @@ export function NativeAuthGate({
         restoreReason: state.restoreReason,
         sessionReady: !state.provisional,
         taskListController: auth,
+        personalWorkspaceController: auth.getPersonalWorkspaceController?.(),
       });
     }
 

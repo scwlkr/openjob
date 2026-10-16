@@ -281,6 +281,7 @@ function ThemedSurface({
           restoreReason,
           sessionReady,
           taskListController,
+          personalWorkspaceController,
         }) => (
           <OpenJobShell
             diagnostics={diagnostics}
@@ -297,6 +298,7 @@ function ThemedSurface({
             runtimeConfig={runtimeConfig}
             restoreReason={restoreReason}
             taskListController={taskListController}
+            personalWorkspaceController={personalWorkspaceController}
             sessionReady={sessionReady}
           />
         )}
