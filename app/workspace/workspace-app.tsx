@@ -7,7 +7,7 @@ import styles from "./workspace.module.css";
 import WorkspaceCalendar from "./workspace-calendar";
 import WorkspaceAgents from "./workspace-agents";
 import WorkspaceTasks, { type WorkspaceTasksHandle } from "./workspace-tasks";
-import type { CalendarTaskSource } from "./workspace-links";
+import type { CalendarTaskSource, MailTaskSource } from "./workspace-links";
 import WorkspaceMail, { type MailSource, type WorkspaceMailHandle } from "./workspace-mail";
 
 type Tab = "Mail" | "Calendar" | "Tasks" | "Agents";
@@ -41,6 +41,11 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   function openLinkedTask(source: CalendarTaskSource) {
     if (!tasks.current?.openLinkedTask(source)) { setError("The linked Task is unavailable in this workspace."); return; }
     setTab("Tasks"); setError(""); setNotice("Linked Task opened. Unsaved Task and Calendar edits are kept.");
+  }
+
+  function openMailTask(source: MailTaskSource) {
+    if (!tasks.current?.openMailTask(source)) { setError("The linked Task is unavailable in this workspace."); return; }
+    setTab("Tasks"); setError(""); setNotice("Task from Mail opened. Unsaved editor text is kept.");
   }
 
   function openSource(source: MailSource) {
@@ -88,7 +93,7 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
         {notice && <div role="status" className={styles.success}>{notice}</div>}
         {!view && !error && <p role="status">Loading workspace…</p>}
         {!view && error && <p>This prototype needs the isolated fixture API enabled on its server.</p>}
-        {view && <div hidden={tab !== "Mail"}><WorkspaceMail ref={mail} view={view} busy={busy} command={command} /></div>}
+        {view && <div hidden={tab !== "Mail"}><WorkspaceMail onOpenTask={openMailTask} ref={mail} view={view} busy={busy} command={command} /></div>}
         {view && <WorkspaceTasks ref={tasks} active={tab === "Tasks"} view={view} busy={busy} command={command} onOpenSource={openSource} />}
         {view && <WorkspaceCalendar active={tab === "Calendar"} view={view} busy={busy} command={command} onOpenTask={openLinkedTask} />}
         {view && tab === "Agents" && <WorkspaceAgents view={view} owner={owner} busy={busy} command={command} refresh={refresh} />}

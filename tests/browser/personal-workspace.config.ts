@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const cwd = fileURLToPath(new URL("../..", import.meta.url));
 export default defineConfig({
-  testDir: ".", testMatch: ["personal-workspace.spec.ts", "personal-mail.spec.ts", "personal-calendar-workflow.spec.ts", "personal-task-finding.spec.ts"], fullyParallel: false,
+  testDir: ".", testMatch: ["personal-workspace.spec.ts", "personal-mail.spec.ts", "personal-mail-task-links.spec.ts", "personal-calendar-workflow.spec.ts", "personal-task-finding.spec.ts"], fullyParallel: false,
   outputDir: "../../output/playwright/personal-workspace-results", reporter: "line",
   use: { baseURL: "http://127.0.0.1:4178", browserName: "chromium", trace: "retain-on-failure",
     launchOptions: process.env.OPENJOB_CHROMIUM_EXECUTABLE ? { executablePath: process.env.OPENJOB_CHROMIUM_EXECUTABLE } : undefined },

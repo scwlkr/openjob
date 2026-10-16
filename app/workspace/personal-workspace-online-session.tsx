@@ -7,7 +7,7 @@ import { OpenJobBrand } from "../openjob-brand";
 import type { WorkspaceView } from "../../shared/workspace-contracts";
 import { PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import WorkspaceTasks, { type WorkspaceTasksHandle } from "./workspace-tasks";
-import type { CalendarTaskSource } from "./workspace-links";
+import type { CalendarTaskSource, MailTaskSource } from "./workspace-links";
 import WorkspaceCalendar from "./workspace-calendar";
 import WorkspaceCalendarFiles from "./workspace-calendar-files";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
@@ -34,6 +34,12 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
     if (!current()) return;
     if (!tasks.current?.openLinkedTask(source)) { setError("The linked Task is unavailable in this workspace."); return; }
     setTab("Tasks"); setError(""); setNotice("Linked Task opened. Unsaved Task and Calendar edits are kept.");
+  }
+
+  function openMailTask(source: MailTaskSource) {
+    if (!current()) return;
+    if (!tasks.current?.openMailTask(source)) { setError("The linked Task is unavailable in this workspace."); return; }
+    setTab("Tasks"); setError(""); setNotice("Task from Mail opened. Unsaved editor text is kept.");
   }
 
   function openSource(source: MailSource) {
@@ -80,7 +86,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
           <p className={styles.banner}>Invented Mail · examples and drafts saved privately to your OpenJob account. All mailbox identities and incoming messages are fictional. Simulate send records a local example; no provider or recipient receives mail.</p>
           <button disabled={busy} onClick={() => command({ type: "mail.examples.add" }, "Invented examples are ready. Existing tasks, calendar and drafts were kept.")}>{view.accounts.length ? "Add invented examples again" : "Add invented examples"}</button>
           {!view.accounts.length && <p>Enable these invented examples to try Mail → Task → Calendar and saved reply drafts. Your existing workspace stays intact.</p>}
-          {view.accounts.length > 0 && <WorkspaceMail ref={mail} view={view} busy={busy} command={command} recovery={recovery} />}
+          {view.accounts.length > 0 && <WorkspaceMail onOpenTask={openMailTask} ref={mail} view={view} busy={busy} command={command} recovery={recovery} />}
         </section>}
         {view && tab === "Mail preview" && <PersonalWorkspaceMail session={session} signal={signal} client={client} busy={busy} command={command} />}
         {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}
