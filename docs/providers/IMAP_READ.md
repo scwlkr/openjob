@@ -49,8 +49,10 @@ success and failure. No mailbox-mutating cleanup command is sent.
 
 ## Deliberate limits
 
-Pages contain at most ten messages. Response bytes, search results, literals,
-headers, body text and request duration are bounded; overflow fails explicitly.
+Pages contain at most ten messages (the isolated demo uses two). Search results
+are limited to 1,000 UIDs, responses to 256 KiB and message literals to 64 KiB.
+Headers are limited to 16 KiB/100 fields; session operations have bounded
+timeouts. Overflow fails explicitly without silently truncating a search.
 Only the documented ASCII/UTF-8 `text/plain` message subset is supported.
 Unsupported MIME, HTML, attachments, character sets and transfer encodings fail
 explicitly. Terminal controls are rejected while ordinary body line breaks and
