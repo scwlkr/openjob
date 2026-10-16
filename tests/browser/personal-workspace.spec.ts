@@ -124,3 +124,91 @@ test("human agent controls show effective scopes, isolate owners and revoke real
   await expect(row).toContainText("Revoked");
   await page.screenshot({ path: testInfo.outputPath("personal-workspace-agent-grants.png"), fullPage: true });
 });
+
+test("authenticated provider preview isolates accounts, pages messages and exposes synthetic capability states", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mail preview", exact: true }).click();
+  const account = page.getByLabel("Preview account", { exact: true });
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  await expect(page.getByTestId("provider-status")).toContainText("Ready (synthetic)");
+  const refreshed = page.waitForResponse((response) => response.url().includes("/api/v1/workspace/provider-preview") && response.request().method() === "GET");
+  await page.getByRole("button", { name: "Refresh preview", exact: true }).click();
+  expect((await refreshed).status()).toBe(200);
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  await expect(page.getByText(/Fixed example snapshot time:/)).toBeVisible();
+  const capabilities = page.getByRole("region", { name: "Provider status" });
+  await expect(capabilities).toContainText("Mail read");
+  await expect(capabilities).toContainText("Mail draft");
+  await expect(capabilities).toContainText("Mail send");
+  await expect(capabilities).toContainText("Calendar read");
+  await expect(capabilities).toContainText("Calendar write");
+  await page.getByTestId("provider-message").filter({ hasText: "Launch checklist for Friday" }).click();
+  const reader = page.getByRole("region", { name: "Synthetic message reader" });
+  await expect(reader).toContainText("Inbox");
+  await expect(reader).toContainText("Thread reference");
+  await expect(reader).toContainText("Provider message reference");
+  await expect(reader).toContainText("alex.personal@gmail.example.invalid");
+  const sentCommand = page.waitForRequest((request) => request.method() === "POST" && request.url().includes("/api/v1/workspace/commands"));
+  await page.getByRole("button", { name: "Create personal task from example", exact: true }).click();
+  expect((await sentCommand).postDataJSON()).toEqual({ type: "task.create", title: "Launch checklist for Friday" });
+  await expect(page.getByRole("status")).toContainText("no mailbox link was saved");
+  await page.getByRole("button", { name: "Next messages", exact: true }).click();
+  await expect(page.getByTestId("provider-message")).toHaveCount(1);
+  await expect(page.getByTestId("provider-message")).toContainText("Studio booking confirmation");
+  await expect(reader.getByRole("button", { name: "Create personal task from example", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Next messages", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Previous messages", exact: true }).click();
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  await page.getByRole("button", { name: "Next messages", exact: true }).click();
+  await page.getByRole("button", { name: "First page", exact: true }).click();
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  const studio = await page.getByRole("option", { name: /Studio Gmail/ }).getAttribute("value");
+  await page.evaluate(() => window.personalWorkspaceFixture.deferNextToken());
+  await page.getByRole("button", { name: "Next messages", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.personalWorkspaceFixture.tokenIsWaiting)).toBe(true);
+  await account.selectOption(studio!);
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  await page.evaluate(() => window.personalWorkspaceFixture.releaseToken());
+  await expect(account).toHaveValue(studio!);
+  await expect(page.getByRole("button", { name: "Previous messages", exact: true })).toBeDisabled();
+  await page.getByTestId("provider-message").first().click();
+  await expect(reader).toContainText("alex.studio@gmail.example.invalid");
+  await expect(page.getByTestId("provider-event")).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "Read-only provider calendar" })).toContainText("not merged into your saved OpenJob Calendar");
+  await page.screenshot({ path: testInfo.outputPath("personal-provider-preview-desktop.png"), fullPage: true });
+  for (const [label, state] of [[/Work Outlook/, "Reconnect required"], [/Archive Outlook/, "Provider error"], [/Standards mailbox/, "Unsupported"]] as const) {
+    const value = await page.getByRole("option", { name: label }).getAttribute("value");
+    await account.selectOption(value!);
+    await expect(page.getByTestId("provider-status")).toContainText(state);
+    await expect(page.getByTestId("provider-sync")).toContainText("Preview sync blocked");
+    await expect(page.getByTestId("provider-message")).toHaveCount(0);
+    await expect(page.getByTestId("provider-event")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Next messages", exact: true })).toBeDisabled();
+  }
+  await page.getByLabel("Test identity", { exact: true }).selectOption("sam");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mail preview", exact: true }).click();
+  await expect(page.getByTestId("provider-message")).toHaveCount(2);
+  expect(await page.getByRole("option", { name: /Studio Gmail/ }).getAttribute("value")).not.toBe(studio);
+  await expect(reader.getByRole("button", { name: "Create personal task from example", exact: true })).toHaveCount(0);
+});
+
+test("provider preview remains usable at tablet and phone widths", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mail preview", exact: true }).click();
+  for (const [width, label] of [[820, "tablet"], [390, "phone"]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByTestId("provider-message")).toHaveCount(2);
+    await page.getByTestId("provider-message").first().click();
+    await expect(page.getByRole("region", { name: "Synthetic message reader" })).toContainText("Thread reference");
+    await page.getByRole("button", { name: "Next messages", exact: true }).click();
+    await expect(page.getByTestId("provider-message")).toHaveCount(1);
+    await page.getByRole("button", { name: "Previous messages", exact: true }).click();
+    await expect(page.getByTestId("provider-message")).toHaveCount(2);
+    await page.getByTestId("provider-message").first().click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`personal-provider-preview-${label}.png`), fullPage: true });
+  }
+});

@@ -6,11 +6,11 @@ import { createFirebaseAuth } from "../firebase-auth";
 import type { AuthSession, OpenJobAuth, SignInMethod } from "../openjob-contracts";
 import { OpenJobBrand } from "../openjob-brand";
 import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
-import { createFixtureWorkspace } from "../../shared/workspace-fixtures";
 import { createPersonalWorkspaceClient, PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import WorkspaceTasks from "./workspace-tasks";
 import WorkspaceCalendar from "./workspace-calendar";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
+import PersonalWorkspaceMail from "./personal-workspace-mail";
 import styles from "./workspace.module.css";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
@@ -67,11 +67,7 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
   const [error, setError] = useState("");
   const [unrecognized, setUnrecognized] = useState(false);
   const [notice, setNotice] = useState("");
-  const [selectedMessage, setSelectedMessage] = useState("");
   const mounted = useRef(true);
-  const synthetic = useMemo(() => createFixtureWorkspace(), []);
-  const messages = synthetic.messages.filter((message) => message.accountId.startsWith("alex_"));
-  const selected = messages.find((message) => message.id === selectedMessage);
   const current = () => mounted.current && !signal.aborted;
 
   useEffect(() => {
@@ -107,7 +103,7 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
         {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
-        {view && tab === "Mail preview" && <><p className={styles.banner}>Synthetic Mail preview · fictional messages, no provider connection, no sending. This mail is not saved to your account.</p><div className={styles.mailGrid}><section className={styles.panel} aria-label="Synthetic messages">{messages.map((message) => <button className={styles.message} key={message.id} onClick={() => setSelectedMessage(message.id)}><strong>{message.subject}</strong><small>{message.from} · synthetic</small></button>)}</section><section className={styles.panel} aria-label="Synthetic message reader">{selected ? <div className={styles.reader}><h2>{selected.subject}</h2><p>{selected.from}</p><pre className={styles.body}>{selected.body}</pre><button disabled={busy} onClick={() => command({ type: "task.create", title: selected.subject }, "Task created from a synthetic example; no mailbox link was saved")}>Create personal task from example</button></div> : <p className={styles.empty}>Select a fictional message to explore the preview.</p>}</section></div></>}
+        {view && tab === "Mail preview" && <PersonalWorkspaceMail session={session} signal={signal} client={client} busy={busy} command={command} />}
         {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id} data-testid="personal-activity"><strong>{entry.actor}</strong> · {entry.action} <small>{new Date(entry.createdAt).toLocaleString()}</small></p>)}</details>}
       </main></div></div>;

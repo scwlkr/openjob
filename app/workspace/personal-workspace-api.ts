@@ -1,3 +1,4 @@
+import type { ProviderPreview } from "../../shared/provider-contracts";
 import type { PersonalAgentGrant } from "../../shared/personal-agent-grants";
 import type { AuthSession } from "../openjob-contracts";
 import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
@@ -13,6 +14,7 @@ export type PersonalWorkspaceClient = {
   command(session: AuthSession, input: WorkspaceCommand, signal: AbortSignal): Promise<unknown>;
   listAgents(session: AuthSession, signal: AbortSignal): Promise<PersonalAgentGrant[]>;
   revokeAgent(session: AuthSession, id: string, signal: AbortSignal): Promise<void>;
+  providerPreview(session: AuthSession, signal: AbortSignal, query?: { accountId?: string; cursor?: string }): Promise<ProviderPreview>;
 };
 
 export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
@@ -40,5 +42,11 @@ export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
     command: (session, input, signal) => request(session, signal, input),
     listAgents: async (session, signal) => await request(session, signal, undefined, "agent-grants") as PersonalAgentGrant[],
     revokeAgent: async (session, id, signal) => { await request(session, signal, undefined, `agent-grants/${encodeURIComponent(id)}`, "DELETE"); },
+    providerPreview: async (session, signal, query = {}) => {
+      const search = new URLSearchParams();
+      if (query.accountId) search.set("accountId", query.accountId);
+      if (query.cursor) search.set("cursor", query.cursor);
+      return await request(session, signal, undefined, `provider-preview${search.size ? `?${search}` : ""}`) as ProviderPreview;
+    },
   };
 }

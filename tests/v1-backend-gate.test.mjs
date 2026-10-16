@@ -9,6 +9,7 @@ import { createFirestoreTaskStore } from "../db/v1-tasks.ts";
 import { createFirestorePersonalWorkspaceStore } from "../db/personal-workspace.ts";
 import { createV1PersonalWorkspaceApi } from "../server/v1-personal-workspace.ts";
 import { createV1PersonalAgentGrantsApi } from "../server/v1-personal-agent-grants.ts";
+import { createV1ProviderPreviewApi } from "../server/v1-provider-preview.ts";
 import { createFirestoreUserStore } from "../db/users.ts";
 import { runV1AcceptanceScenario } from "../scripts/v1-acceptance-scenario.mjs";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
@@ -137,6 +138,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       const personalWorkspaces = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
       const personalWorkspaceApi = createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken });
       const personalAgentGrantsApi = createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken });
+      const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken });
       const tasksApi = createV1TasksApi({ agents: agentGrants, tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
         subscriptions: notificationSubscriptions,
@@ -177,6 +179,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname === "/api/v1/workspace/provider-preview") return providerPreviewApi.fetch(request);
           if (pathname.startsWith("/api/v1/workspace/agent-grants")) return personalAgentGrantsApi.fetch(request);
           if (pathname.startsWith("/api/v1/workspace/")) return personalWorkspaceApi.fetch(request);
           if (pathname.startsWith("/api/v1/agent-grants")) return agentGrantsApi.fetch(request);
@@ -402,11 +405,26 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(privateState.tasks.find(task => task.id === privateTask.id).completed, true);
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).title, "Persisted personal plan");
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).start, "2026-07-17T10:00:00.000Z");
+    const previewPath = "/api/v1/workspace/provider-preview";
+    const deniedPreview = await request({ actor: "invalid", method: "GET", path: previewPath });
+    assert.equal(deniedPreview.status, 401); await validate(deniedPreview, previewPath, "get");
+    const previewResponse = await request({ actor: "initialAdmin", method: "GET", path: previewPath });
+    assert.equal(previewResponse.status, 200); await validate(previewResponse, previewPath, "get");
+    const preview = (await previewResponse.json()).data;
+    assert.equal(preview.mode, "synthetic");
+    assert.ok(preview.accounts.length >= 2);
+    assert.ok(preview.messages.length > 0);
+    const foreignPreview = await request({ actor: "memberUser", method: "GET", path: `${previewPath}?accountId=${encodeURIComponent(preview.selectedAccountId)}` });
+    assert.equal(foreignPreview.status, 403); await validate(foreignPreview, previewPath, "get");
+    const invalidPreviewQuery = await request({ actor: "initialAdmin", method: "GET", path: `${previewPath}?ownerId=foreign` });
+    assert.equal(invalidPreviewQuery.status, 400); await validate(invalidPreviewQuery, previewPath, "get");
     const personalGrantPath = "/api/v1/workspace/agent-grants";
     const issuedPersonal = await request({ actor: "initialAdmin", method: "POST", path: personalGrantPath, body: { name: "Personal planner", scopes: ["tasks:read", "tasks:write", "calendar:read", "calendar:write"], resourceIds: ["tasks:personal", "calendar:personal"] } });
     assert.equal(issuedPersonal.status, 201);
     const { agent: personalGrant, token: personalToken } = (await issuedPersonal.clone().json()).data;
     ephemeralCapabilityMaterial.push(personalToken);
+    const personalAgentPreview = await request({ authorization: personalToken, method: "GET", path: previewPath });
+    assert.equal(personalAgentPreview.status, 401); await validate(personalAgentPreview, previewPath, "get");
     await validate(issuedPersonal, personalGrantPath, "post", { allowedSecrets: [personalToken] });
     const personalList = await request({ actor: "initialAdmin", method: "GET", path: personalGrantPath });
     assert.equal(personalList.status, 200); await validate(personalList, personalGrantPath, "get");

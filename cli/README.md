@@ -42,6 +42,14 @@ and recovery material remain in their 1Password items.
 
 ## Personal Tasks and Calendar
 
+`openjob workspace providers --format json` reads the same provider adapter
+preview as the web app. It contains invented accounts/messages/calendars with
+explicit synthetic status and capability reasons. Use `--account <id>` to select
+an account and `--cursor <opaque-cursor>` for the next message page. Account
+references and cursors are scoped to the authenticated owner and selected
+mailbox. This command uses the normal human profile; it rejects agent tokens.
+No live provider connection, credentials, synchronization or sending occurs.
+
 The existing human profile also owns a personal workspace through the shared
 authenticated API. Web and CLI read and mutate the same server-owned records:
 

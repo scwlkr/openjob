@@ -5,6 +5,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
+import { createProviderPreview, createProviderResourceRef } from "../shared/provider-preview.ts";
 
 const contractUrl = new URL("../openapi/openapi.yaml", import.meta.url);
 const EXPECTED_RELEASE_VERSION = JSON.parse(
@@ -29,6 +30,7 @@ const expectedOperations = [
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "get /api/v1/me/sign-in-methods listSignInMethods",
   "get /api/v1/workspace/snapshot getPersonalWorkspace",
+  "get /api/v1/workspace/provider-preview getProviderPreview",
   "get /api/v1/workspace/agent-grants listPersonalAgentGrants",
   "post /api/v1/workspace/agent-grants createPersonalAgentGrant",
   "delete /api/v1/workspace/agent-grants/{agentId} revokePersonalAgentGrant",
@@ -100,7 +102,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 29);
+  assert.equal(Object.keys(contract.paths).length, 30);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -542,6 +544,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   );
   const signInConflictOperations = [
     "getPersonalWorkspace",
+    "getProviderPreview",
     "commandPersonalWorkspace",
     "listPersonalAgentGrants",
     "createPersonalAgentGrant",
@@ -591,6 +594,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   );
   const domainConflictCodes = new Map([
     ["getPersonalWorkspace", ["conflict"]],
+    ["getProviderPreview", ["provider_unavailable"]],
     ["commandPersonalWorkspace", ["conflict"]],
     ["listPersonalAgentGrants", ["conflict"]],
     ["createPersonalAgentGrant", ["conflict"]],
@@ -709,6 +713,23 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
   }
   assert.equal(contract.paths["/api/v1/workspace/agent-grants"].post["x-openjob-retryable"], false);
   assert.equal(contract.paths["/api/v1/workspace/agent-grants/{agentId}"].delete.responses["204"].content, undefined);
+});
+
+test("provider preview response schemas preserve opaque Unicode upstream identities in qualified references", async () => {
+  const contract = await validateOpenApiContract(contractUrl);
+  const validate = compileSchema(contract.paths["/api/v1/workspace/provider-preview"].get.responses["200"].content["application/json"].schema);
+  const data = await createProviderPreview({ ownerId: "schema_fixture" });
+  const accountId = data.selectedAccountId;
+  const upstream = "漢".repeat(256);
+  const reference = kind => createProviderResourceRef(accountId, kind, upstream);
+  assert.ok(reference("message").length > 512);
+  data.messages[0] = { ...data.messages[0], id: reference("message"), upstreamId: upstream, threadId: reference("thread"), upstreamThreadId: upstream, folderIds: [reference("folder")] };
+  data.folders[0] = { ...data.folders[0], id: reference("folder"), upstreamId: upstream };
+  data.calendars[0] = { ...data.calendars[0], id: reference("calendar"), upstreamId: upstream };
+  data.events[0] = { ...data.events[0], id: reference("event"), upstreamId: upstream, calendarId: reference("calendar") };
+  assert.equal(validate({ data }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ data: { ...data, messages: [{ ...data.messages[0], id: "x".repeat(3073) }] } }), false);
+  assert.equal(validate({ data: { ...data, messages: [{ ...data.messages[0], upstreamId: upstream + "漢" }] } }), false);
 });
 
 test("validation rejects broken operations and examples", async () => {
