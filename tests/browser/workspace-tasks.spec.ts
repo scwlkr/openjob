@@ -50,7 +50,8 @@ test("mail-linked tasks edit, reschedule, unschedule and delete with calendar co
   await expect(event).toContainText("linked task");
   await expect(event).toContainText("Feb 5, 2027");
   await expect(event).toContainText("Personal");
-  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await event.getByRole("button", { name: "Open linked task", exact: true }).click();
+  await expect(row).toBeFocused();
   await row.getByRole("button", { name: "Unschedule", exact: true }).click();
   await expect(row).toContainText("Unscheduled");
   await page.getByRole("button", { name: /^Calendar/ }).click();

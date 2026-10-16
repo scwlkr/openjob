@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from "react";
 import type { WorkspaceCommand, WorkspaceTask, WorkspaceView } from "../../shared/workspace-contracts";
 import type { MailSource } from "./workspace-mail";
+import { linkedTask, type CalendarTaskSource } from "./workspace-links";
 import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void };
+export type WorkspaceTasksHandle = { openLinkedTask: (source: CalendarTaskSource) => boolean };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
 const defaults = () => { const day = new Date().toISOString().slice(0, 10); return { start: `${day}T14:00`, end: `${day}T14:30` }; };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
 const format = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
-export default function WorkspaceTasks({ view, busy, command, onOpenSource }: Props) {
+export default function WorkspaceTasks({ view, busy, command, onOpenSource, active = true, ref }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
@@ -19,8 +21,18 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource }: Pr
   const [calendarId, setCalendarId] = useState("");
   const [start, setStart] = useState(() => defaults().start);
   const [end, setEnd] = useState(() => defaults().end);
+  const [openedTask, setOpenedTask] = useState("");
+  const [navigation, setNavigation] = useState(0);
+  const taskArticle = useRef<HTMLElement>(null);
   const scheduledTask = view.tasks.find((task) => task.id === scheduleId);
   const selectedCalendar = calendarId || view.calendars[0]?.id || "";
+
+  useImperativeHandle(ref, () => ({ openLinkedTask(source) {
+    const task = linkedTask(view, source);
+    if (!task) return false;
+    setOpenedTask(task.id); setNavigation(value => value + 1); return true;
+  } }), [view]);
+  useEffect(() => { if (active && navigation) taskArticle.current?.focus(); }, [active, navigation]);
 
   function openSchedule(task: WorkspaceTask) {
     const linkedEvent = view.events.find((event) => event.id === task.calendarEventId || event.taskId === task.id);
@@ -36,13 +48,14 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource }: Pr
     if (await command({ type: "task.create", title: newTitle }, "Task created")) setNewTitle("");
   }
 
+  if (!active) return null;
   return <>
     <form className={styles.inlineForm} onSubmit={create}>
       <label className={styles.grow}>New task<input aria-label="New task" required value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="What needs your attention?" /></label>
       <button className={styles.primary} disabled={busy || !newTitle.trim()}>Add task</button>
     </form>
     <section className={styles.panel} aria-label="Task list">
-      {view.tasks.map((task) => <article className={styles.task} data-testid="task-row" key={task.id}>
+      {view.tasks.map((task) => <article ref={task.id === openedTask ? taskArticle : undefined} tabIndex={-1} className={`${styles.task} ${task.id === openedTask ? styles.selected : ""}`} data-testid="task-row" key={task.id}>
         <label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(event) => command({ type: "task.complete", taskId: task.id, completed: event.target.checked }, "Task updated")} /><span className={`${taskStyles.title} ${task.completed ? styles.completed : ""}`}>{task.title}</span></label>
         <p className={taskStyles.metadata}>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{format(task.scheduledSlot.start)} – {format(task.scheduledSlot.end)} · {view.calendars.find((calendar) => calendar.id === view.events.find((event) => event.id === task.calendarEventId)?.calendarId)?.name || "Linked calendar"}</small> : <small>Unscheduled</small>}</p>
         {editingId === task.id && <form className={taskStyles.edit} onSubmit={async (event) => { event.preventDefault(); if (await command({ type: "task.update", taskId: task.id, title: editingTitle }, "Task title updated")) setEditingId(""); }}>

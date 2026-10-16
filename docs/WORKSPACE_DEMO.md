@@ -45,7 +45,7 @@ The prototype also opens at `/` in explicit fixture mode. Ordinary builds retain
    and end times, then mark it complete. Edit its title: the linked Calendar block
    follows. Reopen Schedule to adjust the existing interval or calendar. Unschedule
    removes the linked block while keeping the Task. Confirmed Delete task removes
-   the Task and linked block; source mail stays. In Calendar, inspect linked blocks.
+   the Task and linked block; source mail stays. In Calendar, inspect linked blocks and choose **Open linked task** to manage the exact Task or reopen its source Mail. Unfinished Task and Calendar editors survive tab switches.
 3. Use Calendar Agenda, Day or Week; select a UTC date, navigate Previous/Next
    or Today, and filter the owned calendars. Create a separate calendar block,
    edit its title/time and delete it. Editing keeps the original calendar.

@@ -7,7 +7,8 @@ import type { AuthSession, OpenJobAuth, SignInMethod } from "../openjob-contract
 import { OpenJobBrand } from "../openjob-brand";
 import type { WorkspaceView } from "../../shared/workspace-contracts";
 import { createPersonalWorkspaceClient, PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal-workspace-api";
-import WorkspaceTasks from "./workspace-tasks";
+import WorkspaceTasks, { type WorkspaceTasksHandle } from "./workspace-tasks";
+import type { CalendarTaskSource } from "./workspace-links";
 import WorkspaceCalendar from "./workspace-calendar";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import PersonalWorkspaceMail from "./personal-workspace-mail";
@@ -71,7 +72,14 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
   const [notice, setNotice] = useState("");
   const mounted = useRef(true);
   const mail = useRef<WorkspaceMailHandle>(null);
+  const tasks = useRef<WorkspaceTasksHandle>(null);
   const current = () => mounted.current && !signal.aborted;
+
+  function openLinkedTask(source: CalendarTaskSource) {
+    if (!current()) return;
+    if (!tasks.current?.openLinkedTask(source)) { setError("The linked Task is unavailable in this workspace."); return; }
+    setTab("Tasks"); setError(""); setNotice("Linked Task opened. Unsaved Task and Calendar edits are kept.");
+  }
 
   function openSource(source: MailSource) {
     if (!current()) return;
@@ -110,8 +118,8 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
     <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Tasks", "Calendar", "Mail", "Mail preview", "Agents"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div></nav><p className={styles.small}>Tasks, Calendar and invented Mail use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
       <main className={styles.main}><div className={styles.title}><h1>{tab}</h1><button disabled={busy} onClick={refresh}>Refresh</button></div>
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
-        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} onOpenSource={openSource} />}
-        {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
+        {view && <WorkspaceTasks ref={tasks} active={tab === "Tasks"} view={view} busy={busy} command={command} onOpenSource={openSource} />}
+        {view && <WorkspaceCalendar active={tab === "Calendar"} view={view} busy={busy} command={command} onOpenTask={openLinkedTask} />}
         {view && <section hidden={tab !== "Mail"} aria-label="Invented personal Mail">
           <p className={styles.banner}>Invented Mail · examples and drafts saved privately to your OpenJob account. All mailbox identities and incoming messages are fictional. Simulate send records a local example; no provider or recipient receives mail.</p>
           <button disabled={busy} onClick={() => command({ type: "mail.examples.add" }, "Invented examples are ready. Existing tasks, calendar and drafts were kept.")}>{view.accounts.length ? "Add invented examples again" : "Add invented examples"}</button>
