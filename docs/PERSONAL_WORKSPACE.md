@@ -336,3 +336,7 @@ cannot use this new operation. No new grant or provider capability is implied.
 Live provider calendars, external booking and attendee availability are not
 checked. In the packaged local prototype, identities remain synthetic and only
 an explicit `--state-file` keeps saved work across restart.
+
+## Personal Today
+
+The Today navigation item shows saved Calendar blocks overlapping the browser-local day, open Tasks planned today and unscheduled open Tasks. It labels the browser timezone; no due/overdue status is inferred. Completed Tasks leave the open list while their Calendar history remains. Open an exact Task/block to continue in its existing module without replacing unfinished editor text; destination filters clear to reveal it. Calendar editors retain explicit UTC. Refresh reloads saved data; the date clock itself does not fetch new data. This is the current private Personal view, not a cross-Workspace Home or provider sync.

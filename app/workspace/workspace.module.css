@@ -76,5 +76,7 @@
 .success { color: var(--oj-positive); background: var(--oj-positive-fill); }
 .activity { color: var(--oj-muted); font-size: 13px; margin-top: 24px; }
 .activity summary { cursor: pointer; padding: 10px 0; }
+.tabs { min-width: 0; }
+@media(max-width: 640px) { .sidebar .tabs { flex-wrap: wrap; } .sidebar .tabs button { flex: 1 1 28%; } }
 @media(max-width: 1050px) { .calendarGrid { grid-template-columns: 1fr; } .layout { grid-template-columns: 180px minmax(0, 1fr); } .main { padding: 24px 18px; } .mailGrid { grid-template-columns: 1fr; } }
 @media(max-width: 640px) { .header { padding: 16px; flex-wrap: wrap; gap: 12px; } .header img { width: 135px; height: auto; } .badge { order: 3; width: 100%; text-align: center; } .owner { min-width: 110px; } .banner { padding: 12px 16px; } .layout { display: block; } .sidebar { padding: 12px; border-right: 0; border-bottom: 1px solid var(--oj-line); } .sidebar > p, .connection { display: none; } .tabs { display: flex; } .tabs button { flex: 1; padding: 8px; font-size: 14px; } .tabs span { display: none; } .main { padding: 24px 16px; } .reader { padding: 20px; } .inlineForm { flex-wrap: wrap; } .grow { min-width: 180px; } }

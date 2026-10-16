@@ -1,3 +1,24 @@
+# WLK-317 — Personal Today follow-on
+
+Active branch codex/wlk-317-personal-today on merged94ab7a4 (PR88).
+Linear WLK317 adds browser-local Today → exact Task/Calendar navigation, retaining
+unfinished editor buffers and current authorized Personal view. No new API/domain,
+provider connection, send or native release. Current Tasks entry remains available. Actual browser proof passed: Today→exact
+filtered Task focus with new/title text retained; Today→exact Calendar block across
+local/UTC day with another unfinished edit retained. Desktop/tablet/phone inspected;
+identity change cleared prior work/inputs. TypeScript and local-day/DST test pass.
+Independent diff review found no consequential defects. Final source evidence in PR/Linear.
+
+Precise onboarding handoff: docs/LOCAL_ACCOUNT_ONBOARDING.md. Existing nonsecret
+nonprod client fields are committed; preview server binding names exist. Existing
+operator vault reference is documented but key not retrieved/verified. Public SDK
+metadata confirms127.0.0.1/localhost absent from authorized domains. Provider status
+metadata403 arose from disabled Identity Toolkit on a different CLI quota consumer;
+do not enable unrelated APIs. One owner-assisted step: approve reuse of the existing
+nonprod operator for the pilot, add only127.0.0.1 authorized domain, and read back
+whether Google sign-in is already enabled in openjob-nonprod. No changes made.
+No generic new-project/key request; actual sign-in/write proof remains pending.
+
 # WLK-313 — portable installed app and Node service
 
 Worktree: /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry

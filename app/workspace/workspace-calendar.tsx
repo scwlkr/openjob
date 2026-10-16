@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from "react";
 import type { WorkspaceCommand, WorkspaceEvent, WorkspaceView } from "../../shared/workspace-contracts";
 import styles from "./workspace.module.css";
 import calendarStyles from "./workspace-calendar.module.css";
@@ -8,7 +8,8 @@ import WorkspaceFindTime from "./workspace-find-time";
 import { linkedTask, type CalendarTaskSource } from "./workspace-links";
 
 type CalendarMode = "Agenda" | "Day" | "Week";
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; active?: boolean; onOpenTask?: (source: CalendarTaskSource) => void };
+export type WorkspaceCalendarHandle = { openEvent: (id: string) => boolean };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; active?: boolean; onOpenTask?: (source: CalendarTaskSource) => void; ref?: Ref<WorkspaceCalendarHandle> };
 const dayKey = (date: Date) => date.toISOString().slice(0, 10);
 const asDate = (value: string) => new Date(`${value}T00:00:00Z`);
 const shift = (value: string, days: number) => { const next = asDate(value); next.setUTCDate(next.getUTCDate() + days); return dayKey(next); };
@@ -16,7 +17,7 @@ const formatDay = (value: string) => asDate(value).toLocaleDateString("en-US", {
 const formatTime = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 const iso = (value: string) => new Date(`${value}:00Z`).toISOString();
 
-export default function WorkspaceCalendar({ view, busy, command, active = true, onOpenTask }: Props) {
+export default function WorkspaceCalendar({ view, busy, command, active = true, onOpenTask, ref }: Props) {
   const [mode, setMode] = useState<CalendarMode>("Agenda");
   const [selectedDate, setSelectedDate] = useState(() => dayKey(new Date()));
   const [filter, setFilter] = useState("");
@@ -25,6 +26,16 @@ export default function WorkspaceCalendar({ view, busy, command, active = true, 
   const [title, setTitle] = useState("");
   const [start, setStart] = useState(() => `${dayKey(new Date())}T14:00`);
   const [end, setEnd] = useState(() => `${dayKey(new Date())}T14:30`);
+  const [openedEvent, setOpenedEvent] = useState("");
+  const [navigation, setNavigation] = useState(0);
+  const eventArticle = useRef<HTMLElement>(null);
+  useImperativeHandle(ref, () => ({ openEvent(id) {
+    const event = view.events.find(item => item.id === id && view.calendars.some(calendar => calendar.id === item.calendarId));
+    if (!event) return false;
+    setMode("Agenda"); setFilter(""); setSelectedDate(event.start.slice(0, 10));
+    setOpenedEvent(id); setNavigation(value => value + 1); return true;
+  } }), [view]);
+  useEffect(() => { if (active && navigation) eventArticle.current?.focus(); }, [active, navigation]);
   const selectedCalendar = calendarId || view.calendars[0]?.id || "";
   const weekStart = shift(selectedDate, -((asDate(selectedDate).getUTCDay() + 6) % 7));
   const rangeStart = mode === "Week" ? weekStart : selectedDate;
@@ -48,7 +59,7 @@ export default function WorkspaceCalendar({ view, busy, command, active = true, 
   }
   function eventRow(event: WorkspaceEvent) {
     const source = event.taskId ? { taskId: event.taskId, eventId: event.id, calendarId: event.calendarId } : null;
-    return <article className={styles.event} key={event.id} data-testid="calendar-event">
+    return <article ref={event.id === openedEvent ? eventArticle : undefined} tabIndex={-1} className={`${styles.event} ${event.id === openedEvent ? styles.selected : ""}`} key={event.id} data-testid="calendar-event">
       <small><time dateTime={event.start}>{formatTime(event.start)}</time> – <time dateTime={event.end}>{formatTime(event.end)}</time></small>
       <strong>{event.title}</strong><span>{view.calendars.find(item => item.id === event.calendarId)?.name}{event.taskId ? " · linked task" : ""}</span>
       <div className={styles.actions}>
