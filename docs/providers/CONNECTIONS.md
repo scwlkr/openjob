@@ -76,11 +76,17 @@ before production binding is enabled. Already-started external reads cannot be
 recalled. The repository exposes cleanup but is not registered with the production
 deletion workflow because production never creates these records yet.
 
-There is still no OAuth callback/refresh flow, provisioned credential vault or live
-provider configuration. The runtime has no configured repository or broker and
-cannot enable live reads. Implement and review those bindings, verify deletion
-and the cloud runtime, then obtain separate approval for one test account. See
-[Gmail reads](GMAIL_READ.md) and [setup requirements](README.md).
+The [mock OAuth lifecycle](OAUTH.md) adds a new-account reservation approval
+transition: only an exact unchanged `needs_consent` record can become approved
+without changing its reserved revision, after matching vault provisioning.
+Ordinary updates and revocation still mint revisions. This exception permits
+vault-first provisioning without a cross-store transaction.
+
+There is still no production OAuth callback/refresh flow, provisioned credential
+vault or live provider configuration. The runtime has no configured repository
+or broker and cannot enable live reads. Implement and review those bindings,
+verify deletion and the cloud runtime, then obtain separate approval for one
+test account. See [Gmail reads](GMAIL_READ.md) and [setup requirements](README.md).
 
 REST semantics: [conditional writes](https://firebase.google.com/docs/firestore/reference/rest/v1/Precondition)
 and [atomic commit](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/commit).

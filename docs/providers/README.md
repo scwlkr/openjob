@@ -57,7 +57,10 @@ has no configured reader, store or broker, and no live execution mode. A separat
 Firestore metadata repository and injected vault-broker adapter are implemented
 with synthetic tests; they are not production runtime bindings or a provisioned
 secure credential store. See the connection guide for revision/deletion fences
-and partial-failure ordering.
+and partial-failure ordering. A server-only [mock OAuth lifecycle](OAUTH.md)
+implements state/PKCE/nonce, fake exchange/verified-identity seams and vault-first
+reservation approval. It has no production callback route, signature verifier,
+durable transaction store, token refresh or provisioned vault.
 
 ## Smallest real integration to authorize next
 
@@ -89,7 +92,7 @@ the next implementation would need:
 
 Sending, provider draft changes and calendar writes are later, separately scoped
 operations. A first read-only connection does not authorize them. This checkout
-does not contain a live connector, credential provisioning flow or deployable
+does not contain a live connector, real credential provisioning flow or deployable
 OAuth configuration. No setup action above has been performed.
 
 ## Current evidence boundaries
