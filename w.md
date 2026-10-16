@@ -1,10 +1,31 @@
-# WLK-304 local persistence checkpoint (publication now prioritized)
+# WLK-304 local persistence review checkpoint
 
-Branch `codex/wlk-304-local-workspace-persistence` from merged WLK-303/main `37c322b`. Linear WLK-304 records practical acceptance: opt-in `openjob app --state-file PATH`, stable synthetic owners/work across restart, atomic private bounded JSON saves, single writer, visible corruption/write failures, no provider/auth secrets persisted. Default temporary demo on http://127.0.0.1:5193/workspace is unchanged and remains useful.
+Branch `codex/wlk-304-local-workspace-persistence`, base37c322b (merged PR81).
+Implemented opt-in `openjob app --state-file PATH` using the actual packaged UI/API
+and existing domain/fake Firestore. Stable synthetic owner records and workspace,
+grant hashes/revocations and sync receipts persist; RSA keys/session/provider
+secrets do not. Default remains temporary. Private bounded unencrypted JSON,
+atomic save-before-success, serialized operations, rollback on precommit failure,
+pause on uncertain durability, one-writer lock and non-destructive invalid/stale
+lock recovery. UI labels saved/temporary. See docs/NPM_INSTALL.md.
 
-Initial implementation only: new personal-workspace-state/schema modules, fake Firestore snapshot/revision export/restore, optional server save/load/serialization, CLI state-file routing. Actual app bundle build and tsc pass. Persistence/restart/failure tests and narrow implementation review are NOT completed; do not merge or publish this checkpoint. Known review areas: startup-failure lock release, shutdown while writes drain, stable synthetic owner schema and private fields, retry/uncertain-commit semantics, corruption preservation. A design critique favored explicit fake-store snapshot over a duplicate domain adapter; save/load whitelist keeps only synthetic user ownership and workspace/grant-hash/receipt fields, never authority keys or session tokens.
+Source restart/failure suite7/7 PASS; focused existing workspace/agent suite18/18
+PASS before final cancellation fix. Installed tarball restart suite6/6 and actual
+asset/API create/schedule/complete/isolation/Host-Origin/shutdown smoke PASS.
+Final rebuilt installed cancellation proof and exact-head checks pending.
+Independent review found startup lock cancellation and parent continuation races;
+fixed by early signal registration, initialization drain and stopping guards.
+Cheap compile/brand passed; final secret scan pending. No native/device/full-suite
+acceptance claimed. Current useful demo5193 remains unchanged.
 
-At 12:45 UTC Shane approved publication as @scwlkr/openjob. This does not authorize new credentials/grants/security settings. Work is checkpointed while existing npm identity/scope is rechecked; do not publish WLK-304 code. Publish only a separately verified approved artifact from merged WLK-303. Read-only prior result: npm ENEEDAUTH, scoped registry404, unscopedopenjob belongs to another maintainer. Current live-channel verification remains pending. WLK-302 TLS/login remains unrecovered and excluded. PatriBible and existing unrelated checkout untouched.
+WLK-303 publication: Shane approved @scwlkr/openjob, signed into existing account;
+read-only npm whoami=scwlkr and org owner verified. Exact approved archives in
+/tmp/openjob-303-publish-approved remain unchanged. Initial latest publish exited
+EOTP, registry still404; dev not attempted. Parent handed Shane commands for human
+security completion. Do not retry while waiting or publish WLK-304 artifacts.
+Registry readback/fresh installs and separately approved continuous publishing
+remain gates. WLK-302 TLS/login cloud checkpoint unrecovered and excluded;
+PatriBible and unrelated original checkout untouched.
 
 ---
 

@@ -1,3 +1,13 @@
+## Saved packaged local workspace
+
+The npm-installed prototype accepts `openjob app --state-file PATH`. Saved
+synthetic owner identities, Tasks/linked Calendar, invented Mail/drafts, grant
+hashes/revocations and sync receipts survive restarts in bounded private,
+unencrypted JSON. Atomic saves precede success; one writer owns each file and
+invalid files fail without reset. Session signing keys/tokens and provider vault
+material are excluded. Default mode remains temporary and actual sending remains
+disabled. See [installation and recovery](docs/NPM_INSTALL.md).
+
 # Features
 
 ## Packaged npm workspace

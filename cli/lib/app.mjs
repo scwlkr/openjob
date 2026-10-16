@@ -35,6 +35,7 @@ export async function runApp(args, pkg) {
       api.once('exit', () => { clearTimeout(timer); reject(new Error('Local API exited.')); });
     });
     const web = await realpath(resolve(root, 'web'));
+    if (stopping) return;
     const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
     server = createServer(async (incoming, outgoing) => {
       // Synthetic identities are deliberately loopback-only, including browser Host/Origin checks.
@@ -58,10 +59,12 @@ export async function runApp(args, pkg) {
     });
     server.once('error', error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; stop(); });
     server.listen(port, '127.0.0.1', () => {
+      if (stopping) { server.closeAllConnections(); server.close(); return; }
       console.log(`OpenJob ${pkg.version} (@${pkg.openjobDistribution?.channel ?? 'latest'}): http://127.0.0.1:${port}/workspace`);
       console.log(`Local prototype: synthetic Alex/Sam identities and invented providers. ${stateFile ? 'Workspace saved to ' + stateFile : 'Temporary API state'}. Real sending is disabled. Stop with Ctrl+C.`);
+      process.send?.({ type: 'openjob-app-ready', port });
       void automaticUpdateNotice(pkg);
       interval = setInterval(() => { void automaticUpdateNotice(pkg); }, 6 * 60 * 60 * 1000); interval.unref();
     });
-  } catch (error) { stop(); throw error; }
+  } catch (error) { const cancelled = stopping; stop(); if (!cancelled) throw error; }
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { createServer } from 'node:net';
 import { mkdtemp, readFile, writeFile, rm, stat, symlink, access, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +21,12 @@ async function seed(state) {
   for (const owner of ['alex', 'sam']) await users.create({ uid: `personal_browser_${owner}`, provider: 'google' });
 }
 async function start(path) {
-  const child = spawn(process.execPath, ['scripts/personal-workspace-test-server.mjs', '--test-only', '--port', '0', '--state-file', path], { cwd: root, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+  const installed = process.env.OPENJOB_STATE_TEST_BIN;
+  const reservation = createServer(); reservation.listen(0, '127.0.0.1'); await once(reservation, 'listening');
+  const port = reservation.address().port; await new Promise(accept => reservation.close(accept));
+  const command = installed ?? process.execPath;
+  const args = installed ? ['app', '--port', String(port), '--state-file', path] : ['scripts/personal-workspace-test-server.mjs', '--test-only', '--port', '0', '--state-file', path];
+  const child = spawn(command, args, { cwd: installed ? tmpdir() : root, env: { ...process.env, OPENJOB_NO_UPDATE_CHECK: '1' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
   const exited = once(child, 'exit'); let errors = ''; child.stderr.on('data', value => { errors += value; });
   const ready = await new Promise((accept, reject) => {
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Local fixture startup timed out.')); }, 15000);
@@ -125,4 +131,29 @@ test('stale lock recovery copies valid work without removing the original lock o
   await assert.rejects(openPersonalWorkspaceState(path), /copy the state to a fresh path/);
   const copy = path + '.recovered'; await copyFile(path, copy); const recovered = await openPersonalWorkspaceState(copy); await recovered.close();
   assert.equal(await readFile(path, 'utf8'), bytes); assert.equal(await readFile(`${path}.lock`, 'utf8'), 'stale synthetic test lock');
+});
+
+test('cancellation after state lock acquisition drains startup and releases the owned lock', async t => {
+  const path = join(await directory(t), 'cancelled.json');
+  const installed = process.env.OPENJOB_STATE_TEST_BIN;
+  const child = spawn(installed ?? process.execPath, installed
+    ? ['app', '--port', '5199', '--state-file', path]
+    : ['scripts/personal-workspace-test-server.mjs', '--test-only', '--port', '0', '--state-file', path],
+    { cwd: installed ? tmpdir() : root, env: { ...process.env, OPENJOB_NO_UPDATE_CHECK: '1' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+  const exited = once(child, 'exit'); let ready = false, errors = '';
+  child.on('message', () => { ready = true; }); child.stderr.on('data', data => { errors += data; });
+  t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
+  const deadline = Date.now() + 10000;
+  while (true) {
+    try { await access(`${path}.lock`); break; } catch {}
+    assert.equal(child.exitCode, null, errors); assert.ok(Date.now() < deadline, 'lock acquisition timed out');
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  assert.equal(ready, false, 'cancel while initialization is still in progress');
+  child.kill('SIGTERM');
+  const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
+  const [code, signal] = await exited; clearTimeout(timer);
+  assert.equal(code, 0, errors); assert.equal(signal, null);
+  await assert.rejects(access(`${path}.lock`));
+  const app = await start(path); await app.stop();
 });
