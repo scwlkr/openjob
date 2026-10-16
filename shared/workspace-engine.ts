@@ -1,7 +1,7 @@
 import type { WorkspaceActor, WorkspaceAgent, WorkspaceCommand, WorkspaceEngine, WorkspaceScope, WorkspaceState } from "./workspace-contracts.ts";
 import { createFixtureWorkspace } from "./workspace-fixtures.ts";
 
-const SCOPES: WorkspaceScope[] = ["mail:read", "mail:draft", "tasks:read", "tasks:write", "calendar:read", "calendar:write"];
+const SCOPES: WorkspaceScope[] = ["mail:read", "mail:draft", "mail:simulate-send", "tasks:read", "tasks:write", "calendar:read", "calendar:write"];
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code }); }
 function text(value: unknown, name: string, limit = 500): string {
   if (typeof value !== "string" || !value.trim() || value.length > limit) fail("invalid_input", `Invalid ${name}`);
@@ -15,6 +15,7 @@ function parse(input: unknown): WorkspaceCommand {
     "task.schedule": ["taskId", "calendarId", "start", "end"], "calendar.create": ["calendarId", "title", "start", "end"],
     "calendar.update": ["eventId", "title", "start", "end"], "calendar.delete": ["eventId"],
     "mail.compose": ["accountId", "to", "subject", "body"],
+    "mail.draft.update": ["draftId", "to", "subject", "body"], "mail.simulate-send": ["draftId"],
     "mail.read": ["messageId", "read"], "mail.draft": ["messageId", "body"], "mail.send": ["draftId"],
     "agent.grant": ["name", "scopes", "resourceIds"], "agent.revoke": ["agentId"],
   };
@@ -48,6 +49,7 @@ function parse(input: unknown): WorkspaceCommand {
 
 export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWorkspace()): WorkspaceEngine {
   let state = structuredClone(initial);
+  if (state.sent === undefined) state.sent = [];
   function authorize(actor: WorkspaceActor): WorkspaceAgent | undefined {
     if (!actor || !["human", "agent"].includes(actor.kind) || typeof actor.ownerId !== "string" || !actor.ownerId.trim()) fail("unauthorized", "Invalid actor");
     if (actor.kind === "human") return;
@@ -76,6 +78,7 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
     return structuredClone({ accounts, messages: state.messages.filter(m => mailAccounts.has(m.accountId)), tasks, calendars,
       events: state.events.filter(e => calendarIds.has(e.calendarId)).map(e => { const copy = { ...e }; if (copy.taskId && !taskIds.has(copy.taskId)) delete copy.taskId; return copy; }),
       drafts: state.drafts.filter(d => state.accounts.some(a => a.id === d.accountId && a.ownerId === actor.ownerId) && allowed("mail:draft", d.accountId)),
+      sent: state.sent.filter(item => mailAccounts.has(item.accountId)),
       agents: state.agents.filter(a => a.ownerId === actor.ownerId && (!grant || a.id === grant.id)), activity: grant ? [] : state.activity.filter(a => a.ownerId === actor.ownerId),
     });
   }
@@ -89,6 +92,7 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
     };
     const account = (id: string) => { const found = next.accounts.find(a => a.id === id && a.ownerId === actor.ownerId); if (!found) fail("forbidden", "Account is unavailable"); return found; };
     const message = (id: string) => { const found = next.messages.find(m => m.id === id); if (!found) fail("forbidden", "Message is unavailable"); account(found.accountId); return found; };
+    const draft = (id: string) => { const found = next.drafts.find(d => d.id === id); if (!found) fail("forbidden", "Draft is unavailable"); account(found.accountId); return found; };
     const task = (id: string) => { const found = next.tasks.find(t => t.id === id && t.ownerId === actor.ownerId); if (!found) fail("forbidden", "Task is unavailable"); return found; };
     const calendar = (id: string) => { const found = next.calendars.find(c => c.id === id && c.ownerId === actor.ownerId); if (!found) fail("forbidden", "Calendar is unavailable"); return found; };
     const id = () => crypto.randomUUID();
@@ -130,7 +134,29 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
         next.drafts.push(draft); result = draft; break;
       }
       case "mail.read": { const found = message(cmd.messageId); need("mail:read", found.accountId); found.read = cmd.read; result = found; break; }
-      case "mail.draft": { const found = message(cmd.messageId); need("mail:read", found.accountId); need("mail:draft", found.accountId); const draft = { id: id(), accountId: found.accountId, messageId: found.id, body: cmd.body, status: "draft" as const }; next.drafts.push(draft); result = draft; break; }
+      case "mail.draft": {
+        const found = message(cmd.messageId); need("mail:read", found.accountId); need("mail:draft", found.accountId);
+        const existing = next.drafts.find(d => d.accountId === found.accountId && d.messageId === found.id);
+        if (existing) { existing.body = cmd.body; result = existing; }
+        else {
+          const created = { id: id(), accountId: found.accountId, messageId: found.id, to: found.from, subject: /^re:/i.test(found.subject) ? found.subject : `Re: ${found.subject}`, body: cmd.body, status: "draft" as const };
+          next.drafts.push(created); result = created;
+        }
+        break;
+      }
+      case "mail.draft.update": {
+        const found = draft(cmd.draftId); need("mail:draft", found.accountId);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cmd.to)) fail("invalid_input", "Invalid recipient address");
+        Object.assign(found, { to: cmd.to, subject: cmd.subject, body: cmd.body }); result = found; break;
+      }
+      case "mail.simulate-send": {
+        const found = draft(cmd.draftId); const sender = account(found.accountId);
+        need("mail:draft", found.accountId); need("mail:simulate-send", found.accountId);
+        const to = text(found.to, "recipient"); const subject = text(found.subject, "subject"); const body = text(found.body, "body", 20000);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) fail("invalid_input", "Invalid recipient address");
+        const sent = { id: id(), accountId: found.accountId, ...(found.messageId ? { messageId: found.messageId } : {}), from: sender.address, to, subject, body, sentAt: new Date().toISOString(), mode: "fixture" as const };
+        next.sent.push(sent); next.drafts = next.drafts.filter(d => d.id !== found.id); result = sent; break;
+      }
       case "agent.grant": {
         if (grant) fail("forbidden", "Only a human can grant agent access");
         for (const resource of cmd.resourceIds) if (resource !== "tasks:personal" && !next.accounts.some(a => a.id === resource && a.ownerId === actor.ownerId) && !next.calendars.some(c => c.id === resource && c.ownerId === actor.ownerId)) fail("forbidden", "Resource is unavailable");

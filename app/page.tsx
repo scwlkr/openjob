@@ -9,6 +9,7 @@ import {
   loadAccountDeletionStatusReceipt,
 } from "./openjob-private-state";
 import { LoadingScreen } from "./openjob-screens";
+import WorkspaceApp from "./workspace/workspace-app";
 
 function ReadyOpenJobPage({ inviteToken }: { inviteToken?: string }) {
   const auth = useMemo(() => createFirebaseAuth(), []);
@@ -59,8 +60,5 @@ export function OpenJobPage({ inviteToken }: { inviteToken?: string }) {
 }
 
 export default function Home() {
-  return <>
-    {__OPENJOB_WORKSPACE_FIXTURE__ && <a href="/workspace" style={{ display: "block", padding: "12px 20px", background: "var(--oj-selected)", color: "var(--oj-link)" }}>Open Mail, Calendar and Tasks prototype · simulated providers</a>}
-    <OpenJobPage />
-  </>;
+  return __OPENJOB_WORKSPACE_FIXTURE__ ? <WorkspaceApp /> : <OpenJobPage />;
 }

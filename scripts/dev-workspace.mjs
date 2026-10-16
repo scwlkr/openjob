@@ -6,7 +6,7 @@ const args = process.argv.slice(2);
 const index = args.indexOf("--port");
 const port = index === -1 ? "5173" : args[index + 1];
 if (!port || !/^\d+$/.test(port)) throw new Error("Use --port <number>.");
-const stateFile = args.includes("--test")
+const stateFile = (args.includes("--test") || args.includes("--app-test"))
   ? join(tmpdir(), `openjob-workspace-browser-${process.pid}.json`)
   : process.env.OPENJOB_WORKSPACE_STATE_FILE || join(process.cwd(), ".openjob", "workspace-demo.json");
 const children = [];

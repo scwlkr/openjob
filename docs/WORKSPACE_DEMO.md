@@ -14,10 +14,11 @@ temporary state file, even if a persistence override exists in the environment.
 
 All Gmail, Outlook and IMAP connections shown here are simulated. The two
 owner selectors and agent identity headers are explicit fixture identities,
-not authentication. This local prototype cannot send correspondence, connect
-real accounts or write external calendars. The fixture proxy is disabled in
+not authentication. This local prototype cannot deliver correspondence, connect
+real accounts or write external calendars. Its explicit Simulate send action only
+moves a draft into a local, visibly labeled simulated Sent record. The fixture proxy is disabled in
 ordinary builds and only accepts loopback requests when explicitly enabled.
-The existing Group Task app remains at `/`; its production backend is unavailable in this local fixture mode, which supplies no Worker credentials. Ordinary production configuration remains unchanged.
+The prototype also opens at `/` in explicit fixture mode. Ordinary builds retain the existing authenticated Group Task app and production configuration; the local fixture supplies no Worker credentials.
 
 ## Walkthrough
 
@@ -26,8 +27,10 @@ The existing Group Task app remains at `/`; its production backend is unavailabl
 2. In Tasks, schedule that Task on the Work calendar with explicit UTC start
    and end times, then mark it complete. In Calendar, inspect its linked block.
 3. Create a separate calendar block, edit its title/time and delete it.
-4. Compose a new draft from the Studio mailbox. Inspect saved drafts and their
-   originating account. Nothing has been sent.
+4. Compose a new draft from the Studio mailbox. Reopen a saved draft, change its
+   body and save it again. Its ID and original sending account remain the same.
+   Choose **Simulate send** to move it into **Simulated Sent**, then inspect
+   the saved From, To and body. No delivery occurs outside this fixture service.
 5. In Agents, grant `tasks:read` on Personal tasks to a named simulated agent.
    Inspect access: Tasks appear, mailbox messages do not. Revoke it; inspection
    fails immediately.
@@ -52,11 +55,16 @@ npm run workspace:cli -- command --url http://127.0.0.1:4180 --owner demo_alex -
 Example command: `{"type":"task.create","title":"Review the prototype","messageId":"alex_msg_launch"}`.
 The returned ID can be used with `task.schedule` and `task.complete`. Commands
 and response types live in `shared/workspace-contracts.ts`. Add `--agent ID`
-to simulate a granted principal. The CLI refuses non-loopback destinations and
-redirects. `mail.send` always returns `sending_disabled`, including by API/CLI.
+to simulate a granted principal. Editing uses `mail.draft.update`; local delivery
+simulation uses `mail.simulate-send`. An agent needs both `mail:draft` and the
+separate `mail:simulate-send` capability on the source mailbox. Sent reads
+require `mail:read`. The CLI refuses non-loopback destinations and redirects.
+`mail.send` always returns `sending_disabled`, including by API/CLI.
 
 ## Evidence and limits
 
+The default browser gate runs workspace flows against the actual app router and
+HTTP proxy, while the existing Task checks retain their isolated harness.
 The browser workflow and isolated API/CLI tests exercise real mutations,
 retrieval, durable restart, isolation, scope denial and revocation. Functional
 theme/responsive checks replace historical pixel comparisons under
