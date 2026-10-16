@@ -21,7 +21,7 @@ WStack favors simple boundaries and preserving components that earn their place.
 
 ## Proposed decision
 
-Use one modular application with bounded contexts for Identity/Workspace,
+Use one modular application with bounded contexts for Identity/Company/Workspace,
 Connections, Mail, Tasks, Calendar and Delegation/Activity. Application operations
 coordinate contexts; repositories hide persistence choices. Public clients use
 one versioned API/OpenAPI contract, preserving the existing CLI and the principle

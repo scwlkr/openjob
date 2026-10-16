@@ -20,6 +20,15 @@ implementation follows automatically from those proposals.
 
 A message arrives in a connected mailbox. A person or permitted agent turns it into a task with a link to the original conversation, schedules the work on a connected calendar, completes it, and replies from the correct account. The person can see what happened and change or revoke the agent’s access.
 
+### Companies and personal identity
+
+The platform must support companies with multiple employees and one person
+belonging to multiple companies. Identity, membership, resource ownership and
+explicit collaboration are central design requirements. Company membership must
+not imply ownership of personal accounts or automatic visibility across companies.
+Recommended defaults and alternatives are proposed in
+[Companies and identity](COMPANIES_AND_IDENTITY.md) and ADR 0020; they await review.
+
 ### Product principles
 
 **Bring your accounts.** Connect existing providers; do not force a migration to OpenJob-hosted email. Support multiple accounts from the same provider.

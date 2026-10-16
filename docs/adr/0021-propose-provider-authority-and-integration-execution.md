@@ -26,8 +26,9 @@ supported write creates that relationship.
 Keep provider-specific adapters behind capability-oriented interfaces for account
 identity, Mail reads/drafts/sending and Calendar reads/writes. Available operations
 reflect implemented adapter behavior plus actual consent/runtime configuration;
-one provider's success does not imply universal support. Connections bind owner,
-upstream subject, scopes, lifecycle and a server-only credential reference. The
+one provider's success does not imply universal support. Connections bind explicit personal or Company/workspace ownership, controller,
+upstream subject, scopes, lifecycle and a server-only credential reference.
+Company membership or admin role alone cannot grant provider access. The
 credential broker resolves current bindings; users and agents never receive raw
 upstream credentials through the shared application API.
 

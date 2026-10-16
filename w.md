@@ -6,7 +6,14 @@ are reviewable. No feature code was changed for310. Isolated worktree
 /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry,
 branch codex/wlk-310-platform-blueprint from main9ba3929.
 
-Review entry: docs/PLATFORM_ARCHITECTURE.md. Charter/users/scope, capability map,
+Review entry: docs/PLATFORM_ARCHITECTURE.md; Companies and identity detail in
+docs/COMPANIES_AND_IDENTITY.md. One User/personal workspace, independent company
+memberships/roles, company-owned workspaces and explicit resource grants. No
+employment-based personal ownership or automatic cross-company visibility.
+Creation/invitations/switching/connections/agents/departure/collaboration all
+proposed together in revised ADR0020. Managed company login is context-only;
+personal/multi-company identity requires independent personal authentication and
+recovery. Existing global sign-in links need compatibility assessment first. Charter/users/scope, capability map,
 system/container diagrams, workspace/principal boundaries, domains, provider data
 authority, sharedAPI/CLI/UI, integrationjobs/sync, deployment/extensibility,
 prototypegaps/phasedoutcomes. ADRs0019–0021 all PROPOSED, not accepted. No stack
