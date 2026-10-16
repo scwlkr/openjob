@@ -12,7 +12,7 @@ import WorkspaceCalendar from "./workspace-calendar";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import PersonalWorkspaceMail from "./personal-workspace-mail";
 import styles from "./workspace.module.css";
-import WorkspaceMail from "./workspace-mail";
+import WorkspaceMail, { type MailSource, type WorkspaceMailHandle } from "./workspace-mail";
 import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
@@ -70,7 +70,14 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
   const [unrecognized, setUnrecognized] = useState(false);
   const [notice, setNotice] = useState("");
   const mounted = useRef(true);
+  const mail = useRef<WorkspaceMailHandle>(null);
   const current = () => mounted.current && !signal.aborted;
+
+  function openSource(source: MailSource) {
+    if (!current()) return;
+    if (!mail.current?.openSource(source)) { setError("The source message is unavailable in this workspace."); return; }
+    setTab("Mail"); setError(""); setNotice("Source message opened. Any unsaved Mail text is kept.");
+  }
 
   useEffect(() => {
     let active = true;
@@ -103,13 +110,13 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
     <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Tasks", "Calendar", "Mail", "Mail preview", "Agents"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div></nav><p className={styles.small}>Tasks, Calendar and invented Mail use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
       <main className={styles.main}><div className={styles.title}><h1>{tab}</h1><button disabled={busy} onClick={refresh}>Refresh</button></div>
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
-        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
+        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} onOpenSource={openSource} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
         {view && <section hidden={tab !== "Mail"} aria-label="Invented personal Mail">
           <p className={styles.banner}>Invented Mail · examples and drafts saved privately to your OpenJob account. All mailbox identities and incoming messages are fictional. Simulate send records a local example; no provider or recipient receives mail.</p>
           <button disabled={busy} onClick={() => command({ type: "mail.examples.add" }, "Invented examples are ready. Existing tasks, calendar and drafts were kept.")}>{view.accounts.length ? "Add invented examples again" : "Add invented examples"}</button>
           {!view.accounts.length && <p>Enable these invented examples to try Mail → Task → Calendar and saved reply drafts. Your existing workspace stays intact.</p>}
-          {view.accounts.length > 0 && <WorkspaceMail view={view} busy={busy} command={command} />}
+          {view.accounts.length > 0 && <WorkspaceMail ref={mail} view={view} busy={busy} command={command} />}
         </section>}
         {view && tab === "Mail preview" && <PersonalWorkspaceMail session={session} signal={signal} client={client} busy={busy} command={command} />}
         {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}

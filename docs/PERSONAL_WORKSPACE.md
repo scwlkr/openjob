@@ -28,7 +28,7 @@ or edit a reply draft; its original mailbox stays fixed. Drafts and simulated
 Sent survive refresh and store reconstruction. Compose accepts ordinary email
 addresses, but **Simulate send** only moves the draft to a local fixture record.
 Actual `mail.send` always returns `sending_disabled`; no transport sends mail.
-Source message/account references exist only on private Tasks, never Group Tasks.
+Source message/account references exist only on private Tasks, never Group Tasks. Choose **Open source mail** on a private Task to return to its exact message. This selects the original mailbox and Inbox and clears hiding filters. Each unsaved reply is kept separately in the current session; open composition and draft-editor fields are preserved. Reload restores saved work and clears unsaved edits. Unavailable or redacted source records have no open action.
 
 The existing CLI uses exactly the same authenticated API:
 
@@ -80,6 +80,8 @@ openjob workspace snapshot --agent-token-file ./planner.token --format json
 openjob workspace agent list --format json
 openjob workspace agent revoke AGENT_ID --yes
 ```
+
+Agents can resolve an allowed Task source from the same `workspace snapshot` response by matching both `sourceMessageId` and `sourceAccountId` to a visible message. This needs tasks:read and mail:read on the named resources; Tasks-only snapshots redact both source fields. No extra navigation endpoint or provider permission exists.
 
 Choose only needed scopes and resources. The new token file must not exist; the
 CLI writes it atomically with mode 0600. The secret is returned once at issuance,

@@ -174,6 +174,11 @@ test('personal mail grants isolate invented mailboxes, redact task provenance an
   await deny(planner, { type: 'mail.examples.add' });
   await deny(planner, { type: 'mail.read', messageId: seeded.messageIds[2], read: true });
   const task = await ok(planner, { type: 'task.create', title: 'Scoped invented mail task', messageId: seeded.messageIds[0] });
+  const plannerView = await ok(planner);
+  const sourceTask = plannerView.tasks.find(item => item.id === task.id);
+  const sourceMessage = plannerView.messages.find(item => item.id === sourceTask.sourceMessageId && item.accountId === sourceTask.sourceAccountId);
+  assert.equal(sourceMessage.id, seeded.messageIds[0]);
+  assert.equal(sourceMessage.accountId, seeded.accountIds[0]);
   const taskView = await ok(tasks);
   assert.equal(taskView.tasks.find(item => item.id === task.id).sourceMessageId, undefined);
   assert.equal(taskView.tasks.find(item => item.id === task.id).sourceAccountId, undefined);
