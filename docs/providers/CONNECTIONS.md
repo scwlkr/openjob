@@ -51,8 +51,36 @@ the example. Revocation and consent denial return no Mail and cause no new
 broker lookups or provider HTTP requests. Loopback test controls affect only
 those in-memory records; they are not application account-management APIs.
 
-No durable connection store, OAuth callback, production credential vault or
-live provider configuration is implemented or claimed by this boundary. The
-next approved integration must select and implement those components, preserve
-account-deletion/revocation behavior, and verify the cloud runtime and one test
-account. See [Gmail reads](GMAIL_READ.md) and [setup requirements](README.md).
+## Durable metadata and vault adapter
+
+`db/provider-connections.ts` implements the existing store interface with the
+Firestore REST client. A separate `v1ProviderConnections/{owner}` envelope holds
+at most 100 validated connection records, independently of Task/Calendar writes.
+Only metadata and opaque credential references belong here. Conditional writes
+compare the expected connection revision and Firestore update time; an active
+User write fence commits with the metadata change. New mutations mint a revision.
+Reads check the active owner before and after retrieval. Cleanup is idempotent.
+
+`server/providers/provider-token-vault.ts` adapts an injected vault reader to the
+credential broker. The vault record must match the exact owner, account, subject,
+credential reference and connection revision. Approval is checked before lookup
+and after the vault returns. Neither module provisions storage or supplies a real
+vault. Evidence reconstructs the repository over isolated fake Firestore transport
+and uses invented vault credentials; it does not verify a live database.
+
+Metadata and a future external vault cannot commit atomically. Revoke metadata
+first to deny new reads, then clean up the vault with retryable, idempotent work.
+Failed vault creation must never produce approved metadata. Account deletion must
+invalidate access immediately and include both metadata cleanup and vault cleanup
+before production binding is enabled. Already-started external reads cannot be
+recalled. The repository exposes cleanup but is not registered with the production
+deletion workflow because production never creates these records yet.
+
+There is still no OAuth callback/refresh flow, provisioned credential vault or live
+provider configuration. The runtime has no configured repository or broker and
+cannot enable live reads. Implement and review those bindings, verify deletion
+and the cloud runtime, then obtain separate approval for one test account. See
+[Gmail reads](GMAIL_READ.md) and [setup requirements](README.md).
+
+REST semantics: [conditional writes](https://firebase.google.com/docs/firestore/reference/rest/v1/Precondition)
+and [atomic commit](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/commit).

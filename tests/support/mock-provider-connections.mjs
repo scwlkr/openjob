@@ -32,7 +32,7 @@ export async function createMockProviderConnectionHarness({ owners, isOwnerActiv
     async resolve(ref, context) {
       counters.credentialLookups++;
       const row = secretRows.get(ref);
-      if (!row || ['ownerId', 'accountId', 'subject'].some(key => row.connection[key] !== context[key])) return null;
+      if (!row || ['ownerId', 'accountId', 'subject', 'revision'].some(key => row.connection[key] !== context[key])) return null;
       return { accessToken: row.accessToken, subject: row.connection.subject, scopes: [SCOPE], expiresAt: now() + 60000 };
     },
   };

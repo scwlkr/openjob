@@ -53,7 +53,11 @@ Gmail read mapper through the same authenticated API/CLI/app, using injected
 in-memory records, fake credentials and mock HTTP only. These accounts are
 explicitly marked mock, separate from the synthetic examples. Consent-required
 and revoked accounts expose status without Mail or credential lookup. Production
-has no configured reader, store or broker, and no live execution mode.
+has no configured reader, store or broker, and no live execution mode. A separate
+Firestore metadata repository and injected vault-broker adapter are implemented
+with synthetic tests; they are not production runtime bindings or a provisioned
+secure credential store. See the connection guide for revision/deletion fences
+and partial-failure ordering.
 
 ## Smallest real integration to authorize next
 

@@ -19,7 +19,7 @@ const opaque = (value: unknown): value is string => typeof value === "string" &&
 export function describeGmailReadAdapter(): ProviderConnectorStatus[] {
   return [{ provider: "gmail", adapter: "gmail-rest-read", status: "not_connected", consent: "required", liveExecutionEnabled: false,
     implementedOperations: ["mail.read", "mail.labels"], unsupportedOperations: ["calendar.read", "calendar.write", "mail.draft", "mail.send", "sync.history", "reconnect"],
-    message: "Gmail read wire mapping is implemented and tested with synthetic HTTP responses. No live account is connected; runtime execution remains disabled pending explicit consent and server setup.",
+    message: "Gmail read mapping is implemented with synthetic HTTP evidence. No production connection repository, secure token vault or OAuth callback is configured. Mail-read consent and reviewed server wiring are required; live execution remains disabled.",
   }];
 }
 function account(binding: GmailAccountBinding): ProviderAccount {
