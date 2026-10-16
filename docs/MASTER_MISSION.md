@@ -13,7 +13,7 @@ Work is scattered across Outlook, Gmail, Purelymail, calendars, and task tools. 
 OpenJob should make these services feel like one coherent workspace. Users keep their providers and identities. OpenJob connects the work and gives both people and authorized agents practical ways to act on it.
 
 Platform design is proposed in [the platform blueprint](PLATFORM_ARCHITECTURE.md)
-and ADRs 0019–0021. They await owner acceptance; no feature or infrastructure
+and ADRs 0019–0021, with [detailed build specification](build-spec/README.md). They await owner acceptance; no feature or infrastructure
 implementation follows automatically from those proposals.
 
 ### The experience to build

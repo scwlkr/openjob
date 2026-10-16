@@ -37,8 +37,9 @@ flowchart TB
 Recommend a personally controlled authentication/recovery anchor for the User.
 A company-controlled login is a **company-context credential**, not a global
 sign-in method that unlocks personal work or another company. Initially companies
-invite existing personally authenticated Users; company SSO is not required to
-create memberships. If company sign-in is later supported, it authenticates only
+invite existing personally authenticated Users; company SSO is disabled in the first Company release. Eligibility of independent
+personal anchors is assessed without disrupting existing Personal access; see
+[DOMAIN](build-spec/DOMAIN.md). If company sign-in is later supported, it authenticates only
 that company's permitted context. Opening Personal or another company requires
 an independent personal authentication or that other company's accepted proof.
 
@@ -182,7 +183,8 @@ Identity/Workspace coordinates lifecycle changes; Delegation stops grants;
 Connections owns provider/credential cleanup; Mail/Calendar invalidate projections;
 Tasks preserves company-owned work and reconciles its planning links. Retention
 and actual provider cleanup outcomes must be distinguishable from local access
-revocation. Exact durations remain a policy decision before live production data.
+revocation. Concrete proposed durations and cleanup defaults are in
+[RUNTIME](build-spec/RUNTIME.md), pending owner review and implementation proof.
 
 ## Tradeoffs and implementation implications
 
@@ -199,3 +201,8 @@ and grants access without invitation. A global cross-company inbox is convenient
 but makes context and sending identity ambiguous. We recommend the explicit model
 above, with basic roles and one company workspace first; enterprise federation,
 complex org hierarchy and fine-grained custom policy remain future scope.
+
+Detailed entity, role and effective-authorization contracts live in
+[DOMAIN](build-spec/DOMAIN.md); [PRODUCT](build-spec/PRODUCT.md) supplies stable
+requirements and [EXPERIENCE](build-spec/EXPERIENCE.md) supplies screen/flow states.
+All remain Proposed parts of this design.

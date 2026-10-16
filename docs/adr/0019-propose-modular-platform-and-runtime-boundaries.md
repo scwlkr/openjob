@@ -47,6 +47,23 @@ Use local Mac CI/package/publish with manual-only Actions as the current deliver
 preference. A source merge is distinct from publishing npm, deploying the hosted
 app or releasing native binaries. Existing privacy/native release gates remain.
 
+## Proposed build defaults
+
+[RUNTIME](../build-spec/RUNTIME.md) elaborates this ADR: hosted authority on the
+retained stack; per-entity Firestore repositories; server-only encrypted provider
+credential records with separately controlled deployment wrapping key; durable
+Firestore jobs/leases and bounded scheduled execution in the same codebase.
+Crypto/key-rotation design and actual runtime limits still need slice-level proof.
+These defaults do not claim configured infrastructure or approved keys.
+
+The required full npm app is an authenticated client of that hosted service, with
+real capabilities and supported offline scope. Its loopback bridge must enforce
+Host/Origin/CSRF and protected app-credential storage. It is distinct from both
+the synthetic demo and an optional local-authoritative server. Verified npm
+macOS/Windows/Linux support may use an installed browser app; native shell claims
+need their own evidence. Automatic channel update checks notify; installation
+remains explicit. See OJ-X6–X7 and R54. All additions remain **Proposed**.
+
 ## Alternatives and tradeoffs
 
 - **Microservices per module:** permits independent deployments but adds network

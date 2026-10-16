@@ -1,33 +1,38 @@
-# WLK-310 platform design — OWNER REVIEW, NO FEATURE IMPLEMENTATION
+# WLK-310 — integrated specification, OWNER REVIEW PENDING
 
-Owner corrected scope twice Oct16: stop minor workflow/edge slices; then pause
-all new feature implementation until a platform-level system blueprint and ADRs
-are reviewable. No feature code was changed for310. Isolated worktree
-/Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry,
-branch codex/wlk-310-platform-blueprint from main9ba3929.
+Draft PR87: https://github.com/scwlkr/openjob/pull/87
+Worktree /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry
+Branch codex/wlk-310-platform-blueprint; baseline main9ba3929, prior design98f4da5.
+No application edits, feature implementation, adoption or merge authorized.
 
-Review entry: docs/PLATFORM_ARCHITECTURE.md; Companies and identity detail in
-docs/COMPANIES_AND_IDENTITY.md. One User/personal workspace, independent company
-memberships/roles, company-owned workspaces and explicit resource grants. No
-employment-based personal ownership or automatic cross-company visibility.
-Creation/invitations/switching/connections/agents/departure/collaboration all
-proposed together in revised ADR0020. Managed company login is context-only;
-personal/multi-company identity requires independent personal authentication and
-recovery. Existing global sign-in links need compatibility assessment first. Charter/users/scope, capability map,
-system/container diagrams, workspace/principal boundaries, domains, provider data
-authority, sharedAPI/CLI/UI, integrationjobs/sync, deployment/extensibility,
-prototypegaps/phasedoutcomes. ADRs0019–0021 all PROPOSED, not accepted. No stack
-migration, credentials, infrastructure, settings or implementation authorized.
-Independent design review clean after clarifying private connection grants,
-agent effective authority, lifecycle ownership and Task/Calendar planning owner.
-Local links/fences and diff checks pass; no application code changed, so no app
-build or runtime suite repeated. DraftPR only; do not auto-merge or start feature work ahead of owner designreview.
-Linear310 is currentpriority; outcomephases inblueprint are not a secondbacklog.
+Library OpenJob-Review-and-Build-Package-v1 integrated into this same proposal:
+docs/build-spec/README.md indexes ten detailed spec documents plus SOURCE.md;
+33 stable OJ requirements, 20 proposed defaults, 22 dependency-ordered slices.
+Blueprint/Companies/ADRs0019–0021 reconciled, all remain Proposed. ROADMAP P0–P5
+is the single design dependency map; Linear OpenJob remains sole execution queue.
+Market evidence and dated technical review memo retain facts versus hypotheses.
+Original deck/PDF/ZIP remain Library source snapshots. SOURCE.md records verified
+578003-byte ZIP, SHA256 and reconciliation. Local source retained in sibling
+openjob-review-input; no signed URLs/secrets in Git.
 
-Phase2 acceptance now explicitly demonstrates three people/two companies with
-independent roles and personal work, invitation acceptance, scoped context views
-and departure from one company preserving the other/personal contexts. Hosting,
-retention, credential refresh and runner ownership remain proposed/open decisions.
+Proposed defaults: hosted authority, per-entity Firestore, encrypted credential
+repository, bounded durable jobs, metadata-only pilot cache, later full offline/
+Calendar/native/authenticated npm clients. Company SSO disabled initially;
+independent personal anchors assessed without disrupting existing Personal use.
+Three people/two Companies isolation/departure acceptance stays early in P1.
+No silent npm installation; automatic checks notify, installs remain explicit.
+Local Mac CI/manual-only Actions preserved. No heavy builds/browser use.
+
+Independent review found/fixed safe first-read rendering, frozen outbound payload,
+explicit export owner and quote-retention rules; follow-up review clean.
+Validation: all33 requirements traced, all22 slice dependencies ordered; local
+links/fences19docs pass, ZIP size/hash/integrity pass, diff/secret checks pass.
+Docs only: app build/runtime/device tests not rerun; no new runtime claims.
+Next: owner accepts/amends (1) scope/ownership/full target, (2) hosted-first plus
+installed clients, (3) privacy/online-first pilot then controlled offline.
+Record actual acceptance before feature development. Accounts/keys/real effects
+and publication/deployment remain separate execution gates. No competing plan or
+batch of Linear issues created. Exact pushed head/checks recorded in PR/Linear.
 
 ## Separate publication blocker
 

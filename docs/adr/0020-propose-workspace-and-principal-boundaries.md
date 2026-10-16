@@ -34,8 +34,9 @@ or establish ownership of the person's identity, personal accounts or other memb
 Require an independently controlled personal authentication/recovery anchor for
 personal or multi-company use. Company-managed login, if later supported, proves
 only the bound company context; it does not create a global session for Personal
-or another company. Initially company membership can use personally authenticated
-Users without implementing company SSO. Global sign-in linking/removal/recovery
+or another company. The first Company release uses eligible independently personally authenticated
+Users; company SSO is disabled. Preserve existing Personal access during anchor
+eligibility assessment; unknown control is not resolved by user attestation alone. Global sign-in linking/removal/recovery
 requires fresh independent personal proof; company admins manage only their own
 binding and cannot reset the global User. Departure or reassignment must not make
 an employer the person's recovery authority. Establish a replacement before
@@ -94,6 +95,14 @@ projections; Tasks preserves company work and reconciles planning links. Transfe
 of upstream access requires provider-supported authorization or new consent,
 never reassignment of a departed person's raw credentials. Retention and actual
 provider cleanup outcomes remain explicit, distinct from local access revocation.
+
+[DOMAIN](../build-spec/DOMAIN.md) supplies proposed entity/role/access contracts;
+[EXPERIENCE](../build-spec/EXPERIENCE.md) specifies invitation/context/departure
+flows. Initial Company creation adds one shared TaskSpace and OpenJob calendar;
+invitations disclose and explicitly grant contribution to these defaults.
+Company agents initially have sponsor-derived authority and named managers;
+service grants wait for an explicitly supported binding and lifecycle proof.
+These are proposed elaborations, not implemented roles or new access.
 
 ## Alternatives and tradeoffs
 

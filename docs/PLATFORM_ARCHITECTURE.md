@@ -3,8 +3,11 @@
 **Status: Proposed for owner review — 16 October 2026.** This is a target
 architecture, not an implementation or infrastructure authorization. The
 [master mission](MASTER_MISSION.md) remains the product mandate; Linear remains
-the execution queue. New feature implementation pauses until this blueprint is
-reviewable. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
+the execution queue. New feature implementation remains paused pending owner review and authorization. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
+Detailed proposed requirements, screens, contracts, runtime defaults and the single
+dependency roadmap are integrated in [the build specification](build-spec/README.md).
+[DECISIONS](build-spec/DECISIONS.md) is the short owner review list;
+[SOURCE](build-spec/SOURCE.md) records the Library provenance and reconciliation.
 ## 1. Product charter
 
 OpenJob is a workspace where a person and their authorized agents turn incoming
@@ -12,7 +15,7 @@ communication into completed, planned work across the accounts they already use.
 Its organizing unit is **work with context**: a conversation, the action it
 requires, the time reserved for it, and the reply or outcome that closes it.
 
-The first intended user is an independent professional managing several personal
+The initial user hypothesis is an independent professional managing several personal
 and work accounts. Company owners/admins establish shared work for employees and guests; a person
 may belong to several companies while keeping a personal workspace. Collaborators
 share selected work without inheriting private mailbox access. An optional personal agent is a
@@ -26,7 +29,9 @@ that work with less context switching, not by counting modules or integrations.
 
 Platform scope: Mail, Calendar, Tasks, Connections, identities, permissions,
 agent activity and the integration mechanisms that join them. Web and native
-clients share semantics; local operation grows deliberately. Existing Group work
+clients share semantics. Required full scope includes supported offline Mail/Company
+work, Calendar invitations/series and real authenticated npm-installed desktop clients;
+the first live pilot is smaller (see OJ-K5–K6/OJ-X5–X7). Existing Group work
 remains useful. Companies, personal workspaces and independent company memberships are core
 platform concepts, even though the prototype does not implement company tenancy.
 
@@ -124,8 +129,9 @@ Recommend one immutable User per installation with a personal workspace and
 independent memberships in multiple Companies. A Company owns company workspaces
 and resources; each Workspace belongs to exactly one Company or a personal User.
 Company policy establishes the organizational boundary; workspace/resource grants
-narrow it. Company-controlled login is restricted to its company context; personal
-identity/recovery requires an independent personal anchor, not employer control. Roles (Owner/Admin/Employee/Guest) apply per company. Employment never
+narrow it. The first Company release uses eligible independent personal authentication; Company
+SSO stays disabled. Any later Company-controlled login is context-only; Personal
+identity/recovery requires independent personal proof (DOMAIN and ADR 0020). Roles (Owner/Admin/Employee/Guest) apply per company. Employment never
 owns a person's identity or personal accounts. Membership alone does not expose
 restricted mailbox identities, connections or projections.
 
@@ -202,8 +208,9 @@ See [ADR 0021](adr/0021-propose-provider-authority-and-integration-execution.md)
 | Task or OpenJob block removal | Task-planning application operation reconciles the canonical relationship; remote provider deletion requires a separate explicit supported operation |
 
 A retained Task may retain only an unavailable source reference after disconnect;
-that is not permission to retain or reveal message content. Retention periods,
-search-index erasure and activity receipts need explicit policy before live data.
+that is not permission to retain or reveal message content. Proposed retention/cleanup defaults are in [RUNTIME](build-spec/RUNTIME.md):
+metadata-only pilot cache, on-demand bodies and no persistent server body index.
+Owner review and cleanup proof precede live import.
 Connections remains responsible for cleanup completion even when a provider is
 unavailable; a UI status cannot falsely report external revocation as completed.
 ## 7. Interfaces, deployment and growth
@@ -269,33 +276,22 @@ provide the proposed workspace platform or real connected-account experience.
 | `scripts/personal-workspace-test-server.mjs`, npm packaging | Full local prototype works with invented identities; no production local credential or background model |
 | Scoped grants/activity and existing scheduled account-deletion work | No durable provider integration runner/outbox or provider write lifecycle |
 
-Phases are outcome/dependency proposals, not a parallel backlog. Owner review
-selects the next milestone in Linear; no new feature is started by this blueprint.
+[ROADMAP](build-spec/ROADMAP.md) is the single detailed dependency map: P0 review,
+P1 ownership, P2 coherent app/Task/Calendar/agents, P3 real reads, P4 live work loop,
+P5 required provider/Calendar/offline/native/npm completion. Its 22 stable slices
+are design references, not a second execution queue. Select/reconcile a Linear
+item only after review and development authorization.
 
-1. **Agree the platform contract.** Review this charter, domain ownership and ADRs;
-   settle Company/personal ownership, membership/resource grants and the first deployment profile.
-2. **Establish ownership and connect work.** Establish personal/Company ownership,
-   invitations, independent memberships and context selection before live data.
-   Approve one provider/development account; implement connection lifecycle,
-   real paged Inbox/reconnect, durable projections and the first-run shell.
-   Acceptance must include three people and two Companies: Alex is Employee in A
-   and Admin in B; Sam owns A with no B membership; Jo owns B and is Guest in A.
-   Each retains personal work. Demonstrate invitation/acceptance, role-scoped
-   resource visibility and context switching, with no automatic cross-company or
-   personal access. Alex leaving A must preserve personal work and B membership.
-   Read → linked Task → plan → local draft must finish as one journey.
-3. **Close the work loop.** Add separately consented provider draft/send and
-   calendar operations, clear sending identity/outcomes, durable integration jobs,
-   and useful scoped agent jobs using the same operations. Prove a permitted job,
-   a denied action and human revocation in the actual experience.
-4. **Broaden the platform.** A second provider/account and cross-company guest
-   collaboration with explicit ownership; then
-   supported offline/local deployment and cross-device acceptance. Split
-   stores/processes only when evidence shows the current boundary is insufficient.
+Early P1 acceptance retains the three-person/two-Company proof: Alex is Employee
+in A and Admin in B; Sam owns A with no B membership; Jo owns B and is Guest in A.
+Each retains Personal work. Show invitations, role/resource visibility and context
+switching; Alex leaving A preserves Personal and B.
 
-Review decisions: accept/adjust ADRs; choose hosted-first versus a secure local
-service as the first live-provider profile; select the first approved provider;
-confirm Company creation/roles, private versus company-owned work and explicit
-cross-company collaboration defaults. Open questions include retention/search of
-mail projections, company administration and provider grant continuity, provider refresh/job hosting,
-and the eventual local-to-hosted sync contract. None is silently resolved by a demo.
+Owner review covers the three choices in [DECISIONS](build-spec/DECISIONS.md):
+product/ownership and full scope, hosted-first runtime with installed clients, and
+privacy/online-first pilot followed by controlled offline capability. Proposed
+technical defaults cover repositories, encrypted credentials, bounded runner,
+retention and cleanup. Specific accounts/keys/provider effects and releases are
+later execution gates. Provider order follows approved access and evidence; it
+is not another unresolved product decision. Secure local-authoritative hosting
+remains an alternative profile, not a prerequisite for the installed client.

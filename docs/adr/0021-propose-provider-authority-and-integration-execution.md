@@ -52,8 +52,11 @@ event sourcing, a raw-Mail broadcast stream or a cross-provider transaction.
 Sync uses provider-supported incremental state or bounded pages/polling. Webhooks
 are hints, not a second authority. The app shows current/refreshing/stale/blocked
 states grounded in the actual connection. Separate provider projections from the
-current owner aggregate before importing a real Inbox. Specify retention and
-search needs before storing provider message bodies at production scale.
+current owner aggregate before importing a real Inbox. The proposed first-live policy is metadata-only caching and on-demand bodies,
+with no persistent provider-body/attachment or server body-search index. Exact
+cache/receipt/cleanup defaults are in [RUNTIME](../build-spec/RUNTIME.md), pending
+owner review and implementation proof. Authored drafts/outbound payloads are
+distinct protected data, not provider cache.
 
 Offline clients hold a bounded projection and explicit pending edits. They do
 not gain provider write authority offline. Existing personal offline editing and
@@ -68,6 +71,14 @@ account deletion or membership departure, and each context reports its cleanup
 outcome. An unavailable provider leaves cleanup visibly pending. Retained Task
 source stubs are separate from message-content retention, whose policy remains
 an explicit live-data prerequisite.
+
+[CONTRACTS](../build-spec/CONTRACTS.md) specifies the proposed operation states,
+idempotency, dispatch rechecks and connector boundaries. [RUNTIME](../build-spec/RUNTIME.md)
+specifies Firestore jobs/leases, scheduled bounded execution, encrypted credential
+storage and cleanup defaults. Later controlled offline Mail/Company work remains
+required (OJ-X5/R52); no offline provider effects. Invitation/RSVP and series
+writing remain required later Calendar work (OJ-K5–K6/R51), with separate
+notification permissions and explicit occurrence/series scope. All remain Proposed.
 
 ## Alternatives and tradeoffs
 
@@ -88,6 +99,7 @@ credential resolution/refresh, durable reference/projection storage and actual
 Inbox reads together. Sending and external Calendar writes need their own
 capability and consent proof. No adapter or mock OAuth test authorizes live use.
 
-Before accepting implementation, select a provider/deployment profile, decide
-retention and the durable runner owner, and approve external setup separately.
+Before live implementation, review the proposed hosted/data defaults and prove
+the durable runner/credential binding. Select the provider from approved access
+and feasibility evidence; authorize external setup/effects separately.
 Review unrecovered WLK-302 before IMAP work; this ADR does not replace its scope.
