@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type FormEvent, type 
 import type { WorkspaceCommand, WorkspaceTask, WorkspaceView } from "../../shared/workspace-contracts";
 import type { MailSource } from "./workspace-mail";
 import { linkedTask, type CalendarTaskSource } from "./workspace-links";
+import { filterWorkspaceTasks } from "../../shared/workspace-task-query.mjs";
 import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
@@ -23,13 +24,23 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
   const [end, setEnd] = useState(() => defaults().end);
   const [openedTask, setOpenedTask] = useState("");
   const [navigation, setNavigation] = useState(0);
+  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState("");
+  const [scheduledOn, setScheduledOn] = useState("");
   const taskArticle = useRef<HTMLElement>(null);
   const scheduledTask = view.tasks.find((task) => task.id === scheduleId);
   const selectedCalendar = calendarId || view.calendars[0]?.id || "";
+  let visibleTasks: WorkspaceTask[] = [];
+  let filterError = "";
+  try { visibleTasks = filterWorkspaceTasks(view.tasks, { status, search, scheduledOn }); }
+  catch { filterError = "Choose a valid status, search up to 200 characters, and a real planned day in UTC."; }
+
+  function clearFilters() { setStatus("all"); setSearch(""); setScheduledOn(""); }
 
   useImperativeHandle(ref, () => ({ openLinkedTask(source) {
     const task = linkedTask(view, source);
     if (!task) return false;
+    setStatus("all"); setSearch(""); setScheduledOn("");
     setOpenedTask(task.id); setNavigation(value => value + 1); return true;
   } }), [view]);
   useEffect(() => { if (active && navigation) taskArticle.current?.focus(); }, [active, navigation]);
@@ -45,7 +56,7 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    if (await command({ type: "task.create", title: newTitle }, "Task created")) setNewTitle("");
+    if (await command({ type: "task.create", title: newTitle }, "Task created")) { setNewTitle(""); clearFilters(); }
   }
 
   if (!active) return null;
@@ -54,8 +65,19 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
       <label className={styles.grow}>New task<input aria-label="New task" required value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="What needs your attention?" /></label>
       <button className={styles.primary} disabled={busy || !newTitle.trim()}>Add task</button>
     </form>
+    <section className={styles.panel} aria-label="Find tasks">
+      <div className={taskStyles.filters}>
+        <label>Task status<select aria-label="Task status" value={status} onChange={event => setStatus(event.target.value)}><option value="all">All tasks</option><option value="open">Open tasks</option><option value="completed">Completed tasks</option></select></label>
+        <label className={styles.grow}>Search tasks<input aria-label="Search tasks" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder="Task title…" /></label>
+        <label>Planned day (UTC)<input aria-label="Planned day (UTC)" type="date" value={scheduledOn} onChange={event => setScheduledOn(event.target.value)} /></label>
+        <button onClick={() => setScheduledOn(new Date().toISOString().slice(0, 10))}>Planned today</button>
+        <button onClick={clearFilters}>Clear task filters</button>
+      </div>
+      <p className={styles.small} aria-live="polite">{visibleTasks.length} of {view.tasks.length} tasks · {status}{scheduledOn ? ` · overlaps ${scheduledOn} UTC` : " · any planned day"}{search.trim() ? ` · title contains “${search.trim()}”` : ""}</p>
+      {filterError && <p role="alert" className={styles.error}>{filterError}</p>}
+    </section>
     <section className={styles.panel} aria-label="Task list">
-      {view.tasks.map((task) => <article ref={task.id === openedTask ? taskArticle : undefined} tabIndex={-1} className={`${styles.task} ${task.id === openedTask ? styles.selected : ""}`} data-testid="task-row" key={task.id}>
+      {visibleTasks.map((task) => <article ref={task.id === openedTask ? taskArticle : undefined} tabIndex={-1} className={`${styles.task} ${task.id === openedTask ? styles.selected : ""}`} data-testid="task-row" key={task.id}>
         <label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(event) => command({ type: "task.complete", taskId: task.id, completed: event.target.checked }, "Task updated")} /><span className={`${taskStyles.title} ${task.completed ? styles.completed : ""}`}>{task.title}</span></label>
         <p className={taskStyles.metadata}>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{format(task.scheduledSlot.start)} – {format(task.scheduledSlot.end)} · {view.calendars.find((calendar) => calendar.id === view.events.find((event) => event.id === task.calendarEventId)?.calendarId)?.name || "Linked calendar"}</small> : <small>Unscheduled</small>}</p>
         {editingId === task.id && <form className={taskStyles.edit} onSubmit={async (event) => { event.preventDefault(); if (await command({ type: "task.update", taskId: task.id, title: editingTitle }, "Task title updated")) setEditingId(""); }}>
@@ -77,6 +99,7 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
         </div>
       </article>)}
       {!view.tasks.length && <p className={styles.empty}>No tasks yet. Add one or turn a message into a task.</p>}
+      {view.tasks.length > 0 && !visibleTasks.length && !filterError && <p className={styles.empty}>No tasks match these filters. Try another title, status or planned day.</p>}
     </section>
     {scheduledTask && <section className={styles.panel} aria-label="Task schedule editor"><h2 className={styles.sectionHeading}>Schedule task</h2>
       <form className={styles.form} onSubmit={async (event) => { event.preventDefault(); if (await command({ type: "task.schedule", taskId: scheduledTask.id, calendarId: selectedCalendar, start: utc(start), end: utc(end) }, "Task scheduled on your calendar")) setScheduleId(""); }}>

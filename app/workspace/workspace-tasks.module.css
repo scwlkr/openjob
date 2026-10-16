@@ -4,3 +4,5 @@
 .edit label { display: grid; min-width: min(200px, 100%); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .actions button { margin-left: 0; }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 16px; }
+.filters label { display: grid; gap: 6px; min-width: 0; }

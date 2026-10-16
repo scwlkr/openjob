@@ -68,10 +68,20 @@ authenticated API. Web and CLI read and mutate the same server-owned records:
 
 ```sh
 openjob workspace snapshot --format json
+openjob workspace tasks --status open --search "launch" --scheduled-on 2026-10-17 --format json
 printf '%s' '{"type":"task.create","title":"Prepare the demo"}' | openjob workspace command --input - --format json
 openjob workspace command --input command.json --format json
 printf '%s' '{"type":"mail.examples.add"}' | openjob workspace command --input - --format json
 ```
+
+`workspace tasks` filters an already authorized snapshot and preserves task
+order. Defaults include all tasks; choose `--status open|completed|all`, a
+literal case-insensitive title `--search` of at most 200 trimmed characters,
+and `--scheduled-on YYYY-MM-DD`. Scheduled dates use UTC overlap: a task ending
+at midnight is excluded from the next day, while a task crossing midnight
+appears on both days. Unscheduled tasks are excluded when a day is selected.
+The same command accepts a personal `--agent-token-file`; filtering never
+expands the grant’s access. JSON output is `{ "data": [tasks] }`.
 
 The strict command objects support `task.create` (`title`), `task.update`
 (`taskId`, `title`), `task.complete` (`taskId`, `completed`), `task.schedule`

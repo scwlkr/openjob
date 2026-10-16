@@ -3,6 +3,7 @@
 
 import { prepareAgentGrant, deliverAgentGrant } from "./lib/agent-grant.mjs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
+import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
 import {
   apiRequestWithIdToken as requestApiWithIdToken,
@@ -83,6 +84,7 @@ const TASK_OPTIONS = new Map([
 ]);
 const COMMAND_OPTIONS = new Map([
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
+  ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
   ["workspace providers", new Set([...OUTPUT_OPTIONS, "--account", "--cursor"])],
   ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
   ["workspace agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
@@ -151,6 +153,7 @@ Global options:
 const RESOURCE_HELP = {
   workspace: `Usage:
   openjob workspace snapshot
+  openjob workspace tasks [--status <all|open|completed>] [--search <literal-title>] [--scheduled-on <YYYY-MM-DD>]
   openjob workspace providers [--account <account-id>] [--cursor <cursor>]
   openjob workspace command --input <path|->
   openjob workspace agent grant --name <name> --scopes <comma-list> --resources <comma-list> --token-out <new-path>
@@ -534,6 +537,14 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "tasks" && rest.length === 0) {
+    let query;
+    try { query = normalizeWorkspaceTaskQuery({ status: parsed.options.get("--status"), search: parsed.options.get("--search"), scheduledOn: parsed.options.get("--scheduled-on") }); }
+    catch { throw new CliError("usage_error", "Use --status all|open|completed, --search up to 200 characters and a real --scheduled-on YYYY-MM-DD date.", 2); }
+    const response = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    if (!Array.isArray(response?.data?.tasks)) throw new CliError("invalid_response", "OpenJob returned an invalid task snapshot.", 8);
+    writeResult({ data: filterWorkspaceTasks(response.data.tasks, query) }); return;
+  }
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();
     for (const [option, key, maximum] of [["--account", "accountId", 128], ["--cursor", "cursor", 4096]]) {

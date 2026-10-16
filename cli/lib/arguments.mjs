@@ -20,6 +20,8 @@ const VALUE_OPTIONS = new Set([
   "--scopes",
   "--resources",
   "--status",
+  "--search",
+  "--scheduled-on",
   "--text",
   "--text-file",
   "--token-out",
