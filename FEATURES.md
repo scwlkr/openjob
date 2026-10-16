@@ -1,3 +1,10 @@
+## Proposed npm publication (disabled)
+
+WLK-307 prepares OIDC main/dev and owner-reviewed release/latest publishing with
+sealed artifacts, source/tag freshness and integrity checks. No publishing access
+or activation exists. A local0.3.8 installation candidate contains saved workspace
+and Task time planning, separate from registry releases. See [the access proposal](docs/NPM_PUBLISHING_PROPOSAL.md).
+
 ## Find saved Calendar time for a Task
 
 Calendar offers open slots across all saved owner calendars for an open Task,

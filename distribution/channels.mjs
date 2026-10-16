@@ -1,3 +1,4 @@
+import { isNewerStableRelease } from '../lib/semver.ts';
 export const NPM_PACKAGE_NAME = '@scwlkr/openjob';
 
 // Pure mapping shared by the artifact builder and deterministic checks.
@@ -15,4 +16,10 @@ export function artifactIdentity({ channel, baseVersion, ref, sha, timestamp }) 
 // actions/checkout can detach HEAD; main is still available through origin.
 export function sourceRef(ref) {
   return ref === 'refs/heads/main' ? 'refs/remotes/origin/main' : ref;
+}
+
+// Installation review only: this ref cannot satisfy a stable publication event.
+export function candidateIdentity({ baseVersion, version, sha }) {
+  if (!/^[a-f0-9]{40}$/.test(sha) || !isNewerStableRelease(version ?? '', baseVersion) || !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)) throw new Error('Candidate must be a newer stable version at an exact reviewed source.');
+  return { version, channel: 'latest', source: sha, ref: `candidate-unpublished/v${version}` };
 }

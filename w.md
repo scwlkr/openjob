@@ -1,3 +1,32 @@
+# WLK-307 publishing preparation — NO ACCESS/ACTIVATION/PUBLICATION
+
+Branch codex/wlk-307-npm-publishing from reviewed main714e850. User requested
+concrete disabled OIDC proposal + next local candidate. Exact approval table and
+steps: docs/NPM_PUBLISHING_PROPOSAL.md. Read-only GitHub: public scwlkr/openjob,
+defaultmain, no environments/variables; reviewer scwlkr ID206951249 verified.
+Official npm supports multiple records, environment binding and hosted OIDC;
+first publish within2days. No trust/security/credential/settings mutations.
+
+Prepared disabled npm-publish.yml, publication policies/runner and candidate mode.
+Both jobs gated by absent OPENJOB_NPM_PUBLISHING_ENABLED; separate dev-main and
+stable-v* environments. Stable owner review + adminbypassoff, sealed bytes before
+approval, no rebuild afterapproval, no write retries/tagrepair, exact-version
+integrity/tag no-op, fresh-ref and monotonic registry checks. Package-level trust
+is across tags: main/workflow writers gain package-publication authority upon
+activation. Direct npm publish + implicitstage, no dist-tag-management permission.
+Real environment/OIDC behavior cannot be verified before approved setup exists.
+
+Review found missing bypass check/artifact rerun collision; fixed failclosed and
+attempt-specific artifact name carried from build output. Policy/distribution15
+PASS before candidate-policy test; final compile/tests/review/candidate pending.
+Mac transport temporarily disconnected13:42–13:44; returned, actual git state
+inspected and failed docs step confirmed unexecuted before retry. No sleep/power
+settings changed. Prior code on disk preserved. Draft PR pending; do not merge,
+activate, create access or publish before explicit owner decision. Initial npm
+archives and saved demos5193/5194/5195 preserved; WLK302 unrecovered/excluded.
+
+---
+
 # npm channels verified13:27 UTC / WLK-306 final delivery
 
 After Shane's tag-only npm security completion, cache-bypassed public metadata200:
