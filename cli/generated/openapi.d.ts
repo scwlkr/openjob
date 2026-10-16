@@ -3933,6 +3933,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "accounts": [],
+                     *         "messages": [],
+                     *         "tasks": [
+                     *           {
+                     *             "id": "task_personal",
+                     *             "ownerId": "user_personal",
+                     *             "title": "Prepare the demo",
+                     *             "completed": false
+                     *           }
+                     *         ],
+                     *         "calendars": [
+                     *           {
+                     *             "id": "personal",
+                     *             "ownerId": "user_personal",
+                     *             "name": "Personal",
+                     *             "color": "#2454dc"
+                     *           }
+                     *         ],
+                     *         "events": [],
+                     *         "drafts": [],
+                     *         "sent": [],
+                     *         "agents": [],
+                     *         "activity": []
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PersonalWorkspaceView"];
                     };
@@ -3972,7 +4001,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "conflict",
+                     *         "message": "The workspace changed. Reload before retrying.",
+                     *         "requestId": "req_personal_conflict"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
                 };
             };
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
@@ -4007,6 +4050,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "type": "task.create",
+                 *       "title": "Prepare the demo"
+                 *     }
+                 */
                 "application/json": components["schemas"]["PersonalWorkspaceCommand"];
             };
         };
@@ -4017,6 +4066,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "task_personal",
+                     *         "ownerId": "user_personal",
+                     *         "title": "Prepare the demo",
+                     *         "completed": false
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PersonalWorkspaceCommandResult"];
                     };
@@ -4056,7 +4115,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "conflict",
+                     *         "message": "The workspace changed. Reload before retrying.",
+                     *         "requestId": "req_personal_conflict"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
                 };
             };
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
