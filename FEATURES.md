@@ -2,7 +2,7 @@
 
 ## Packaged npm workspace
 
-`npm run app:pack` builds the actual personal workspace, local synthetic API and existing CLI into an installable tarball. `openjob app` runs it without a checkout; `openjob updates` and automatic notice-only checks retain the artifact’s latest/dev channel. Artifact-only CI maps published stable releases to latest and exact main source to timestamp/SHA dev versions. Registry publication and ownership setup remain pending. See [npm installation](docs/NPM_INSTALL.md).
+`npm run app:pack` builds the actual personal workspace, local synthetic API and existing CLI into an installable `@scwlkr/openjob` tarball (the executable remains `openjob`). `openjob app` runs it without a checkout; `openjob updates` and automatic notice-only checks retain the artifact’s latest/dev channel. Artifact-only CI maps published stable releases to latest and exact main source to timestamp/SHA dev versions. Registry publication and ownership setup remain pending. See [npm installation](docs/NPM_INSTALL.md).
 
 ## Authenticated personal workspace
 

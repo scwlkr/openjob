@@ -1,3 +1,5 @@
+export const NPM_PACKAGE_NAME = '@scwlkr/openjob';
+
 // Pure mapping shared by the artifact builder and deterministic checks.
 export function artifactIdentity({ channel, baseVersion, ref, sha, timestamp }) {
   if (!/^\d+\.\d+\.\d+$/.test(baseVersion) || !/^[a-f0-9]{40}$/.test(sha)) throw new Error('A stable base version and full source SHA are required.');

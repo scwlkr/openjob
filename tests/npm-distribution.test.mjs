@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { artifactIdentity, sourceRef } from '../distribution/channels.mjs';
+import { artifactIdentity, sourceRef, NPM_PACKAGE_NAME } from '../distribution/channels.mjs';
 import { selectedChannel, newerVersion, checkForUpdates, updateNotice } from '../cli/lib/updates.mjs';
 const sha = '5358f6cc0c030d478aafea7d4762fdab68d799e3';
 const base = { baseVersion: '0.3.7', sha, timestamp: 1792144983 };
@@ -62,4 +62,8 @@ test('unpublished artifacts never query or recommend the unverified registry nam
   let calls = 0;
   const result = await checkForUpdates({ name: 'openjob', version: '0.3.7', openjobDistribution: { channel: 'latest', registryVerified: false } }, { fetchImplementation: async () => { calls++; return Response.json({ latest: '99.0.0' }); } });
   assert.equal(calls, 0); assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'registry_not_verified'); assert.equal(updateNotice(result), '');
+});
+
+test('the full-app artifact uses the proposed owner scope, not the unrelated public openjob package', () => {
+  assert.equal(NPM_PACKAGE_NAME, '@scwlkr/openjob');
 });

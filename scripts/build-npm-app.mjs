@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { artifactIdentity, sourceRef } from '../distribution/channels.mjs';
+import { artifactIdentity, sourceRef, NPM_PACKAGE_NAME } from '../distribution/channels.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const channel = process.argv[2];
@@ -26,6 +26,7 @@ await build({ configFile: join(root, 'tests/browser/personal-workspace-vite.conf
 await build({ configFile: false, publicDir: false, build: { ssr: join(root, 'scripts/personal-workspace-test-server.mjs'), target: 'node22', outDir: join(output, 'app/api'), emptyOutDir: true, minify: false, rollupOptions: { output: { entryFileNames: 'server.mjs' } } }, ssr: { noExternal: true }, logLevel: 'warn' });
 for (const name of ['lib', 'generated', 'openapi-types.ts', 'openjob.mjs', 'README.md']) await cp(join(root, 'cli', name), join(output, name), { recursive: true });
 const { private: _private, ...manifest } = pkg;
+manifest.name = NPM_PACKAGE_NAME;
 manifest.description = 'OpenJob workspace prototype and command-line client';
 manifest.version = identity.version;
 manifest.files = [...pkg.files, 'app'];

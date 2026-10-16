@@ -14,7 +14,7 @@ After installing the root locked build dependencies:
 
 ```sh
 npm run app:pack
-npm install --global --prefix /tmp/openjob-install ./dist/openjob-0.3.7.tgz
+npm install --global --prefix /tmp/openjob-install ./dist/scwlkr-openjob-0.3.7.tgz
 /tmp/openjob-install/bin/openjob app --port 5191
 ```
 
@@ -29,17 +29,21 @@ These commands are the intended public installation and manual upgrade paths
 once npm ownership and publication are approved and configured:
 
 ```sh
-npm install --global openjob@latest
+npm install --global @scwlkr/openjob@latest
 openjob app
 openjob updates
 # Stay on the development channel when manually upgrading it:
-npm install --global openjob@dev
+npm install --global @scwlkr/openjob@dev
 ```
 
-No public npm publish or registry ownership verification has been completed.
-Do not assume today's public `openjob` package belongs to this repository.
-Do not use these registry commands until ownership and artifact identity are
-confirmed. The local tarball above is the verified distribution path.
+Read-only registry inspection on 16 October 2026 found that public `openjob`
+is maintained by `homy`, latest 1.0.11, with repository HomyeeKing/openjob. It
+belongs to a different project. The full-app artifact therefore uses the proposed
+`@scwlkr/openjob` name while retaining the `openjob` executable. That scoped name
+returned 404; this does not establish ownership or reserve it. `npm whoami` on
+this Mac returned ENEEDAUTH. No publication or credential setup occurred.
+Do not use the scoped registry commands until scope rights and the initial
+reviewed publication are confirmed. The local tarball is the verified path.
 
 The artifact records its selected channel. Registry checks stay disabled while
 package ownership is unverified (`registryVerified: false`); explicit checks
@@ -68,8 +72,9 @@ requires a clean checkout, refuses ref/version mismatch and sets the matching
 Delayed main builds refuse a newer fetched origin/main instead of assigning an
 old source to dev. Release artifacts remain bound to the published tag.
 
-Remaining owner-approved setup: confirm the package name and publisher rights;
-choose npm authentication/trusted publishing; approve registry publishing CI,
+Remaining owner-approved setup: sign in to the intended existing npm account
+and confirm its rights to the `@scwlkr` scope (or approve another owned scope);
+approve the initial `@scwlkr/openjob` publication and choose npm authentication/trusted publishing; approve registry publishing CI,
 serialization and stale-run protection; publish reviewed artifacts with explicit
 matching tags; verify both live dist-tags and clean registry installations.
 No credentials, trusted-publisher settings or production tags were configured.
