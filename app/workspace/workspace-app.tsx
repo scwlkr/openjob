@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
 import { OpenJobBrand } from "../openjob-brand";
 import styles from "./workspace.module.css";
 import WorkspaceCalendar from "./workspace-calendar";
 import WorkspaceAgents from "./workspace-agents";
 import WorkspaceTasks from "./workspace-tasks";
-import WorkspaceMail from "./workspace-mail";
+import WorkspaceMail, { type MailSource, type WorkspaceMailHandle } from "./workspace-mail";
 
 type Tab = "Mail" | "Calendar" | "Tasks" | "Agents";
 const date = (value: string) => new Date(value).toLocaleString(undefined, { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " UTC";
@@ -34,6 +34,12 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const mail = useRef<WorkspaceMailHandle>(null);
+
+  function openSource(source: MailSource) {
+    if (!mail.current?.openSource(source)) { setError("The source message is unavailable in this workspace."); return; }
+    setTab("Mail"); setError(""); setNotice("Source message opened. Any unsaved Mail text is kept.");
+  }
 
   const refresh = useCallback(async () => {
     const next: WorkspaceView = await api("snapshot", owner);
@@ -75,8 +81,8 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
         {notice && <div role="status" className={styles.success}>{notice}</div>}
         {!view && !error && <p role="status">Loading workspace…</p>}
         {!view && error && <p>This prototype needs the isolated fixture API enabled on its server.</p>}
-        {view && <div hidden={tab !== "Mail"}><WorkspaceMail view={view} busy={busy} command={command} /></div>}
-        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
+        {view && <div hidden={tab !== "Mail"}><WorkspaceMail ref={mail} view={view} busy={busy} command={command} /></div>}
+        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} onOpenSource={openSource} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
         {view && tab === "Agents" && <WorkspaceAgents view={view} owner={owner} busy={busy} command={command} refresh={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id}><small>{date(entry.createdAt)}</small> {entry.action} <small>· {entry.actor}</small></p>)}</details>}

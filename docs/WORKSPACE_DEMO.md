@@ -41,7 +41,7 @@ The prototype also opens at `/` in explicit fixture mode. Ordinary builds retain
 1. Start as Alex. Use Inbox, Drafts and Simulated Sent folders; search subjects,
    people or message bodies within the selected mailbox. Filter among the three simulated mailboxes, open the launch
    checklist message, and save a reply draft. Create a personal Task from it.
-2. In Tasks, schedule that Task on the Work calendar with explicit UTC start
+2. In Tasks, choose **Open source mail** to reopen the exact message and mailbox without losing unsaved replies or composition text. Then schedule that Task on the Work calendar with explicit UTC start
    and end times, then mark it complete. Edit its title: the linked Calendar block
    follows. Reopen Schedule to adjust the existing interval or calendar. Unschedule
    removes the linked block while keeping the Task. Confirmed Delete task removes

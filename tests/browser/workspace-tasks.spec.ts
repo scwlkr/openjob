@@ -8,6 +8,10 @@ test("mail-linked tasks edit, reschedule, unschedule and delete with calendar co
   await expect(page.getByRole("status")).toContainText("Private task created");
   await page.getByRole("button", { name: /^Tasks/ }).click();
   const sourceTask = page.getByTestId("task-row").filter({ hasText: "Design review notes" }).last();
+  await sourceTask.getByRole("button", { name: "Open source mail", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Design review notes", exact: true })).toBeFocused();
+  await expect(page.getByLabel("Mailbox", { exact: true })).toHaveValue("alex_outlook");
+  await page.getByRole("button", { name: /^Tasks/ }).click();
   await sourceTask.getByRole("button", { name: "Edit title", exact: true }).click();
   await page.getByLabel("Task title", { exact: true }).fill(title);
   await page.getByRole("button", { name: "Save title", exact: true }).click();

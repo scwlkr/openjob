@@ -142,3 +142,78 @@ test("agents access only named invented mailboxes and lose access after human re
   await expect(page.getByTestId("sent-message").filter({ hasText: name })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("personal-invented-mail-agent.png"), fullPage: true });
 });
+
+test("Task source navigation finds the exact mailbox and preserves unsaved Mail work", async ({ page, request }, testInfo) => {
+  const token = await ownerToken(request);
+  await call(request, token, { type: "mail.examples.add" });
+  const marker = `Source navigation ${Date.now()}`;
+  await call(request, token, { type: "task.create", title: `${marker} personal`, messageId: "example-message-1" });
+  await call(request, token, { type: "task.create", title: `${marker} work`, messageId: "example-message-3" });
+  await call(request, token, { type: "task.create", title: `${marker} plain` });
+  await page.goto("/");
+  const task = (name: string) => page.getByTestId("task-row").filter({ hasText: `${marker} ${name}` });
+  await expect(task("plain")).toBeVisible();
+  await expect(task("plain").getByRole("button", { name: "Open source mail", exact: true })).toHaveCount(0);
+  for (const width of [1280, 720, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await task("personal").getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Launch checklist for Friday", exact: true })).toBeFocused();
+    await expect(page.getByLabel("Mailbox", { exact: true })).toHaveValue("mail:example-gmail-personal");
+    await page.getByLabel("Reply draft", { exact: true }).fill(`${marker} unsaved personal ${width}`);
+    await page.getByRole("button", { name: "Compose draft", exact: true }).click();
+    await page.getByLabel("From mailbox", { exact: true }).selectOption("mail:example-outlook");
+    await page.getByLabel("Subject", { exact: true }).fill(`${marker} unsaved composition ${width}`);
+    await page.getByLabel("Message", { exact: true }).fill("Keep this editor while I follow another Task.");
+    await page.getByLabel("Mailbox", { exact: true }).selectOption("mail:example-outlook");
+    await page.getByLabel("Search mail", { exact: true }).fill("a search that hides the source");
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await task("work").getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Design review notes", exact: true })).toBeFocused();
+    await expect(page.getByLabel("Mailbox", { exact: true })).toHaveValue("mail:example-gmail-work");
+    await expect(page.getByLabel("Search mail", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Inbox", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByLabel("From mailbox", { exact: true })).toHaveValue("mail:example-outlook");
+    await expect(page.getByLabel("Subject", { exact: true })).toHaveValue(`${marker} unsaved composition ${width}`);
+    await page.getByLabel("Reply draft", { exact: true }).fill(`${marker} work reply ${width}`);
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await task("personal").getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${marker} unsaved personal ${width}`);
+    await page.getByRole("button", { name: "Cancel draft editor", exact: true }).click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await task("work").getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${marker} work reply ${width}`);
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("No message sent");
+    const snapshot = await request.get("/api/v1/workspace/snapshot", { headers: { authorization: `Bearer ${token}` } });
+    const saved = (await snapshot.json()).data.drafts.find((draft: { body: string }) => draft.body === `${marker} work reply ${width}`);
+    expect(saved.accountId).toBe("mail:example-gmail-work"); expect(saved.messageId).toBe("example-message-3");
+    await page.screenshot({ path: testInfo.outputPath(`task-source-mail-${width}.png`), fullPage: true });
+    await page.reload();
+    await expect(task("work")).toBeVisible();
+    await task("work").getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${marker} work reply ${width}`);
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+  }
+  // Existing API/CLI checks prove authorization redaction. A stale/mismatched
+  // client snapshot must also never offer a link to a different mailbox.
+  await page.route("**/api/v1/workspace/snapshot", async route => {
+    const response = await route.fetch(); const body = await response.json();
+    const personal = body.data.tasks.find((item: { title: string }) => item.title === `${marker} personal`);
+    personal.sourceAccountId = "mail:example-gmail-work";
+    const work = body.data.tasks.find((item: { title: string }) => item.title === `${marker} work`);
+    delete work.sourceAccountId; delete work.sourceMessageId;
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload();
+  await expect(task("personal")).toBeVisible();
+  await expect(task("personal").getByRole("button", { name: "Open source mail", exact: true })).toHaveCount(0);
+  await expect(task("work").getByRole("button", { name: "Open source mail", exact: true })).toHaveCount(0);
+  await page.unroute("**/api/v1/workspace/snapshot");
+  await page.getByLabel("Test identity", { exact: true }).selectOption("sam");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("task-row").filter({ hasText: marker })).toHaveCount(0);
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await expect(page.getByLabel("Reply draft", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Subject", { exact: true })).toHaveCount(0);
+});
