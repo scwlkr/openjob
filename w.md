@@ -1,3 +1,27 @@
+Exact integrated checks: new delayed-save Mail regression PASS. Existing connected
+Mail test exposed its reload-before-save-completion race (saved original rather
+than revised bytes on phone); fixed test to await editor closing before reload.
+This observes actual saved completion rather than aborting its request. No app
+behavior changed for this test correction. Rerun affected flow before merge.
+
+# WLK-308 Mail editor ready / WLK-307 local workflow merged
+
+PR84 merged14b9699: local npm preparation + separately approved publication;
+OIDC cancelled, Actions manual-only. No grants/auth/settings/publication/deploy.
+WLK308 scope: shared Mail UI only. Active editor cannot be overwritten with
+Compose/Edit; same saved draft simulation blocked with guidance. Explicit Cancel
+preserves saved version and is disabled during pending save. Failure keeps text.
+Independent review caught pending-save Cancel race; fixed and review clean.
+Browser synthetic desktop1280/phone390 two flows PASS incl delayed503, retry,
+updatedsimulation, cancellation, folder/module navigation, ownerisolation. Core
+Mail10 PASS; compile/brand/secret PASS. Screenshot phone inspected; no overflow.
+Integrated reviewed main after307; final focused checks + draftPR next. Native/
+device/fullsuite not claimed. No provider/TLS changes or WLK302 recovery claimed.
+Original saved demos5193/5194/5195 and approved/candidatearchives unchanged.
+After308 merge, verify actual exact-main local dev preparation withoutpublishing.
+
+---
+
 # WLK-307 LOCAL workflow verified; OIDC cancelled
 
 Revised PR84 branch includes local Mac preparation/publication, no access grant.

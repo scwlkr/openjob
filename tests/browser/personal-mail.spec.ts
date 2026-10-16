@@ -69,6 +69,7 @@ test("authenticated invented Mail connects saved tasks, schedules and replies on
     await page.getByRole("button", { name: "Mail", exact: true }).click();
     await expect(page.getByLabel("Message", { exact: true })).toHaveValue(`${current} saved edited reply`);
     await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Draft editor" })).toHaveCount(0);
     await page.reload();
     await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
     await expect(task.getByRole("checkbox")).toBeChecked();
@@ -216,4 +217,57 @@ test("Task source navigation finds the exact mailbox and preserves unsaved Mail 
   await page.getByRole("button", { name: "Mail", exact: true }).click();
   await expect(page.getByLabel("Reply draft", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Subject", { exact: true })).toHaveCount(0);
+});
+
+test("active Mail editor preserves text and blocks stale saved-draft simulation", async ({ page, request }, testInfo) => {
+  const token = await ownerToken(request);
+  await call(request, token, { type: "mail.examples.add" });
+  for (const width of [1280, 390]) {
+    const marker = `Editor guard ${width} ${Date.now()}`;
+    for (const subject of [marker, `${marker} other`]) await call(request, token, { type: "mail.compose", accountId: "mail:example-gmail-personal", to: "reviewer@example.invalid", subject, body: "Saved original" });
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    const draft = page.getByTestId("saved-draft").filter({ has: page.getByText(marker, { exact: true }) });
+    const other = page.getByTestId("saved-draft").filter({ has: page.getByText(`${marker} other`, { exact: true }) });
+    await draft.getByRole("button", { name: "Edit draft", exact: true }).click();
+    await page.getByLabel("Message", { exact: true }).fill(`${marker} revised body`);
+    await expect(page.getByRole("button", { name: "Compose draft", exact: true })).toBeDisabled();
+    await expect(other.getByRole("button", { name: "Edit draft", exact: true })).toBeDisabled();
+    await expect(draft.getByRole("button", { name: "Simulate send", exact: true })).toBeDisabled();
+    await expect(draft).toContainText("Save or cancel the draft editor");
+    let releaseSave!: () => void;
+    const delayedSave = new Promise<void>(resolve => { releaseSave = resolve; });
+    await page.route("**/api/v1/workspace/commands", async route => { await delayedSave; await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "unavailable", message: "Synthetic unavailable fixture" } }) }); });
+    await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Cancel draft editor", exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Message", { exact: true })).toHaveValue(`${marker} revised body`);
+    releaseSave();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel("Message", { exact: true })).toHaveValue(`${marker} revised body`);
+    await expect(draft).toContainText("Saved original");
+    await expect(draft.getByRole("button", { name: "Simulate send", exact: true })).toBeDisabled();
+    await page.unroute("**/api/v1/workspace/commands");
+    await page.screenshot({ path: testInfo.outputPath(`mail-editor-guard-${width}.png`), fullPage: true });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Draft editor" })).toHaveCount(0);
+    await expect(draft).toContainText(`${marker} revised body`);
+    await draft.getByRole("button", { name: "Simulate send", exact: true }).click();
+    await page.getByRole("button", { name: "Simulated Sent", exact: true }).click();
+    await expect(page.getByTestId("sent-message").filter({ hasText: marker })).toContainText(`${marker} revised body`);
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    await other.getByRole("button", { name: "Edit draft", exact: true }).click();
+    await page.getByLabel("Message", { exact: true }).fill("Explicitly discarded edit");
+    await page.getByRole("button", { name: "Cancel draft editor", exact: true }).click();
+    await expect(other).toContainText("Saved original");
+    await page.getByRole("button", { name: "Compose draft", exact: true }).click();
+    await page.getByLabel("Subject", { exact: true }).fill("Unfinished composition");
+    await page.getByRole("button", { name: "Inbox", exact: true }).click();
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    await expect(page.getByLabel("Subject", { exact: true })).toHaveValue("Unfinished composition");
+    await expect(other.getByRole("button", { name: "Edit draft", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "Cancel draft editor", exact: true }).click();
+  }
 });

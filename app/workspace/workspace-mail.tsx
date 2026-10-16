@@ -102,12 +102,13 @@ export default function WorkspaceMail({ view, busy, command, ref, recovery }: Pr
 
   return <>
           {recovery && <section className={styles.inset} aria-label="Unfinished Mail recovery"><label><input type="checkbox" aria-label="Keep unfinished drafts in this browser" checked={keepUnfinished} onChange={event => { const enabled = event.target.checked; editVersion.current += 1; setKeepUnfinished(enabled); setRecoveryNotice(enabled ? "Only text you type is kept in this browser. Inbox messages and saved draft bodies are not cached. Signing out or switching users removes unfinished text." : "Unfinished text recovery disabled. Current editor text stays open."); persistBuffer(!enabled); }} /> Keep unfinished drafts in this browser</label>{recoveryNotice && <p role="status">{recoveryNotice}</p>}</section>}
-          <button className={styles.compose} onClick={() => { resetComposeRecovery(); setComposing(!composing); setEditingDraft(""); setComposeAccount(""); setComposeTo(""); setComposeSubject(""); setComposeBody(""); }}>Compose draft</button><label className={styles.filter}>Mailbox<select aria-label="Mailbox" value={accountId} onChange={(e) => { setAccountId(e.target.value); setMessageId(""); }}><option value="">All mailboxes</option>{view.accounts.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.address}</option>)}</select></label>
+          <button className={styles.compose} disabled={busy || composing} onClick={() => { resetComposeRecovery(); setComposing(true); setEditingDraft(""); setComposeAccount(""); setComposeTo(""); setComposeSubject(""); setComposeBody(""); }}>Compose draft</button><label className={styles.filter}>Mailbox<select aria-label="Mailbox" value={accountId} onChange={(e) => { setAccountId(e.target.value); setMessageId(""); }}><option value="">All mailboxes</option>{view.accounts.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.address}</option>)}</select></label>
           <nav className={styles.folders} aria-label="Mail folders">{(["Inbox", "Drafts", "Simulated Sent"] as MailFolder[]).map((folder) => <button key={folder} aria-label={folder} aria-current={mailFolder === folder ? "page" : undefined} onClick={() => setMailFolder(folder)}>{folder}<span aria-hidden="true">{folderCounts[folder]}</span></button>)}</nav>
           <div className={styles.searchBar}><label className={styles.grow}>Search mail<input type="search" aria-label="Search mail" value={mailSearch} placeholder="Subject, people or message text…" onChange={(e) => setMailSearch(e.target.value)} /></label>{mailSearch && <button onClick={() => setMailSearch("")}>Clear search</button>}</div>
           <p className={styles.small} aria-live="polite">{resultCount} {resultCount === 1 ? "result" : "results"} in {mailFolder}{accountId ? ` · ${view.accounts.find((account) => account.id === accountId)?.label}` : " · all mailboxes"}</p>
           {composing && <section className={styles.panel} aria-label="Draft editor">
             <h2 className={styles.sectionHeading}>{editingDraft ? "Edit saved draft" : "New draft"}</h2>
+            <p>Save or cancel this editor before opening another draft. Cancel discards editor changes; any saved draft stays unchanged.</p>
             <form className={styles.form} onSubmit={async (event: FormEvent) => { event.preventDefault();
               const version = editVersion.current;
               const input: WorkspaceCommand = editingDraft
@@ -120,7 +121,7 @@ export default function WorkspaceMail({ view, busy, command, ref, recovery }: Pr
               <label>To<input aria-label="To" type="email" required value={composeTo} onChange={(e) => { setComposeTo(e.target.value); composeEdit("to", e.target.value); }} /></label>
               <label>Subject<input aria-label="Subject" required value={composeSubject} onChange={(e) => { setComposeSubject(e.target.value); composeEdit("subject", e.target.value); }} /></label>
               <label>Message<textarea aria-label="Message" required rows={5} value={composeBody} onChange={(e) => { setComposeBody(e.target.value); composeEdit("body", e.target.value); }} /></label>
-              <div className={styles.actions}><button className={styles.primary} disabled={busy}>{editingDraft ? "Save draft changes" : "Save new draft"}</button><button type="button" onClick={() => { resetComposeRecovery(); setComposing(false); setEditingDraft(""); }}>Cancel draft editor</button></div>
+              <div className={styles.actions}><button className={styles.primary} disabled={busy}>{editingDraft ? "Save draft changes" : "Save new draft"}</button><button type="button" disabled={busy} onClick={() => { resetComposeRecovery(); setComposing(false); setEditingDraft(""); }}>Cancel draft editor</button></div>
               <small>Fixture draft only. Live sending is unavailable.</small>
             </form>
           </section>}
@@ -130,9 +131,9 @@ export default function WorkspaceMail({ view, busy, command, ref, recovery }: Pr
               <small>From: {view.accounts.find((account) => account.id === item.accountId)?.address}</small>
               <small>To: {item.to || "Reply to selected message"} · Draft only</small><p className={styles.body}>{item.body}</p>
               <div className={styles.actions}>
-                <button disabled={busy} onClick={() => { resetComposeRecovery(); setEditingDraft(item.id); setComposeAccount(item.accountId); setComposeTo(item.to || ""); setComposeSubject(item.subject || ""); setComposeBody(item.body); setComposing(true); }}>Edit draft</button>
-                <button disabled={busy} onClick={async () => { if (await command({ type: "mail.simulate-send", draftId: item.id }, "Fixture message moved to Simulated Sent. No actual delivery occurred.")) { if (editingDraft === item.id) { setComposing(false); setEditingDraft(""); } } }}>Simulate send</button>
-              </div><small>Simulation only · no actual delivery</small>
+                <button disabled={busy || composing} onClick={() => { resetComposeRecovery(); setEditingDraft(item.id); setComposeAccount(item.accountId); setComposeTo(item.to || ""); setComposeSubject(item.subject || ""); setComposeBody(item.body); setComposing(true); }}>Edit draft</button>
+                <button disabled={busy || editingDraft === item.id} onClick={async () => { if (await command({ type: "mail.simulate-send", draftId: item.id }, "Fixture message moved to Simulated Sent. No actual delivery occurred.")) { if (editingDraft === item.id) { setComposing(false); setEditingDraft(""); } } }}>Simulate send</button>
+              </div>{editingDraft === item.id && <p role="status">Save or cancel the draft editor before simulating delivery of this saved draft.</p>}<small>Simulation only · no actual delivery</small>
             </article>)}
             {!visibleDrafts.length && <p className={styles.empty}>{search ? "No drafts match this search in the selected mailbox." : "No saved drafts in this mailbox. Compose a draft or save a reply from your inbox."}</p>}
           </section>}
