@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { attachBrowserProvenance } from "./browser-provenance.mjs";
 import packageMetadata from "../../package.json" with { type: "json" };
 
 // Fixture expirations are in July 2026. Keep wall time deterministic while
@@ -6506,7 +6507,10 @@ test("keeps done Tasks visible in Former Member sections", async ({ page }) => {
   await expect(page.getByText("Completed before departure")).toBeVisible();
 });
 
-test("keeps the approved Variant B layout with the standard brand in light and dark", async ({ page }, testInfo) => {
+test("keeps the approved Variant B layout with the standard brand in light and dark", async ({ page, browser }, testInfo) => {
+  await attachBrowserProvenance(browser, testInfo, [
+    "variant-b-phone.png", "variant-b-desktop.png", "variant-b-phone-dark.png", "variant-b-desktop-dark.png",
+  ]);
   await page.emulateMedia({ colorScheme: "light" });
   await startSignedIn(page);
   await page.clock.setFixedTime(new Date("2026-07-17T12:00:00-05:00"));
