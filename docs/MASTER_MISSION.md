@@ -46,6 +46,19 @@ The manifest also contains existing build, API, CLI, native, verification, and r
 
 *This baseline comes from repository documentation and configuration, not a running-system audit. Deployment health, real usage, costs, and working behavior must be verified in the first implementation session.*
 
+### Verified implementation checkpoint — 16 October 2026
+
+The initial baseline above is historical. Cloud implementation through PR77
+now connects authenticated personal Mail, Tasks, Calendar and scoped agents
+through shared APIs/CLI, with a reproducible invented-data workflow. Web and
+native Tasks/Calendar support explicit offline edits, sync and conflict review;
+web can retain authored unfinished Mail text separately. Provider Mail remains
+simulated. Gmail REST read translation and owner/OAuth/vault boundaries have
+synthetic-transport proof, but production connections are unconfigured. Live
+provider/database behavior, production Firebase offline startup and native
+device/release acceptance remain unverified. Current delivery evidence and
+execution scope belong in Linear and w.md, not a second backlog here.
+
 ### The first job: make improvement possible
 
 **Inspect once; reuse the result.** Reproduce the main task workflow. Identify the runtime, data ownership, auth boundaries, deployment path, active work, and the few failures that most obstruct use or development.

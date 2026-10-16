@@ -101,3 +101,5 @@ export type ListAgentGrantsResponse = JsonResponse<
 export type CreateAgentGrantResponse = JsonResponse<
   operations["createAgentGrant"]["responses"][201]
 >;
+
+export type CalendarIcalExportResponse = JsonResponse<operations["exportPersonalCalendar"]["responses"][200]>;

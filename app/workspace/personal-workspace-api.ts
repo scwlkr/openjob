@@ -5,6 +5,7 @@ import { TASK_CALENDAR_REVISION, validateTaskCalendarProjection, validateTaskCal
 import type { TaskCalendarSyncSnapshot, TaskCalendarSyncInput, TaskCalendarSyncAck } from "../../shared/task-calendar-sync";
 import type { WorkspaceView } from "../../shared/workspace-contracts";
 import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
+import { isOpenJobTimestamp } from "../openjob-timestamp";
 
 export class PersonalWorkspaceError extends Error {
   constructor(public readonly code: string, public readonly status = 0) {
@@ -45,7 +46,7 @@ export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
     try { body = JSON.parse(raw); } catch { throw invalidResponse(); }
     signal.throwIfAborted();
     if (!response.ok) {
-      const safe = new Set(["authentication_required", "account_deletion_pending", "sign_in_method_unrecognized", "conflict", "sync_expired", "workspace_capacity", "body_too_large", "invalid_input", "invalid_request", "forbidden"]);
+      const safe = new Set(["authentication_required", "account_deletion_pending", "sign_in_method_unrecognized", "conflict", "calendar_import_conflict", "calendar_ical_unsupported", "sync_expired", "workspace_capacity", "body_too_large", "invalid_input", "invalid_request", "forbidden"]);
       throw new PersonalWorkspaceError(safe.has(body?.error?.code ?? "") ? body.error!.code! : "request_failed", response.status);
     }
     if (!body || typeof body !== "object" || !("data" in body)) throw new PersonalWorkspaceError("invalid_response", 502);
@@ -56,9 +57,14 @@ export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
     return value as Record<string, unknown>;
   };
   async function me(session: AuthSession, signal: AbortSignal): Promise<User> {
-    const value = exact(await request(session, signal, undefined, "../me"), ["userId", "username", "usernameRequired"]);
+    const value = exact(await request(session, signal, undefined, "../me"), ["userId", "username", "usernameRequired", "groups"]);
     if (typeof value.userId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.userId) || typeof value.usernameRequired !== "boolean" || !(value.username === null || typeof value.username === "string" && value.username.length <= 128)) throw new PersonalWorkspaceError("invalid_response", 502);
-    return value as User;
+    if (!Array.isArray(value.groups) || value.groups.length > 1000) throw new PersonalWorkspaceError("invalid_response", 502);
+    for (const item of value.groups) {
+      const group = exact(item, ["groupId", "name", "role", "createdAt"]);
+      if (typeof group.groupId !== "string" || group.groupId.length > 1500 || !/^grp_[A-Za-z0-9_-]+$/.test(group.groupId) || typeof group.name !== "string" || !group.name.trim() || [...group.name].length > 80 || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(group.name) || !["admin", "member"].includes(String(group.role)) || !isOpenJobTimestamp(group.createdAt)) throw new PersonalWorkspaceError("invalid_response", 502);
+    }
+    return { userId: value.userId, username: value.username as string | null, usernameRequired: value.usernameRequired };
   }
   async function verifyOwner(session: AuthSession, owner: string, signal: AbortSignal) {
     const current = await me(session, signal); signal.throwIfAborted();

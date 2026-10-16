@@ -18,7 +18,7 @@ test('task-calendar sync API validates sanitized projection and exact operation 
   await expect(wrong.syncTaskCalendar!('fixture', owner, input)).rejects.toMatchObject({ code: 'invalid_response' });
   const privateData = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: jest.fn(async () => json({ revision, projection: { ...projection, messages: ['private'] } })) });
   await expect(privateData.readTaskCalendarSync!('fixture', owner)).rejects.toMatchObject({ code: 'invalid_response' });
-  const audit = { ...empty(), activity: [{ id: 'audit_sync', ownerId: owner, actor: 'You', action: 'task-calendar.sync', createdAt: '2026-10-17T00:00:00.000Z' }] };
+  const audit = { ...empty(), activity: ['task-calendar.sync', 'calendar.import'].map((action, index) => ({ id: `audit_${index}`, ownerId: owner, actor: 'You', action, createdAt: '2026-10-17T00:00:00.000Z' })) };
   const afterSync = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: jest.fn(async () => json(audit)) });
   await expect(afterSync.readPersonalWorkspace('fixture', owner)).resolves.toEqual(audit);
 });

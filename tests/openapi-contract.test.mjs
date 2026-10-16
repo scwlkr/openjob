@@ -31,6 +31,7 @@ const expectedOperations = [
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "get /api/v1/me/sign-in-methods listSignInMethods",
   "get /api/v1/workspace/snapshot getPersonalWorkspace",
+  "get /api/v1/workspace/calendar-export exportPersonalCalendar",
   "get /api/v1/workspace/provider-preview getProviderPreview",
   "get /api/v1/workspace/agent-grants listPersonalAgentGrants",
   "post /api/v1/workspace/agent-grants createPersonalAgentGrant",
@@ -103,7 +104,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 30);
+  assert.equal(Object.keys(contract.paths).length, 31);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -547,6 +548,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
     "getPersonalWorkspace",
     "getProviderPreview",
     "commandPersonalWorkspace",
+    "exportPersonalCalendar",
     "listPersonalAgentGrants",
     "createPersonalAgentGrant",
     "revokePersonalAgentGrant",
@@ -596,7 +598,8 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const domainConflictCodes = new Map([
     ["getPersonalWorkspace", ["conflict"]],
     ["getProviderPreview", ["provider_unavailable"]],
-    ["commandPersonalWorkspace", ["conflict"]],
+    ["commandPersonalWorkspace", ["calendar_import_conflict", "conflict"]],
+    ["exportPersonalCalendar", ["conflict"]],
     ["listPersonalAgentGrants", ["conflict"]],
     ["createPersonalAgentGrant", ["conflict"]],
     ["revokePersonalAgentGrant", ["conflict"]],
@@ -661,7 +664,7 @@ test("personal workspace schemas permit invented Mail with Tasks/Calendar while 
     { type: "mail.simulate-send", draftId: "draft_a" },
     { type: "mail.send", draftId: "draft_a" },
   ];
-  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 16);
+  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 17);
   for (const command of commands) {
     assert.equal(validateCommand(command), true, command.type);
     assert.equal(validateCommand({ ...command, ownerId: "foreign_user" }), false, `${command.type} cannot override owner`);
@@ -797,4 +800,20 @@ test("validation rejects broken operations and examples", async () => {
     validateOpenApiContract(invalidParameterExample),
     /parameters\.GroupId.*example/i,
   );
+});
+
+test('Calendar iCalendar schemas require reviewed bounded imports and exclude private export metadata', async () => {
+  const { components: { schemas } } = await validateOpenApiContract(contractUrl);
+  const validate = compileSchema(schemas.PersonalWorkspaceCommand);
+  const command = { type: 'calendar.import', calendarId: 'personal', ical: 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n', expectedRevision: `ci1_${'a'.repeat(64)}` };
+  assert.equal(validate(command), true, JSON.stringify(validate.errors));
+  for (const invalid of [{ ...command, expectedRevision: 'unreviewed' }, { ...command, ownerUserId: 'user_foreign' }, { ...command, ical: 'x'.repeat(16385) }, { ...command, expectedRevision: undefined }]) assert.equal(validate(invalid), false);
+  const exportValidate = compileSchema(schemas.CalendarIcalExport);
+  const exported = { calendarId: 'personal', filename: 'openjob-calendar.ics', contentType: 'text/calendar; charset=utf-8', ical: command.ical };
+  assert.equal(exportValidate(exported), true);
+  assert.equal(exportValidate({ ...exported, sourceMessageId: 'mail_private' }), false);
+  assert.equal(exportValidate({ ...exported, filename: '../unsafe.ics' }), false);
+  const result = compileSchema(schemas.PersonalWorkspaceCommandResult);
+  assert.equal(result({ calendarId: 'personal', imported: 1, skipped: 0, revision: command.expectedRevision }), true);
+  assert.equal(result({ calendarId: 'personal', imported: 1, skipped: 0, revision: command.expectedRevision, importedUids: ['private-source'] }), false);
 });

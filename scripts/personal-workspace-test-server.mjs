@@ -57,7 +57,7 @@ const server = createServer(async (incoming, outgoing) => {
     if (url.pathname === '/api/v1/me' && incoming.method === 'GET') {
       const identity = await verifyIdToken(request); const user = identity && await users.resolve(identity);
       outgoing.writeHead(user ? 200 : 401, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      outgoing.end(JSON.stringify(user ? { data: { ...user, usernameRequired: !user.username } } : { error: { code: 'authentication_required' } })); return;
+      outgoing.end(JSON.stringify(user ? { data: { ...user, usernameRequired: !user.username, groups: [] } } : { error: { code: 'authentication_required' } })); return;
     }
     const response = await (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request);
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));

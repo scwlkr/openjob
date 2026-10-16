@@ -2,6 +2,7 @@ import type { FirebaseTokenIdentity } from "./firebase-id-token.ts";
 import type { OpenJobUser } from "./v1-identity.ts";
 import type { PersonalWorkspaceStore } from "../shared/personal-workspace.ts";
 import { isInactiveUserError } from "../db/user-history.ts";
+import { createCalendarIcalExport } from "../shared/calendar-ical.ts";
 import {
   defaultRequestId, errorResponse, jsonResponse, internalErrorResponse,
   accountDeletionPendingResponse, signInMethodUnrecognizedResponse,
@@ -20,6 +21,7 @@ const COMMAND_FIELDS: Record<string, string[]> = {
   "task.delete": ["type", "taskId"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
   "calendar.create": ["type", "calendarId", "title", "start", "end"],
   "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
+  "calendar.import": ["type", "calendarId", "ical", "expectedRevision"],
   "mail.examples.add": ["type"], "mail.read": ["type", "messageId", "read"],
   "mail.draft": ["type", "messageId", "body"], "mail.compose": ["type", "accountId", "to", "subject", "body"],
   "mail.draft.update": ["type", "draftId", "to", "subject", "body"], "mail.simulate-send": ["type", "draftId"],
@@ -50,7 +52,11 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         const origin = request.headers.get("origin");
         if (origin && origin !== url.origin) return fail("origin_denied", "Cross-origin workspace requests are denied.", 403);
         let data: unknown;
-        if (sync && request.method === "GET") {
+        if (url.pathname === "/api/v1/workspace/calendar-export" && request.method === "GET") {
+          const calendarIds = url.searchParams.getAll("calendarId");
+          if ([...url.searchParams.keys()].some(key => key !== "calendarId") || calendarIds.length !== 1 || !/^[A-Za-z0-9:_-]{1,128}$/.test(calendarIds[0])) return fail("invalid_input", "One calendarId is required.", 400);
+          data = await createCalendarIcalExport(personalToken ? agentSnapshot! : await workspace.snapshot(user!.userId), calendarIds[0]);
+        } else if (sync && request.method === "GET") {
           if (!workspace.readTaskCalendarSync) return fail("unavailable", "Offline synchronization is unavailable.", 503);
           data = await workspace.readTaskCalendarSync(user!.userId);
         } else if (sync && request.method === "POST") {
@@ -111,6 +117,8 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
         if (code === "authentication_required") return fail(code, "The personal agent credential is unavailable or expired.", 401);
         if (code === "invalid_input") return fail(code, "One or more command fields are invalid.", 400);
+        if (code === "calendar_ical_unsupported") return fail(code, "The calendar file uses an unsupported feature.", 400);
+        if (code === "calendar_import_conflict") return fail(code, "The calendar changed or an imported event conflicts. Review before retrying.", 409);
         if (code === "forbidden") return fail(code, "The personal workspace resource is unavailable.", 403);
         if (code === "sending_disabled") return fail(code, "Real sending is disabled.", 403);
         if (code === "workspace_capacity") return fail(code, "Personal workspace capacity was exceeded.", 413);

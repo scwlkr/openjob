@@ -830,6 +830,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspace/calendar-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Export one owned Calendar as bounded timed UTC iCalendar JSON. Requires calendar read access; contains no Mail links or private task provenance. Human and personal agent authorization is checked again before returning. No provider requests occur. */
+        get: operations["exportPersonalCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspace/agent-grants": {
         parameters: {
             query?: never;
@@ -1051,7 +1068,7 @@ export interface components {
             ownerId: string;
             actor: string;
             /** @enum {string} */
-            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
+            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
             /** Format: date-time */
             createdAt: string;
         };
@@ -1066,7 +1083,30 @@ export interface components {
             agents: unknown[];
             activity: components["schemas"]["PersonalWorkspaceActivity"][];
         };
-        PersonalWorkspaceCommand: {
+        CalendarIcalExport: {
+            calendarId: string;
+            /** @constant */
+            filename: "openjob-calendar.ics";
+            /** @constant */
+            contentType: "text/calendar; charset=utf-8";
+            /** @description At most 16 KiB UTF-8, 50 timed UTC VEVENT records, no Mail/source metadata. */
+            ical: string;
+        };
+        CalendarIcalImportCommand: {
+            /** @constant */
+            type: "calendar.import";
+            calendarId: string;
+            /** @description Strict timed UTC subset; maximum 16 KiB UTF-8 and 50 VEVENT records. No recurrence, timezone, attachments, attendees or provider access. */
+            ical: string;
+            expectedRevision: string;
+        };
+        CalendarIcalImportResult: {
+            calendarId: string;
+            imported: number;
+            skipped: number;
+            revision: string;
+        };
+        PersonalWorkspaceCommand: components["schemas"]["CalendarIcalImportCommand"] | {
             /** @constant */
             type: "task.create";
             title: string;
@@ -1167,7 +1207,7 @@ export interface components {
             /** @constant */
             deleted: true;
         };
-        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceUpdated"] | components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"] | components["schemas"]["PersonalWorkspaceExampleMessage"] | components["schemas"]["PersonalWorkspaceDraft"] | components["schemas"]["PersonalWorkspaceSent"] | components["schemas"]["PersonalMailExamplesResult"];
+        PersonalWorkspaceCommandResult: components["schemas"]["CalendarIcalImportResult"] | components["schemas"]["PersonalWorkspaceUpdated"] | components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"] | components["schemas"]["PersonalWorkspaceExampleMessage"] | components["schemas"]["PersonalWorkspaceDraft"] | components["schemas"]["PersonalWorkspaceSent"] | components["schemas"]["PersonalMailExamplesResult"];
         PersonalWorkspaceExampleAccount: {
             /** @constant */
             id: "mail:example-gmail-personal";
@@ -1629,7 +1669,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "sending_disabled" | "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "calendar_import_conflict" | "calendar_ical_unsupported" | "sending_disabled" | "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -4522,7 +4562,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"] & {
                         error?: {
                             /** @enum {unknown} */
-                            code?: "sign_in_method_unrecognized" | "conflict";
+                            code?: "sign_in_method_unrecognized" | "conflict" | "calendar_import_conflict";
                         };
                     };
                 };
@@ -4539,6 +4579,85 @@ export interface operations {
             };
             /** @description Content type must be application/json. */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    exportPersonalCalendar: {
+        parameters: {
+            query: {
+                calendarId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private Calendar file content; clients save exact UTF-8 bytes explicitly. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "calendarId": "personal",
+                     *         "filename": "openjob-calendar.ics",
+                     *         "contentType": "text/calendar; charset=utf-8",
+                     *         "ical": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//OpenJob//Calendar//EN\r\nEND:VCALENDAR\r\n"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["CalendarIcalExport"];
+                    };
+                };
+            };
+            /** @description Exactly one bounded calendarId is required. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Calendar, agent scope or request origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Calendar exceeds the bounded export capacity. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
