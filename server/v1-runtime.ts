@@ -5,6 +5,8 @@ import { createFirestoreGroupStore } from "@/db/groups";
 import { createFirestoreAccountDeletionJobStore } from "@/db/account-deletions";
 import { createFirestoreNotificationSubscriptionStore } from "@/db/notification-subscriptions";
 import { createFirestoreTaskStore } from "@/db/v1-tasks";
+import { createFirestorePersonalWorkspaceStore } from "@/db/personal-workspace";
+import { createV1PersonalWorkspaceApi, createV1PersonalWorkspaceHandler } from "./v1-personal-workspace";
 import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
@@ -52,6 +54,7 @@ type V1Runtime = {
   identityApi: ReturnType<typeof createV1IdentityApi>;
   notificationSubscriptionsApi: ReturnType<typeof createV1NotificationSubscriptionsApi>;
   tasksApi: ReturnType<typeof createV1TasksApi>;
+  personalWorkspaceApi: ReturnType<typeof createV1PersonalWorkspaceApi>;
 };
 
 let runtime: V1Runtime | null = null;
@@ -78,6 +81,7 @@ function getRuntime() {
   const users = createFirestoreUserStore(firebase);
   const groups = createFirestoreGroupStore(firebase);
   const tasks = createFirestoreTaskStore(firebase);
+  const personalWorkspaces = createFirestorePersonalWorkspaceStore(firebase);
   const agentGrants = createFirestoreAgentGrantStore(firebase);
   const notificationSubscriptions =
     createFirestoreNotificationSubscriptionStore(firebase);
@@ -131,6 +135,7 @@ function getRuntime() {
     agentGrantsApi: createV1AgentGrantsApi({ grants: agentGrants, users, verifyIdToken }),
     accountDeletionApi: createV1AccountDeletionApi({
       agentGrants,
+      personalWorkspaces,
       groups,
       jobs: accountDeletionJobs,
       notifications: notificationSubscriptions,
@@ -149,6 +154,7 @@ function getRuntime() {
       verifyCredentialToken: verifyIdToken.verifyToken,
       verifyIdToken,
     }),
+    personalWorkspaceApi: createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,
@@ -199,6 +205,7 @@ export const handleV1GroupsRequest = createV1GroupsHandler(getGroupsApi);
 export const handleV1NotificationSubscriptionsRequest =
   createV1NotificationSubscriptionsHandler(getNotificationSubscriptionsApi);
 export const handleV1TasksRequest = createV1TasksHandler(getTasksApi);
+export const handleV1PersonalWorkspaceRequest = createV1PersonalWorkspaceHandler(() => getRuntime().personalWorkspaceApi);
 
 export function retryPendingAccountDeletions() {
   const configuredTarget = (env as FirebaseBindings)

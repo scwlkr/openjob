@@ -37,6 +37,9 @@ import packageJson from "./package.json" with { type: "json" };
 /** @typedef {import("./openapi-types.ts").ListGroupsResponse} ListGroupsResponse */
 /** @typedef {import("./openapi-types.ts").ListAgentGrantsResponse} ListAgentGrantsResponse */
 /** @typedef {import("./openapi-types.ts").CreateAgentGrantResponse} CreateAgentGrantResponse */
+/** @typedef {import("./openapi-types.ts").PersonalWorkspaceSnapshotResponse} PersonalWorkspaceSnapshotResponse */
+/** @typedef {import("./openapi-types.ts").PersonalWorkspaceCommandRequest} PersonalWorkspaceCommandRequest */
+/** @typedef {import("./openapi-types.ts").PersonalWorkspaceCommandResponse} PersonalWorkspaceCommandResponse */
 /** @typedef {import("./openapi-types.ts").CreateGroupRequest} CreateGroupRequest */
 /** @typedef {import("./openapi-types.ts").CreateGroupResponse} CreateGroupResponse */
 /** @typedef {import("./openapi-types.ts").GetGroupResponse} GetGroupResponse */
@@ -78,6 +81,8 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["workspace snapshot", new Set(OUTPUT_OPTIONS)],
+  ["workspace command", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--group", "--name", "--token-out"])],
   ["agent list", new Set(OUTPUT_OPTIONS)],
   ["agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
@@ -115,6 +120,7 @@ Usage:
   openjob [global options] <resource> <command> [arguments]
 
 Resources:
+  workspace  Personal Tasks and Calendar through the shared authenticated API
   auth       Sign in, inspect authentication, or sign out
   user       Show the current User
   username   Claim the current User's immutable Username
@@ -138,6 +144,14 @@ Global options:
 
 /** @type {Record<string, string>} */
 const RESOURCE_HELP = {
+  workspace: `Usage:
+  openjob workspace snapshot
+  openjob workspace command --input <path|->
+
+Uses the selected human profile's personal Tasks and Calendar API.
+Commands are strict JSON task.create/update/complete/schedule/unschedule/delete
+or calendar.create/update/delete objects. No Mail, fixture identities or agent credentials.
+Mutations are not automatically retried after network or service failures.`,
   agent: `Usage:
   openjob agent grant --group <group-id> --name <name> --token-out <new-path>
   openjob agent list
@@ -502,6 +516,37 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "snapshot" && rest.length === 0) {
+    const response = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    writeResult(response);
+    return;
+  }
+  if (resource === "workspace" && command === "command" && rest.length === 0) {
+    const path = parsed.options.get("--input");
+    if (typeof path !== "string" || !path) throw new CliError("usage_error", "workspace command requires --input <path|->.", 2);
+    const input = readInputObject(path);
+    /** @type {Record<string, string[]>} */
+    const fields = {
+      "task.create": ["type", "title"], "task.update": ["type", "taskId", "title"],
+      "task.complete": ["type", "taskId", "completed"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
+      "task.unschedule": ["type", "taskId"], "task.delete": ["type", "taskId"],
+      "calendar.create": ["type", "calendarId", "title", "start", "end"],
+      "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
+    };
+    const type = input.type;
+    if (typeof type !== "string" || !Object.hasOwn(fields, type) || Object.keys(input).length !== fields[type].length || Object.keys(input).some(key => !fields[type].includes(key)) || Buffer.byteLength(JSON.stringify(input)) > 32768) {
+      throw new CliError("input_invalid", "Use one bounded personal Task or Calendar command with exactly its documented fields.", 2);
+    }
+    for (const field of fields[type]) {
+      if (field === "completed" ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > 500) {
+        throw new CliError("input_invalid", "One or more personal workspace command fields are invalid.", 2);
+      }
+    }
+    const body = /** @type {PersonalWorkspaceCommandRequest} */ (input);
+    const response = /** @type {PersonalWorkspaceCommandResponse} */ (await apiRequest("/workspace/commands", { method: "POST", body: JSON.stringify(body) }));
+    writeResult(response);
+    return;
+  }
   if (resource === "group" && command === "current" && rest.length === 0) {
     writeResult({ data: resolveGroup(parsed.options) });
     return;

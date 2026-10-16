@@ -899,6 +899,7 @@ export function GroupShell(props: GroupShellProps) {
                 <p className={styles.menuLabel}>Signed in as @{props.user.username}</p>
                 <p className={styles.menuVersion}>OpenJob v{OPENJOB_VERSION}</p>
                 <div className={styles.menuActions}>
+                  <button type="button" onClick={() => window.location.assign("/workspace")}>Personal workspace</button>
                   <button
                     type="button"
                     onClick={() => {

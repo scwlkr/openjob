@@ -22,6 +22,7 @@ tags:
   - name: Invite Links
   - name: Tasks
   - name: Agents
+  - name: Workspace
 security:
   - firebaseBearer: []
 paths:
@@ -1384,6 +1385,146 @@ paths:
         "429": *a6
         "500": *a7
 
+  /api/v1/workspace/snapshot:
+    get:
+      tags:
+        - Workspace
+      operationId: getPersonalWorkspace
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal
+        Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or
+        group-agent credentials are accepted. Responses are never cached.
+      responses:
+        "200":
+          description: Personal workspace result.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PersonalWorkspaceView"
+        "400":
+          description: Invalid bounded JSON command or fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          description: Resource, command, agent identity or Origin denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Route unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Sign-in Method unrecognized or workspace changed concurrently; reload before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "413":
+          description: Request or workspace capacity exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "415":
+          description: Content type must be application/json.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+  /api/v1/workspace/commands:
+    post:
+      tags:
+        - Workspace
+      operationId: commandPersonalWorkspace
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      description: Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal
+        Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or
+        group-agent credentials are accepted. Responses are never cached.
+      responses:
+        "200":
+          description: Personal workspace result.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PersonalWorkspaceCommandResult"
+        "400":
+          description: Invalid bounded JSON command or fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          description: Resource, command, agent identity or Origin denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Route unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Sign-in Method unrecognized or workspace changed concurrently; reload before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "413":
+          description: Request or workspace capacity exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "415":
+          description: Content type must be application/json.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonalWorkspaceCommand"
 components:
   securitySchemes:
     agentBearer:
@@ -2359,6 +2500,373 @@ components:
               requestId: req_01J0INTERNAL
 
   schemas:
+    PersonalWorkspaceTask:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - ownerId
+        - title
+        - completed
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ownerId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        completed:
+          type: boolean
+        scheduledSlot:
+          type: object
+          additionalProperties: false
+          required:
+            - start
+            - end
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        calendarEventId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    PersonalWorkspaceCalendar:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - ownerId
+        - name
+        - color
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ownerId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        name:
+          type: string
+          minLength: 1
+          maxLength: 500
+        color:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+    PersonalWorkspaceEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - calendarId
+        - title
+        - start
+        - end
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        taskId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    PersonalWorkspaceActivity:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - ownerId
+        - actor
+        - action
+        - createdAt
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ownerId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        actor:
+          type: string
+          const: You
+        action:
+          type: string
+          enum:
+            - task.create
+            - task.update
+            - task.complete
+            - task.schedule
+            - task.unschedule
+            - task.delete
+            - calendar.create
+            - calendar.update
+            - calendar.delete
+        createdAt:
+          type: string
+          format: date-time
+    PersonalWorkspaceView:
+      type: object
+      additionalProperties: false
+      required:
+        - accounts
+        - messages
+        - tasks
+        - calendars
+        - events
+        - drafts
+        - sent
+        - agents
+        - activity
+      properties:
+        accounts:
+          type: array
+          maxItems: 0
+          items: false
+        messages:
+          type: array
+          maxItems: 0
+          items: false
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceTask"
+        calendars:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceCalendar"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceEvent"
+        drafts:
+          type: array
+          maxItems: 0
+          items: false
+        sent:
+          type: array
+          maxItems: 0
+          items: false
+        agents:
+          type: array
+          maxItems: 0
+          items: false
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceActivity"
+    PersonalWorkspaceCommand:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - title
+          properties:
+            type:
+              type: string
+              const: task.create
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - title
+          properties:
+            type:
+              type: string
+              const: task.update
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - completed
+          properties:
+            type:
+              type: string
+              const: task.complete
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            completed:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - calendarId
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: task.schedule
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+          properties:
+            type:
+              type: string
+              const: task.unschedule
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+          properties:
+            type:
+              type: string
+              const: task.delete
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - calendarId
+            - title
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: calendar.create
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - eventId
+            - title
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: calendar.update
+            eventId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - eventId
+          properties:
+            type:
+              type: string
+              const: calendar.delete
+            eventId:
+              type: string
+              minLength: 1
+              maxLength: 128
+    PersonalWorkspaceDeleted:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - deleted
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        deleted:
+          type: boolean
+          const: true
+    PersonalWorkspaceCommandResult:
+      oneOf:
+        - $ref: "#/components/schemas/PersonalWorkspaceTask"
+        - $ref: "#/components/schemas/PersonalWorkspaceEvent"
+        - $ref: "#/components/schemas/PersonalWorkspaceDeleted"
     InstallationId:
       type: string
       minLength: 16
@@ -2944,6 +3452,13 @@ components:
     ErrorCode:
       type: string
       enum:
+        - forbidden
+        - invalid_input
+        - invalid_content_type
+        - body_too_large
+        - origin_denied
+        - workspace_capacity
+        - conflict
         - agent_access_denied
         - not_found
         - invalid_request

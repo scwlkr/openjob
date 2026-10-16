@@ -796,10 +796,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspace/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or group-agent credentials are accepted. Responses are never cached. */
+        get: operations["getPersonalWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or group-agent credentials are accepted. Responses are never cached. */
+        post: operations["commandPersonalWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PersonalWorkspaceTask: {
+            id: string;
+            ownerId: string;
+            title: string;
+            completed: boolean;
+            scheduledSlot?: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            };
+            calendarEventId?: string;
+        };
+        PersonalWorkspaceCalendar: {
+            id: string;
+            ownerId: string;
+            name: string;
+            color: string;
+        };
+        PersonalWorkspaceEvent: {
+            id: string;
+            calendarId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            taskId?: string;
+        };
+        PersonalWorkspaceActivity: {
+            id: string;
+            ownerId: string;
+            /** @constant */
+            actor: "You";
+            /** @enum {string} */
+            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PersonalWorkspaceView: {
+            accounts: unknown[];
+            messages: unknown[];
+            tasks: components["schemas"]["PersonalWorkspaceTask"][];
+            calendars: components["schemas"]["PersonalWorkspaceCalendar"][];
+            events: components["schemas"]["PersonalWorkspaceEvent"][];
+            drafts: unknown[];
+            sent: unknown[];
+            agents: unknown[];
+            activity: components["schemas"]["PersonalWorkspaceActivity"][];
+        };
+        PersonalWorkspaceCommand: {
+            /** @constant */
+            type: "task.create";
+            title: string;
+        } | {
+            /** @constant */
+            type: "task.update";
+            taskId: string;
+            title: string;
+        } | {
+            /** @constant */
+            type: "task.complete";
+            taskId: string;
+            completed: boolean;
+        } | {
+            /** @constant */
+            type: "task.schedule";
+            taskId: string;
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "task.unschedule";
+            taskId: string;
+        } | {
+            /** @constant */
+            type: "task.delete";
+            taskId: string;
+        } | {
+            /** @constant */
+            type: "calendar.create";
+            calendarId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "calendar.update";
+            eventId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "calendar.delete";
+            eventId: string;
+        };
+        PersonalWorkspaceDeleted: {
+            id: string;
+            /** @constant */
+            deleted: true;
+        };
+        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"];
         /** @description Opaque installation identifier with no User information. */
         InstallationId: string;
         /** @description Canonical opaque OpenJob User ID independent of provider subjects. */
@@ -1090,7 +1234,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -3770,6 +3914,170 @@ export interface operations {
             };
             409: components["responses"]["SignInMethodUnrecognizedResponse"];
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    getPersonalWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal workspace result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PersonalWorkspaceView"];
+                    };
+                };
+            };
+            /** @description Invalid bounded JSON command or fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource, command, agent identity or Origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed concurrently; reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Request or workspace capacity exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Content type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    commandPersonalWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalWorkspaceCommand"];
+            };
+        };
+        responses: {
+            /** @description Personal workspace result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PersonalWorkspaceCommandResult"];
+                    };
+                };
+            };
+            /** @description Invalid bounded JSON command or fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource, command, agent identity or Origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed concurrently; reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Request or workspace capacity exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Content type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

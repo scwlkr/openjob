@@ -128,6 +128,7 @@ function createHarness({
   firebaseDeletionFailures = 0,
   failNotifications = false,
   failAgentGrants = false,
+  failPersonalWorkspaces = false,
   finalized = false,
   identity = GOOGLE,
   providerMismatch = false,
@@ -397,6 +398,13 @@ function createHarness({
         return 1;
       },
     },
+    personalWorkspaces: {
+      async removeAllForUser(userId) {
+        calls.push(`remove-personal-workspace:${userId}`);
+        if (failPersonalWorkspaces) throw new Error("personal workspace cleanup unavailable");
+        return 1;
+      },
+    },
     now: () => currentNow,
     providers: {
       assertReady() {
@@ -550,6 +558,7 @@ test("account deletion revokes access before atomically applying data policy and
     "remove-detached:user_delete",
     "remove-notifications:user_delete",
     "remove-agent-grants:user_delete",
+    "remove-personal-workspace:user_delete",
     "delete-firebase:firebase_delete_google",
     "delete-user:user_delete:firebase_delete_google",
   ]);
@@ -560,6 +569,14 @@ test("agent grant cleanup failure keeps deletion pending before identity finaliz
   const response = await api.fetch(deletionRequest([googleProof()]));
   assert.equal(response.status, 202);
   assert.ok(calls.includes("remove-agent-grants:user_delete"));
+  assert.equal(calls.some(call => call.startsWith("delete-firebase:") || call.startsWith("delete-user:")), false);
+});
+
+test("personal workspace cleanup failure keeps deletion pending before identity finalization", async () => {
+  const { api, calls } = createHarness({ failPersonalWorkspaces: true });
+  const response = await api.fetch(deletionRequest([googleProof()]));
+  assert.equal(response.status, 202);
+  assert.ok(calls.includes("remove-personal-workspace:user_delete"));
   assert.equal(calls.some(call => call.startsWith("delete-firebase:") || call.startsWith("delete-user:")), false);
 });
 

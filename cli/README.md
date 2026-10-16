@@ -40,6 +40,32 @@ only the binding name with `wrangler secret list --env preview`. Never put the
 secret in Git, a command argument, or terminal output. Provider passwords, MFA,
 and recovery material remain in their 1Password items.
 
+## Personal Tasks and Calendar
+
+The existing human profile also owns a personal workspace through the shared
+authenticated API. Web and CLI read and mutate the same server-owned records:
+
+```sh
+openjob workspace snapshot --format json
+printf '%s' '{"type":"task.create","title":"Prepare the demo"}' | openjob workspace command --input - --format json
+openjob workspace command --input command.json --format json
+```
+
+The strict command objects support `task.create` (`title`), `task.update`
+(`taskId`, `title`), `task.complete` (`taskId`, `completed`), `task.schedule`
+(`taskId`, `calendarId`, `start`, `end`), `task.unschedule`/`task.delete`
+(`taskId`), `calendar.create` (`calendarId`, `title`, `start`, `end`),
+`calendar.update` (`eventId`, `title`, `start`, `end`) and `calendar.delete`
+(`eventId`). Every command includes its `type`. Use calendar ID `personal`
+for the default calendar and ISO timestamps with timezone offsets or `Z`.
+
+Normal `--profile`, `--format`, `--out` and `--quiet` conventions apply.
+No Group selection, fixture owner headers, Mail access or agent credentials
+are accepted here. A linked task mutation also updates its calendar block.
+Commands are not retried for network/service errors: inspect a fresh snapshot
+before retrying an uncertain mutation. Hosted availability requires a reviewed
+release; fixture demonstrations do not establish deployed availability.
+
 ## Scoped agent reads
 
 An authenticated human owner uses `POST /api/v1/agent-grants` with
