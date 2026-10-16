@@ -12,6 +12,7 @@ function parse(input: unknown): WorkspaceCommand {
   const obj = input as Record<string, unknown>;
   const fields: Record<string, string[]> = {
     "task.create": ["title", "messageId"], "task.complete": ["taskId", "completed"],
+    "task.update": ["taskId", "title"], "task.unschedule": ["taskId"], "task.delete": ["taskId"],
     "task.schedule": ["taskId", "calendarId", "start", "end"], "calendar.create": ["calendarId", "title", "start", "end"],
     "calendar.update": ["eventId", "title", "start", "end"], "calendar.delete": ["eventId"],
     "mail.compose": ["accountId", "to", "subject", "body"],
@@ -95,6 +96,14 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
     const draft = (id: string) => { const found = next.drafts.find(d => d.id === id); if (!found) fail("forbidden", "Draft is unavailable"); account(found.accountId); return found; };
     const task = (id: string) => { const found = next.tasks.find(t => t.id === id && t.ownerId === actor.ownerId); if (!found) fail("forbidden", "Task is unavailable"); return found; };
     const calendar = (id: string) => { const found = next.calendars.find(c => c.id === id && c.ownerId === actor.ownerId); if (!found) fail("forbidden", "Calendar is unavailable"); return found; };
+    const linkedEvent = (found: WorkspaceState["tasks"][number]) => {
+      const event = found.calendarEventId ? next.events.find(e => e.id === found.calendarEventId) : undefined;
+      if (event) {
+        calendar(event.calendarId); need("calendar:write", event.calendarId);
+        if (event.taskId !== found.id) fail("forbidden", "Linked event is unavailable");
+      }
+      return event;
+    };
     const id = () => crypto.randomUUID();
     let result: unknown;
     switch (cmd.type) {
@@ -104,6 +113,18 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
         if (source) need("mail:read", source.accountId);
         const created = { id: id(), ownerId: actor.ownerId, title: cmd.title, completed: false, ...(source ? { sourceMessageId: source.id, sourceAccountId: source.accountId } : {}) };
         next.tasks.push(created); result = created; break;
+      }
+      case "task.update": {
+        need("tasks:write", "tasks:personal"); const found = task(cmd.taskId); const event = linkedEvent(found);
+        found.title = cmd.title; if (event) event.title = cmd.title; result = found; break;
+      }
+      case "task.unschedule":
+      case "task.delete": {
+        need("tasks:write", "tasks:personal"); const found = task(cmd.taskId); const event = linkedEvent(found);
+        if (event) next.events = next.events.filter(item => item.id !== event.id);
+        if (cmd.type === "task.delete") { next.tasks = next.tasks.filter(item => item.id !== found.id); result = { id: found.id, deleted: true }; }
+        else { delete found.scheduledSlot; delete found.calendarEventId; result = found; }
+        break;
       }
       case "task.complete": { need("tasks:write", "tasks:personal"); const found = task(cmd.taskId); found.completed = cmd.completed; result = found; break; }
       case "task.schedule": {

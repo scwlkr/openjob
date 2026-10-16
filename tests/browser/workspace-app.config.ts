@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 /** Exercise the actual app/router/proxy, not just a mounted component. */
 export default defineConfig({
   testDir: ".",
-  testMatch: ["workspace.spec.ts", "workspace-drafts.spec.ts", "workspace-mail-navigation.spec.ts", "workspace-calendar.spec.ts", "workspace-agents.spec.ts"],
+  testMatch: ["workspace.spec.ts", "workspace-drafts.spec.ts", "workspace-mail-navigation.spec.ts", "workspace-calendar.spec.ts", "workspace-agents.spec.ts", "workspace-tasks.spec.ts"],
   fullyParallel: false,
   outputDir: "../../output/playwright/workspace-app-results",
   reporter: "line",

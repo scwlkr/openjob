@@ -1,16 +1,32 @@
 # Run the full workspace prototype
 
-From this cloud checkout, with the existing locked dependencies installed:
+The saved cloud checkout already has Node24.19.0, npm11.9.0 and the locked
+dependencies installed. From the repository root, start a new seeded demo:
 
 ```sh
-npm run dev:workspace -- --port 5173
+npm run dev:workspace -- --fresh
 ```
 
-Open `http://127.0.0.1:5173/workspace` in the configured cloud browser. The
-launcher starts the app and a loopback fixture API. Mail, Calendar, Tasks and
-Agents share server-owned state saved under the ignored `.openjob/` directory.
-Restarting the launcher reloads that state. Browser-test runs use their own
-temporary state file, even if a persistence override exists in the environment.
+Open `http://127.0.0.1:5173/workspace` in the configured cloud browser. No login,
+Firebase/Cloudflare account, provider credentials, environment secrets or separate
+seed command is required. Alex starts with three simulated mailboxes, three
+messages, a personal Task and two Calendars; Sam has separate private fixtures.
+The launcher starts both the app and its loopback API and prints the state path.
+
+`--fresh` creates a new temporary fixture file; it never resets an existing
+demo or honors an existing state-file override. To keep the default saved demo
+across restarts, omit `--fresh`: `npm run dev:workspace`. The default state is
+`.openjob/workspace-demo.json`; its first start seeds automatically and later
+starts reload it. To reopen a particular fresh run, pass its printed path through
+`OPENJOB_WORKSPACE_STATE_FILE` and omit `--fresh`. Stop with Ctrl+C. Only one
+launcher may use backend port4180; stop the earlier run before starting another.
+Use `--port 5174` for a different frontend port. Browser gates always use isolated
+temporary state, independently of persistence overrides.
+
+This uses the existing locked stack. A newly provisioned checkout needs its
+locked dependencies installed first; inspect root/native postinstall scripts
+before `npm ci`, which also installs native dependencies and applies patches.
+No install is needed in this already prepared saved environment.
 
 All Gmail, Outlook and IMAP connections shown here are simulated. The two
 owner selectors and agent identity headers are explicit fixture identities,
@@ -26,7 +42,10 @@ The prototype also opens at `/` in explicit fixture mode. Ordinary builds retain
    people or message bodies within the selected mailbox. Filter among the three simulated mailboxes, open the launch
    checklist message, and save a reply draft. Create a personal Task from it.
 2. In Tasks, schedule that Task on the Work calendar with explicit UTC start
-   and end times, then mark it complete. In Calendar, inspect its linked block.
+   and end times, then mark it complete. Edit its title: the linked Calendar block
+   follows. Reopen Schedule to adjust the existing interval or calendar. Unschedule
+   removes the linked block while keeping the Task. Confirmed Delete task removes
+   the Task and linked block; source mail stays. In Calendar, inspect linked blocks.
 3. Use Calendar Agenda, Day or Week; select a UTC date, navigate Previous/Next
    or Today, and filter the owned calendars. Create a separate calendar block,
    edit its title/time and delete it. Editing keeps the original calendar.
@@ -59,7 +78,12 @@ npm run workspace:cli -- command --url http://127.0.0.1:4180 --owner demo_alex -
 ```
 
 Example command: `{"type":"task.create","title":"Review the prototype","messageId":"alex_msg_launch"}`.
-The returned ID can be used with `task.schedule` and `task.complete`. Commands
+The returned ID can be used with `task.schedule`, `task.complete`,
+`task.update`, `task.unschedule` and `task.delete`. Rename/unschedule/delete
+require tasks:write on Personal tasks; when a linked Calendar block is changed
+or removed, calendar:write on that calendar is also required. All changes are
+atomic. Rename keeps the Task and linked block titles aligned; deleting source
+Tasks never deletes Mail. Commands
 and response types live in `shared/workspace-contracts.ts`. Add `--agent ID`
 to simulate a granted principal. Editing uses `mail.draft.update`; local delivery
 simulation uses `mail.simulate-send`. An agent needs both `mail:draft` and the

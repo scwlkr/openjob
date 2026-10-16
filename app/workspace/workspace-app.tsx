@@ -6,11 +6,11 @@ import { OpenJobBrand } from "../openjob-brand";
 import styles from "./workspace.module.css";
 import WorkspaceCalendar from "./workspace-calendar";
 import WorkspaceAgents from "./workspace-agents";
+import WorkspaceTasks from "./workspace-tasks";
 
 type Tab = "Mail" | "Calendar" | "Tasks" | "Agents";
 type MailFolder = "Inbox" | "Drafts" | "Simulated Sent";
 const date = (value: string) => new Date(value).toLocaleString(undefined, { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " UTC";
-const utc = (value: string) => new Date(value + ":00Z").toISOString();
 
 async function api(path: string, owner: string, command?: WorkspaceCommand, agentId?: string) {
   const response = await fetch(`/api/workspace/${path}`, {
@@ -45,11 +45,6 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   const [composeTo, setComposeTo] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
-  const [scheduleTask, setScheduleTask] = useState("");
-  const [calendarId, setCalendarId] = useState("");
-  const [start, setStart] = useState("2026-10-16T14:00");
-  const [end, setEnd] = useState("2026-10-16T14:30");
 
   const refresh = useCallback(async () => {
     const next: WorkspaceView = await api("snapshot", owner);
@@ -81,8 +76,6 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   const selectedMessage = visibleMessages.find((item) => item.id === messageId);
   const folderCounts = { Inbox: mailboxMessages.length, Drafts: mailboxDrafts.length, "Simulated Sent": mailboxSent.length };
   const resultCount = mailFolder === "Inbox" ? visibleMessages.length : mailFolder === "Drafts" ? visibleDrafts.length : visibleSent.length;
-  const calendars = view?.calendars || [];
-  const selectedCalendar = calendarId || calendars[0]?.id || "";
   const submit = (fn: () => void) => (event: FormEvent) => { event.preventDefault(); fn(); };
 
   return <div className={styles.workspace}>
@@ -147,19 +140,11 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
             <section className={styles.panel} aria-label="Message reader">{selectedMessage ? <div className={styles.reader}><p className={styles.eyebrow}>PRIVATE MAIL</p><h2>{selectedMessage.subject}</h2><p className={styles.small}>From: {selectedMessage.from}<br />To: {selectedMessage.to}<br />{date(selectedMessage.receivedAt)}</p><pre className={styles.body}>{selectedMessage.body}</pre><div className={styles.actions}><button disabled={busy} onClick={() => command({ type: "mail.read", messageId: selectedMessage.id, read: !selectedMessage.read }, "Message updated")}>Mark {selectedMessage.read ? "unread" : "read"}</button><button className={styles.primary} disabled={busy} onClick={() => command({ type: "task.create", title: selectedMessage.subject, messageId: selectedMessage.id }, "Private task created from this message")}>Create task from mail</button></div><form onSubmit={submit(async () => { const existing = view.drafts.find((item) => item.messageId === selectedMessage.id);
               await command(existing ? { type: "mail.draft.update", draftId: existing.id, to: existing.to || selectedMessage.from, subject: existing.subject || `Re: ${selectedMessage.subject}`, body: draft } : { type: "mail.draft", messageId: selectedMessage.id, body: draft }, "Reply saved as a local fixture draft. No message sent."); })}><label>Reply draft<textarea aria-label="Reply draft" required value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} placeholder="Write a reply to save for later…" /></label><button disabled={busy || !draft.trim()}>Save draft</button><p className={styles.small}>Draft only · live sending is disabled</p></form></div> : <div className={styles.empty}>Select a message to read, draft a reply or create a private task.</div>}</section></div>}
         </>}
-        {view && tab === "Tasks" && <>
-          <form className={styles.inlineForm} onSubmit={submit(async () => { if (await command({ type: "task.create", title: taskTitle }, "Task created")) setTaskTitle(""); })}><label className={styles.grow}>New task<input aria-label="New task" required value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="What needs your attention?" /></label><button className={styles.primary} disabled={busy}>Add task</button></form>
-          <section className={styles.panel} aria-label="Task list">{view.tasks.map((task) => <article className={styles.task} data-testid="task-row" key={task.id}><label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(e) => command({ type: "task.complete", taskId: task.id, completed: e.target.checked }, "Task updated")} /><span className={task.completed ? styles.completed : ""}>{task.title}</span></label><div>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{date(task.scheduledSlot.start)} – {date(task.scheduledSlot.end)}</small> : <small>Unscheduled</small>}<button disabled={busy} onClick={() => { setScheduleTask(task.id); }}>Schedule</button></div></article>)}{!view.tasks.length && <p className={styles.empty}>No tasks yet. Add one or turn a message into a task.</p>}</section>
-          {scheduleTask && <section className={styles.panel}><h2 className={styles.sectionHeading}>Schedule task</h2><form className={styles.form} onSubmit={submit(async () => { if (await command({ type: "task.schedule", taskId: scheduleTask, calendarId: selectedCalendar, start: utc(start), end: utc(end) }, "Task scheduled on your calendar")) setScheduleTask(""); })}><p>{view.tasks.find((task) => task.id === scheduleTask)?.title}</p><TimeFields calendars={calendars} calendarId={selectedCalendar} setCalendarId={setCalendarId} start={start} setStart={setStart} end={end} setEnd={setEnd} /><div className={styles.actions}><button className={styles.primary} disabled={busy}>Save schedule</button><button type="button" onClick={() => setScheduleTask("")}>Cancel</button></div></form></section>}
-        </>}
+        {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
         {view && tab === "Agents" && <WorkspaceAgents view={view} owner={owner} busy={busy} command={command} refresh={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id}><small>{date(entry.createdAt)}</small> {entry.action} <small>· {entry.actor}</small></p>)}</details>}
       </main>
     </div>
   </div>;
-}
-
-function TimeFields({ lockedCalendar = false, calendars, calendarId, setCalendarId, start, setStart, end, setEnd }: { lockedCalendar?: boolean; calendars: WorkspaceView["calendars"]; calendarId: string; setCalendarId: (value: string) => void; start: string; setStart: (value: string) => void; end: string; setEnd: (value: string) => void }) {
-  return <><label>Calendar<select aria-label="Calendar" disabled={lockedCalendar} value={calendarId} onChange={(e) => setCalendarId(e.target.value)} required>{calendars.map((calendar) => <option key={calendar.id} value={calendar.id}>{calendar.name}</option>)}</select></label><label>Start (UTC)<input aria-label="Start (UTC)" type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} /></label><label>End (UTC)<input aria-label="End (UTC)" type="datetime-local" required value={end} onChange={(e) => setEnd(e.target.value)} /></label></>;
 }
