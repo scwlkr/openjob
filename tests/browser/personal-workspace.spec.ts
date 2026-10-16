@@ -144,6 +144,7 @@ test("authenticated provider preview isolates accounts, pages messages and expos
   await expect(connections).toContainText("Implemented · not connected");
   await expect(connections).toContainText("Gmail Mail-read consent required");
   await expect(connections).toContainText("live execution disabled");
+  await expect(connections).toContainText("No production connection repository, secure token vault or OAuth callback is configured");
   await expect(connections).toContainText("Gmail consent is separate from your OpenJob sign-in");
   await expect(connections).toContainText("Read messages, Read labels");
   await expect(connections.getByRole("button")).toHaveCount(0);

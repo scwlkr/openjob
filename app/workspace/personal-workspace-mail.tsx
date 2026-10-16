@@ -74,7 +74,7 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
         <p>Gmail consent is separate from your OpenJob sign-in.</p>
         <p>{connector.message}</p>
         <dl className={styles.providerCapabilities}><div><dt><strong>Implemented reads</strong></dt><dd>{connector.implementedOperations.map(operationLabel).join(", ")}</dd></div><div><dt><strong>Not supported</strong></dt><dd>{connector.unsupportedOperations.map(operationLabel).join(", ")}</dd></div></dl>
-        <p className={styles.small}>Next step: choose an approved test account and complete owner-reviewed setup for read-only Mail consent.</p>
+        <p className={styles.small}>Next step: finish server storage and OAuth setup, then approve a test account for read-only Mail consent. OpenJob sign-in alone cannot connect Mail.</p>
       </article>)}
       {!data.connectors.length && <p>No provider connections are available in this build.</p>}
     </div></section>}
