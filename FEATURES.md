@@ -1,5 +1,9 @@
 # Features
 
+## Packaged npm workspace
+
+`npm run app:pack` builds the actual personal workspace, local synthetic API and existing CLI into an installable tarball. `openjob app` runs it without a checkout; `openjob updates` and automatic notice-only checks retain the artifact’s latest/dev channel. Artifact-only CI maps published stable releases to latest and exact main source to timestamp/SHA dev versions. Registry publication and ownership setup remain pending. See [npm installation](docs/NPM_INSTALL.md).
+
 ## Authenticated personal workspace
 
 `/workspace` uses the existing Firebase session and `/api/v1/workspace` for owner-private Tasks and an OpenJob Personal Calendar. The existing Group app links to it from the User menu. Create, edit, schedule, complete, unschedule and delete personal Tasks; linked Calendar changes stay atomic. The Firestore REST adapter stores one validated owner document with compare-and-set and active-user/deletion fences; the current bounded record limit is 900 KB. Account deletion removes the private workspace before finalizing identity deletion. Existing `openjob workspace snapshot` and `openjob workspace command --input FILE|-` use the same authenticated API. No fixture identity header selects an owner.

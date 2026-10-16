@@ -1,3 +1,15 @@
+# Local WLK-303 integration checkpoint
+
+Isolated Mac checkout/branch `codex/wlk-303-npm-distribution` from main `5358f6cc0c030d478aafea7d4762fdab68d799e3`. Existing Desktop/dev/openjob and PatriBible remain untouched. WLK-302 cloud stop was accepted per parent; final TLS/login checkpoint is not recovered and is excluded here. Linear WLK-303 remains the execution record. No merge until reconciliation.
+
+Implemented actual built personal workspace + bundled synthetic API + existing CLI artifact; immutable latest/dev channel metadata, public-registry notice-only checks and artifact-only CI. Corrected detached main source resolution and app SIGINT cleanup. No publishing/deploy/credential configuration. Registry ownership and separately approved publication automation remain blockers; public tags do not yet track this source. [Install/run/limits](docs/NPM_INSTALL.md).
+
+Evidence: real UI/API Vite package build, npm pack (53 files, about 672kB), clean-prefix install `/tmp/openjob-303-prefix`, installed version/help and actual Chrome UI at http://127.0.0.1:5191/workspace. Explicit synthetic Alex/Sam/no-live-provider labels observed. Brand check and 8 distribution checks passed. `npm run typecheck` generated runtime types; direct `tsc --noEmit` passed after generation. Focused core run had 46/48 passing: both failures were the same old help assertion rejecting the newly documented app prototype; assertion now scopes that exclusion to existing production commands. Re-run affected lane before delivery. Installed mutation smoke script is ready; browser interaction was interrupted by transient home-internet connection drops, not a verified assertion failure. Do not claim mutation proof until its receipt passes.
+
+Mac Node26.5.0; no native installs/builds or duplicate full suites. Logs `/tmp/openjob-303-*`. Task work remains local until committed/pushed. Remaining: installed mutation/lifecycle proof, focused core rerun, review/fix, draft PR and exact-head checks. Preserve useful local app for Shane; keep temporary demo API state separate from saved fixtures. No real mail, external account connection, release or deployment.
+
+---
+
 # OpenJob cloud handoff
 
 [Mission](docs/MASTER_MISSION.md), [run guide](docs/WORKSPACE_DEMO.md), sole queue [Linear openjob](https://linear.app/wlkr-labs/project/openjob-fa4830c93118). Cloud only; one integration owner and disjoint workers. Parent assignment unchanged; no schedule created. Private environment and owner Page references stay in Linear.
