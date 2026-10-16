@@ -876,8 +876,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read an owner-scoped synthetic provider adapter preview
-         * @description Human Firebase identity only. Invented provider adapter accounts, capabilities, account-qualified references and paginated records. No real credentials, provider network requests, writes or sending. Fixture headers and all agent credentials are denied or ignored; no human authentication fallback for agent tokens. The separate connector catalog describes the implemented Gmail read adapter as not_connected, consent required and live execution disabled. It never adds an unconnected account or permits provider execution.
+         * Read an owner-scoped synthetic or mock provider workspace
+         * @description Human Firebase identity only. Invented provider adapter accounts, capabilities, account-qualified references and paginated records. No real credentials, provider network requests, writes or sending. Fixture headers and all agent credentials are denied or ignored; no human authentication fallback for agent tokens. The separate connector catalog describes the implemented Gmail read adapter as not_connected, consent required and live execution disabled. It never adds an unconnected account or permits provider execution. An injected server-owned connection reader may add explicitly mock accounts that exercise Gmail protocol mapping with synthetic HTTP responses. Clients choose owned account IDs only. No source, token, broker metadata or execution-enable input is accepted. Upstream provider authentication failures are provider_unavailable, never human-session authentication errors.
          */
         get: operations["getProviderPreview"];
         put?: never;
@@ -918,10 +918,10 @@ export interface components {
             label: string;
             /** Format: email */
             address: string;
-            /** @constant */
-            mode: "synthetic";
             /** @enum {string} */
-            status: "ready" | "reconnect_required" | "error" | "unsupported";
+            mode: "synthetic" | "mock";
+            /** @enum {string} */
+            status: "ready" | "reconnect_required" | "error" | "unsupported" | "not_connected" | "needs_consent" | "revoked";
             statusReason: string;
             capabilities: {
                 mailRead: components["schemas"]["ProviderPreviewCapability"];
@@ -934,8 +934,7 @@ export interface components {
             sync: {
                 /** @enum {string} */
                 state: "synthetic_ready" | "blocked";
-                /** Format: date-time */
-                asOf: string;
+                asOf: string | null;
                 reason: string;
             };
             upstreamId: string;
@@ -980,8 +979,8 @@ export interface components {
             end: string;
         };
         ProviderPreview: {
-            /** @constant */
-            mode: "synthetic";
+            /** @enum {string} */
+            mode: "synthetic" | "mock";
             accounts: components["schemas"]["ProviderPreviewAccount"][];
             selectedAccountId: string;
             messages: components["schemas"]["ProviderPreviewMessage"][];
@@ -4700,109 +4699,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "data": {
-                     *         "mode": "synthetic",
-                     *         "accounts": [
-                     *           {
-                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
-                     *             "provider": "gmail",
-                     *             "label": "Personal Gmail preview",
-                     *             "address": "alex@gmail.example.invalid",
-                     *             "mode": "synthetic",
-                     *             "status": "ready",
-                     *             "statusReason": "Invented preview; no live provider connection.",
-                     *             "capabilities": {
-                     *               "mailRead": {
-                     *                 "available": true,
-                     *                 "reason": "Synthetic read adapter only."
-                     *               },
-                     *               "calendarRead": {
-                     *                 "available": true,
-                     *                 "reason": "Synthetic read adapter only."
-                     *               },
-                     *               "draft": {
-                     *                 "available": false,
-                     *                 "reason": "Live integration is unavailable."
-                     *               },
-                     *               "send": {
-                     *                 "available": false,
-                     *                 "reason": "Live integration is unavailable."
-                     *               },
-                     *               "calendarWrite": {
-                     *                 "available": false,
-                     *                 "reason": "Live integration is unavailable."
-                     *               },
-                     *               "reconnect": {
-                     *                 "available": false,
-                     *                 "reason": "Live integration is unavailable."
-                     *               }
-                     *             },
-                     *             "sync": {
-                     *               "state": "synthetic_ready",
-                     *               "asOf": "2026-10-16T03:00:00.000Z",
-                     *               "reason": "Synthetic fixture snapshot."
-                     *             },
-                     *             "upstreamId": "account_personal"
-                     *           }
-                     *         ],
-                     *         "selectedAccountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
-                     *         "messages": [
-                     *           {
-                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1",
-                     *             "accountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
-                     *             "upstreamId": "upstream_message_1",
-                     *             "threadId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1",
-                     *             "folderIds": [
-                     *               "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox"
-                     *             ],
-                     *             "subject": "Invented planning message",
-                     *             "from": "mia@example.invalid",
-                     *             "to": "alex@gmail.example.invalid",
-                     *             "body": "Synthetic example only.",
-                     *             "receivedAt": "2026-10-16T03:00:00.000Z",
-                     *             "read": false,
-                     *             "upstreamThreadId": "thread_shared"
-                     *           }
-                     *         ],
-                     *         "folders": [
-                     *           {
-                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox",
-                     *             "accountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
-                     *             "upstreamId": "INBOX",
-                     *             "name": "Inbox"
-                     *           }
-                     *         ],
-                     *         "calendars": [],
-                     *         "events": [],
-                     *         "nextCursor": null,
-                     *         "syncCursor": "pv1.synthetic_example",
-                     *         "connectors": [
-                     *           {
-                     *             "provider": "gmail",
-                     *             "adapter": "gmail-rest-read",
-                     *             "status": "not_connected",
-                     *             "consent": "required",
-                     *             "liveExecutionEnabled": false,
-                     *             "implementedOperations": [
-                     *               "mail.read",
-                     *               "mail.labels"
-                     *             ],
-                     *             "unsupportedOperations": [
-                     *               "calendar.read",
-                     *               "calendar.write",
-                     *               "mail.draft",
-                     *               "mail.send",
-                     *               "sync.history",
-                     *               "reconnect"
-                     *             ],
-                     *             "message": "Read-only Gmail adapter implemented; no approved account or provider read consent. Live execution disabled."
-                     *           }
-                     *         ]
-                     *       }
-                     *     }
-                     */
                     "application/json": {
                         data: components["schemas"]["ProviderPreview"];
                     };

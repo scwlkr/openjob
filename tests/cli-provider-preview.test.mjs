@@ -9,15 +9,19 @@ import { createV1ProviderPreviewApi } from '../server/v1-provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
 import { createTestFirebaseAuthority } from './support/firebase-id-tokens.mjs';
 import { createOpenApiResponseValidator } from './support/openapi-response.mjs';
+import { createMockProviderConnectionHarness } from './support/mock-provider-connections.mjs';
 
-async function harness(t) {
+async function harness(t, { mockConnections = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'openjob-provider-cli-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const credential = join(directory, 'human-credential'); await writeFile(credential, 'fixture-a', { mode: 0o600 });
   const now = '2026-07-15T12:00:00.000Z'; const authority = await createTestFirebaseAuthority({ now });
   const tokens = { a: await authority.issue({ uid: 'firebase_a' }), b: await authority.issue({ uid: 'firebase_b' }) };
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: 'openjob-dev', now: () => Date.parse(now), fetchImplementation: authority.fetch });
-  const api = createV1ProviderPreviewApi({ verifyIdToken, users: { async resolve(identity) { return { userId: identity.uid === 'firebase_a' ? 'user_a' : 'user_b', username: null }; } } });
+  const mock = mockConnections ? await createMockProviderConnectionHarness({ owners: { alex: 'user_a', sam: 'user_b' }, isOwnerActive: async () => true }) : undefined;
+  let connectionError;
+  const connections = mock ? { listAccounts: owner => mock.reader.listAccounts(owner), async listMessages(input) { if (connectionError) throw Object.assign(new Error('private upstream token detail'), { code: connectionError }); return mock.reader.listMessages(input); } } : undefined;
+  const api = createV1ProviderPreviewApi({ verifyIdToken, connections, users: { async resolve(identity) { return { userId: identity.uid === 'firebase_a' ? 'user_a' : 'user_b', username: null }; } } });
   const validate = await createOpenApiResponseValidator(); const calls = [], failures = [];
   const server = createServer(async (req, res) => {
     try {
@@ -38,7 +42,7 @@ async function harness(t) {
     const child = spawn(process.execPath, ['cli/openjob.mjs', 'workspace', 'providers', ...args], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = ''; child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; }); child.on('error', reject); child.on('close', status => resolve({ status, stdout, stderr }));
   });
-  return { directory, calls, failures, run, async owner(account) { await writeFile(credential, `fixture-${account}`, { mode: 0o600 }); } };
+  return { directory, calls, failures, run, mock, faultConnection(code) { connectionError = code; }, async owner(account) { await writeFile(credential, `fixture-${account}`, { mode: 0o600 }); } };
 }
 
 test('existing human CLI reads the shared synthetic adapter with scoped account selection and pagination', async t => {
@@ -85,6 +89,36 @@ test('provider CLI rejects agent credentials and invalid query options before au
     ['--agent-token-file', '/absent'], ['--account', ''], ['--account', '../private'],
     ['--account', 'x'.repeat(129)], ['--cursor', 'x'.repeat(4097)], ['--cursor', 'private\nvalue'],
     ['--cursor', 'a', '--cursor', 'b'], ['--group', 'grp_fixture'], ['--input', '-'],
+    ['--source', 'mock'], ['--live', 'true'], ['--token', 'private'],
   ]) { const result = await f.run(args); assert.equal(result.status, 2, result.stderr); assert.equal(result.stdout, ''); }
   assert.deepEqual(f.calls, []);
+});
+
+test('existing CLI selects owned mock protocol accounts with broker denial, revocation and generic upstream errors', async t => {
+  const f = await harness(t, { mockConnections: true });
+  const ok = async args => { const result = await f.run(['--format', 'json', ...args]); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const first = await ok(['--account', f.mock.accountIds.alex]);
+  assert.equal(first.mode, 'mock'); assert.equal(first.messages.length, 2); assert.match(first.messages[0].body, /Gmail wire mapper for alex/);
+  const next = await ok(['--account', f.mock.accountIds.alex, '--cursor', first.nextCursor]);
+  assert.equal(next.messages.length, 1); assert.equal(next.nextCursor, null); assert.equal(next.syncCursor, null);
+  assert.equal(first.connectors[0].liveExecutionEnabled, false);
+  const serialized = JSON.stringify([first, next]);
+  for (const field of ['credentialRef', 'revision', 'scopes', 'accessToken', 'broker']) assert.equal(serialized.includes(`"${field}":`), false, field);
+  for (const secret of ['fixture_ref_', 'mock_access_']) assert.equal(serialized.includes(secret), false);
+  const counters = { ...f.mock.counters };
+  const consent = await ok(['--account', f.mock.accountIds.consent]);
+  assert.equal(consent.accounts.find(account => account.id === f.mock.accountIds.consent).status, 'needs_consent'); assert.deepEqual(consent.messages, []);
+  assert.deepEqual(f.mock.counters, counters);
+  await f.owner('b'); const foreign = await f.run(['--account', f.mock.accountIds.alex, '--format', 'json']);
+  assert.notEqual(foreign.status, 0); assert.match(foreign.stderr, /forbidden/); assert.equal(foreign.stdout, '');
+  assert.deepEqual(f.mock.counters, counters);
+  await f.owner('a'); f.faultConnection('authentication_required');
+  const authCount = f.calls.filter(call => call.path.startsWith('/firebase/')).length;
+  const upstream = await f.run(['--account', f.mock.accountIds.alex, '--format', 'json']);
+  assert.notEqual(upstream.status, 0); assert.match(upstream.stderr, /provider_unavailable/); assert.equal(upstream.stderr.includes('private'), false);
+  assert.equal(f.calls.filter(call => call.path.startsWith('/firebase/')).length, authCount + 1, 'upstream authentication failure does not replay human credential refresh');
+  f.faultConnection(undefined); f.mock.controls.revoke(f.mock.accountIds.alex);
+  const revoked = await ok(['--account', f.mock.accountIds.alex]);
+  assert.equal(revoked.accounts.find(account => account.id === f.mock.accountIds.alex).status, 'revoked'); assert.deepEqual(revoked.messages, []);
+  assert.deepEqual(f.mock.counters, counters); assert.deepEqual(f.failures, []);
 });

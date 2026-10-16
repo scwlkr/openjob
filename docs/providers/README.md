@@ -46,6 +46,15 @@ are read-only examples shown separately from saved OpenJob Calendar blocks.
 No control connects a real account or writes a provider record. The adapter's
 deterministic delta test stream is a contract fixture, not a running sync worker.
 
+## Mock connection integration
+
+The [owner connection/broker boundary](CONNECTIONS.md) can now drive the real
+Gmail read mapper through the same authenticated API/CLI/app, using injected
+in-memory records, fake credentials and mock HTTP only. These accounts are
+explicitly marked mock, separate from the synthetic examples. Consent-required
+and revoked accounts expose status without Mail or credential lookup. Production
+has no configured reader, store or broker, and no live execution mode.
+
 ## Smallest real integration to authorize next
 
 Choose one owner-approved test account and one read-only provider first. No

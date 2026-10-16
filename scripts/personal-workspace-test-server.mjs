@@ -8,6 +8,7 @@ import { createV1ProviderPreviewApi } from '../server/v1-provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
 import { createFakeFirestore, createPrivateKey } from '../tests/support/fake-firestore.mjs';
 import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens.mjs';
+import { createMockProviderConnectionHarness } from '../tests/support/mock-provider-connections.mjs';
 
 if (!process.argv.includes('--test-only')) throw new Error('This isolated synthetic server requires --test-only.');
 const now = new Date().toISOString();
@@ -19,7 +20,6 @@ const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectI
 const workspace = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
 const api = createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken });
 const grantsApi = createV1PersonalAgentGrantsApi({ workspace, users, verifyIdToken });
-const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken });
 const sessions = new Map();
 for (const owner of ['alex', 'sam']) {
   const token = await authority.issue({ uid: `personal_browser_${owner}` });
@@ -27,6 +27,11 @@ for (const owner of ['alex', 'sam']) {
   const result = await users.create(identity);
   sessions.set(owner, { token, userId: result.user.userId });
 }
+const providerHarness = await createMockProviderConnectionHarness({
+  owners: Object.fromEntries([...sessions].map(([name, session]) => [name, session.userId])),
+  isOwnerActive: async ownerId => { const user = await users.getById(ownerId); return !!user && !user.deletionPending; },
+});
+const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken, connections: providerHarness.reader });
 const server = createServer(async (incoming, outgoing) => {
   try {
     const url = new URL(incoming.url, `http://${incoming.headers.host || '127.0.0.1:4181'}`);
@@ -34,6 +39,14 @@ const server = createServer(async (incoming, outgoing) => {
     if (owner && incoming.method === 'GET') {
       outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       outgoing.end(JSON.stringify(sessions.get(owner))); return;
+    }
+    if (url.pathname === '/__test/provider-counters' && incoming.method === 'GET') {
+      outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      outgoing.end(JSON.stringify(providerHarness.counters)); return;
+    }
+    const revoke = url.pathname.match(/^\/__test\/provider-connections\/(mock_gmail_[a-f0-9]{24}(?:_consent)?)\/revoke$/)?.[1];
+    if (revoke && incoming.method === 'POST' && incoming.headers['x-openjob-test-control'] === 'mock-provider') {
+      outgoing.writeHead(providerHarness.controls.revoke(revoke) ? 204 : 404, { 'cache-control': 'no-store' }); outgoing.end(); return;
     }
     const headers = new Headers();
     for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);

@@ -49,6 +49,13 @@ an account and `--cursor <opaque-cursor>` for the next message page. Account
 references and cursors are scoped to the authenticated owner and selected
 mailbox. This command uses the normal human profile; it rejects agent tokens.
 No live provider connection, credentials, synchronization or sending occurs.
+An isolated protocol demo may also expose explicitly `mock` accounts through
+the same command. Their message/label reads exercise the Gmail wire adapter
+against synthetic HTTP responses using a server-owned connection reader. The
+client selects an owned account ID; it cannot select a source, provide a
+credential, or enable live execution. Revoked or changed connection records
+stop later reads. Upstream consent/authentication failures return a generic
+provider-unavailable response and do not log out the OpenJob session.
 The separate `connectors` catalog reports adapter implementation status. The
 Gmail read adapter is listed as `not_connected`, with required consent and
 `liveExecutionEnabled: false`; it is not a selectable mailbox. Its implemented
