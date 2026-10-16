@@ -1,5 +1,5 @@
 import type { ProviderConnectionInput } from "../../db/provider-connections.ts";
-import { providerConnectionFingerprint, validateProviderConnection, type ProviderConnection } from "./provider-connections.ts";
+import { effectiveProvider, providerConnectionFingerprint, validateProviderConnection, type ProviderConnection } from "./provider-connections.ts";
 import type { ProviderVaultEntry } from "./provider-token-vault.ts";
 import { MOCK_OAUTH_SCOPES, ProviderOAuthError, oauthFail, oauthHash, oauthId, oauthOpaque, oauthRandom, type ProviderOAuthOptions, type ProviderOAuthTransaction, type ProviderOAuthExchange, type VerifiedProviderIdentity } from "./provider-oauth-types.ts";
 
@@ -9,7 +9,7 @@ const subject = (value: unknown): value is string => typeof value === "string" &
 const email = (value: unknown): value is string => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const label = (value: unknown): value is string => oauthOpaque(value, 80);
 function exact(value: unknown, keys: string[]): asserts value is Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).sort().join(",") !== [...keys].sort().join(",")) oauthFail("invalid_input"); }
-function vaultBinding(row: ProviderConnection): Omit<ProviderVaultEntry, "credential"> { return { credentialRef: row.credentialRef, ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision }; }
+function vaultBinding(row: ProviderConnection): Omit<ProviderVaultEntry, "credential"> { if (effectiveProvider(row) !== "gmail") oauthFail("invalid_input"); return { credentialRef: row.credentialRef, ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision }; }
 
 /** Server-only mock orchestration. Exchange, identity verification and vault writes are injected attestations. */
 export function createMockProviderOAuthLifecycle(options: ProviderOAuthOptions) {
@@ -46,6 +46,7 @@ export function createMockProviderOAuthLifecycle(options: ProviderOAuthOptions) 
     try {
       const raw = await connections.getForOwner(reserved.ownerId, reserved.accountId);
       const current = raw ? validateProviderConnection(raw, reserved.ownerId, reserved.accountId) : null;
+      if (current && effectiveProvider(current) !== "gmail") return false;
       if (!current || current.revision !== reserved.revision || current.state === "revoked") metadataDone = true;
       else { const result = await connections.revokeForOwner(reserved.ownerId, reserved.accountId, reserved.revision); metadataDone = !result || result.state === "revoked"; }
     } catch { /* Preserve a retryable queue entry, never publish backend messages. */ }
@@ -67,6 +68,7 @@ export function createMockProviderOAuthLifecycle(options: ProviderOAuthOptions) 
       if (!current) return false;
     }
     try { current = validateProviderConnection(current, pending.ownerId, pending.candidate.accountId); } catch { return false; }
+    if (effectiveProvider(current) !== "gmail") return false;
     if (current.credentialRef !== pending.candidate.credentialRef) { pendingReservations.delete(pendingKey); return true; }
     if (current.state === "revoked") { pendingReservations.delete(pendingKey); return true; }
     if (current.state !== "needs_consent" || providerConnectionFingerprint(current) !== providerConnectionFingerprint({ ...pending.candidate, ownerId: pending.ownerId, revision: current.revision })) return false;
@@ -120,7 +122,7 @@ export function createMockProviderOAuthLifecycle(options: ProviderOAuthOptions) 
         let reservation: ProviderConnection;
         try { reservation = await connections.putForOwner(row.ownerId, candidate, null); } catch { return oauthFail("reservation_uncertain"); } finally { pendingReservation.settled = true; }
         const parsed = validateProviderConnection(reservation, row.ownerId, row.accountId);
-        if (parsed.state !== "needs_consent" || parsed.subject !== row.expectedSubject || parsed.credentialRef !== candidate.credentialRef || providerConnectionFingerprint(parsed) !== providerConnectionFingerprint({ ...candidate, ownerId: row.ownerId, revision: parsed.revision })) oauthFail("reservation_mismatch");
+        if (effectiveProvider(parsed) !== "gmail" || parsed.state !== "needs_consent" || parsed.subject !== row.expectedSubject || parsed.credentialRef !== candidate.credentialRef || providerConnectionFingerprint(parsed) !== providerConnectionFingerprint({ ...candidate, ownerId: row.ownerId, revision: parsed.revision })) oauthFail("reservation_mismatch");
         reserved = parsed;
         pendingCleanup.set(key(reserved), structuredClone(reserved)); activeReservations.add(key(reserved)); pendingReservations.delete(reservationKey); await guard(row); credentialAlive();
         const stored: ProviderVaultEntry = { ...vaultBinding(reserved), credential: { accessToken: token.accessToken, subject: verified.subject, scopes: [...token.scopes], expiresAt: token.expiresAt } };

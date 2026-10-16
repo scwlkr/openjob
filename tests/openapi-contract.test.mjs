@@ -754,6 +754,12 @@ test("provider preview response schemas preserve opaque Unicode upstream identit
     message: "Read adapter implemented; no approved account or provider consent. Live execution disabled.",
   };
   assert.equal(validate({ data: { ...data, connectors: [connector] } }), true);
+  const outlook = { ...connector, provider: "outlook", adapter: "outlook-graph-read", implementedOperations: ["mail.read", "mail.folders"], unsupportedOperations: connector.unsupportedOperations.map(operation => operation === "sync.history" ? "mail.delta" : operation) };
+  assert.equal(validate({ data: { ...data, connectors: [connector, outlook] } }), true);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...outlook, adapter: "gmail-rest-read" }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...connector, provider: "outlook" }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...outlook, implementedOperations: ["mail.read", "mail.labels"] }] } }), false);
+
   assert.equal(validate({ data: { ...data, connectors: [{ ...connector, liveExecutionEnabled: true }] } }), false);
   assert.equal(validate({ data: { ...data, connectors: [{ ...connector, status: "connected" }] } }), false);
   assert.equal(validate({ data: { ...data, connectors: [{ ...connector, accessToken: "private" }] } }), false);

@@ -1,9 +1,10 @@
 import type { ProviderAccount, ProviderReadAdapter } from "../../shared/provider-contracts.ts";
 import { createGmailReadAdapter, type GmailReadCredential } from "./gmail-read-adapter.ts";
+import { createOutlookReadAdapter, OutlookReadError } from "./outlook-read-adapter.ts";
 import { fail, GmailReadError } from "./gmail-wire.ts";
 
 export type ProviderConnection = {
-  ownerId: string; accountId: string; subject: string; address: string; label: string;
+  provider?: "gmail" | "outlook"; ownerId: string; accountId: string; subject: string; address: string; label: string;
   credentialRef: string; scopes: string[]; state: "approved" | "needs_consent" | "revoked";
   expiresAt: number; revision: string; mode: "mock";
 };
@@ -12,7 +13,7 @@ export type ProviderConnectionStore = {
   getForOwner(ownerId: string, accountId: string): Promise<ProviderConnection | null>;
 };
 export type ProviderCredentialBroker = {
-  resolve(credentialRef: string, binding: { ownerId: string; accountId: string; subject: string; revision: string }): Promise<GmailReadCredential | null>;
+  resolve(credentialRef: string, binding: { provider?: "gmail" | "outlook"; ownerId: string; accountId: string; subject: string; revision: string }): Promise<GmailReadCredential | null>;
 };
 export type ProviderConnectionReader = Pick<ProviderReadAdapter, "listAccounts" | "listMessages">;
 export type ProviderConnectionReaderOptions = {
@@ -21,27 +22,30 @@ export type ProviderConnectionReaderOptions = {
   executionMode?: "disabled" | "mock"; fetchImplementation?: typeof fetch;
   now?: () => number; timeoutMs?: number;
 };
-const READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+export const effectiveProvider = (row: { provider?: "gmail" | "outlook" }): "gmail" | "outlook" => row.provider ?? "gmail";
+export const providerReadScopes = (provider: "gmail" | "outlook"): readonly string[] => provider === "outlook" ? ["Mail.Read", "User.Read"] : ["https://www.googleapis.com/auth/gmail.readonly"];
+const hasReadScopes = (row: ProviderConnection) => providerReadScopes(effectiveProvider(row)).every(scope => row.scopes.includes(scope));
 const validId = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-const opaque = (value: unknown, max = 256): value is string => typeof value === "string" && !!value.trim() && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value);
+const opaque = (value: unknown, max = 256): value is string => typeof value === "string" && !!value.trim() && value.length <= max && !/[\u0000-\u001f\u007f-\u009f]/.test(value);
 export function validateProviderConnection(value: unknown, owner: string, account?: string): ProviderConnection {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail("malformed_response");
   const row = value as ProviderConnection;
-  if (Object.keys(row).sort().join(",") !== "accountId,address,credentialRef,expiresAt,label,mode,ownerId,revision,scopes,state,subject") fail("malformed_response");
+  if (Object.keys(row).filter(key => key !== "provider").sort().join(",") !== "accountId,address,credentialRef,expiresAt,label,mode,ownerId,revision,scopes,state,subject") fail("malformed_response");
+  if (Object.hasOwn(row, "provider") && !["gmail", "outlook"].includes(String(row.provider))) fail("malformed_response");
   if (!validId(row.ownerId) || !validId(row.accountId) || row.ownerId !== owner || account !== undefined && row.accountId !== account) fail("forbidden");
-  if (!opaque(row.subject) || !opaque(row.label) || !opaque(row.credentialRef, 512) || !opaque(row.revision, 128) || typeof row.address !== "string" || row.address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.address) || row.mode !== "mock" || !["approved", "needs_consent", "revoked"].includes(row.state) || !Number.isFinite(row.expiresAt) || !Array.isArray(row.scopes) || row.scopes.length > 100 || row.scopes.some(scope => !opaque(scope, 256)) || new Set(row.scopes).size !== row.scopes.length) fail("malformed_response");
+  if (!opaque(row.subject) || !opaque(row.label) || !opaque(row.credentialRef, 512) || !opaque(row.revision, 128) || typeof row.address !== "string" || row.address.length > 254 || /[\u0000-\u001f\u007f-\u009f]/.test(row.address) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.address) || row.mode !== "mock" || !["approved", "needs_consent", "revoked"].includes(row.state) || !Number.isFinite(row.expiresAt) || !Array.isArray(row.scopes) || row.scopes.length > 100 || row.scopes.some(scope => !opaque(scope, 256)) || new Set(row.scopes).size !== row.scopes.length) fail("malformed_response");
   return structuredClone(row);
 }
 export function providerConnectionFingerprint(row: ProviderConnection) {
-  return JSON.stringify({ ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, address: row.address, label: row.label, credentialRef: row.credentialRef, scopes: [...row.scopes].sort(), state: row.state, expiresAt: row.expiresAt, revision: row.revision, mode: row.mode });
+  return JSON.stringify({ provider: effectiveProvider(row), ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, address: row.address, label: row.label, credentialRef: row.credentialRef, scopes: [...row.scopes].sort(), state: row.state, expiresAt: row.expiresAt, revision: row.revision, mode: row.mode });
 }
 function metadata(row: ProviderConnection, mode: "disabled" | "mock", now: number): ProviderAccount {
-  const status = row.state === "revoked" ? "revoked" : row.state === "needs_consent" || !row.scopes.includes(READ_SCOPE) || row.expiresAt <= now ? "needs_consent" : mode === "disabled" ? "not_connected" : "ready";
-  const reason = status === "revoked" ? "Mock connection approval was revoked; no broker or mailbox read is allowed." : status === "needs_consent" ? "Mock connection needs current Gmail read approval. No credential lookup or provider read is allowed." : status === "not_connected" ? "Connection execution is disabled. This is mock binding metadata, not a connected live mailbox." : "Approved mock Gmail protocol connection using invented HTTP data. No live account is connected.";
+  const status = row.state === "revoked" ? "revoked" : row.state === "needs_consent" || !hasReadScopes(row) || row.expiresAt <= now ? "needs_consent" : mode === "disabled" ? "not_connected" : "ready";
+  const reason = status === "revoked" ? "Mock connection approval was revoked; no broker or mailbox read is allowed." : status === "needs_consent" ? "Mock connection needs current provider read approval. No credential lookup or provider read is allowed." : status === "not_connected" ? "Connection execution is disabled. This is mock binding metadata, not a connected live mailbox." : "Approved mock provider protocol connection using invented HTTP data. No live account is connected.";
   const unavailable = { available: false, reason: "This mock reader does not implement provider writes, calendars or reconnection." };
-  return { id: row.accountId, upstreamId: row.subject, provider: "gmail", label: row.label, address: row.address, mode: "mock", status, statusReason: reason,
+  return { id: row.accountId, upstreamId: row.subject, provider: effectiveProvider(row), label: row.label, address: row.address, mode: "mock", status, statusReason: reason,
     capabilities: { mailRead: { available: status === "ready", reason }, calendarRead: { ...unavailable }, draft: { ...unavailable }, send: { ...unavailable }, calendarWrite: { ...unavailable }, reconnect: { ...unavailable } },
-    sync: { state: "blocked", asOf: null, reason: "No live synchronization exists. Mock message reads do not implement Gmail history synchronization." },
+    sync: { state: "blocked", asOf: null, reason: "No live synchronization exists. Mock message reads do not implement provider history synchronization." },
   };
 }
 /** Server injection only: there is deliberately no live mode or environment enable switch. */
@@ -59,7 +63,7 @@ export function createProviderConnectionReader(options: ProviderConnectionReader
   }
   function approved(row: ProviderConnection) {
     if (row.state === "revoked") fail("execution_disabled");
-    if (row.state !== "approved" || !row.scopes.includes(READ_SCOPE)) fail("consent_required");
+    if (row.state !== "approved" || !hasReadScopes(row)) fail("consent_required");
     if (row.expiresAt <= now()) fail("authentication_required");
   }
   return {
@@ -68,7 +72,7 @@ export function createProviderConnectionReader(options: ProviderConnectionReader
       try { values = await store.listForOwner(owner); } catch { return fail("malformed_response"); }
       if (!Array.isArray(values) || values.length > 100) fail("malformed_response");
       const rows = values.map(value => validateProviderConnection(value, owner)); const ids = new Set<string>(); const subjects = new Set<string>();
-      for (const row of rows) { if (ids.has(row.accountId) || subjects.has(row.subject)) fail("malformed_response"); ids.add(row.accountId); subjects.add(row.subject); }
+      for (const row of rows) { if (ids.has(row.accountId) || subjects.has(`${effectiveProvider(row)}:${row.subject}`)) fail("malformed_response"); ids.add(row.accountId); subjects.add(`${effectiveProvider(row)}:${row.subject}`); }
       await active(owner); return rows.map(row => metadata(row, executionMode, now()));
     },
     async listMessages({ ownerId, accountId, cursor }) {
@@ -77,17 +81,18 @@ export function createProviderConnectionReader(options: ProviderConnectionReader
       await active(ownerId); const initial = await read(ownerId, accountId); approved(initial); const expected = providerConnectionFingerprint(initial);
       const recheck = async () => { await active(ownerId); const current = await read(ownerId, accountId); if (providerConnectionFingerprint(current) !== expected) fail("execution_disabled"); approved(current); await active(ownerId); approved(current); return true; };
       await recheck();
-      const adapter = createGmailReadAdapter({ bindings: [{ ownerId, accountId, subject: initial.subject, address: initial.address, label: initial.label }], now, timeoutMs,
+      const createAdapter = effectiveProvider(initial) === "outlook" ? createOutlookReadAdapter : createGmailReadAdapter;
+      const adapter = createAdapter({ bindings: [{ ownerId, accountId, subject: initial.subject, address: initial.address, label: initial.label }], now, timeoutMs,
         fetchImplementation,
         approveExecution: recheck,
         resolveCredential: async () => {
           await recheck(); let credential: GmailReadCredential | null;
-          try { credential = structuredClone(await broker.resolve(initial.credentialRef, { ownerId, accountId, subject: initial.subject, revision: initial.revision })); } catch { return fail("authentication_required"); }
+          try { credential = structuredClone(await broker.resolve(initial.credentialRef, { ownerId, accountId, subject: initial.subject, revision: initial.revision, ...(effectiveProvider(initial) === "outlook" ? { provider: "outlook" as const } : {}) })); } catch { return fail("authentication_required"); }
           await recheck(); return credential;
         },
       });
       try { const page = await adapter.listMessages({ ownerId, accountId, cursor }); await recheck(); return page; }
-      catch (error) { if (error instanceof GmailReadError) throw error; return fail("malformed_response"); }
+      catch (error) { if (error instanceof GmailReadError || error instanceof OutlookReadError) throw error; return fail("malformed_response"); }
     },
   };
 }

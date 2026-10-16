@@ -1,4 +1,4 @@
-// Invented Gmail wire fixtures only. This module never uses global fetch or production credentials.
+// Invented Gmail and Outlook Graph wire fixtures only. This module never uses global fetch or production credentials.
 import { createProviderConnectionReader } from '../../server/providers/provider-connections.ts';
 
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -18,6 +18,15 @@ export async function createMockProviderConnectionHarness({ owners, isOwnerActiv
       revision: '1', mode: 'mock' };
     records.set(accountId, connection); accountIds[name] = accountId;
     secretRows.set(credentialRef, { connection, name, accessToken: `mock_access_${key}` });
+    const outlookId = `mock_outlook_${key}`;
+    const outlook = { ...connection, provider: 'outlook', accountId: outlookId, label: `Mock Outlook protocol · ${name[0].toUpperCase() + name.slice(1)}`, address: `outlook.${key}@example.invalid`, credentialRef: `fixture_outlook_ref_${key}`, scopes: ['Mail.Read', 'User.Read'] };
+    records.set(outlookId, outlook); accountIds[`outlook${name[0].toUpperCase() + name.slice(1)}`] = outlookId;
+    secretRows.set(outlook.credentialRef, { connection: outlook, name, accessToken: `mock_outlook_access_${key}` });
+    if (name === 'alex') {
+      const consentId = `${outlookId}_consent`;
+      records.set(consentId, { ...outlook, accountId: consentId, subject: `fixture_outlook_consent_${key}`, credentialRef: `fixture_outlook_consent_ref_${key}`, label: 'Mock Outlook protocol · consent required', state: 'needs_consent' });
+      accountIds.outlookConsent = consentId;
+    }
     if (name === 'alex') {
       const consentId = `${accountId}_consent`;
       records.set(consentId, { ...connection, accountId: consentId, label: 'Mock Gmail protocol · consent required', subject: `fixture_consent_${key}`, address: `consent.${key}@example.invalid`, credentialRef: `fixture_consent_ref_${key}`, state: 'needs_consent' });
@@ -32,16 +41,32 @@ export async function createMockProviderConnectionHarness({ owners, isOwnerActiv
     async resolve(ref, context) {
       counters.credentialLookups++;
       const row = secretRows.get(ref);
-      if (!row || ['ownerId', 'accountId', 'subject', 'revision'].some(key => row.connection[key] !== context[key])) return null;
-      return { accessToken: row.accessToken, subject: row.connection.subject, scopes: [SCOPE], expiresAt: now() + 60000 };
+      if (!row || (row.connection.provider ?? 'gmail') !== (context.provider ?? 'gmail') || ['ownerId', 'accountId', 'subject', 'revision'].some(key => row.connection[key] !== context[key])) return null;
+      return { accessToken: row.accessToken, subject: row.connection.subject, scopes: [...row.connection.scopes], expiresAt: now() + 60000 };
     },
   };
   const fetchImplementation = async (input, init) => {
     const url = new URL(input);
-    if (url.origin !== 'https://gmail.googleapis.com' || !url.pathname.startsWith('/gmail/v1/users/me/') || init.method !== 'GET' || init.redirect !== 'error' || init.body !== undefined) throw new Error('Invalid mock protocol request');
+    if (init.method !== 'GET' || init.redirect !== 'error' || init.body !== undefined) throw new Error('Invalid mock protocol request');
     const authorization = new Headers(init.headers).get('authorization');
     const fixture = [...secretRows.values()].find(row => authorization === `Bearer ${row.accessToken}`);
     if (!fixture) return Response.json({ error: { message: 'Mock authorization unavailable' } }, { status: 401 });
+    if (fixture.connection.provider === 'outlook') {
+      if (url.origin !== 'https://graph.microsoft.com' || !url.pathname.startsWith('/v1.0/me')) throw new Error('Invalid mock Graph request');
+      const prefer = new Headers(init.headers).get('prefer');
+      if (!prefer?.includes('IdType="ImmutableId"') || !prefer.includes('outlook.body-content-type="text"')) throw new Error('Missing mock Graph read preferences');
+      counters.requests++;
+      const path = decodeURIComponent(url.pathname.slice('/v1.0/me'.length));
+      if (!path) return Response.json({ id: fixture.connection.subject, mail: fixture.connection.address, userPrincipalName: fixture.connection.address });
+      if (path === '/messages') {
+        const token = url.searchParams.get('$skiptoken'); if (token !== null && token !== 'mock-graph-page-2') throw new Error('Unknown mock Graph page');
+        return Response.json({ value: (token ? [3] : [1, 2]).map(index => ({ id: `AAMkMessage${index}==` })), ...(!token ? { '@odata.nextLink': 'https://graph.microsoft.com/v1.0/me/messages?$top=10&$select=id&$skiptoken=mock-graph-page-2' } : {}) });
+      }
+      if (path === '/mailFolders/AAMkInbox==') return Response.json({ id: 'AAMkInbox==', displayName: 'Inbox' });
+      const index = Number(path.match(/^\/messages\/AAMkMessage([123])==$/)?.[1]); if (!index) throw new Error('Unknown mock Graph read');
+      return Response.json({ id: `AAMkMessage${index}==`, conversationId: 'AAQkThread==', parentFolderId: 'AAMkInbox==', subject: ['Outlook fixture: prepare the launch', 'Outlook fixture: review the plan', 'Outlook fixture: follow up'][index - 1], from: { emailAddress: { name: 'Mia', address: 'sender@example.invalid' } }, toRecipients: [{ emailAddress: { address: fixture.connection.address } }], body: { contentType: 'text', content: `Invented message read through the Outlook Graph wire mapper for ${fixture.name}. No live mailbox was contacted. Café 日本語.` }, receivedDateTime: '2026-10-17T09:00:00.000Z', isRead: false });
+    }
+    if (url.origin !== 'https://gmail.googleapis.com' || !url.pathname.startsWith('/gmail/v1/users/me/')) throw new Error('Invalid mock Gmail request');
     counters.requests++;
     const path = url.pathname.slice('/gmail/v1/users/me/'.length);
     if (path === 'profile') return Response.json({ emailAddress: fixture.connection.address });

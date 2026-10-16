@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createProviderConnectionReader } from '../server/providers/provider-connections.ts';
+import { createProviderConnectionReader, providerConnectionFingerprint } from '../server/providers/provider-connections.ts';
 
 const NOW = Date.parse('2026-10-17T00:00:00Z');
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -94,5 +94,22 @@ test('changed record between initial read and approval denies before broker; bro
 test('broker cannot substitute subject, omit read consent or return an expired credential', async () => {
   for (const credential of [{ subject: 'foreign-subject' }, { scopes: [] }, { expiresAt: NOW }]) {
     const f = fixture({ credential }); await assert.rejects(read(f.reader), failure(['authentication_required', 'consent_required'])); assert.equal(f.brokers(), 1); assert.equal(f.calls.length, 0);
+  }
+});
+
+
+test('legacy absent provider and explicit Gmail share fingerprints while Outlook is distinct', () => {
+  assert.equal(providerConnectionFingerprint(ROW), providerConnectionFingerprint({ ...ROW, provider: 'gmail' }));
+  assert.notEqual(providerConnectionFingerprint(ROW), providerConnectionFingerprint({ ...ROW, provider: 'outlook' }));
+});
+
+test('control-bearing connection labels, addresses and opaque fields fail before broker lookup or HTTP', async () => {
+  for (const control of ['\u001b', '\u007f', '\u0085', '\u009b']) {
+    for (const patch of [{ label: `Unsafe${control}label` }, { address: `unsafe${control}@example.invalid` }, { subject: `subject${control}` }, { credentialRef: `ref${control}` }, { revision: `revision${control}` }, { scopes: [SCOPE, `scope${control}`] }]) {
+      const f = fixture({ row: { ...ROW, ...patch } });
+      await assert.rejects(f.reader.listAccounts(ROW.ownerId), failure(['malformed_response']));
+      await assert.rejects(read(f.reader), failure(['malformed_response']));
+      assert.equal(f.brokers(), 0); assert.equal(f.calls.length, 0);
+    }
   }
 });

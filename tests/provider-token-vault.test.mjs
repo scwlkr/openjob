@@ -7,15 +7,15 @@ import { createFakeFirestore, createPrivateKey } from './support/fake-firestore.
 const NOW = Date.parse('2026-10-17T00:00:00Z'); const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const REF = 'mock_opaque_reference'; const TOKEN = 'invented_mock_access_token';
 const ROW = { ownerId: 'user_fixture', accountId: 'gmail_fixture', subject: 'google_fixture_subject', address: 'alex@example.invalid', label: 'Mock Gmail', credentialRef: REF, scopes: [SCOPE], state: 'approved', expiresAt: NOW + 60000, revision: 'revision_1', mode: 'mock' };
-const binding = row => ({ ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision });
-const entry = row => ({ credentialRef: row.credentialRef, ...binding(row), credential: { accessToken: TOKEN, subject: row.subject, scopes: [SCOPE], expiresAt: NOW + 120000 } });
+const binding = row => ({ ...(row.provider ? { provider: row.provider } : {}), ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision });
+const entry = row => ({ credentialRef: row.credentialRef, ...binding(row), credential: { accessToken: TOKEN, subject: row.subject, scopes: [...row.scopes], expiresAt: NOW + 120000 } });
 const codes = allowed => error => allowed.includes(error.code) && !JSON.stringify({ ...error, message: error.message, stack: error.stack }).includes(TOKEN) && !error.message.includes(REF);
 function fixture(options = {}) {
-  let row = structuredClone(ROW); let secret = entry(row); let active = true; let clock = NOW; let duringRead; let reads = 0; let metadataReads = 0;
+  let row = structuredClone(options.row ?? ROW); let secret = entry(row); let active = true; let clock = NOW; let duringRead; let reads = 0; let metadataReads = 0;
   const connections = { async listForOwner() { return [structuredClone(row)]; }, async getForOwner() { metadataReads++; if (options.storeError) throw new Error(`${REF} ${TOKEN}`); return structuredClone(row); } };
   const vault = { async read(ref) { reads++; assert.equal(ref, REF); await duringRead?.(); if (options.vaultError) throw new Error(`${REF} ${TOKEN}`); return structuredClone(secret); } };
   const broker = createProviderTokenVaultBroker({ connections, vault, isOwnerActive: async () => active, now: () => clock, executionMode: options.executionMode ?? 'mock' });
-  return { broker, connections, vault, resolve: (context = binding(ROW), ref = REF) => broker.resolve(ref, context), reads: () => reads, metadataReads: () => metadataReads, change: fn => { row = fn(row); }, secret: fn => { secret = fn(secret); }, active: value => { active = value; }, time: value => { clock = value; }, hook: fn => { duringRead = fn; } };
+  return { broker, connections, vault, resolve: (context = binding(options.row ?? ROW), ref = REF) => broker.resolve(ref, context), reads: () => reads, metadataReads: () => metadataReads, change: fn => { row = fn(row); }, secret: fn => { secret = fn(secret); }, active: value => { active = value; }, time: value => { clock = value; }, hook: fn => { duringRead = fn; } };
 }
 
 test('vault broker defaults disabled without metadata/token lookup and has no live mode', async () => {
@@ -87,4 +87,26 @@ test('durable metadata + separate vault + Gmail mock HTTP compose across reconst
   assert.equal(await store.removeAllForUser(ownerId), 1); assert.equal(await store.removeAllForUser(ownerId), 0); assert.ok(secrets.has(REF));
   await assert.rejects(staleBroker.resolve(REF, binding(reapproved)), codes(['authentication_required']));
   assert.equal(JSON.stringify([...db.documents.values()]).includes(TOKEN), false);
+});
+
+test('Outlook vault credentials require exact explicit provider and both delegated read scopes', async () => {
+  const outlook = { ...ROW, provider: 'outlook', scopes: ['Mail.Read', 'User.Read'] };
+  const f = fixture({ row: outlook }); assert.deepEqual((await f.resolve()).scopes, ['Mail.Read', 'User.Read']);
+  const legacy = fixture(); legacy.secret(value => ({ ...value, provider: 'gmail' })); assert.equal((await legacy.resolve()).subject, ROW.subject);
+  for (const provider of [undefined, 'gmail']) { const denied = fixture({ row: outlook }); denied.secret(value => { const result = { ...value, provider }; if (provider === undefined) delete result.provider; return result; }); await assert.rejects(denied.resolve(), codes(['authentication_required'])); }
+  for (const scopes of [['Mail.Read'], ['User.Read'], [SCOPE]]) { const denied = fixture({ row: outlook }); denied.secret(value => ({ ...value, credential: { ...value.credential, scopes } })); await assert.rejects(denied.resolve(), codes(['consent_required'])); }
+  const wrongBinding = fixture({ row: outlook }); await assert.rejects(wrongBinding.resolve(binding(ROW)), codes(['execution_disabled'])); assert.equal(wrongBinding.reads(), 0);
+  const foreign = fixture(); foreign.secret(value => ({ ...value, provider: 'outlook' })); await assert.rejects(foreign.resolve(), codes(['authentication_required']));
+  const changed = fixture(); changed.hook(() => changed.change(row => ({ ...row, provider: 'outlook', scopes: ['Mail.Read', 'User.Read'] })));
+  await assert.rejects(changed.resolve(), codes(['execution_disabled']));
+});
+
+test('vault control-bearing opaque bindings and credential scopes fail closed', async () => {
+  for (const control of ['\u001b', '\u007f', '\u0085', '\u009b']) {
+    for (const patch of [{ subject: `subject${control}` }, { revision: `revision${control}` }]) {
+      const f = fixture(); await assert.rejects(f.resolve({ ...binding(ROW), ...patch }), codes(['invalid_input'])); assert.equal(f.reads(), 0);
+    }
+    const ref = fixture(); await assert.rejects(ref.resolve(binding(ROW), `reference${control}`), codes(['invalid_input'])); assert.equal(ref.reads(), 0);
+    const scopes = fixture(); scopes.secret(row => ({ ...row, credential: { ...row.credential, scopes: [SCOPE, `scope${control}`] } })); await assert.rejects(scopes.resolve(), codes(['consent_required']));
+  }
 });
