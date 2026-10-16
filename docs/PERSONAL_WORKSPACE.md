@@ -298,3 +298,41 @@ expired, foreign or wrong-resource grants deny. No human-session fallback occurs
 The API exposes authenticated `GET /api/v1/workspace/calendar-export?calendarId=personal`
 and `calendar.import` through the existing command endpoint. Native/offline file
 controls are outside this slice; imported blocks enter normal Task/Calendar sync.
+
+## Find time for a Task
+
+In Calendar, choose an open Task and the calendar to save its block on. Set
+**Find after / Find before (UTC)** and **Minutes needed**, then choose **Find
+open slots**. The finder checks all your saved OpenJob calendars, including
+imported blocks, regardless of the Calendar display filter. It returns up to
+12 non-overlapping suggestions in a window of at most seven days. Durations
+are whole minutes from 5 to 480. It can suggest past time if your explicit window
+includes it; it does not assume working hours or a local time zone.
+
+Choose **Schedule …** to save one suggestion. Current saved blocks are checked
+again during each database retry. If the time became occupied, your Task stays
+unchanged: Refresh, then find time again. Moving a scheduled Task excludes only
+its exact linked block and keeps one link. Completed Tasks must be reopened first.
+Existing manual scheduling can still overlap blocks intentionally.
+
+The same read calculation works in the existing authenticated human CLI:
+
+```sh
+openjob workspace availability --task TASK_ID \
+  --schedule-start 2027-05-11T09:00:00Z \
+  --schedule-end 2027-05-11T17:00:00Z --minutes 30 --format json
+```
+
+Submit a chosen slot using `openjob workspace command --input FILE`:
+
+```json
+{"type":"task.schedule-available","taskId":"TASK_ID","calendarId":"personal","start":"2027-05-11T09:00:00Z","end":"2027-05-11T09:30:00Z"}
+```
+
+A stale occupied slot returns `schedule_conflict` (HTTP409, CLI exit6). Availability
+is advisory until the command succeeds. This flow requires a human session;
+existing scoped agents keep their existing explicit scheduling operations and
+cannot use this new operation. No new grant or provider capability is implied.
+Live provider calendars, external booking and attendee availability are not
+checked. In the packaged local prototype, identities remain synthetic and only
+an explicit `--state-file` keeps saved work across restart.

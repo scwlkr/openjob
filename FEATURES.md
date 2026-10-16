@@ -1,3 +1,15 @@
+## Find saved Calendar time for a Task
+
+Calendar offers open slots across all saved owner calendars for an open Task,
+with an explicit UTC window (up to seven days) and duration (5–480 minutes).
+The person chooses a suggestion; `task.schedule-available` rechecks current saved
+blocks inside the atomic mutation and rejects a newly occupied slot without
+moving the Task. A verified existing Task block is excluded during rescheduling.
+The existing CLI exposes the same calculation with `workspace availability`.
+This human-only flow checks saved OpenJob blocks, including Calendar-file imports;
+it does not read live provider calendars or book external events. Manual
+scheduling remains available. [Usage](docs/PERSONAL_WORKSPACE.md#find-time-for-a-task).
+
 ## Saved packaged local workspace
 
 The npm-installed prototype accepts `openjob app --state-file PATH`. Saved

@@ -48,7 +48,7 @@ test('real synthetic API restores linked Mail/Task/Calendar/draft and separate o
   const alex = await app.session('alex'), sam = await app.session('sam');
   const examples = await app.call(alex.token, 'commands', { type: 'mail.examples.add' });
   const task = await app.call(alex.token, 'commands', { type: 'task.create', title: 'Keep linked work', messageId: examples.messageIds[0] });
-  await app.call(alex.token, 'commands', { type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2027-04-06T09:00:00Z', end: '2027-04-06T09:30:00Z' });
+  await app.call(alex.token, 'commands', { type: 'task.schedule-available', taskId: task.id, calendarId: 'personal', start: '2027-04-06T09:00:00Z', end: '2027-04-06T09:30:00Z' });
   await app.call(alex.token, 'commands', { type: 'task.complete', taskId: task.id, completed: true });
   const draft = await app.call(alex.token, 'commands', { type: 'mail.draft', messageId: examples.messageIds[0], body: 'Saved invented reply' });
   await app.call(sam.token, 'commands', { type: 'task.create', title: 'Sam private task' });

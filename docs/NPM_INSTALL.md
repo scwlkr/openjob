@@ -45,30 +45,30 @@ startup. After a crash, stop the old process and copy the saved JSON to a fresh
 path, then pass that path; leave the original file and lock for inspection.
 Do not blindly remove locks or overwrite saved work.
 
-## Registry channels (pending completed publication)
+## Registry channels
 
-These commands are the intended public installation and manual upgrade paths
-once npm ownership and publication are approved and configured:
+The initial approved `@scwlkr/openjob` versions are published and clean-prefix
+registry installs have been verified. They contain WLK-303's runnable full
+prototype, but **do not include** the later saved-state or find-time features.
+Use a local build of current main for those features until a reviewed update is
+separately published.
 
 ```sh
-npm install --global @scwlkr/openjob@latest
+npm install --global @scwlkr/openjob@0.3.7
 openjob app
 openjob updates
-# Stay on the development channel when manually upgrading it:
+# Development-channel initial artifact:
 npm install --global @scwlkr/openjob@dev
 ```
 
-Read-only registry inspection on 16 October 2026 found that public `openjob`
-is maintained by `homy`, latest 1.0.11, with repository HomyeeKing/openjob. It
-belongs to a different project. The full-app artifact therefore uses the proposed
-`@scwlkr/openjob` name while retaining the `openjob` executable. That scoped name
-was still unpublished at the last verified read. Shane approved scoped
-publication and completed sign-in; read-only checks confirmed npm account
-`scwlkr` owns the scope. The first approved publication stopped at npm's EOTP
-security prompt, with no registry package created. Shane has the exact reviewed
-WLK-303 archives/commands to complete that human prompt. WLK-304 persistence is
-separate reviewed development work and is not in those archives. Use the local
-tarball until live tags and clean registry installations are verified.
+At the16 October13:18 UTC verification, public `dev` correctly resolved to
+`0.3.8-dev.1792154226.37c322be4d3d`, while `latest` also pointed to that dev version.
+A tag-only correction to stable0.3.7 awaits the owner's npm security prompt;
+use the explicit stable version above until the corrected latest tag is verified.
+Do not republish existing versions. The stable update check safely reports
+unavailable while latest points to a prerelease. Both published artifact
+integrities match the approved archives. Public unscoped `openjob` belongs to a
+different project; use `@scwlkr/openjob`, retaining the `openjob` binary.
 
 The artifact records its selected channel. Registry checks stay disabled while
 package ownership is unverified (`registryVerified: false`); explicit checks
@@ -97,8 +97,9 @@ requires a clean checkout, refuses ref/version mismatch and sets the matching
 Delayed main builds refuse a newer fetched origin/main instead of assigning an
 old source to dev. Release artifacts remain bound to the published tag.
 
-Remaining: human npm security completion for the approved initial archives;
-verify live tags/integrities and clean installations. Ongoing automated registry
+Remaining: human npm security completion for the latest tag-only correction,
+then verify both live tags/channel checks. Initial artifact integrities and clean
+registry installations are verified. Ongoing automated registry
 publication still needs separately approved authentication/trusted publishing,
 serialization and stale-run protection. Current CI only builds downloadable
 artifacts; public latest/dev do not automatically follow this repository.

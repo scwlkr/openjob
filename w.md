@@ -1,3 +1,31 @@
+# WLK-306 ready for final exact-head integration
+
+Branch codex/wlk-306-find-time from main30760ac. Human-only Calendar Find time:
+shared bounded UTC finder, existing CLI availability, final task.schedule-available
+current-owner overlap check inside CAS retries. All saved owner calendars count;
+only exact current Task link is excluded. Manual scheduling unchanged. API
+409 schedule_conflict and web/native activity contracts updated. No live calendar,
+external booking, credentials/grants/TLS or npm publication.
+
+Functional checkpoint6e9e612: focused domain/store/contracts/API/distribution39/39
+PASS; CLI5/5 PASS after fixing missing global ErrorCode schema enum. Independent
+static review clean. Root compile, brand and secrets PASS. Native HTTP test
+unavailable because native Expo dependencies/tsconfig absent; no native install,
+full suite or device acceptance claim. Actual installed UI5195: create Task,
+saved09:00 block, finder suggests09:30, add newer09:30 block, stale suggestion
+visibly rejects/Task unchanged, Refresh/finder selects10:00, Task linked block
+saves. Phone390px rendered without overflow (scrollWidth390); viewport restored.
+Screenshot /tmp/openjob-306-planner.png. Installed restart/CLI proof and finalhead
+receipts in Linear before merge. Own saved demo5195 separate file
+/tmp/openjob-306-demo/workspace.json (session26836); original5193/5194 preserved.
+
+npm handoff unchanged: approved initial stable/dev artifacts publicly verified;
+latest tag misassigned to dev, tag-only correction awaiting Shane's npm security
+prompt. No retries/mutations/polling while waiting. Initial packages exclude
+WLK-304/WLK-306. Staged archives untouched. WLK-302 TLS/login unrecovered/excluded.
+
+---
+
 # npm registry verified13:19 UTC / latest tag correction needs human npm prompt
 
 Public exact-version reads now200. Stable0.3.7 and dev0.3.8-dev.1792154226.37c322be4d3d
