@@ -42,7 +42,7 @@ function indexedDbWith(record) {
   };
 }
 
-test("the notification worker has lifecycle behavior without app fetch, cache, sync, or badge behavior", async () => {
+test("the notification worker preserves lifecycle and push behavior alongside explicit public shell caching", async () => {
   const source = await workerSource();
   const listeners = new Map();
   const calls = [];
@@ -64,13 +64,15 @@ test("the notification worker has lifecycle behavior without app fetch, cache, s
 
   assert.deepEqual([...listeners.keys()].sort(), [
     "activate",
+    "fetch",
     "install",
+    "message",
     "notificationclick",
     "push",
   ]);
-  assert.equal(listeners.has("fetch"), false);
+  assert.equal(listeners.has("fetch"), true);
   assert.equal(listeners.has("sync"), false);
-  assert.doesNotMatch(source, /\bcaches\b|setAppBadge|clearAppBadge/);
+  assert.doesNotMatch(source, /setAppBadge|clearAppBadge/);
 
   listeners.get("install")({});
   let activation;
@@ -254,4 +256,36 @@ test("notification selection focuses an existing OpenJob client or opens the Gro
     { options: { type: "window", includeUncontrolled: true } },
     { openWindow: "/?notification-group=grp_notifications" },
   ]);
+});
+
+test('public shell preparation omits credentials and excludes private/API/auth/nonhashed requests from cache', async () => {
+  const listeners = new Map(), entries = new Map(), fetched = [], messages = [];
+  let offline = false;
+  const cache = { async put(url, response) { entries.set(url, response); }, async match(url) { return entries.get(url)?.clone(); }, async keys() { return [...entries.keys()].map(url => new Request(url)); }, async delete(request) { return entries.delete(request.url); } };
+  const self = { location: { origin: 'https://openjob.example' }, addEventListener(type, callback) { listeners.set(type, callback); } };
+  const fetch = async (request, options) => {
+    const url = typeof request === 'string' ? request : request.url;
+    fetched.push({ url, options }); if (offline) throw new Error('Offline.');
+    if (url.endsWith('/workspace')) return new Response('<script type="module" src="/assets/page-12345678.js"></script><link href="/assets/page-12345678.css" rel="stylesheet"><script src="/api/v1/me"></script>', { headers: { 'content-type': 'text/html' } });
+    return new Response(url.endsWith('.js') ? 'import "./chunk-abcdefgh.js";' : 'body{}', { headers: { 'content-type': url.endsWith('.js') ? 'text/javascript' : 'text/css' } });
+  };
+  vm.runInNewContext(await workerSource(), { self, fetch, caches: { open: async () => cache }, URL, TextDecoder, Set });
+  let completion;
+  listeners.get('message')({ data: { type: 'openjob:prepare-offline-shell' }, ports: [{ postMessage(message) { messages.push(message.type); } }], waitUntil(promise) { completion = promise; } });
+  await completion;
+  assert.deepEqual(messages, ['openjob:offline-shell-ready']);
+  assert.equal(entries.size, 4); assert.ok(entries.has('https://openjob.example/assets/chunk-abcdefgh.js'));
+  assert.ok(fetched.every(call => call.options.credentials === 'omit' && call.options.redirect === 'error'));
+  for (const path of ['/api/v1/me', '/auth/callback', '/__test/state', '/workspace?private=1', '/assets/unhashed.js', '/']) {
+    let intercepted = false; listeners.get('fetch')({ request: new Request(`https://openjob.example${path}`), respondWith() { intercepted = true; } });
+    assert.equal(intercepted, false, path);
+  }
+  let intercepted = false;
+  listeners.get('fetch')({ request: new Request('https://openjob.example/workspace', { headers: { authorization: 'Bearer private' } }), respondWith() { intercepted = true; } });
+  assert.equal(intercepted, false);
+  offline = true;
+  let response;
+  listeners.get('fetch')({ request: new Request('https://openjob.example/workspace'), respondWith(promise) { response = promise; } });
+  assert.match(await (await response).text(), /page-12345678/);
+  assert.equal(entries.size, 4, 'runtime navigation never adds a cache entry');
 });

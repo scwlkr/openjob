@@ -224,7 +224,7 @@ export function OpenJobApp({
   ) => {
     let failure: unknown;
     try {
-      clearBrowserPrivateState({ preserveTaskDraft });
+      await clearBrowserPrivateState({ preserveTaskDraft });
     } catch (error) {
       failure = error;
     }

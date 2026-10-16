@@ -11,6 +11,9 @@ import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens
 import { createMockProviderConnectionHarness } from '../tests/support/mock-provider-connections.mjs';
 
 if (!process.argv.includes('--test-only')) throw new Error('This isolated synthetic server requires --test-only.');
+const portIndex = process.argv.indexOf('--port');
+const port = portIndex < 0 ? 4181 : Number(process.argv[portIndex + 1]);
+if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Use an explicit loopback port from 0 to 65535.');
 const now = new Date().toISOString();
 const authority = await createTestFirebaseAuthority({ now });
 const firestore = createFakeFirestore();
@@ -51,6 +54,11 @@ const server = createServer(async (incoming, outgoing) => {
     const headers = new Headers();
     for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);
     const request = new Request(url, { method: incoming.method, headers, ...(incoming.method === 'POST' ? { body: incoming, duplex: 'half' } : {}) });
+    if (url.pathname === '/api/v1/me' && incoming.method === 'GET') {
+      const identity = await verifyIdToken(request); const user = identity && await users.resolve(identity);
+      outgoing.writeHead(user ? 200 : 401, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      outgoing.end(JSON.stringify(user ? { data: { ...user, usernameRequired: !user.username } } : { error: { code: 'authentication_required' } })); return;
+    }
     const response = await (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request);
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));
     outgoing.end(Buffer.from(await response.arrayBuffer()));
@@ -58,5 +66,9 @@ const server = createServer(async (incoming, outgoing) => {
     outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end('{"error":{"code":"test_server_failure"}}');
   }
 });
-server.listen(4181, '127.0.0.1', () => console.log('Synthetic signed identity + fake Firestore API: http://127.0.0.1:4181'));
+server.listen(port, '127.0.0.1', () => {
+  const actualPort = server.address().port;
+  console.log(`Synthetic signed identity + fake Firestore API: http://127.0.0.1:${actualPort}`);
+  process.send?.({ type: 'openjob-personal-fixture-ready', port: actualPort });
+});
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));

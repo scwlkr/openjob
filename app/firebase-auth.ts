@@ -104,13 +104,28 @@ function signInMethodFor(
 }
 
 async function sessionFor(user: {
+  uid: string;
   tenantId: string | null;
+  providerData: { providerId: string }[];
   getIdToken(): Promise<string>;
   getIdTokenResult(): Promise<{ signInProvider: string | null }>;
-}): Promise<AuthSession> {
-  const token = await user.getIdTokenResult();
+}, allowOfflineRestore = false): Promise<AuthSession> {
+  let method: AuthenticationMethod;
+  try {
+    const token = await user.getIdTokenResult();
+    method = signInMethodFor(token.signInProvider, user.tenantId);
+  } catch (error) {
+    // Only network loss may restore a local shell. Provider metadata never authorizes API access.
+    if (!allowOfflineRestore || !error || typeof error !== "object" || !("code" in error) || error.code !== "auth/network-request-failed") throw error;
+    const methods = new Set(user.providerData.map(provider => {
+      try { return signInMethodFor(provider.providerId, user.tenantId); } catch { return null; }
+    }).filter((value): value is AuthenticationMethod => value !== null));
+    if (methods.size !== 1) throw error;
+    method = [...methods][0]!;
+  }
   return {
-    signInMethod: signInMethodFor(token.signInProvider, user.tenantId),
+    localIdentity: { uid: user.uid, tenantId: user.tenantId },
+    signInMethod: method,
     getIdToken: () => user.getIdToken(),
   };
 }
@@ -178,7 +193,7 @@ async function primaryCredentialProof(
       };
 }
 
-export function createFirebaseAuth(): OpenJobAuth {
+export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOfflineRestore?: boolean } = {}): OpenJobAuth {
   let forceAccountSelection = false;
   let secondaryGeneration = 0;
   let activeSecondaryGeneration: number | null = null;
@@ -219,7 +234,7 @@ export function createFirebaseAuth(): OpenJobAuth {
               listener(null);
               return;
             }
-            void sessionFor(user)
+            void sessionFor(user, allowOfflineRestore)
               .then((session) => {
                 if (active && currentEmission === emission) listener(session);
               })

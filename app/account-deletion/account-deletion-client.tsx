@@ -145,7 +145,7 @@ export function AccountDeletionClient() {
   ) => {
     let failure = await disposeProofs(preservedPrimaryProof);
     try {
-      clearBrowserPrivateState();
+      await clearBrowserPrivateState();
     } catch (error) {
       failure ??= error;
     }

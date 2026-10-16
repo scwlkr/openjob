@@ -15,13 +15,16 @@ let disposed = 0;
 async function selectOwner(next: string) {
   const epoch = ++generation;
   owner = next; sessionStorage.setItem("personal-test-owner", next);
-  const response = await fetch(`/__test/session/${next}`);
-  const data = await response.json() as { token: string };
+  async function token() {
+    const response = await fetch(`/__test/session/${next}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Synthetic session unavailable");
+    return (await response.json() as { token: string }).token;
+  }
   if (epoch !== generation) return;
-  session = { signInMethod: "google", getIdToken: async () => {
+  session = { signInMethod: "google", localIdentity: { uid: `personal_browser_${next}`, tenantId: null }, getIdToken: async () => {
     const deferred = gate; gate = undefined;
     if (deferred) { waiting = deferred.release; await deferred.promise; }
-    return data.token;
+    return token();
   } };
   listener?.(session);
 }
@@ -45,6 +48,6 @@ window.personalWorkspaceFixture = fixture;
 
 function Harness() {
   const [selected, setSelected] = useState(owner);
-  return <><label style={{ display: "block", padding: 12 }}>Test identity<select aria-label="Test identity" value={selected} onChange={(event) => { setSelected(event.target.value); selectOwner(event.target.value); }}><option value="alex">Alex</option><option value="sam">Sam</option></select></label><PersonalWorkspaceApp auth={auth} /></>;
+  return <><p style={{ margin: 0, padding: 12 }}>Isolated signed-identity demo · invented Mail and temporary fake Firestore · no live provider or sending.</p><label style={{ display: "block", padding: 12 }}>Test identity<select aria-label="Test identity" value={selected} onChange={(event) => { setSelected(event.target.value); selectOwner(event.target.value); }}><option value="alex">Alex</option><option value="sam">Sam</option></select></label><PersonalWorkspaceApp auth={auth} /></>;
 }
 createRoot(document.getElementById("root")!).render(<Harness />);
