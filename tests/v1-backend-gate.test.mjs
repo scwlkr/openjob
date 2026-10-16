@@ -6,6 +6,8 @@ import { createFirestoreGroupStore } from "../db/groups.ts";
 import { createFirestoreAccountDeletionJobStore } from "../db/account-deletions.ts";
 import { createFirestoreNotificationSubscriptionStore } from "../db/notification-subscriptions.ts";
 import { createFirestoreTaskStore } from "../db/v1-tasks.ts";
+import { createFirestorePersonalWorkspaceStore } from "../db/personal-workspace.ts";
+import { createV1PersonalWorkspaceApi } from "../server/v1-personal-workspace.ts";
 import { createFirestoreUserStore } from "../db/users.ts";
 import { runV1AcceptanceScenario } from "../scripts/v1-acceptance-scenario.mjs";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
@@ -131,6 +133,8 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       const agentGrants = createFirestoreAgentGrantStore(config, firestore.fetch, { now: () => Date.parse(controls.clock.now()) });
       const agentGrantsApi = createV1AgentGrantsApi({ grants: agentGrants, users, verifyIdToken, now: () => Date.parse(controls.clock.now()) });
       const groupsApi = createV1GroupsApi({ groups, users, verifyIdToken });
+      const personalWorkspaces = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
+      const personalWorkspaceApi = createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken });
       const tasksApi = createV1TasksApi({ agents: agentGrants, tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
         subscriptions: notificationSubscriptions,
@@ -139,6 +143,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       });
       const accountDeletionApi = createV1AccountDeletionApi({
         agentGrants,
+        personalWorkspaces,
         groups,
         jobs: accountDeletionJobs,
         notifications: notificationSubscriptions,
@@ -170,6 +175,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname.startsWith("/api/v1/workspace/")) return personalWorkspaceApi.fetch(request);
           if (pathname.startsWith("/api/v1/agent-grants")) return agentGrantsApi.fetch(request);
           if (pathname === "/api/v1/me/deletion") {
             return accountDeletionApi.fetch(request);
@@ -364,6 +370,35 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       request,
       validate,
     });
+    // The complete backend checklist includes the owner-private application API.
+    const privateCall = async (actor, input) => {
+      const method = input ? "POST" : "GET";
+      const path = `/api/v1/workspace/${input ? "commands" : "snapshot"}`;
+      const response = await request({ actor, method, path, ...(input ? { body: input } : {}) });
+      await validate(response, path, method.toLowerCase());
+      return response;
+    };
+    assert.equal((await privateCall("invalid")).status, 401);
+    assert.equal((await privateCall("invalid", { type: "task.create", title: "Denied" })).status, 401);
+    const createdPrivate = await privateCall("initialAdmin", { type: "task.create", title: "Owner private planning" });
+    assert.equal(createdPrivate.status, 200);
+    const privateTask = (await createdPrivate.json()).data;
+    for (const command of [
+      { type: "task.schedule", taskId: privateTask.id, calendarId: "personal", start: "2026-07-17T10:00:00Z", end: "2026-07-17T10:30:00Z" },
+      { type: "task.update", taskId: privateTask.id, title: "Persisted personal plan" },
+      { type: "task.complete", taskId: privateTask.id, completed: true },
+    ]) assert.equal((await privateCall("initialAdmin", command)).status, 200);
+    assert.equal((await privateCall("memberUser", { type: "task.update", taskId: privateTask.id, title: "Foreign edit" })).status, 403);
+    const otherWorkspace = await privateCall("memberUser");
+    assert.equal(otherWorkspace.status, 200);
+    assert.equal((await otherWorkspace.json()).data.tasks.length, 0);
+    await harness.restart();
+    const savedPrivate = await privateCall("initialAdmin");
+    assert.equal(savedPrivate.status, 200);
+    const privateState = (await savedPrivate.json()).data;
+    assert.equal(privateState.tasks.find(task => task.id === privateTask.id).completed, true);
+    assert.equal(privateState.events.find(event => event.taskId === privateTask.id).title, "Persisted personal plan");
+    assert.equal(privateState.events.find(event => event.taskId === privateTask.id).start, "2026-07-17T10:00:00.000Z");
     const groupsAfter = await request({
       actor: "initialAdmin",
       method: "GET",
@@ -436,6 +471,11 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(missingDeletionStatus.status, 401);
     await validate(missingDeletionStatus, "/api/v1/me/deletion", "get");
 
+    const deletionWorkspace = await privateCall("deletionUser", { type: "task.create", title: "Remove private account data" });
+    assert.equal(deletionWorkspace.status, 200);
+    const deletionWorkspaceOwner = (await deletionWorkspace.json()).data.ownerId;
+    const deletionWorkspacePath = `${database}/v1PersonalWorkspaces/${deletionWorkspaceOwner}`;
+    assert.ok(firestore.documents.has(deletionWorkspacePath));
     const preparedDeletion = await request({
       actor: "deletionUser",
       method: "PUT",
@@ -673,6 +713,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       status: "completed",
     });
     await validate(completedStatus, "/api/v1/me/deletion", "get");
+    assert.equal(firestore.documents.has(deletionWorkspacePath), false, "account deletion removes the private workspace");
   } finally {
     Object.assign(console, originalConsole);
   }

@@ -28,6 +28,7 @@ const expectedOperations = [
   "get /api/v1/me/deletion getAccountDeletionStatus",
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "get /api/v1/me/sign-in-methods listSignInMethods",
+  "get /api/v1/workspace/snapshot getPersonalWorkspace",
   "patch /api/v1/groups/{groupId} renameGroup",
   "patch /api/v1/groups/{groupId}/tasks/{taskId} updateGroupTask",
   "patch /api/v1/me/deletion refreshAccountDeletionProvider",
@@ -46,6 +47,7 @@ const expectedOperations = [
   "post /api/v1/me createCurrentUser",
   "post /api/v1/me/deletion deleteCurrentUser",
   "post /api/v1/me/sign-in-methods linkSignInMethod",
+  "post /api/v1/workspace/commands commandPersonalWorkspace",
   "put /api/v1/groups/{groupId}/tasks/{taskId}/state setGroupTaskState",
   "put /api/v1/me/deletion mintAccountDeletionStatusToken",
   "put /api/v1/me/username claimUsername",
@@ -95,7 +97,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 25);
+  assert.equal(Object.keys(contract.paths).length, 27);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -536,6 +538,8 @@ test("contract schemas enforce normalized domain rules and status-specific error
     false,
   );
   const signInConflictOperations = [
+    "getPersonalWorkspace",
+    "commandPersonalWorkspace",
     "createAgentGrant",
     "listAgentGrants",
     "revokeAgentGrant",
@@ -580,6 +584,8 @@ test("contract schemas enforce normalized domain rules and status-specific error
     ]),
   );
   const domainConflictCodes = new Map([
+    ["getPersonalWorkspace", ["conflict"]],
+    ["commandPersonalWorkspace", ["conflict"]],
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
     ["claimUsername", ["username_immutable", "username_taken"]],
     ["createGroupTask", ["assignee_not_member"]],
@@ -616,6 +622,56 @@ test("contract schemas enforce normalized domain rules and status-specific error
       );
     }
   }
+});
+
+test("personal workspace schemas accept only Task/Calendar commands and provider-free views", async () => {
+  const contract = await validateOpenApiContract(contractUrl);
+  const { schemas } = contract.components;
+  const validateCommand = compileSchema(schemas.PersonalWorkspaceCommand);
+  const interval = { start: "2026-07-15T15:00:00Z", end: "2026-07-15T15:30:00Z" };
+  const commands = [
+    { type: "task.create", title: "Review the plan" },
+    { type: "task.update", taskId: "task_a", title: "Updated plan" },
+    { type: "task.complete", taskId: "task_a", completed: true },
+    { type: "task.schedule", taskId: "task_a", calendarId: "personal", ...interval },
+    { type: "task.unschedule", taskId: "task_a" },
+    { type: "task.delete", taskId: "task_a" },
+    { type: "calendar.create", calendarId: "personal", title: "Focus", ...interval },
+    { type: "calendar.update", eventId: "event_a", title: "Revised focus", ...interval },
+    { type: "calendar.delete", eventId: "event_a" },
+  ];
+  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 9);
+  for (const command of commands) {
+    assert.equal(validateCommand(command), true, command.type);
+    assert.equal(validateCommand({ ...command, ownerId: "foreign_user" }), false, `${command.type} cannot override owner`);
+    assert.equal(validateCommand({ ...command, credential: "private" }), false, `${command.type} cannot carry credentials`);
+  }
+  for (const command of [
+    { type: "task.create", title: "Private", messageId: "mail_a" },
+    { type: "task.complete", taskId: "task_a", completed: "true" },
+    { type: "task.schedule", taskId: "task_a", calendarId: "personal", start: "tomorrow", end: "later" },
+    { type: "mail.send", draftId: "draft_a" },
+    { type: "agent.grant", name: "Unknown agent", scopes: ["tasks:write"] },
+  ]) assert.equal(validateCommand(command), false, command.type);
+
+  const validateView = compileSchema(schemas.PersonalWorkspaceView);
+  const view = {
+    accounts: [], messages: [], drafts: [], sent: [], agents: [],
+    tasks: [{ id: "task_a", ownerId: "user_a", title: "Review", completed: false }],
+    calendars: [{ id: "personal", ownerId: "user_a", name: "Personal", color: "#2454dc" }],
+    events: [{ id: "event_a", calendarId: "personal", title: "Focus", ...interval }],
+    activity: [{ id: "activity_a", ownerId: "user_a", actor: "You", action: "task.create", createdAt: interval.start }],
+  };
+  assert.equal(validateView(view), true);
+  for (const field of ["accounts", "messages", "drafts", "sent", "agents"]) {
+    assert.equal(validateView({ ...view, [field]: [{ id: "private_provider_record" }] }), false, `${field} must stay empty`);
+  }
+  assert.equal(validateView({ ...view, tasks: [{ ...view.tasks[0], sourceMessageId: "private_mail" }] }), false);
+  assert.equal(validateView({ ...view, calendars: [{ ...view.calendars[0], accountId: "provider_mailbox" }] }), false);
+  assert.equal(validateView({ ...view, activity: [{ ...view.activity[0], action: "mail.send" }] }), false);
+  assert.equal(validateView({ ...view, unexpectedCredentials: "private" }), false);
+  assert.equal(contract.paths["/api/v1/workspace/snapshot"].get["x-openjob-retryable"], true);
+  assert.equal(contract.paths["/api/v1/workspace/commands"].post["x-openjob-retryable"], false);
 });
 
 test("validation rejects broken operations and examples", async () => {

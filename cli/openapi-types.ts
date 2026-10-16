@@ -1,5 +1,9 @@
 import type { operations } from "./generated/openapi";
 
+export type PersonalWorkspaceSnapshotResponse = JsonResponse<operations["getPersonalWorkspace"]["responses"][200]>;
+export type PersonalWorkspaceCommandRequest = operations["commandPersonalWorkspace"]["requestBody"]["content"]["application/json"];
+export type PersonalWorkspaceCommandResponse = JsonResponse<operations["commandPersonalWorkspace"]["responses"][200]>;
+
 type JsonResponse<T> = T extends {
   content: { "application/json": infer Body };
 }
