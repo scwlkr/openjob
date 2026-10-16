@@ -1,3 +1,24 @@
+# WLK-307 LOCAL workflow verified; OIDC cancelled
+
+Revised PR84 branch includes local Mac preparation/publication, no access grant.
+Candidate full command PASS at52b54694cb1731d3ba9d30372028e55806718a06:
+15 policy/distribution, tsc, secret622, actual UI/API build/pack/fresh-prefix install/
+app smoke create-schedule-complete/isolation/HostOrigin/shutdown. New local output
+integrity sha512-PG58TXMo2Gq4YNxU3a4WoSFLc4nmuYGHdKN56/YloauEW/GYIaom37LoZnZhiXw72Rcu/eOvOObxU1yxfg38vA==,
+publishable:false. Original /tmp/openjob-307-candidate remains unchanged.
+Review fixed mutable tarball race: approved bytes staged in private tmpfile0600,
+manifest/npm read only stagedpath; cleanHEAD rechecked immediately beforewrite.
+No npm publish/auth/security operation executed. Existing login reused only on
+future approved publish, interactive npm security prompt remains possible.
+Local focused final policy15 PASS; native/device/fullsuite not claimed.
+
+Shane rejects automatic Actions usage. Proposed npm-publish workflow deleted;
+existing artifacts manual-dispatch only. No external protection changes. Actual
+dev channel preparation from integrated main is next proof; no version publication.
+WLK308 reviewedUI checkpoint a0e6649 retained separately pendingintegration.
+
+---
+
 # WLK-307 revised: LOCAL Mac publication, OIDC CANCELLED
 
 Shane rejected Actions usage for publishing and prefers local CI/deployment.

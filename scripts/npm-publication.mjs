@@ -68,16 +68,22 @@ if (mode === 'prepare') {
   if (plan.publishable !== true || JSON.stringify(plan.identity) !== JSON.stringify(identity) || !/^scwlkr-openjob-[0-9A-Za-z.-]+\.tgz$/.test(plan.filename)) throw new Error('Plan is not publishable from this exact reviewed source.');
   const tarball = resolve(dirname(planPath), plan.filename), bytes = await readFile(tarball);
   if (bytes.length > 5 * 1024 * 1024 || digest(bytes) !== plan.integrity) throw new Error('Approved artifact bytes changed.');
-  const pkg = JSON.parse(execFileSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8', maxBuffer: 1024 * 1024 }));
+  const staging = await mkdtemp(join(tmpdir(), 'openjob-approved-npm-'));
+  try {
+  const approvedTarball = join(staging, plan.filename);
+  await writeFile(approvedTarball, bytes, { flag: 'wx', mode: 0o600 });
+  const pkg = JSON.parse(execFileSync('tar', ['-xOf', approvedTarball, 'package/package.json'], { encoding: 'utf8', maxBuffer: 1024 * 1024 }));
   verifyPublicationManifest(pkg, identity);
   if (execFileSync('npm', ['whoami', '--registry=https://registry.npmjs.org'], { encoding: 'utf8' }).trim() !== 'scwlkr') throw new Error('Use the existing scwlkr npm login. No authentication settings were changed.');
   const decision = publicationDecision(identity, plan.integrity, await registry(), await registry(`/${encodeURIComponent(identity.version)}`));
   freshSource(identity);
+  if (git('rev-parse', 'HEAD') !== source || git('status', '--porcelain')) throw new Error('Source changed during publication checks; no publication attempted.');
   if (decision === 'publish') {
     console.log('Publishing approved bytes once. Complete any npm security prompt personally; never put OTPs or tokens in project files.');
-    run('npm', ['publish', tarball, '--access', 'public', '--tag', identity.channel, '--registry=https://registry.npmjs.org', '--ignore-scripts']);
+    run('npm', ['publish', approvedTarball, '--access', 'public', '--tag', identity.channel, '--registry=https://registry.npmjs.org', '--ignore-scripts']);
   }
   const exact = await registry(`/${encodeURIComponent(identity.version)}`), metadata = await registry();
   if (publicationDecision(identity, plan.integrity, metadata, exact) !== 'already_current') throw new Error('Readback unconfirmed; inspect registry before retrying. Never automatically replay an ambiguous publish.');
   console.log(JSON.stringify({ version: identity.version, channel: identity.channel, integrity: plan.integrity, status: decision === 'publish' ? 'published_verified' : decision }));
+  } finally { await rm(staging, { recursive: true, force: true }); }
 }

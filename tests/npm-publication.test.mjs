@@ -38,6 +38,7 @@ test('Actions are manual artifact-only; local publisher preserves authentication
   const runner = await readFile('scripts/npm-publication.mjs', 'utf8');
   assert.doesNotMatch(runner, /NODE_AUTH_TOKEN|NPM_TOKEN|id-token|npm trust|dist-tag.*add|--otp/);
   assert.match(runner, /'whoami'/); assert.match(runner, /'--tag', identity.channel/);
+  assert.match(runner, /'publish', approvedTarball/); assert.match(runner, /writeFile\(approvedTarball, bytes, \{ flag: 'wx', mode: 0o600 \}/);
   assert.match(runner, /smoke-npm-app/); assert.doesNotMatch(runner, /--userconfig/);
 });
 test('candidate cannot satisfy a stable publication manifest', () => {
