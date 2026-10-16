@@ -12,6 +12,13 @@ export function prepareAgentGrant(options) {
       !name || [...name].length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || !tokenPath || tokenPath === "-") {
     throw new CliError("usage_error", "Agent grant requires explicit --group, a 1–80 character --name, and a new --token-out file (not stdout).", 2);
   }
+  return { body: { groupId, name }, tokenOptions: preparePrivateTokenOutput(options) };
+}
+
+/** Shared private, atomic grant-token destination checks. @param {Map<string,string>} options */
+export function preparePrivateTokenOutput(options) {
+  const tokenPath = options.get("--token-out");
+  if (!tokenPath || tokenPath === "-" || options.has("--force")) throw new CliError("usage_error", "Use a new private --token-out file without --force.", 2);
   const preflight = path => {
     preflightOutput(new Map([["--out", path]]));
     try {
@@ -36,7 +43,7 @@ export function prepareAgentGrant(options) {
       throw new CliError("usage_error", "Public output and the private token require different files.", 2);
     }
   }
-  return { body: { groupId, name }, tokenOptions };
+  return tokenOptions;
 }
 
 /**

@@ -29,6 +29,9 @@ const expectedOperations = [
   "get /api/v1/me/notification-subscriptions/{installationId} getNotificationSubscription",
   "get /api/v1/me/sign-in-methods listSignInMethods",
   "get /api/v1/workspace/snapshot getPersonalWorkspace",
+  "get /api/v1/workspace/agent-grants listPersonalAgentGrants",
+  "post /api/v1/workspace/agent-grants createPersonalAgentGrant",
+  "delete /api/v1/workspace/agent-grants/{agentId} revokePersonalAgentGrant",
   "patch /api/v1/groups/{groupId} renameGroup",
   "patch /api/v1/groups/{groupId}/tasks/{taskId} updateGroupTask",
   "patch /api/v1/me/deletion refreshAccountDeletionProvider",
@@ -97,7 +100,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 27);
+  assert.equal(Object.keys(contract.paths).length, 29);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
@@ -540,6 +543,9 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const signInConflictOperations = [
     "getPersonalWorkspace",
     "commandPersonalWorkspace",
+    "listPersonalAgentGrants",
+    "createPersonalAgentGrant",
+    "revokePersonalAgentGrant",
     "createAgentGrant",
     "listAgentGrants",
     "revokeAgentGrant",
@@ -586,6 +592,9 @@ test("contract schemas enforce normalized domain rules and status-specific error
   const domainConflictCodes = new Map([
     ["getPersonalWorkspace", ["conflict"]],
     ["commandPersonalWorkspace", ["conflict"]],
+    ["listPersonalAgentGrants", ["conflict"]],
+    ["createPersonalAgentGrant", ["conflict"]],
+    ["revokePersonalAgentGrant", ["conflict"]],
     ["banGroupUser", ["ban_not_allowed", "last_admin", "self_removal"]],
     ["claimUsername", ["username_immutable", "username_taken"]],
     ["createGroupTask", ["assignee_not_member"]],
@@ -672,6 +681,34 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
   assert.equal(validateView({ ...view, unexpectedCredentials: "private" }), false);
   assert.equal(contract.paths["/api/v1/workspace/snapshot"].get["x-openjob-retryable"], true);
   assert.equal(contract.paths["/api/v1/workspace/commands"].post["x-openjob-retryable"], false);
+  const agentId = "agt_" + "a".repeat(32);
+  assert.equal(validateView({ ...view, activity: [{ ...view.activity[0], actor: `Agent ${agentId}` }] }), true);
+  assert.equal(validateView({ ...view, activity: [{ ...view.activity[0], actor: "Untrusted actor text" }] }), false);
+  const validateGrantInput = compileSchema(schemas.PersonalAgentGrantInput);
+  const grantInput = { name: "Personal planner", scopes: ["tasks:read", "tasks:write"], resourceIds: ["tasks:personal"] };
+  assert.equal(validateGrantInput(grantInput), true);
+  for (const invalid of [
+    { ...grantInput, scopes: ["mail:read"] },
+    { ...grantInput, scopes: ["tasks:read", "tasks:read"] },
+    { ...grantInput, resourceIds: ["grp_private"] },
+    { ...grantInput, ownerUserId: "foreign_user" },
+    { ...grantInput, name: "Bad\nname" },
+  ]) assert.equal(validateGrantInput(invalid), false);
+  const publicGrant = { ...grantInput, id: agentId, ownerUserId: "user_a", createdAt: interval.start, expiresAt: "2026-07-16T15:00:00Z", revoked: false };
+  const validateGrant = compileSchema(schemas.PersonalAgentGrant);
+  assert.equal(validateGrant(publicGrant), true);
+  assert.equal(validateGrant({ ...publicGrant, tokenHash: "private" }), false);
+  assert.equal(validateGrant({ ...publicGrant, token: "private" }), false);
+  const validateResult = compileSchema(schemas.PersonalWorkspaceCommandResult);
+  assert.equal(validateResult({ id: "task_a", updated: true }), true);
+  assert.equal(validateResult({ id: "task_a", updated: true, title: "Unpermitted read" }), false);
+  for (const path of ["/api/v1/workspace/snapshot", "/api/v1/workspace/commands"]) {
+    const operation = contract.paths[path][path.endsWith("snapshot") ? "get" : "post"];
+    assert.deepEqual(operation.security, [{ firebaseBearer: [] }, { personalWorkspaceAgentBearer: [] }]);
+    assert.match(operation.description, /No human credential fallback/);
+  }
+  assert.equal(contract.paths["/api/v1/workspace/agent-grants"].post["x-openjob-retryable"], false);
+  assert.equal(contract.paths["/api/v1/workspace/agent-grants/{agentId}"].delete.responses["204"].content, undefined);
 });
 
 test("validation rejects broken operations and examples", async () => {

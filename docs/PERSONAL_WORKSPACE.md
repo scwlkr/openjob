@@ -16,8 +16,8 @@ not create accounts implicitly or accept demo owner headers as authentication.
 The Personal Calendar is OpenJob-owned; it is not a Google, Outlook or CalDAV
 calendar. Mail is an explicitly synthetic read-only preview, not connected mail.
 Creating a Task from that preview saves only the example title, with no mailbox
-reference. No sending is implemented. Personal agent access follows in WLK-285;
-existing Group read-only agent credentials do not grant this workspace access.
+reference. No sending is implemented. Existing Group read-only agent credentials do not
+grant this workspace access.
 
 ## Existing CLI
 
@@ -34,6 +34,33 @@ and exact fields are documented in the shared OpenAPI contract; a scheduled
 interval needs explicit ISO start/end timestamps with a time zone and an owned
 Calendar ID. Mutation requests do not retry network/service failures; inspect
 a snapshot before retrying an ambiguous outcome.
+
+## Scoped personal agents
+
+An authenticated human can issue, list and revoke grants through the same API.
+The Agents screen shows effective access and recent stable agent IDs; it never
+renders or stores an agent secret. Issue credentials through the existing CLI:
+
+```sh
+openjob workspace agent grant --name Planner --scopes tasks:read,tasks:write,calendar:read,calendar:write --resources tasks:personal,calendar:personal --token-out ./planner.token
+openjob workspace snapshot --agent-token-file ./planner.token --format json
+openjob workspace agent list --format json
+openjob workspace agent revoke AGENT_ID --yes
+```
+
+Choose only needed scopes and resources. The new token file must not exist; the
+CLI writes it atomically with mode 0600. The secret is returned once at issuance,
+never listed. Grants expire after 24 hours. Only a hash is persisted, alongside
+workspace state, and writes revalidate the grant on each compare-and-set attempt.
+Revocation fences concurrent writes through that same document. Expiry is checked
+immediately before commit dispatch; the REST adapter cannot guarantee a server
+commit-clock deadline. Account deletion removes state and grants together.
+
+Agent credentials cannot administer grants, access Group Tasks or fall back to
+human login. Write-only grants receive minimal acknowledgements rather than
+Task/Calendar content. Linked Task scheduling requires both relevant write
+scopes and resources. Mail access and sending remain unavailable. No actual
+credentials were issued during development; isolated tests use synthetic tokens.
 
 ## Persistence and deletion
 

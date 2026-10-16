@@ -27,21 +27,24 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
   return Object.freeze({
     async fetch(request: Request): Promise<Response> {
       try {
-        // Existing group-agent credentials do not grant personal workspace access.
-        if (/^Bearer\s+oj_agent_/i.test(request.headers.get("authorization") || "")) {
-          return fail("authentication_required", "Authenticate with a human Firebase identity. Agent access is not available for this endpoint.", 401);
+        const authorization = request.headers.get("authorization") || "";
+        const personalToken = /^Bearer\s+(oj_personal_\S*)$/i.exec(authorization)?.[1];
+        if (!personalToken && /^Bearer\s+oj_/i.test(authorization)) {
+          return fail("authentication_required", "This agent credential cannot access the personal workspace.", 401);
         }
-        const identity = await verifyIdToken(request);
-        if (!identity) return fail("authentication_required", "Authentication is required.", 401);
-        const user = await users.resolve(identity);
-        if (!user) return signInMethodUnrecognizedResponse(requestId);
-        if (user.deletionPending) return accountDeletionPendingResponse(requestId);
+        // Opaque personal credentials are authenticated by the store, never as Firebase users.
+        const identity = personalToken ? null : await verifyIdToken(request);
+        if (!personalToken && !identity) return fail("authentication_required", "Authentication is required.", 401);
+        const user = identity ? await users.resolve(identity) : null;
+        if (!personalToken && !user) return signInMethodUnrecognizedResponse(requestId);
+        if (user?.deletionPending) return accountDeletionPendingResponse(requestId);
+        const agentSnapshot = personalToken ? await workspace.snapshotForAgent(personalToken) : null;
         const url = new URL(request.url);
         const origin = request.headers.get("origin");
         if (origin && origin !== url.origin) return fail("origin_denied", "Cross-origin workspace requests are denied.", 403);
         let data: unknown;
         if (url.pathname === "/api/v1/workspace/snapshot" && request.method === "GET") {
-          data = await workspace.snapshot(user.userId);
+          data = personalToken ? agentSnapshot : await workspace.snapshot(user!.userId);
         } else if (url.pathname === "/api/v1/workspace/commands" && request.method === "POST") {
           if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
             return fail("invalid_content_type", "Commands require application/json.", 415);
@@ -72,15 +75,19 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
           const allowed = COMMAND_FIELDS[input.type];
           if (fields.length !== allowed.length || fields.some(field => !allowed.includes(field))) return fail("invalid_request", "The command contains missing or unknown fields.", 400);
           // Owner identity is resolved above; neither request bodies nor fixture headers select it.
-          data = await workspace.command(user.userId, input);
+          data = personalToken ? await workspace.commandForAgent(personalToken, input) : await workspace.command(user!.userId, input);
         } else return fail("not_found", "The requested resource was not found.", 404);
-        const current = await users.resolve(identity);
-        if (!current || current.userId !== user.userId || current.deletionPending) return accountDeletionPendingResponse(requestId);
+        if (personalToken) await workspace.snapshotForAgent(personalToken);
+        else {
+          const current = await users.resolve(identity!);
+          if (!current || current.userId !== user!.userId || current.deletionPending) return accountDeletionPendingResponse(requestId);
+        }
         return jsonResponse({ data });
       } catch (error) {
         if (isInactiveUserError(error)) return accountDeletionPendingResponse(requestId);
         if (isRateLimitError(error)) return rateLimitedErrorResponse(requestId);
         const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+        if (code === "authentication_required") return fail(code, "The personal agent credential is unavailable or expired.", 401);
         if (code === "invalid_input") return fail(code, "One or more command fields are invalid.", 400);
         if (code === "forbidden") return fail(code, "The personal workspace resource is unavailable.", 403);
         if (code === "workspace_capacity") return fail(code, "Personal workspace capacity was exceeded.", 413);
