@@ -1,9 +1,10 @@
 import type { GmailReadCredential } from "./gmail-read-adapter.ts";
-import { effectiveProvider, providerReadScopes, providerConnectionFingerprint, validateProviderConnection, type ProviderConnection, type ProviderConnectionStore, type ProviderCredentialBroker } from "./provider-connections.ts";
+import { effectiveProvider, validProviderImap, providerImapFingerprint, providerReadScopes, providerConnectionFingerprint, validateProviderConnection, type ProviderImapConfig, type ProviderConnection, type ProviderConnectionStore, type ProviderCredentialBroker } from "./provider-connections.ts";
 import { fail } from "./gmail-wire.ts";
 
 export type ProviderVaultEntry = {
-  provider?: "gmail" | "outlook"; credentialRef: string; ownerId: string; accountId: string; subject: string; revision: string;
+  imap?: ProviderImapConfig; provider?: "gmail" | "outlook" | "imap"; credentialRef: string; ownerId: string; accountId: string; subject: string; revision: string;
+  /** IMAP uses an injected mock session handle; imap.read is local approval, not an OAuth scope. */
   credential: GmailReadCredential;
 };
 export type ProviderTokenVault = { read(credentialRef: string): Promise<ProviderVaultEntry | null> };
@@ -23,7 +24,7 @@ export function createProviderTokenVaultBroker({ vault, connections, isOwnerActi
   async function current(ref: string, binding: Binding) {
     await active(binding.ownerId); let row: ProviderConnection;
     try { row = validateProviderConnection(await connections.getForOwner(binding.ownerId, binding.accountId), binding.ownerId, binding.accountId); } catch { return fail("authentication_required"); }
-    if (effectiveProvider(row) !== effectiveProvider(binding) || row.credentialRef !== ref || row.subject !== binding.subject || row.revision !== binding.revision || row.state === "revoked") fail("execution_disabled");
+    if (effectiveProvider(row) !== effectiveProvider(binding) || providerImapFingerprint(row) !== providerImapFingerprint(binding) || row.credentialRef !== ref || row.subject !== binding.subject || row.revision !== binding.revision || row.state === "revoked") fail("execution_disabled");
     if (row.state !== "approved" || !providerReadScopes(effectiveProvider(row)).every(scope => row.scopes.includes(scope))) fail("consent_required");
     if (row.expiresAt <= now()) fail("authentication_required");
     await active(binding.ownerId); if (row.expiresAt <= now()) fail("authentication_required"); return row;
@@ -31,12 +32,12 @@ export function createProviderTokenVaultBroker({ vault, connections, isOwnerActi
   return {
     async resolve(ref, binding) {
       if (executionMode !== "mock") fail("execution_disabled");
-      if (!opaque(ref, 512) || !binding || Object.keys(binding).filter(key => key !== "provider").sort().join(",") !== "accountId,ownerId,revision,subject" || Object.hasOwn(binding, "provider") && !["gmail", "outlook"].includes(String(binding.provider)) || !id(binding.ownerId) || !id(binding.accountId) || !opaque(binding.subject, 256) || !opaque(binding.revision, 128)) fail("invalid_input");
+      if (!opaque(ref, 512) || !binding || Object.keys(binding).filter(key => !["provider", "imap"].includes(key)).sort().join(",") !== "accountId,ownerId,revision,subject" || Object.hasOwn(binding, "provider") && !["gmail", "outlook", "imap"].includes(String(binding.provider)) || !validProviderImap(binding) || !id(binding.ownerId) || !id(binding.accountId) || !opaque(binding.subject, 256) || !opaque(binding.revision, 128)) fail("invalid_input");
       const before = await current(ref, binding); let entry: ProviderVaultEntry | null;
       try { entry = structuredClone(await vault.read(ref)); } catch { return fail("authentication_required"); }
       const after = await current(ref, binding);
       if (providerConnectionFingerprint(before) !== providerConnectionFingerprint(after)) fail("execution_disabled");
-      if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).filter(key => key !== "provider").sort().join(",") !== "accountId,credential,credentialRef,ownerId,revision,subject" || effectiveProvider(entry) !== effectiveProvider(binding) || Object.hasOwn(entry, "provider") && !["gmail", "outlook"].includes(String(entry.provider)) || entry.credentialRef !== ref || entry.ownerId !== binding.ownerId || entry.accountId !== binding.accountId || entry.subject !== binding.subject || entry.revision !== binding.revision) fail("authentication_required");
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).filter(key => !["provider", "imap"].includes(key)).sort().join(",") !== "accountId,credential,credentialRef,ownerId,revision,subject" || effectiveProvider(entry) !== effectiveProvider(binding) || !validProviderImap(entry) || providerImapFingerprint(entry) !== providerImapFingerprint(binding) || Object.hasOwn(entry, "provider") && !["gmail", "outlook", "imap"].includes(String(entry.provider)) || entry.credentialRef !== ref || entry.ownerId !== binding.ownerId || entry.accountId !== binding.accountId || entry.subject !== binding.subject || entry.revision !== binding.revision) fail("authentication_required");
       const value = entry.credential;
       if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).sort().join(",") !== "accessToken,expiresAt,scopes,subject" || value.subject !== binding.subject || typeof value.accessToken !== "string" || !/^[A-Za-z0-9._~+\/-]{1,8192}={0,2}$/.test(value.accessToken) || !Number.isFinite(value.expiresAt) || value.expiresAt <= now()) fail("authentication_required");
       if (!Array.isArray(value.scopes) || value.scopes.length > 100 || value.scopes.some(scope => !opaque(scope, 256)) || new Set(value.scopes).size !== value.scopes.length || !providerReadScopes(effectiveProvider(binding)).every(scope => value.scopes.includes(scope))) fail("consent_required");

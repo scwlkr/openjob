@@ -7,7 +7,7 @@ import { createFakeFirestore, createPrivateKey } from './support/fake-firestore.
 const NOW = Date.parse('2026-10-17T00:00:00Z'); const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const REF = 'mock_opaque_reference'; const TOKEN = 'invented_mock_access_token';
 const ROW = { ownerId: 'user_fixture', accountId: 'gmail_fixture', subject: 'google_fixture_subject', address: 'alex@example.invalid', label: 'Mock Gmail', credentialRef: REF, scopes: [SCOPE], state: 'approved', expiresAt: NOW + 60000, revision: 'revision_1', mode: 'mock' };
-const binding = row => ({ ...(row.provider ? { provider: row.provider } : {}), ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision });
+const binding = row => ({ ...(row.imap ? { imap: structuredClone(row.imap) } : {}), ...(row.provider ? { provider: row.provider } : {}), ownerId: row.ownerId, accountId: row.accountId, subject: row.subject, revision: row.revision });
 const entry = row => ({ credentialRef: row.credentialRef, ...binding(row), credential: { accessToken: TOKEN, subject: row.subject, scopes: [...row.scopes], expiresAt: NOW + 120000 } });
 const codes = allowed => error => allowed.includes(error.code) && !JSON.stringify({ ...error, message: error.message, stack: error.stack }).includes(TOKEN) && !error.message.includes(REF);
 function fixture(options = {}) {
@@ -109,4 +109,15 @@ test('vault control-bearing opaque bindings and credential scopes fail closed', 
     const ref = fixture(); await assert.rejects(ref.resolve(binding(ROW), `reference${control}`), codes(['invalid_input'])); assert.equal(ref.reads(), 0);
     const scopes = fixture(); scopes.secret(row => ({ ...row, credential: { ...row.credential, scopes: [SCOPE, `scope${control}`] } })); await assert.rejects(scopes.resolve(), codes(['consent_required']));
   }
+});
+
+test('IMAP vault bindings require explicit provider and exact server/username/INBOX configuration', async () => {
+  const imap = { ...ROW, provider: 'imap', scopes: ['imap.read'], imap: { serverId: 'mock_server', username: 'fixture_user', mailbox: 'INBOX' } };
+  const allowed = fixture({ row: imap }); assert.deepEqual((await allowed.resolve()).scopes, ['imap.read']);
+  for (const alter of [value => { delete value.provider; return value; }, value => { delete value.imap; return value; }, value => ({ ...value, imap: { ...value.imap, serverId: 'foreign_server' } }), value => ({ ...value, imap: { ...value.imap, username: 'foreign_user' } }), value => ({ ...value, imap: { ...value.imap, mailbox: 'Archive' } })]) {
+    const denied = fixture({ row: imap }); denied.secret(alter); await assert.rejects(denied.resolve(), codes(['authentication_required']));
+  }
+  const mismatch = fixture({ row: imap }); await assert.rejects(mismatch.resolve({ ...binding(imap), imap: { ...imap.imap, serverId: 'foreign_server' } }), codes(['execution_disabled'])); assert.equal(mismatch.reads(), 0);
+  const changed = fixture({ row: imap }); changed.hook(() => changed.change(row => ({ ...row, imap: { ...row.imap, username: 'changed_user' } }))); await assert.rejects(changed.resolve(), codes(['execution_disabled']));
+  const missingScope = fixture({ row: imap }); missingScope.secret(row => ({ ...row, credential: { ...row.credential, scopes: [SCOPE] } })); await assert.rejects(missingScope.resolve(), codes(['consent_required']));
 });

@@ -105,3 +105,14 @@ test('provider metadata preserves legacy Gmail while allowing same subject only 
   await assert.rejects(f.store.putForOwner(OWNER, { ...input('outlook_ref_collision'), provider: 'outlook', credentialRef: gmail.credentialRef }, null), code('conflict'));
   for (const provider of ['imap', null, 'OUTLOOK']) await assert.rejects(f.store.putForOwner(OWNER, { ...input('invalid_provider'), provider }, null), code('invalid_input'));
 });
+
+test('IMAP metadata requires opaque exact INBOX configuration and qualifies subject uniqueness by server', async () => {
+  const f = await fixture();
+  const imap = { ...input('imap_one'), provider: 'imap', subject: 'same_username', scopes: ['imap.read'], imap: { serverId: 'server_one', username: 'same_username', mailbox: 'INBOX' } };
+  const first = await f.store.putForOwner(OWNER, imap, null);
+  assert.deepEqual((await f.reopen().getForOwner(OWNER, first.accountId)).imap, imap.imap);
+  await f.store.putForOwner(OWNER, { ...imap, accountId: 'imap_two', credentialRef: 'imap_two_ref', imap: { ...imap.imap, serverId: 'server_two' } }, null);
+  await assert.rejects(f.store.putForOwner(OWNER, { ...imap, accountId: 'imap_duplicate', credentialRef: 'imap_duplicate_ref' }, null), code('conflict'));
+  for (const config of [undefined, { ...imap.imap, serverId: 'https://host.example.invalid' }, { ...imap.imap, host: 'host.example.invalid' }, { ...imap.imap, username: 'bad\u009buser' }, { ...imap.imap, mailbox: 'Archive' }]) await assert.rejects(f.store.putForOwner(OWNER, { ...imap, accountId: 'imap_bad', imap: config }, null), code('invalid_input'));
+  await assert.rejects(f.store.putForOwner(OWNER, { ...input('gmail_with_imap'), imap: imap.imap }, null), code('invalid_input'));
+});

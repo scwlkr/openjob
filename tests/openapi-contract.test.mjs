@@ -756,6 +756,11 @@ test("provider preview response schemas preserve opaque Unicode upstream identit
   assert.equal(validate({ data: { ...data, connectors: [connector] } }), true);
   const outlook = { ...connector, provider: "outlook", adapter: "outlook-graph-read", implementedOperations: ["mail.read", "mail.folders"], unsupportedOperations: connector.unsupportedOperations.map(operation => operation === "sync.history" ? "mail.delta" : operation) };
   assert.equal(validate({ data: { ...data, connectors: [connector, outlook] } }), true);
+  const imap = { ...connector, provider: "imap", adapter: "imap-inbox-read", implementedOperations: ["mail.read", "mail.inbox"], unsupportedOperations: ["calendar.read", "calendar.write", "mail.draft", "mail.send", "mail.delta", "mail.threads", "reconnect"] };
+  assert.equal(validate({ data: { ...data, connectors: [connector, outlook, imap] } }), true);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...imap, adapter: "outlook-graph-read" }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...imap, imap: { serverId: "private_server" } }] } }), false);
+
   assert.equal(validate({ data: { ...data, connectors: [{ ...outlook, adapter: "gmail-rest-read" }] } }), false);
   assert.equal(validate({ data: { ...data, connectors: [{ ...connector, provider: "outlook" }] } }), false);
   assert.equal(validate({ data: { ...data, connectors: [{ ...outlook, implementedOperations: ["mail.read", "mail.labels"] }] } }), false);

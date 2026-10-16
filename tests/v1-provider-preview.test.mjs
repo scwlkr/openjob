@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createV1PersonalWorkspaceApi } from '../server/v1-personal-workspace.ts';
+import { createEmptyPersonalWorkspace, applyPersonalWorkspaceCommand } from '../shared/personal-workspace.ts';
 import { createV1ProviderPreviewApi, createV1ProviderPreviewHandler } from '../server/v1-provider-preview.ts';
 import { createProviderPreview } from '../shared/provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
@@ -24,7 +26,7 @@ async function fixture() {
   };
   let api = createV1ProviderPreviewApi(options);
   const request = (query = '', { token = 'a', headers = {}, method = 'GET' } = {}) => api.fetch(new Request(`https://openjob.example.invalid/api/v1/workspace/provider-preview${query ? '?' + query : ''}`, { method, headers: { authorization: `Bearer ${tokens[token] ?? token}`, ...headers } }));
-  return { request, calls, users, hooks, connect(connections) { api = createV1ProviderPreviewApi({ ...options, preview: undefined, connections }); }, get verifies() { return verifies; } };
+  return { request, calls, users, hooks, tokens, verifyIdToken: options.verifyIdToken, connect(connections) { api = createV1ProviderPreviewApi({ ...options, preview: undefined, connections }); }, get verifies() { return verifies; } };
 }
 
 test('signed provider preview uses account-qualified owner references, cursor isolation and explicit synthetic capabilities', async () => {
@@ -34,7 +36,7 @@ test('signed provider preview uses account-qualified owner references, cursor is
   await validate(response.clone(), '/api/v1/workspace/provider-preview', 'get');
   const preview = (await response.json()).data;
   assert.equal(preview.mode, 'synthetic'); assert.equal(f.calls[0].ownerId, 'user_a');
-  assert.equal(preview.connectors.length, 2);
+  assert.equal(preview.connectors.length, 3);
   const connector = preview.connectors[0];
   assert.deepEqual(Object.keys(connector).sort(), ['adapter', 'consent', 'implementedOperations', 'liveExecutionEnabled', 'message', 'provider', 'status', 'unsupportedOperations']);
   assert.equal(connector.adapter, 'gmail-rest-read'); assert.equal(connector.provider, 'gmail');
@@ -159,10 +161,33 @@ test('human Outlook preview maps injected Graph pages with owner/provider cursor
   assert.equal(first.mode, 'mock'); assert.equal(first.accounts.find(account => account.id === mock.accountIds.outlookAlex).provider, 'outlook'); assert.equal(first.accounts.some(account => account.id === mock.accountIds.outlookSam), false);
   assert.equal(first.messages.length, 2); assert.equal(first.messages[0].upstreamId, 'AAMkMessage1=='); assert.equal(first.messages[0].subject, 'Outlook fixture: prepare the launch'); assert.match(first.messages[0].body, /Outlook Graph wire mapper for alex/); assert.equal(first.folders[0].name, 'Inbox'); assert.equal(first.syncCursor, null);
   const next = await call(mock.accountIds.outlookAlex, first.nextCursor); assert.equal(next.status, 200); const page = (await next.json()).data; assert.equal(page.messages.length, 1); assert.equal(page.nextCursor, null);
-  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter, row.liveExecutionEnabled]), [['gmail', 'gmail-rest-read', false], ['outlook', 'outlook-graph-read', false]]);
+  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter, row.liveExecutionEnabled]), [['gmail', 'gmail-rest-read', false], ['outlook', 'outlook-graph-read', false], ['imap', 'imap-inbox-read', false]]);
   for (const privateValue of ['fixture_outlook_ref_', 'mock_outlook_access_', 'credentialRef', 'accessToken', 'revision', 'scopes']) assert.equal(JSON.stringify(first).includes(privateValue), false);
   assert.equal((await call(mock.accountIds.alex, first.nextCursor)).status, 400);
   const before = { ...mock.counters }; assert.equal((await f.request(new URLSearchParams({ accountId: mock.accountIds.outlookAlex }).toString(), { token: 'b' })).status, 403); assert.deepEqual(mock.counters, before);
   const consent = await call(mock.accountIds.outlookConsent); assert.equal(consent.status, 200); assert.deepEqual((await consent.json()).data.messages, []); assert.deepEqual(mock.counters, before);
   mock.controls.revoke(mock.accountIds.outlookAlex); const revoked = await call(mock.accountIds.outlookAlex); assert.equal(revoked.status, 200); assert.deepEqual((await revoked.json()).data.messages, []); assert.deepEqual(mock.counters, before);
+});
+
+test('human IMAP preview reads injected raw INBOX pages with private configuration, cursor reset and title-only Tasks', async () => {
+  const f = await fixture(); const mock = await createMockProviderConnectionHarness({ owners: { alex: 'user_a', sam: 'user_b' }, isOwnerActive: async owner => [...f.users.values()].some(user => user.userId === owner && !user.deletionPending) }); f.connect(mock.reader);
+  const validate = await createOpenApiResponseValidator();
+  const call = async (accountId, cursor) => { const response = await f.request(new URLSearchParams({ accountId, ...(cursor ? { cursor } : {}) }).toString()); await validate(response.clone(), '/api/v1/workspace/provider-preview', 'get'); return response; };
+  const response = await call(mock.accountIds.imapAlex); assert.equal(response.status, 200, await response.clone().text()); const first = (await response.json()).data;
+  assert.equal(first.mode, 'mock'); assert.equal(first.accounts.find(account => account.id === mock.accountIds.imapAlex).provider, 'imap'); assert.equal(first.accounts.some(account => account.id === mock.accountIds.imapSam), false);
+  assert.equal(first.messages.length, 2); assert.equal(first.messages[0].subject, 'IMAP fixture: prepare the launch'); assert.match(first.messages[0].body, /IMAP wire mapper for alex/); assert.equal(first.folders[0].name, 'INBOX'); assert.equal(first.syncCursor, null);
+  const next = await call(mock.accountIds.imapAlex, first.nextCursor); assert.equal(next.status, 200); const page = (await next.json()).data; assert.equal(page.messages.length, 1); assert.equal(page.nextCursor, null);
+  for (const privateValue of ['fixture_imap_ref_', 'mock_imap_session_', 'fixture_server_', 'fixture_imap_user_', 'credentialRef', 'accessToken', 'serverId', '"username"', '"imap":', 'revision', 'scopes']) {
+    assert.equal(JSON.stringify(first).includes(privateValue), false, privateValue);
+  }
+  for (const account of [mock.accountIds.alex, mock.accountIds.outlookAlex]) assert.equal((await call(account, first.nextCursor)).status, 400);
+  assert.equal(mock.controls.resetImap('unknown'), false); assert.equal(mock.controls.resetImap(mock.accountIds.alex), false);
+  assert.equal(mock.controls.resetImap(mock.accountIds.imapAlex), true); assert.equal((await call(mock.accountIds.imapAlex, first.nextCursor)).status, 400);
+  let state = createEmptyPersonalWorkspace('user_a');
+  const personal = createV1PersonalWorkspaceApi({ verifyIdToken: f.verifyIdToken, users: { async resolve(identity) { return f.users.get(identity.uid) ?? null; } }, workspace: { async snapshot() { return structuredClone(state); }, async command(owner, input) { const next = applyPersonalWorkspaceCommand(owner, state, input); state = next.state; return next.result; }, async removeAllForUser() { return 0; } } });
+  const taskResponse = await personal.fetch(new Request('https://openjob.example.invalid/api/v1/workspace/commands', { method: 'POST', headers: { authorization: `Bearer ${f.tokens.a}`, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'task.create', title: first.messages[0].subject }) }));
+  assert.equal(taskResponse.status, 200); const task = (await taskResponse.json()).data; assert.equal(task.title, 'IMAP fixture: prepare the launch'); assert.equal('sourceMessageId' in task, false); assert.equal('sourceAccountId' in task, false); assert.deepEqual(state.messages, []);
+  const before = { ...mock.counters }; assert.equal((await f.request(new URLSearchParams({ accountId: mock.accountIds.imapAlex }).toString(), { token: 'b' })).status, 403); assert.deepEqual(mock.counters, before);
+  const consent = await call(mock.accountIds.imapConsent); assert.equal(consent.status, 200); assert.deepEqual((await consent.json()).data.messages, []); assert.deepEqual(mock.counters, before);
+  mock.controls.revoke(mock.accountIds.imapAlex); const revoked = await call(mock.accountIds.imapAlex); assert.equal(revoked.status, 200); assert.deepEqual((await revoked.json()).data.messages, []); assert.deepEqual(mock.counters, before);
 });

@@ -46,7 +46,7 @@
 .workspace .message { display: grid; gap: 6px; width: 100%; border: 0; border-bottom: 1px solid var(--oj-line); text-align: left; border-radius: 0; padding: 20px; overflow-wrap: anywhere; }
 .message span { font-size: 13px; color: var(--oj-muted); }
 .workspace .selected { background: var(--oj-selected); }
-.reader { padding: 26px; }
+.reader { padding: 26px; overflow-wrap: anywhere; }
 .body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin: 30px 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
 .workspace .primary { background: var(--oj-action); border-color: var(--oj-action); color: var(--oj-action-text); }

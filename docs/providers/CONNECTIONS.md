@@ -1,12 +1,12 @@
 # Owner connection and credential broker boundary
 
-The connection reader composes the Gmail and Outlook wire adapters with injected server-side
+The connection reader composes the Gmail, Outlook and IMAP wire adapters with injected server-side
 connection records and a credential broker. Production defaults have no reader,
 records or broker configured. There is no live mode, environment enable switch,
 upstream-token API parameter or browser connection control.
 
 An explicit `mock` execution mode requires a supplied HTTP transport. The
-isolated test server supplies invented Gmail and Graph responses, in-memory connection
+isolated test server supplies invented Gmail/Graph responses and IMAP session bytes, in-memory connection
 records and a fake broker. The authenticated API, existing CLI and app can read
 that protocol path in tests. Accounts and records are visibly marked **mock**;
 the independent synthetic examples remain available. Neither mode is a real
@@ -90,7 +90,18 @@ vault or live provider configuration. The runtime has no configured repository
 or broker and cannot enable live reads. Implement and review those bindings,
 verify deletion and the cloud runtime, then obtain separate approval for one
 test account. See [Gmail reads](GMAIL_READ.md), [Outlook reads](OUTLOOK_READ.md)
-and [setup requirements](README.md).
+[IMAP Inbox reads](IMAP_READ.md) and [setup requirements](README.md).
 
 REST semantics: [conditional writes](https://firebase.google.com/docs/firestore/reference/rest/v1/Precondition)
 and [atomic commit](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/commit).
+
+## IMAP session binding
+
+Explicit IMAP records additionally bind a private server configuration key,
+username and INBOX. The configuration participates in connection fingerprints,
+broker expectations and vault entries; changed configuration cannot reuse an
+approval or stale credential record. The internal imap.read approval is not an
+OAuth scope. The injected session factory must attest the exact account/config
+binding. It supplies invented authenticated-session bytes in development and
+does not implement live TLS, login or passwords. Gmail/Outlook cannot fall back
+to global network transport when only an IMAP session factory is configured.

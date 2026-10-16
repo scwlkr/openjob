@@ -8,10 +8,11 @@ their owning account and record kind. Provider calendars remain authoritative
 external records; OpenJob Personal Calendar and Tasks remain separate.
 
 The application preview includes synthetic examples and explicitly labeled mock
-protocol accounts. The [Gmail REST read adapter](GMAIL_READ.md) and
-[Outlook Graph read adapter](OUTLOOK_READ.md) implement bounded Mail translation
+protocol accounts. The [Gmail REST read adapter](GMAIL_READ.md),
+[Outlook Graph read adapter](OUTLOOK_READ.md) and
+[bounded IMAP Inbox adapter](IMAP_READ.md) implement bounded Mail translation
 through the existing connection boundary, with execution closed by default and
-only invented HTTP transport evidence. Provider names in
+only invented HTTP/session transport evidence. Provider names in
 the preview describe examples, not verified live Gmail, Microsoft Graph, IMAP or
 CalDAV connections.
 Capabilities describe this adapter's implemented operations. An unsupported
@@ -51,7 +52,7 @@ deterministic delta test stream is a contract fixture, not a running sync worker
 ## Mock connection integration
 
 The [owner connection/broker boundary](CONNECTIONS.md) can now drive the real
-Gmail and Outlook read mappers through the same authenticated API/CLI/app, using injected
+Gmail, Outlook and IMAP read mappers through the same authenticated API/CLI/app, using injected
 in-memory records, fake credentials and mock HTTP only. These accounts are
 explicitly marked mock, separate from the synthetic examples. Consent-required
 and revoked accounts expose status without Mail or credential lookup. Production
@@ -67,6 +68,8 @@ callback route, signature verifier, token refresh or provisioned vault. The
 cleanup queue remains process-local and needs durable retry ownership before live use.
 The OAuth lifecycle is Google-only; Outlook has no authorization flow. Its
 read-only protocol fixture exercises Graph mapping without changing that boundary.
+IMAP adds an injected authenticated-session seam with byte-counted read protocol
+evidence; it does not implement sockets, TLS, mailbox login or OAuth.
 
 ## Smallest real integration to authorize next
 

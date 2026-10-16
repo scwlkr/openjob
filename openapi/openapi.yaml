@@ -3199,6 +3199,7 @@ components:
       oneOf:
         - $ref: "#/components/schemas/GmailConnectorStatus"
         - $ref: "#/components/schemas/OutlookConnectorStatus"
+        - $ref: "#/components/schemas/ImapConnectorStatus"
     GmailConnectorStatus:
       type: object
       additionalProperties: false
@@ -3306,6 +3307,63 @@ components:
               - mail.draft
               - mail.send
               - mail.delta
+              - reconnect
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+    ImapConnectorStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - adapter
+        - status
+        - consent
+        - liveExecutionEnabled
+        - implementedOperations
+        - unsupportedOperations
+        - message
+      properties:
+        provider:
+          type: string
+          const: imap
+        adapter:
+          type: string
+          const: imap-inbox-read
+        status:
+          type: string
+          const: not_connected
+        consent:
+          type: string
+          const: required
+        liveExecutionEnabled:
+          type: boolean
+          const: false
+        implementedOperations:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - mail.read
+              - mail.inbox
+        unsupportedOperations:
+          type: array
+          minItems: 7
+          maxItems: 7
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - calendar.read
+              - calendar.write
+              - mail.draft
+              - mail.send
+              - mail.delta
+              - mail.threads
               - reconnect
         message:
           type: string

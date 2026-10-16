@@ -113,3 +113,9 @@ test('control-bearing connection labels, addresses and opaque fields fail before
     }
   }
 });
+
+test('IMAP-only injected transport never enables HTTP providers without an explicit fetch implementation', async () => {
+  const f = fixture();
+  const reader = createProviderConnectionReader({ store: f.store, broker: f.broker, isOwnerActive: async () => true, executionMode: 'mock', imapSessionFactory: async () => { throw new Error('No HTTP fallback.'); }, now: () => NOW });
+  await assert.rejects(read(reader), failure(['execution_disabled'])); assert.equal(f.brokers(), 0); assert.equal(f.calls.length, 0);
+});

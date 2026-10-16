@@ -46,11 +46,14 @@ activation is human-only. Existing Task and Calendar commands are unchanged.
 
 ## Provider preview
 
-The Mail preview reads synthetic examples and explicitly labeled mock Gmail/Outlook
+The Mail preview reads synthetic examples and explicitly labeled mock Gmail/Outlook/IMAP
 protocol accounts through the authenticated provider-preview API and existing CLI.
 In the cloud personal demo, select **Mock Outlook protocol · Alex** to read mapped
 Graph text/folder pages, then create a title-only Task. These are invented HTTP
-responses, not a live Microsoft connection. Consent-required/revoked accounts
+responses, not a live Microsoft connection. **Mock IMAP protocol · Alex** reads
+a bounded Inbox through invented read-only protocol bytes; UIDVALIDITY changes
+invalidate its old cursor, and Refresh preview starts a new view. Neither mode
+implements a live provider login. Consent-required/revoked accounts
 return no Mail; switching to Sam exposes only Sam's accounts. Account-qualified
 references keep upstream IDs distinct across owners and multiple accounts from
 the same provider. The UI exposes capability limits and connection/sync states;

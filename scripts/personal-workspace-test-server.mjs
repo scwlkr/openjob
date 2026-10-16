@@ -47,9 +47,13 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       outgoing.end(JSON.stringify(providerHarness.counters)); return;
     }
-    const revoke = url.pathname.match(/^\/__test\/provider-connections\/(mock_(?:gmail|outlook)_[a-f0-9]{24}(?:_consent)?)\/revoke$/)?.[1];
+    const revoke = url.pathname.match(/^\/__test\/provider-connections\/(mock_(?:gmail|outlook|imap)_[a-f0-9]{24}(?:_consent)?)\/revoke$/)?.[1];
     if (revoke && incoming.method === 'POST' && incoming.headers['x-openjob-test-control'] === 'mock-provider') {
       outgoing.writeHead(providerHarness.controls.revoke(revoke) ? 204 : 404, { 'cache-control': 'no-store' }); outgoing.end(); return;
+    }
+    const resetImap = url.pathname.match(/^\/__test\/provider-connections\/(mock_imap_[a-f0-9]{24})\/reset-uidvalidity$/)?.[1];
+    if (resetImap && incoming.method === 'POST' && incoming.headers['x-openjob-test-control'] === 'mock-provider') {
+      outgoing.writeHead(providerHarness.controls.resetImap(resetImap) ? 204 : 404, { 'cache-control': 'no-store' }); outgoing.end(); return;
     }
     const headers = new Headers();
     for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);
