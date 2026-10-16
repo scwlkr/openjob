@@ -24,6 +24,11 @@ Local links/fences and diff checks pass; no application code changed, so no app
 build or runtime suite repeated. DraftPR only; do not auto-merge or start feature work ahead of owner designreview.
 Linear310 is currentpriority; outcomephases inblueprint are not a secondbacklog.
 
+Phase2 acceptance now explicitly demonstrates three people/two companies with
+independent roles and personal work, invitation acceptance, scoped context views
+and departure from one company preserving the other/personal contexts. Hosting,
+retention, credential refresh and runner ownership remain proposed/open decisions.
+
 ## Separate publication blocker
 
 Owner approved exact dev0.3.8-dev.1792161876.9ba3929fbf0c from source

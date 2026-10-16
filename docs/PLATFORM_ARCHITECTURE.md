@@ -277,8 +277,12 @@ selects the next milestone in Linear; no new feature is started by this blueprin
 2. **Establish ownership and connect work.** Establish personal/Company ownership,
    invitations, independent memberships and context selection before live data.
    Approve one provider/development account; implement connection lifecycle,
-   real paged Inbox and reconnect status,
-   durable reference/projection storage and the app's coherent first-run shell.
+   real paged Inbox/reconnect, durable projections and the first-run shell.
+   Acceptance must include three people and two Companies: Alex is Employee in A
+   and Admin in B; Sam owns A with no B membership; Jo owns B and is Guest in A.
+   Each retains personal work. Demonstrate invitation/acceptance, role-scoped
+   resource visibility and context switching, with no automatic cross-company or
+   personal access. Alex leaving A must preserve personal work and B membership.
    Read → linked Task → plan → local draft must finish as one journey.
 3. **Close the work loop.** Add separately consented provider draft/send and
    calendar operations, clear sending identity/outcomes, durable integration jobs,
