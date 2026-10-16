@@ -1,3 +1,33 @@
+# WLK-307 revised: LOCAL Mac publication, OIDC CANCELLED
+
+Shane rejected Actions usage for publishing and prefers local CI/deployment.
+No OIDC/trust/environment/activation/credential/security changes were created.
+PR84 revised in place: remove publisher workflow; artifact workflow manual-only,
+no automatic push/release runs. Existing branch protection read via owner gh:
+404 branch not protected; rulesets empty. No protections modified/bypassed.
+New docs/NPM_LOCAL_RELEASE.md supersedes deleted OIDC proposal. Prior notes below
+are historical and cancelled where they describe pending OIDC approval.
+
+Local npm:prepare dev|latest|candidate VERSION checks focused policies/compile/
+secrets, builds real UI/API, packs, clean-prefix installs/runs, seals SHA512 plan.
+Dev must equal remote main; stable exact remote version tag in main history.
+Separate npm:publish PLAN --approve SHA512 requires owner approval, existing
+npm whoami scwlkr, unchanged source/artifact, owner metadata/monotonic tag checks,
+fresh refs and one explicit-tag publish attempt. No new publication authorized.
+Interactive npm browser/2FA prompt may need owner Terminal completion; do not
+request/print/store secrets. Existing initial npm packages/candidate untouched.
+
+WLK308 independent UI checkpoint a0e6649 on codex/wlk-308-mail-editor: one active
+Mail editor, no silent Compose/Edit replacement, same draft simulation blocked,
+Cancel disabled during pending save. Reviewed clean after race fix; desktop/phone
+browser2 + core10 + compile/brand/secret PASS. Not yet merged. Screenshots in
+output/playwright/personal-workspace-results. Saved demos5193/5194/5195 preserved.
+WLK302 historical cloud thread readable but no remote branch/PR/checkpoint; no
+recovery claimed or duplication. Mac transport briefly dropped, recovered before
+local rewrite. Final local preparation proof/review/PR integration follows.
+
+---
+
 # WLK-307 final disabled proposal and local candidate
 
 Prepared on codex/wlk-307-npm-publishing from main714e850. Live read-only check:

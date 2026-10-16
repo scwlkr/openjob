@@ -1,17 +1,6 @@
 import { artifactIdentity, NPM_PACKAGE_NAME } from './channels.mjs';
 import { compareSemVer, parseSemVer } from '../lib/semver.ts';
-export const PUBLISH_REPOSITORY = 'scwlkr/openjob';
-export const PUBLISH_WORKFLOW = 'npm-publish.yml';
-export const PUBLISH_ENVIRONMENTS = { dev: 'openjob-npm-dev', latest: 'openjob-npm-release' };
 const fail = message => { throw new Error(message); };
-export function publicationIdentity(context, event, baseVersion, timestamp) {
-  if (context.repository !== PUBLISH_REPOSITORY || event.repository?.full_name !== PUBLISH_REPOSITORY) fail('Only the owning repository may publish.');
-  let channel, ref;
-  if (context.eventName === 'push' && context.ref === 'refs/heads/main' && event.deleted !== true && event.after === context.sha) { channel = 'dev'; ref = context.ref; }
-  else if (context.eventName === 'release' && event.action === 'published' && event.release?.draft === false && event.release.prerelease === false) { channel = 'latest'; ref = `refs/tags/${event.release.tag_name}`; if (context.ref !== ref) fail('Release ref mismatch.'); }
-  else fail('Only main pushes and published stable releases are eligible.');
-  return { ...artifactIdentity({ channel, ref, sha: context.sha, baseVersion, timestamp }), name: NPM_PACKAGE_NAME, environment: PUBLISH_ENVIRONMENTS[channel] };
-}
 export function verifyRegistryOwner(metadata) {
   if (metadata?.name !== NPM_PACKAGE_NAME || !metadata.maintainers?.some(item => item.name === 'scwlkr') || metadata.repository?.url !== 'git+https://github.com/scwlkr/openjob.git') fail('Registry identity does not match the verified owner/repository.');
 }
@@ -34,30 +23,10 @@ export function publicationDecision(identity, integrity, metadata, exact) {
   if (comparison === 0) fail('Tag/version metadata disagree; inspect before publication.');
   return 'publish';
 }
-export function verifyPublishingEnvironment(channel, environment, policies) {
-  const name = PUBLISH_ENVIRONMENTS[channel];
-  if (environment?.name !== name || environment.deployment_branch_policy?.custom_branch_policies !== true || environment.deployment_branch_policy.protected_branches !== false) fail('Publishing environment must already have explicit ref restrictions.');
-  const expected = channel === 'dev' ? { name: 'main', type: 'branch' } : { name: 'v*', type: 'tag' };
-  if (policies?.total_count !== 1 || policies.branch_policies?.length !== 1 || policies.branch_policies[0].name !== expected.name || policies.branch_policies[0].type !== expected.type) fail('Publishing environment has unexpected allowed refs.');
-  if (channel === 'latest') {
-    const rule = environment.protection_rules?.find(item => item.type === 'required_reviewers');
-    if (!rule || rule.reviewers?.length !== 1 || rule.reviewers[0].type !== 'User' || rule.reviewers[0].reviewer?.id !== 206951249 || rule.reviewers[0].reviewer.login !== 'scwlkr') fail('Stable publication requires the owner environment reviewer.');
-  }
-}
 
-export function assertPublicationRuntime(env) {
-  if (env.OPENJOB_NPM_PUBLISHING_ENABLED !== 'true' || env.GITHUB_ACTIONS !== 'true' || env.RUNNER_ENVIRONMENT !== 'github-hosted' || !env.ACTIONS_ID_TOKEN_REQUEST_URL || !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN || env.NODE_AUTH_TOKEN || env.NPM_TOKEN) fail('Publication is disabled outside the explicitly enabled hosted OIDC job; no token fallback.');
+export function localPublicationIdentity({ channel, baseVersion, source, timestamp }) {
+  return { ...artifactIdentity({ channel, baseVersion, sha: source, timestamp, ref: channel === 'dev' ? 'refs/heads/main' : `refs/tags/v${baseVersion}` }), name: NPM_PACKAGE_NAME };
 }
-export function verifyPublishedRelease(identity, release, expectedId) {
-  if (!Number.isSafeInteger(expectedId) || expectedId < 1 || release?.id !== expectedId || release.tag_name !== identity.ref.slice('refs/tags/'.length) || release.draft !== false || release.prerelease !== false || !release.published_at) fail('The approved stable release is no longer published at its exact tag.');
-}
-
-export function stableApprovalComment(identity, integrity) {
-  return `Approve ${identity.name}@${identity.version} ${integrity}`;
-}
-export function verifyStableArtifactApproval(identity, integrity, environment, approvals) {
-  const comment = stableApprovalComment(identity, integrity);
-  const forEnvironment = item => item.environments?.some(env => env.id === environment?.id && env.name === environment?.name);
-  if (Array.isArray(approvals) && approvals.some(item => item.state === 'rejected' && forEnvironment(item))) fail('This run contains a rejected stable environment review; start a new reviewed run.');
-  if (!Number.isSafeInteger(environment?.id) || environment.name !== PUBLISH_ENVIRONMENTS.latest || !Array.isArray(approvals) || !approvals.some(item => item.state === 'approved' && item.user?.id === 206951249 && item.user.login === 'scwlkr' && item.comment === comment && item.environments?.some(env => env.id === environment.id && env.name === environment.name))) fail('Stable publication requires an explicit owner approval comment for this exact artifact in this run.');
+export function assertLocalPublish(env, approval, integrity) {
+  if (env.CI || env.GITHUB_ACTIONS || !integrity || approval !== integrity) fail('Publish requires a local interactive run and explicit approval of the exact integrity.');
 }
