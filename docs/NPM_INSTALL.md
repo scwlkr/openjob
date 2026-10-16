@@ -68,8 +68,8 @@ the owner's npm security prompt; no version was republished. Both published
 artifact integrities match approved archives. You can use
 `npm install --global @scwlkr/openjob@latest` for stable. Public unscoped `openjob`
 belongs to a different project; use `@scwlkr/openjob`, retaining the `openjob`
-binary. Future main/release publication is not automatic; current CI builds
-downloadable artifacts only.
+binary. New versions are checked, packaged and explicitly published locally;
+repository pushes do not automatically publish packages or run Actions.
 
 The artifact records its selected channel. Registry checks stay disabled while
 package ownership is unverified (`registryVerified: false`); explicit checks
@@ -88,21 +88,19 @@ Switch channels only by explicitly installing the other channel.
 
 ## Artifact mapping and publication blockers
 
-`npm-artifacts.yml` builds downloadable tarballs after main pushes and published
-stable releases; it does not publish to npm or deploy. `latest` requires an exact
-stable `v<package-version>` tag and uses that release version. `dev` requires
-exact main source and uses `<next-patch>-dev.<commit-Unix-time>.<12-char-SHA>`.
-Both retain the full source SHA/ref/channel in `openjobDistribution`. The builder
-requires a clean checkout, refuses ref/version mismatch and sets the matching
-`publishConfig.tag`, preventing an accidental default `latest` dev upload.
-Delayed main builds refuse a newer fetched origin/main instead of assigning an
-old source to dev. Release artifacts remain bound to the published tag.
+Shane chose local Mac CI and publishing. `npm run npm:prepare -- dev` checks,
+builds and clean-prefix runs the exact current remote main package. Stable
+preparation uses `-- latest` and the separately reviewed exact remote
+`v<package-version>` tag in main history. Dev versions remain
+`<next-patch>-dev.<commit-Unix-time>.<12-char-SHA>`. Sealed plans record full source,
+ref, channel and integrity. A separate explicitly approved publish uses the
+existing npm login and an explicit channel tag; it never silently installs client
+updates. See [local release commands](NPM_LOCAL_RELEASE.md).
 
-Initial publication, tag correction, exact artifact integrities, clean registry
-installations and channel checks are verified. Ongoing automated registry
-publication still needs separately approved authentication/trusted publishing,
-serialization and stale-run protection. Current CI only builds downloadable
-artifacts; public latest/dev do not automatically follow this repository.
+The optional `npm-artifacts.yml` is manual dispatch only: no push/release runs,
+registry credentials, publishing or deployment. The OIDC proposal was cancelled;
+no persistent access was configured. Initial publication/integrity/install proof
+remains valid; future public tags change only after approved local publication.
 
 Maintainer proof after building and clean-prefix installation:
 

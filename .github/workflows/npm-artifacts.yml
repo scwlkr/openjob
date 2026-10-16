@@ -1,37 +1,24 @@
-name: OpenJob npm artifacts (no publishing)
+name: OpenJob npm artifacts (manual only, no publishing)
 on:
-  push:
-    branches: [main]
-  release:
-    types: [published]
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: npm-artifact-${{ github.ref }}
-  cancel-in-progress: false
 jobs:
   artifact:
-    if: github.event_name == 'push' || (!github.event.release.prerelease && !github.event.release.draft)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:distribution
-      - name: Build exact source for selected channel
-        env:
-          CHANNEL: ${{ github.event_name == 'release' && 'latest' || 'dev' }}
-        run: node scripts/build-npm-app.mjs "$CHANNEL"
+      - run: node scripts/build-npm-app.mjs local
       - run: npm pack ./dist/npm --pack-destination ./dist
       - uses: actions/upload-artifact@v4
         with:
-          name: openjob-npm-${{ github.sha }}
+          name: openjob-installation-review-${{ github.sha }}
           path: dist/*.tgz
-# Deliberately no npm publish, registry credentials, deployment or production tags.
-# Enabling registry publication requires separate owner approval and npm ownership.
+# Optional owner-requested artifact only. No push/release runs or publication.

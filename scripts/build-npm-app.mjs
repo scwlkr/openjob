@@ -4,16 +4,20 @@ import { execFileSync } from 'node:child_process';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { artifactIdentity, sourceRef, NPM_PACKAGE_NAME } from '../distribution/channels.mjs';
+import { artifactIdentity, candidateIdentity, sourceRef, NPM_PACKAGE_NAME } from '../distribution/channels.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const channel = process.argv[2];
-if (!['local', 'latest', 'dev'].includes(channel)) throw new Error('Use build-npm-app.mjs <local|latest|dev>.');
+if (!['local', 'candidate', 'latest', 'dev'].includes(channel)) throw new Error('Use build-npm-app.mjs <local|candidate VERSION|latest|dev>.');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const pkg = JSON.parse(await readFile(join(root, 'cli/package.json'), 'utf8'));
 const source = git('rev-parse', 'HEAD');
 let identity = { version: pkg.version, channel: 'latest', source, ref: 'local-unpublished' };
-if (channel !== 'local') {
+if (channel === 'candidate') {
+  if (git('status', '--porcelain')) throw new Error('Candidate requires clean reviewed source; no release/tag is created.');
+  identity = candidateIdentity({ baseVersion: pkg.version, version: process.argv[3], sha: source });
+}
+if (!['local', 'candidate'].includes(channel)) {
   if (git('status', '--porcelain')) throw new Error('Channel artifacts require a clean source checkout.');
   const ref = process.env.GITHUB_REF || (channel === 'latest' ? `refs/tags/${git('describe', '--exact-match', '--tags')}` : `refs/heads/${git('branch', '--show-current')}`);
   if (git('rev-parse', sourceRef(ref)) !== source) throw new Error('Channel ref does not identify this exact source.');

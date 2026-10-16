@@ -1,6 +1,6 @@
 # OpenJob CLI
 
-The new [packaged workspace instructions](https://github.com/scwlkr/openjob/blob/main/docs/NPM_INSTALL.md) cover `openjob app`, local tarball installation and notice-only latest/dev updates. Public registry publication remains pending; the historical GitHub CLI-only artifact below does not contain workspace app assets.
+The new [packaged workspace instructions](https://github.com/scwlkr/openjob/blob/main/docs/NPM_INSTALL.md) cover `openjob app`, local tarball installation and notice-only latest/dev updates. Initial scoped registry packages are published; the historical GitHub CLI-only artifact below does not contain workspace app assets.
 
 Requires macOS and Node.js 22.13 or newer. Install OpenJob v0.3.7 from GitHub:
 
