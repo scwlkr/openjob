@@ -39,7 +39,7 @@ test("authenticated invented Mail connects saved tasks, schedules and replies on
     await expect(page.getByTestId("task-row").filter({ hasText: `${marker} existing task` })).toBeVisible();
     await page.getByRole("button", { name: "Mail", exact: true }).click();
     await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${current} unsaved reply`);
-    await page.getByRole("button", { name: "Create task from mail", exact: true }).click();
+    await page.getByRole("button", { name: /^Create (another )?task from mail$/ }).click();
     await expect(page.getByRole("status")).toContainText("Private task created");
     await page.getByRole("button", { name: "Tasks", exact: true }).click();
     const createdTask = page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).filter({ hasText: "From private mail" }).last();

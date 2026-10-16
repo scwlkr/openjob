@@ -3,12 +3,12 @@
 import { useEffect, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from "react";
 import type { WorkspaceCommand, WorkspaceTask, WorkspaceView } from "../../shared/workspace-contracts";
 import type { MailSource } from "./workspace-mail";
-import { linkedTask, type CalendarTaskSource } from "./workspace-links";
+import { linkedTask, mailLinkedTasks, type CalendarTaskSource, type MailTaskSource } from "./workspace-links";
 import { filterWorkspaceTasks } from "../../shared/workspace-task-query.mjs";
 import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
-export type WorkspaceTasksHandle = { openLinkedTask: (source: CalendarTaskSource) => boolean };
+export type WorkspaceTasksHandle = { openLinkedTask: (source: CalendarTaskSource) => boolean; openMailTask: (source: MailTaskSource) => boolean };
 type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
 const defaults = () => { const day = new Date().toISOString().slice(0, 10); return { start: `${day}T14:00`, end: `${day}T14:30` }; };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
@@ -42,6 +42,10 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
     if (!task) return false;
     setStatus("all"); setSearch(""); setScheduledOn("");
     setOpenedTask(task.id); setNavigation(value => value + 1); return true;
+  }, openMailTask(source) {
+    const task = mailLinkedTasks(view, source).find(item => item.id === source.taskId);
+    if (!task) return false;
+    clearFilters(); setOpenedTask(task.id); setNavigation(value => value + 1); return true;
   } }), [view]);
   useEffect(() => { if (active && navigation) taskArticle.current?.focus(); }, [active, navigation]);
 
