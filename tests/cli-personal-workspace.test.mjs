@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
 import { createEmptyPersonalWorkspace, applyPersonalWorkspaceCommand } from '../shared/personal-workspace.ts';
 import { createTestFirebaseAuthority } from './support/firebase-id-tokens.mjs';
 import { createOpenApiResponseValidator } from './support/openapi-response.mjs';
+const execFileAsync = promisify(execFile);
 
 async function harness(t) {
   const directory = await mkdtemp(join(tmpdir(), 'openjob-personal-cli-'));
@@ -55,8 +57,8 @@ async function harness(t) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const run = (args, input) => new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['cli/openjob.mjs', ...args], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const run = (args, input, entrypoint = 'cli/openjob.mjs') => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [entrypoint, ...args], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = ''; child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; }); child.on('error', reject); child.on('close', status => resolve({ status, stdout, stderr })); child.stdin.end(input);
   });
   return { directory, run, calls, failures, records, reload() { api = createV1PersonalWorkspaceApi(options); }, outage(value) { outage = value; }, async owner(account) { await writeFile(credential, `fixture-refresh-${account}`, { mode: 0o600 }); } };
@@ -155,5 +157,33 @@ test('existing CLI performs the invented Mail to Task to Calendar and Simulated 
   assert.equal(view.tasks.find(item => item.id === task.id).completed, true); assert.equal(view.events.some(item => item.taskId === task.id), true);
   assert.equal(view.messages.find(item => item.id === messageId).read, true); assert.equal(view.sent[0].id, sent.id); assert.equal(view.drafts[0].id, composed.id);
   await f.owner('b'); const foreign = await call({ type: 'mail.simulate-send', draftId: composed.id }); assert.notEqual(foreign.status, 0); assert.match(foreign.stderr, /forbidden/);
+  assert.deepEqual(f.failures, []);
+});
+
+test('workspace tasks filters authorized snapshots and runs from the standalone CLI package', async t => {
+  const f = await harness(t);
+  const command = async input => { const result = await f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify(input)); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const open = await command({ type: 'task.create', title: '[Plan].* Overnight' });
+  const done = await command({ type: 'task.create', title: '[plan].* Completed' });
+  const other = await command({ type: 'task.create', title: 'Other unscheduled task' });
+  await command({ type: 'task.schedule', taskId: open.id, calendarId: 'personal', start: '2026-10-16T23:30:00Z', end: '2026-10-17T00:30:00Z' });
+  await command({ type: 'task.schedule', taskId: done.id, calendarId: 'personal', start: '2026-10-17T13:00:00Z', end: '2026-10-17T13:30:00Z' });
+  await command({ type: 'task.complete', taskId: done.id, completed: true });
+  const list = async (args = [], entrypoint) => { const result = await f.run(['workspace', 'tasks', '--format', 'json', ...args], undefined, entrypoint); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  assert.deepEqual((await list()).map(task => task.id), [open.id, done.id, other.id]);
+  const filtered = await list(['--status', 'open', '--search', ' [PLAN].* ', '--scheduled-on', '2026-10-17']);
+  assert.deepEqual(filtered.map(task => task.id), [open.id]);
+  assert.equal(filtered[0].scheduledSlot.start, '2026-10-16T23:30:00.000Z');
+  assert.deepEqual((await list(['--status', 'completed'])).map(task => task.id), [done.id]);
+  const before = f.calls.length;
+  for (const args of [['--status', 'done'], ['--scheduled-on', '2026-02-29'], ['--search', 'x'.repeat(201)], ['--group', 'grp_fixture']]) {
+    const result = await f.run(['workspace', 'tasks', ...args]); assert.equal(result.status, 2, result.stderr);
+  }
+  assert.equal(f.calls.length, before, 'invalid filters never request a snapshot');
+  const packed = await execFileAsync('npm', ['pack', './cli', '--ignore-scripts', '--cache', join(f.directory, 'npm-cache'), '--pack-destination', f.directory, '--json']);
+  const archive = join(f.directory, JSON.parse(packed.stdout)[0].filename);
+  await execFileAsync('tar', ['-xzf', archive, '-C', f.directory]);
+  assert.deepEqual((await list(['--status', 'open', '--search', '[plan].*'], join(f.directory, 'package', 'openjob.mjs'))).map(task => task.id), [open.id]);
+  await f.owner('b'); assert.deepEqual(await list(['--search', '[plan].*']), []);
   assert.deepEqual(f.failures, []);
 });

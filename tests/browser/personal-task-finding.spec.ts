@@ -1,0 +1,67 @@
+import { expect, test } from "@playwright/test";
+
+test("find personal planned work, manage it and follow source Mail without losing edits", async ({ page, request }, testInfo) => {
+  const { token } = await (await request.get("/__test/session/alex")).json();
+  const command = async (input: unknown) => {
+    const response = await request.post("/api/v1/workspace/commands", { headers: { authorization: `Bearer ${token}` }, data: input });
+    expect(response.status()).toBe(200); return (await response.json()).data;
+  };
+  await command({ type: "mail.examples.add" });
+  for (const width of [1280, 390]) {
+    const marker = `Find work ${width} ${Date.now()}`;
+    const created = await command({ type: "task.create", title: `${marker} LAUNCH plan`, messageId: "example-message-1" });
+    await command({ type: "task.schedule", taskId: created.id, calendarId: "personal", start: "2027-06-01T23:45:00Z", end: "2027-06-02T00:15:00Z" });
+    await command({ type: "task.create", title: `${marker} unscheduled launch` });
+    await page.setViewportSize({ width, height: 900 }); await page.goto("/");
+    await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+    await page.getByLabel("Task status", { exact: true }).selectOption("open");
+    await page.getByLabel("Search tasks", { exact: true }).fill(` ${marker.toUpperCase()} launch `);
+    await page.getByLabel("Planned day (UTC)", { exact: true }).fill("2027-06-02");
+    const row = page.getByTestId("task-row").filter({ hasText: `${marker} LAUNCH plan` });
+    await expect(page.getByTestId("task-row")).toHaveCount(1);
+    await expect(row).toBeVisible();
+    await expect(page.getByLabel("Find tasks")).toContainText("overlaps 2027-06-02 UTC");
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`personal-task-finding-${width}.png`), fullPage: true });
+    await row.getByRole("button", { name: "Edit title", exact: true }).click();
+    await page.getByLabel("Task title", { exact: true }).fill(`${marker} revised`);
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await expect(page.getByLabel("Task title", { exact: true })).toHaveValue(`${marker} revised`);
+    await expect(page.getByLabel("Task status", { exact: true })).toHaveValue("open");
+    await row.getByRole("checkbox").click();
+    await expect(page.getByTestId("task-row")).toHaveCount(0);
+    await expect(page.getByText("No tasks match these filters. Try another title, status or planned day.", { exact: true })).toBeVisible();
+    await page.getByLabel("Task status", { exact: true }).selectOption("completed");
+    await expect(row.getByRole("checkbox")).toBeChecked();
+    await page.getByLabel("Search tasks", { exact: true }).fill("hide this exact navigation target");
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.getByTestId("calendar-event").filter({ hasText: `${marker} LAUNCH plan` }).getByRole("button", { name: "Open linked task", exact: true }).click();
+    await expect(row).toBeFocused();
+    await expect(page.getByLabel("Task status", { exact: true })).toHaveValue("all");
+    await expect(page.getByLabel("Search tasks", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Planned day (UTC)", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Task title", { exact: true })).toHaveValue(`${marker} revised`);
+    await page.getByRole("button", { name: "Save title", exact: true }).click();
+    const revised = page.getByTestId("task-row").filter({ hasText: `${marker} revised` });
+    await revised.getByRole("button", { name: "Open source mail", exact: true }).click();
+    await expect(page.getByLabel("Mailbox", { exact: true })).toHaveValue("mail:example-gmail-personal");
+    await page.getByLabel("Reply draft", { exact: true }).fill(`${marker} finished reply`);
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("No message sent");
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await page.getByLabel("Search tasks", { exact: true }).fill(marker);
+    await page.getByRole("button", { name: "Planned today", exact: true }).click();
+    const today = await page.evaluate(() => new Date().toISOString().slice(0, 10));
+    await expect(page.getByLabel("Planned day (UTC)", { exact: true })).toHaveValue(today);
+    await expect(page.getByTestId("task-row")).toHaveCount(0);
+    await page.getByRole("button", { name: "Clear task filters", exact: true }).click();
+    await expect(revised).toBeVisible();
+    await page.reload(); await expect(revised.getByRole("checkbox")).toBeChecked();
+  }
+  await page.getByLabel("Search tasks", { exact: true }).fill("private owner filter");
+  await page.getByLabel("Task status", { exact: true }).selectOption("completed");
+  await page.getByLabel("Test identity", { exact: true }).selectOption("sam");
+  await expect(page.getByLabel("Search tasks", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Task status", { exact: true })).toHaveValue("all");
+});

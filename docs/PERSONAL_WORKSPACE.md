@@ -54,6 +54,16 @@ it cannot reconnect, send or write provider records. A preview Calendar is not
 the saved OpenJob Personal Calendar. Example-to-Task still saves only its title.
 See the [provider boundary and smallest real integration setup](providers/README.md).
 
+## Find personal work
+
+Task status, title search and Planned day (UTC) use the same filtering rules in the app and existing CLI. Default All preserves all work. Search is a trimmed, case-insensitive literal title match, up to 200 characters. A planned day includes intervals overlapping that UTC day; unscheduled Tasks do not match. Clear task filters restores all work. Calendar’s Open linked task clears filters needed to reveal that exact Task while keeping unfinished editors.
+
+```sh
+openjob workspace tasks --status open --search launch --scheduled-on 2027-06-02 --format json
+```
+
+The CLI reads the existing authorized snapshot and returns filtered Task records, preserving IDs and permission redaction. Invalid statuses or impossible dates reject before a request. It does not add provider access.
+
 ## Existing CLI
 
 After authenticating an existing human profile through the normal OpenJob CLI:

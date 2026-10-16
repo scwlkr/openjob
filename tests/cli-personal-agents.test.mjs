@@ -203,3 +203,28 @@ test('personal mail grants isolate invented mailboxes, redact task provenance an
   await deny(planner, { type: 'mail.compose', accountId: seeded.accountIds[0], to: 'reader@example.invalid', subject: 'Revoked', body: 'Denied' }, /authentication_required/);
   assert.deepEqual(f.failures, []);
 });
+
+test('workspace task filtering preserves scoped snapshot redaction and revocation without human fallback', async t => {
+  const f = await harness(t);
+  const human = async input => { const result = await f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify(input)); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const seed = await human({ type: 'mail.examples.add' });
+  const task = await human({ type: 'task.create', title: 'Scoped [Plan].* task', messageId: seed.messageIds[0] });
+  await human({ type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2026-10-16T23:30:00Z', end: '2026-10-17T00:30:00Z' });
+  const tokenPath = join(f.directory, 'task-query-token'); const args = f.grantArgs(tokenPath);
+  args[args.indexOf('--scopes') + 1] = 'tasks:read'; args[args.indexOf('--resources') + 1] = 'tasks:personal';
+  const issued = await f.run(args); assert.equal(issued.status, 0, issued.stderr); const agent = JSON.parse(issued.stdout).data;
+  await rm(f.credential);
+  const authCount = f.calls.filter(call => call.path.startsWith('/firebase/')).length;
+  const query = ['workspace', 'tasks', '--agent-token-file', tokenPath, '--status', 'open', '--search', '[PLAN].*', '--scheduled-on', '2026-10-17', '--format', 'json'];
+  const listed = await f.run(query); assert.equal(listed.status, 0, listed.stderr);
+  const tasks = JSON.parse(listed.stdout).data; assert.deepEqual(tasks.map(item => item.id), [task.id]);
+  assert.equal(tasks[0].sourceMessageId, undefined); assert.equal(tasks[0].sourceAccountId, undefined); assert.equal(tasks[0].calendarEventId, undefined);
+  assert.equal(f.calls.filter(call => call.path.startsWith('/firebase/')).length, authCount);
+  await writeFile(f.credential, 'fixture-refresh', { mode: 0o600 });
+  const revoked = await f.run(['workspace', 'agent', 'revoke', agent.id, '--yes']); assert.equal(revoked.status, 0, revoked.stderr);
+  await rm(f.credential);
+  const before = f.calls.filter(call => call.path.startsWith('/firebase/')).length;
+  const denied = await f.run(query); assert.notEqual(denied.status, 0); assert.match(denied.stderr, /authentication_required/); assert.equal(denied.stdout, '');
+  assert.equal(f.calls.filter(call => call.path.startsWith('/firebase/')).length, before);
+  assert.deepEqual(f.failures, []);
+});
