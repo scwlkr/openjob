@@ -52,7 +52,8 @@ function Harness() {
   useEffect(() => {
     let active = true;
     fetch("/__test/state-mode", { cache: "no-store" }).then(response => response.json() as Promise<{ mode?: string }>).then(value => {
-      if (active && ["saved", "temporary"].includes(value.mode)) setStorageMode(value.mode);
+      const mode = value.mode;
+      if (active && (mode === "saved" || mode === "temporary")) setStorageMode(mode);
     }).catch(() => {});
     return () => { active = false; };
   }, []);
