@@ -1,4 +1,5 @@
 import { NativeAuthCoordinator, OpenJobApiError, type NativeAuthDependencies } from '../src/auth/coordinator';
+import type { NativeOfflineWorkspaceCache, NativeOfflineWorkspaceRecord } from '../src/offline-workspace-contracts';
 const owner = 'user_alex';
 const session = { provider: 'google' as const, idToken: 'private-token', refreshToken: 'private-refresh', expiresAt: 999999999 };
 const snapshot = { accounts: [], messages: [], tasks: [], calendars: [], events: [], drafts: [], sent: [], agents: [], activity: [] };
@@ -14,6 +15,21 @@ function fixture(personal = true) {
   return { coordinator: new NativeAuthCoordinator(dependencies as unknown as NativeAuthDependencies), dependencies, setOwner: (id: string) => { userId = id; } };
 }
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (reason: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
+test('personal-only durable pending cache restores a provisional owner without a Group cache', async () => {
+  const f = fixture(); f.dependencies.loadLocalTaskListCache.mockResolvedValueOnce(null as never);
+  const projection = { tasks: [], calendars: [{ id: 'personal', ownerId: owner, name: 'Personal', color: '#2454dc' }], events: [] };
+  let cached: NativeOfflineWorkspaceRecord | null = { ownerUserId: owner, revision: `tc1_${'a'.repeat(64)}`, projection, pending: { baseRevision: `tc1_${'a'.repeat(64)}`, operationId: '00000000-0000-4000-8000-000000000001', expiresAt: '2026-10-18T00:00:00.000Z', projection, attempted: false } };
+  const cache: NativeOfflineWorkspaceCache = { async load(expected, guard) { guard?.(); return cached?.ownerUserId === expected ? cached : null; }, async save(value, guard) { guard?.(); cached = value; }, async purge() { cached = null; } };
+  const read = jest.fn(async () => ({ revision: `tc1_${'a'.repeat(64)}`, projection }));
+  const coordinator = new NativeAuthCoordinator({ ...f.dependencies, personalOfflineCache: cache, loadPersonalOfflineCache: cache.load, offlineRandomUUID: () => '00000000-0000-4000-8000-000000000002', readTaskCalendarSync: read, syncTaskCalendar: jest.fn(), purgeLocalDomainCache: () => cache.purge() } as unknown as NativeAuthDependencies);
+  await expect(coordinator.restoreCachedSession()).resolves.toMatchObject({ provisional: true, user: { userId: owner } });
+  const offline = coordinator.getPersonalWorkspaceController()!.offline!;
+  await expect(offline.load(owner)).resolves.toMatchObject({ status: 'pending' });
+  await expect(offline.edit(owner, { type: 'task.create', title: 'Offline personal-only' })).resolves.toMatchObject({ status: 'pending' });
+  await expect(offline.refresh(owner)).rejects.toMatchObject({ code: 'revoked' }); expect(read).not.toHaveBeenCalled();
+  await expect(offline.sync(owner)).rejects.toMatchObject({ code: 'revoked' }); expect(cached?.pending?.attempted).toBe(false);
+  await coordinator.signOut(); expect(cached).toBeNull(); await expect(offline.load(owner)).rejects.toMatchObject({ code: 'revoked' });
+});
 test('optional stable token-free facade routes all operations through active session', async () => {
   expect(fixture(false).coordinator.getPersonalWorkspaceController()).toBeUndefined(); const f = fixture(); const api = f.coordinator.getPersonalWorkspaceController()!;
   expect(api).toBe(f.coordinator.getPersonalWorkspaceController()); expect(Object.keys(api).length).toBe(4); expect(JSON.stringify(api)).not.toContain('token'); await expect(api.readPersonalWorkspace(owner)).rejects.toMatchObject({ code: 'revoked' });

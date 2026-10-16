@@ -1,3 +1,5 @@
+import { projectTaskCalendar, validateTaskCalendarSyncInput, TASK_CALENDAR_MAX_AGE_MS, taskCalendarFail, type TaskCalendarSyncAck } from "../shared/task-calendar-sync.ts";
+import { mergeTaskCalendar, parseTaskCalendarReceipts, taskCalendarPayloadHash, taskCalendarRevision, type TaskCalendarReceipt } from "./task-calendar-sync.ts";
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from "./firestore-rest.ts";
 import { activeUserHistoryWrite, assertActiveUser } from "./user-history.ts";
 import { applyPersonalAgentCommand, personalAgentSnapshot, applyPersonalWorkspaceCommand, assertPersonalWorkspaceOwner, createEmptyPersonalWorkspace, validatePersonalWorkspace, type PersonalWorkspaceStore } from "../shared/personal-workspace.ts";
@@ -9,7 +11,7 @@ function fail(code: string, message: string): never { throw Object.assign(new Er
 function concurrent(error: unknown) { return error instanceof FirestoreRequestError && ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION", "NOT_FOUND"].includes(error.code ?? ""); }
 type Options = { now?: () => number; agentId?: () => string; secret?: () => string };
 type Credential = { owner: string; id: string; hash: string };
-type Envelope = { state: WorkspaceState; grants: StoredPersonalAgentGrant[] };
+type Envelope = { state: WorkspaceState; grants: StoredPersonalAgentGrant[]; receipts: TaskCalendarReceipt[] };
 
 export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fetchImplementation: typeof fetch = fetch,
   { now = Date.now, agentId = () => `agt_${crypto.randomUUID().replaceAll("-", "")}`, secret = newPersonalAgentSecret }: Options = {}): PersonalWorkspaceStore {
@@ -23,13 +25,14 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
     return document;
   }
   function envelope(owner: string, document: FirestoreDocument | null): Envelope {
-    if (!document) return { state: createEmptyPersonalWorkspace(owner), grants: [] };
+    if (!document) return { state: createEmptyPersonalWorkspace(owner), grants: [], receipts: [] };
     const encoded = document.fields?.stateJson?.stringValue;
     if (!encoded || new TextEncoder().encode(JSON.stringify(document)).length > MAX_ENCODED_BYTES) fail("invalid_state", "Invalid personal workspace record");
     let value: unknown;
     try { value = JSON.parse(encoded); } catch { fail("invalid_state", "Invalid personal workspace record"); }
     if (document.fields?.grantJson && typeof document.fields.grantJson.stringValue !== "string") fail("invalid_state", "Invalid personal grant envelope");
-    return { state: validatePersonalWorkspace(owner, value), grants: parsePersonalAgentGrants(owner, document.fields?.grantJson?.stringValue) };
+    if (document.fields?.syncJson && typeof document.fields.syncJson.stringValue !== "string") fail("invalid_state", "Invalid sync receipt envelope");
+    return { state: validatePersonalWorkspace(owner, value), grants: parsePersonalAgentGrants(owner, document.fields?.grantJson?.stringValue), receipts: parseTaskCalendarReceipts(owner, document.fields?.syncJson?.stringValue) };
   }
   async function commit(writes: unknown[]) { await firestore.request(":commit", { method: "POST", body: JSON.stringify({ writes }) }); }
   async function credential(token: string): Promise<Credential> {
@@ -42,21 +45,22 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
     if (!grant || grant.revoked || Date.parse(grant.createdAt) > now() || Date.parse(grant.expiresAt) <= now() || !personalAgentHashEqual(grant.tokenHash, auth.hash)) fail("authentication_required", "Personal agent access is unavailable");
     return grant;
   }
-  async function mutate(owner: string, apply: (current: Envelope) => { result: unknown; state?: WorkspaceState; grants?: StoredPersonalAgentGrant[]; skip?: boolean }, auth?: Credential) {
+  async function mutate(owner: string, apply: (current: Envelope) => { result: unknown; state?: WorkspaceState; grants?: StoredPersonalAgentGrant[]; skip?: boolean; receipts?: TaskCalendarReceipt[]; beforeCommit?: () => void } | Promise<{ result: unknown; state?: WorkspaceState; grants?: StoredPersonalAgentGrant[]; skip?: boolean; receipts?: TaskCalendarReceipt[]; beforeCommit?: () => void }>, auth?: Credential) {
     assertPersonalWorkspaceOwner(owner);
     for (let attempt = 0; attempt < 3; attempt++) {
       await assertActiveUser(firestore, owner);
       const existing = await read(owner); const current = envelope(owner, existing);
       if (auth) authorized(current.grants, auth);
-      const next = apply(current);
+      const next = await apply(current);
       if (next.skip) { await assertActiveUser(firestore, owner); return next.result; }
-      const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) } } };
+      const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) }, syncJson: { stringValue: JSON.stringify(next.receipts ?? current.receipts) } } };
       if (new TextEncoder().encode(JSON.stringify(update)).length > MAX_ENCODED_BYTES - 1024) fail("workspace_capacity", "Personal workspace storage limit reached");
       try {
         const userFence = await activeUserHistoryWrite(firestore, owner);
         // Authorization-time expiry: REST CAS cannot compare the server's commit clock.
         // Check immediately before dispatch; unchanged envelope CAS fences revocation.
         if (auth) authorized(current.grants, auth);
+        next.beforeCommit?.();
         await commit([userFence, { update, currentDocument: existing ? { updateTime: existing.updateTime } : { exists: false } }]);
         return next.result;
       } catch (error) { if (!concurrent(error)) throw error; }
@@ -69,6 +73,29 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
   }
   return {
     async snapshot(owner) { return (await activeEnvelope(owner)).state; },
+    async readTaskCalendarSync(owner) {
+      const current = await activeEnvelope(owner); const projection = projectTaskCalendar(owner, current.state);
+      const revision = await taskCalendarRevision(owner, projection); await assertActiveUser(firestore, owner);
+      return { revision, projection };
+    },
+    async syncTaskCalendar(owner, value) {
+      const input = validateTaskCalendarSyncInput(owner, value); const payloadHash = await taskCalendarPayloadHash(owner, input);
+      return await mutate(owner, async current => {
+        const receipts = current.receipts.filter(receipt => Date.parse(receipt.retainUntil) > now());
+        const receipt = receipts.find(receipt => receipt.operationId === input.operationId);
+        if (receipt) { if (receipt.payloadHash !== payloadHash) taskCalendarFail("conflict"); return { result: { operationId: input.operationId, revision: receipt.revision }, skip: true }; }
+        const checkExpiry = () => { if (Date.parse(input.expiresAt) <= now() || Date.parse(input.expiresAt) > now() + TASK_CALENDAR_MAX_AGE_MS) taskCalendarFail("sync_expired"); };
+        checkExpiry();
+        if (await taskCalendarRevision(owner, projectTaskCalendar(owner, current.state)) !== input.baseRevision) taskCalendarFail("conflict");
+        if (receipts.length >= 100) taskCalendarFail("workspace_capacity");
+        const next = mergeTaskCalendar(owner, current.state, input.projection);
+        next.activity = [...next.activity, { id: crypto.randomUUID(), ownerId: owner, actor: "You", action: "task-calendar.sync", createdAt: new Date(now()).toISOString() }];
+        const state = validatePersonalWorkspace(owner, next); const revision = await taskCalendarRevision(owner, projectTaskCalendar(owner, state));
+        receipts.push({ ownerId: owner, operationId: input.operationId, payloadHash, expiresAt: input.expiresAt, retainUntil: new Date(Date.parse(input.expiresAt) + TASK_CALENDAR_MAX_AGE_MS).toISOString(), revision });
+        return { result: { operationId: input.operationId, revision }, state, receipts, beforeCommit: checkExpiry };
+      }) as TaskCalendarSyncAck;
+    },
+
     async command(owner, input) { return mutate(owner, current => applyPersonalWorkspaceCommand(owner, current.state, input)); },
     async createAgent(owner, input) {
       assertPersonalWorkspaceOwner(owner); const validated = validatePersonalAgentInput(input);

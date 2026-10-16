@@ -5,6 +5,23 @@ const empty = () => ({ accounts: [], messages: [], drafts: [], sent: [], agents:
 const json = (data: unknown, status = 200) => new Response(JSON.stringify({ data }), { status });
 const grant = () => ({ id: `agt_${'a'.repeat(32)}`, ownerUserId: owner, name: 'Planner', scopes: ['tasks:read'], resourceIds: ['tasks:personal'], createdAt: '2026-10-17T00:00:00.000Z', expiresAt: '2026-10-18T00:00:00.000Z', revoked: false });
 const base = 'https://service.example.invalid/api/v1';
+test('task-calendar sync API validates sanitized projection and exact operation acknowledgments', async () => {
+  const revision = `tc1_${'a'.repeat(64)}`; const projection = { tasks: [], calendars: empty().calendars, events: [] };
+  const operationId = '00000000-0000-4000-8000-000000000001';
+  const input = { operationId, baseRevision: revision, expiresAt: '2026-10-18T00:00:00.000Z', projection };
+  const fetcher = jest.fn().mockResolvedValueOnce(json({ revision, projection })).mockResolvedValueOnce(json({ operationId, revision }));
+  const api = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: fetcher });
+  await expect(api.readTaskCalendarSync!('private-token', owner)).resolves.toEqual({ revision, projection });
+  await expect(api.syncTaskCalendar!('private-token', owner, input)).resolves.toEqual({ operationId, revision });
+  expect(fetcher.mock.calls[0]![0]).toBe(`${base}/workspace/task-calendar-sync`); expect(fetcher.mock.calls[1]![1].body).toBe(JSON.stringify(input));
+  const wrong = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: jest.fn(async () => json({ operationId: 'other', revision })) });
+  await expect(wrong.syncTaskCalendar!('fixture', owner, input)).rejects.toMatchObject({ code: 'invalid_response' });
+  const privateData = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: jest.fn(async () => json({ revision, projection: { ...projection, messages: ['private'] } })) });
+  await expect(privateData.readTaskCalendarSync!('fixture', owner)).rejects.toMatchObject({ code: 'invalid_response' });
+  const audit = { ...empty(), activity: [{ id: 'audit_sync', ownerId: owner, actor: 'You', action: 'task-calendar.sync', createdAt: '2026-10-17T00:00:00.000Z' }] };
+  const afterSync = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: jest.fn(async () => json(audit)) });
+  await expect(afterSync.readPersonalWorkspace('fixture', owner)).resolves.toEqual(audit);
+});
 test('uses bearer and existing endpoints, validates reads and discards command result', async () => {
   const fetcher = jest.fn().mockResolvedValueOnce(json(empty())).mockResolvedValueOnce(json({ id: 'created' })).mockResolvedValueOnce(json([grant()])).mockResolvedValueOnce(new Response(null, { status: 204 }));
   const api = createNativePersonalWorkspaceApi({ apiBaseUrl: base + '/', fetchImplementation: fetcher });

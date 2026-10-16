@@ -167,12 +167,51 @@ Tasks and manual Calendar blocks support create/edit/delete, with confirmation
 for deletion. Schedule fields accept UTC ISO timestamps (for example
 `2027-06-02T14:00:00Z`); impossible dates and nonincreasing slots are rejected.
 Module and Group navigation preserve unfinished input. Owner/session changes
-clear it; provisional/offline sessions must restore before personal access.
+clear it. Cached Tasks and Calendar can be edited offline under the last protected owner; Mail and online operations require session restoration.
 Agents shows effective scopes/resources, expiry, activity and confirmed revoke.
 Use the existing CLI for agent issuance; no secret is displayed in the app.
 
-This surface is online-only, with no personal disk cache, offline mutation queue
-or automatic mutation retry. After an uncertain request, reconnect and Refresh
-to inspect saved state before changing it again. Native controller, HTTP and
-component checks do not prove device keyboards, backgrounding or native storage.
-Cross-platform device/release gates in ADR0017 still apply.
+Mail and agent access remain online-only. An uncertain ordinary Mail request is never replayed automatically. Native controller, HTTP and component checks do not prove device keyboards, backgrounding or native storage. Cross-platform device/release gates in ADR0017 still apply.
+
+## Native offline Tasks and Calendar
+
+The saved-on-device workspace keeps only personal Tasks and Calendar in a
+separate SQLCipher database in the app document directory, with its encryption
+key in the existing device-only Keychain/SecureStore boundary. Mail, source
+message/account references, drafts, grants and credentials are excluded.
+**Online Mail and linked work** retains the complete online source-Mail journey.
+Returning to saved Tasks/Calendar refreshes safely; pending local work is never
+silently discarded. The Group cache retains its separate existing schema.
+
+1. Confirm a session and Refresh from server once. Disconnect: edit/create/complete,
+   schedule/unschedule/delete Tasks or create/edit/delete manual Calendar blocks.
+   **Pending · saved on device** means the encrypted write completed. A storage
+   failure preserves the previous saved work and unfinished editor.
+2. Reopen offline under that same protected owner, including when no Group was
+   ever opened. Restore the session to reconnect, then choose **Sync saved changes**.
+   The atomic batch requires the last confirmed Tasks/Calendar revision.
+3. If another client changed those records, **Conflict · review required** keeps
+   the local proposal and shows current server work. Compare both versions.
+   Explicitly discard local work or confirm replacing server Tasks/Calendar with
+   the reviewed local version. A further server edit requires another review.
+
+Sync receipts bind the owner, operation ID and complete payload. Retrying a lost
+acknowledgement cannot duplicate that batch. Queued newer local edits survive
+an older acknowledgement. Ambiguous attempted batches must be checked with the
+same operation before editing them again. New batches expire after 24 hours;
+expired unresolved work requires review rather than silent replay. Receipts are
+retained beyond that window; capacity errors preserve pending work. Whole-domain
+conflicts are conservative: there is no automatic field merge. Source-Mail
+provenance stays server-owned and is preserved on surviving Tasks.
+
+Signing out/switching users or revocation/deletion purges private local state,
+including pending work. Mail, agent credentials, web/CLI offline editing,
+background sync and provider Calendar writes are outside this slice. Real
+native durability, encryption bridges, rendering and keyboard behavior remain
+device acceptance work; no release is implied.
+
+The human-only authenticated sync endpoint is
+`GET /api/v1/workspace/task-calendar-sync` → `{data:{revision,projection}}`;
+`POST` accepts `{operationId,baseRevision,expiresAt,projection}` and acknowledges
+`{data:{operationId,revision}}`. Personal agent credentials cannot replace this
+domain. Existing command/snapshot endpoints remain unchanged.

@@ -165,6 +165,8 @@ export default function createAppConfig({ config = {} } = {}) {
 
   return {
     ...config,
+    // Expo's lazy export filesystem drops sibling shared-runtime watch folders.
+    experiments: { ...config.experiments, onDemandFilesystem: false },
     name: names[environment],
     slug: identities.expo.slug,
     owner: identities.expo.account,

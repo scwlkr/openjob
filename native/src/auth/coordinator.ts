@@ -1,4 +1,6 @@
 import type { NativePersonalWorkspaceApi, NativePersonalWorkspaceController } from "../personal-workspace-contracts";
+import type { NativeOfflineWorkspaceCache, NativeOfflineWorkspaceRecord } from '../offline-workspace-contracts';
+import { createNativeOfflineWorkspaceController } from '../offline-workspace-controller';
 import type {
   NativeCachedTaskList,
   NativeGroup,
@@ -229,6 +231,9 @@ export class OpenJobApiError extends Error {
 }
 
 export type NativeAuthDependencies = Partial<NativePersonalWorkspaceApi> & {
+  personalOfflineCache?: NativeOfflineWorkspaceCache;
+  offlineRandomUUID?: () => string;
+  loadPersonalOfflineCache?(owner: string, guard?: () => void): Promise<NativeOfflineWorkspaceRecord | null>;
   claimUsername(
     idToken: string,
     username: string,
@@ -358,7 +363,27 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     stored: Promise.resolve(),
   };
 
-  constructor(private readonly dependencies: NativeAuthDependencies) {}
+  constructor(private readonly dependencies: NativeAuthDependencies) {
+    if (dependencies.personalOfflineCache && dependencies.readTaskCalendarSync && dependencies.syncTaskCalendar && dependencies.offlineRandomUUID) {
+      const offline = createNativeOfflineWorkspaceController({
+        cache: dependencies.personalOfflineCache, now: dependencies.now, randomUUID: dependencies.offlineRandomUUID,
+        capture: owner => {
+          const epoch = this.operationEpoch;
+          const guard = () => { this.assertCurrentOperation(epoch); if (!owner || this.activeResult?.user.userId !== owner || this.deletionReceipt) throw new ProviderSignInError('revoked'); };
+          guard(); return guard;
+        },
+        read: owner => this.withPersonalSession(owner, token => dependencies.readTaskCalendarSync!(token, owner)),
+        write: (owner, input) => this.withPersonalSession(owner, token => dependencies.syncTaskCalendar!(token, owner, input)),
+      });
+      const confirmed = (owner: string) => { if (!owner || this.activeResult?.user.userId !== owner || this.activeResult.provisional || this.deletionReceipt) throw new ProviderSignInError('revoked'); };
+      this.personalWorkspaceFacade.offline = Object.freeze({ ...offline,
+        refresh: async (owner: string) => { confirmed(owner); return offline.refresh(owner); },
+        sync: async (owner: string) => { confirmed(owner); return offline.sync(owner); },
+        resolve: async (owner: string, choice: 'server' | 'local') => { confirmed(owner); return offline.resolve(owner, choice); },
+      });
+    }
+    Object.freeze(this.personalWorkspaceFacade);
+  }
 
   async restoreCachedSession(): Promise<SignedInResult | null> {
     const epoch = this.operationEpoch;
@@ -376,7 +401,10 @@ export class NativeAuthCoordinator implements NativeTaskListController {
       stored.ownerUserId,
     );
     this.assertCurrentOperation(epoch);
-    if (!cached) return null;
+    const loadPersonal = this.dependencies.loadPersonalOfflineCache ?? this.dependencies.personalOfflineCache?.load.bind(this.dependencies.personalOfflineCache);
+    const personal = !cached && loadPersonal ? await loadPersonal(stored.ownerUserId, () => this.assertCurrentOperation(epoch)) : null;
+    this.assertCurrentOperation(epoch);
+    if (!cached && (!personal || personal.ownerUserId !== stored.ownerUserId)) return null;
     const result: SignedInResult = {
       kind: "signed-in",
       methods: [],
@@ -1090,12 +1118,12 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     );
   }
 
-  private readonly personalWorkspaceFacade: NativePersonalWorkspaceController = Object.freeze({
+  private readonly personalWorkspaceFacade: NativePersonalWorkspaceController = {
     readPersonalWorkspace: (owner: string) => this.withPersonalSession(owner, token => this.dependencies.readPersonalWorkspace!(token, owner)),
     commandPersonalWorkspace: (owner: string, input: Parameters<NativePersonalWorkspaceController["commandPersonalWorkspace"]>[1]) => this.withPersonalSession(owner, token => this.dependencies.commandPersonalWorkspace!(token, input)),
     listPersonalAgents: (owner: string) => this.withPersonalSession(owner, token => this.dependencies.listPersonalAgents!(token, owner)),
     revokePersonalAgent: (owner: string, id: string) => this.withPersonalSession(owner, token => this.dependencies.revokePersonalAgent!(token, id)),
-  });
+  };
 
   getPersonalWorkspaceController(): NativePersonalWorkspaceController | undefined {
     return this.dependencies.readPersonalWorkspace && this.dependencies.commandPersonalWorkspace && this.dependencies.listPersonalAgents && this.dependencies.revokePersonalAgent ? this.personalWorkspaceFacade : undefined;

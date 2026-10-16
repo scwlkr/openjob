@@ -1,3 +1,4 @@
+import type { TaskCalendarSyncSnapshot, TaskCalendarSyncAck } from "./task-calendar-sync.ts";
 import { PERSONAL_MAIL_ACCOUNTS, PERSONAL_MAIL_MESSAGES, addPersonalMailExamples } from "./personal-mail-examples.ts";
 import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspace-contracts.ts";
 import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
@@ -9,6 +10,8 @@ export type { PersonalMailExamplesResult } from "./personal-mail-examples.ts";
 
 export type PersonalWorkspaceStore = {
   snapshot(ownerUserId: string): Promise<WorkspaceView>;
+  readTaskCalendarSync?(ownerUserId: string): Promise<TaskCalendarSyncSnapshot>;
+  syncTaskCalendar?(ownerUserId: string, input: unknown): Promise<TaskCalendarSyncAck>;
   command(ownerUserId: string, input: unknown): Promise<unknown>;
   removeAllForUser(ownerUserId: string): Promise<number>;
   createAgent(ownerUserId: string, input: PersonalAgentInput): Promise<{ agent: PersonalAgentGrant; token: string }>;
@@ -73,7 +76,7 @@ export function validatePersonalWorkspace(ownerId: string, value: unknown): Work
     if (event.taskId !== undefined && !state.tasks.some(task => task.id === event.taskId && task.calendarEventId === event.id && task.scheduledSlot?.start === event.start && task.scheduledSlot.end === event.end)) return invalid();
   }
   for (const task of state.tasks) if (task.calendarEventId && !state.events.some(event => event.id === task.calendarEventId && event.taskId === task.id)) return invalid();
-  for (const entry of state.activity) if (!record(entry) || !keys(entry, ["id", "ownerId", "actor", "action", "createdAt"]) || !unique(entry.id) || entry.ownerId !== ownerId || (entry.actor !== "You" && !/^Agent agt_[a-f0-9]{32}$/.test(entry.actor)) || !COMMANDS.has(entry.action) || !date(entry.createdAt)) return invalid();
+  for (const entry of state.activity) if (!record(entry) || !keys(entry, ["id", "ownerId", "actor", "action", "createdAt"]) || !unique(entry.id) || entry.ownerId !== ownerId || (entry.actor !== "You" && !/^Agent agt_[a-f0-9]{32}$/.test(entry.actor)) || (!COMMANDS.has(entry.action) && entry.action !== "task-calendar.sync") || !date(entry.createdAt)) return invalid();
   return structuredClone(state);
 }
 function assertCommand(input: unknown): asserts input is PersonalWorkspaceCommand {
