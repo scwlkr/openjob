@@ -4,8 +4,8 @@ import { preparePrivateTokenOutput } from "./agent-grant.mjs";
 import { readTextSource } from "./input.mjs";
 import { writeEnvelope } from "./output.mjs";
 
-const SCOPES = ["tasks:read", "tasks:write", "calendar:read", "calendar:write"];
-const RESOURCES = ["tasks:personal", "calendar:personal"];
+const SCOPES = ["tasks:read", "tasks:write", "calendar:read", "calendar:write", "mail:read", "mail:draft", "mail:simulate-send"];
+const RESOURCES = ["tasks:personal", "calendar:personal", "mail:example-gmail-personal", "mail:example-gmail-work", "mail:example-outlook"];
 export function preparePersonalAgentGrant(options) {
   const name = options.get("--name")?.trim();
   const list = (option, allowed) => {

@@ -5,13 +5,15 @@ import Link from "next/link";
 import { createFirebaseAuth } from "../firebase-auth";
 import type { AuthSession, OpenJobAuth, SignInMethod } from "../openjob-contracts";
 import { OpenJobBrand } from "../openjob-brand";
-import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
+import type { WorkspaceView } from "../../shared/workspace-contracts";
 import { createPersonalWorkspaceClient, PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import WorkspaceTasks from "./workspace-tasks";
 import WorkspaceCalendar from "./workspace-calendar";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import PersonalWorkspaceMail from "./personal-workspace-mail";
 import styles from "./workspace.module.css";
+import WorkspaceMail from "./workspace-mail";
+import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
 type Props = { auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
@@ -84,7 +86,7 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
     catch (failure) { if (current()) { setError("Your workspace could not be loaded. Try Refresh."); setUnrecognized(failure instanceof PersonalWorkspaceError && failure.code === "sign_in_method_unrecognized"); } }
   }
 
-  async function command(input: WorkspaceCommand, success: string) {
+  async function command(input: PersonalWorkspaceCommand, success: string) {
     if (!current()) return false;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -98,11 +100,17 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
   }
 
   return <div className={styles.workspace}><header className={styles.header}><OpenJobBrand /><span>Personal workspace · signed in</span><button onClick={onSignOut}>Sign out</button></header>
-    <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Tasks", "Calendar", "Mail preview", "Agents"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div></nav><p className={styles.small}>Tasks and Calendar use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
+    <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Tasks", "Calendar", "Mail", "Mail preview", "Agents"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div></nav><p className={styles.small}>Tasks, Calendar and invented Mail use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
       <main className={styles.main}><div className={styles.title}><h1>{tab}</h1><button disabled={busy} onClick={refresh}>Refresh</button></div>
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
         {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
+        {view && <section hidden={tab !== "Mail"} aria-label="Invented personal Mail">
+          <p className={styles.banner}>Invented Mail · examples and drafts saved privately to your OpenJob account. All mailbox identities and incoming messages are fictional. Simulate send records a local example; no provider or recipient receives mail.</p>
+          <button disabled={busy} onClick={() => command({ type: "mail.examples.add" }, "Invented examples are ready. Existing tasks, calendar and drafts were kept.")}>{view.accounts.length ? "Add invented examples again" : "Add invented examples"}</button>
+          {!view.accounts.length && <p>Enable these invented examples to try Mail → Task → Calendar and saved reply drafts. Your existing workspace stays intact.</p>}
+          {view.accounts.length > 0 && <WorkspaceMail view={view} busy={busy} command={command} />}
+        </section>}
         {view && tab === "Mail preview" && <PersonalWorkspaceMail session={session} signal={signal} client={client} busy={busy} command={command} />}
         {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id} data-testid="personal-activity"><strong>{entry.actor}</strong> · {entry.action} <small>{new Date(entry.createdAt).toLocaleString()}</small></p>)}</details>}

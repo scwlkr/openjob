@@ -46,7 +46,7 @@ test('scoped agent executes linked workflow with distinct audit and no mail or a
   for (const key of ['accounts', 'messages', 'drafts', 'sent', 'agents', 'activity']) assert.deepEqual(view[key], []);
   const durable = JSON.parse(doc(f).fields.stateJson.stringValue);
   assert.ok(durable.activity.every(entry => entry.actor === `Agent ${agent.id}`)); assert.deepEqual(durable.agents, []);
-  for (const input of [{ type: 'mail.send', draftId: 'x' }, { type: 'mail.compose' }, { type: 'agent.grant' }, { type: 'task.create', title: 'Mail link', messageId: 'x' }]) await rejectsUnchanged(f, () => f.store.commandForAgent(token, input), 'forbidden');
+  for (const [input, code] of [[{ type: 'mail.send', draftId: 'x' }, 'sending_disabled'], [{ type: 'mail.compose' }, 'invalid_input'], [{ type: 'agent.grant' }, 'forbidden'], [{ type: 'task.create', title: 'Mail link', messageId: 'x' }, 'forbidden']]) await rejectsUnchanged(f, () => f.store.commandForAgent(token, input), code);
   const ownTask = await f.store.command('user_sam', create('Private Sam task'));
   await rejectsUnchanged(f, () => f.store.commandForAgent(token, { type: 'task.delete', taskId: ownTask.id }), 'forbidden');
 });
@@ -116,7 +116,7 @@ test('snapshot rechecks revocation and user deletion; account cleanup removes cr
 
 test('strict grant schema, bounded count and corrupt envelopes are rejected', async () => {
   const f = await fixture(); await f.issued();
-  for (const input of [{ name: '' }, { name: 'bad\nname' }, { scopes: ['mail:read'] }, { scopes: ['tasks:read', 'tasks:read'] }, { resourceIds: ['personal'] }, { resourceIds: [] }, { expiresAt: '2099-01-01' }]) {
+  for (const input of [{ name: '' }, { name: 'bad\nname' }, { scopes: ['mail:send'] }, { scopes: ['tasks:read', 'tasks:read'] }, { resourceIds: ['personal'] }, { resourceIds: [] }, { expiresAt: '2099-01-01' }]) {
     await rejectsUnchanged(f, () => f.issued(input), 'invalid_input');
   }
   const current = doc(f); const original = current.fields.grantJson.stringValue;

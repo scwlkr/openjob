@@ -1,6 +1,10 @@
+import { PERSONAL_MAIL_ACCOUNTS, PERSONAL_MAIL_MESSAGES, addPersonalMailExamples } from "./personal-mail-examples.ts";
 import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspace-contracts.ts";
 import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
 import { createWorkspaceEngine } from "./workspace-engine.ts";
+
+export type PersonalWorkspaceCommand = WorkspaceCommand | { type: "mail.examples.add" };
+export type { PersonalMailExamplesResult } from "./personal-mail-examples.ts";
 
 export type PersonalWorkspaceStore = {
   snapshot(ownerUserId: string): Promise<WorkspaceView>;
@@ -12,7 +16,7 @@ export type PersonalWorkspaceStore = {
   snapshotForAgent(token: string): Promise<WorkspaceView>;
   commandForAgent(token: string, input: unknown): Promise<unknown>;
 };
-const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete"]);
+const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete", "mail.read", "mail.draft", "mail.compose", "mail.draft.update", "mail.simulate-send", "mail.send", "mail.examples.add"]);
 const KEYS = ["accounts", "messages", "tasks", "calendars", "events", "drafts", "sent", "agents", "activity"];
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code }); }
 export function assertPersonalWorkspaceOwner(ownerId: string) {
@@ -32,13 +36,34 @@ export function validatePersonalWorkspace(ownerId: string, value: unknown): Work
   const invalid = () => fail("invalid_state", "Invalid personal workspace state");
   if (!record(value) || !keys(value, KEYS) || KEYS.some(key => !Array.isArray(value[key]))) return invalid();
   const state = value as unknown as WorkspaceState;
-  if ([state.accounts, state.messages, state.drafts, state.sent, state.agents].some(items => items.length)) return invalid();
+  if (state.agents.length) return invalid();
   const ids = new Set<string>();
   const unique = (id: unknown) => { if (!string(id, 128) || ids.has(id)) return false; ids.add(id); return true; };
+  if (state.accounts.length !== 0 && state.accounts.length !== PERSONAL_MAIL_ACCOUNTS.length) return invalid();
+  for (const account of state.accounts) {
+    if (!record(account)) return invalid();
+    const expected = PERSONAL_MAIL_ACCOUNTS.find(item => item.id === account.id);
+    if (!record(account) || !unique(account.id) || !expected || !keys(account, ["id", "ownerId", "provider", "label", "address", "mode"]) || account.ownerId !== ownerId || Object.entries(expected).some(([key, value]) => (account as unknown as Record<string, unknown>)[key] !== value)) return invalid();
+  }
+  if (state.messages.length !== (state.accounts.length ? PERSONAL_MAIL_MESSAGES.length : 0)) return invalid();
+  for (const message of state.messages) {
+    if (!record(message)) return invalid();
+    const expected = PERSONAL_MAIL_MESSAGES.find(item => item.id === message.id);
+    if (!record(message) || !unique(message.id) || !expected || !keys(message, ["id", "accountId", "subject", "from", "to", "body", "receivedAt", "read"]) || typeof message.read !== "boolean" || Object.entries(expected).some(([key, value]) => key !== "read" && (message as unknown as Record<string, unknown>)[key] !== value)) return invalid();
+  }
+  const email = (value: unknown) => string(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  for (const [item, sent] of [...state.drafts.map(item => [item, false] as const), ...state.sent.map(item => [item, true] as const)]) {
+    if (!record(item)) return invalid();
+    const fields = item as unknown as Record<string, unknown>;
+    if (!record(item) || !unique(item.id) || !state.accounts.some(account => account.id === item.accountId) || !keys(item, sent ? ["id", "accountId", "messageId", "from", "to", "subject", "body", "sentAt", "mode"] : ["id", "accountId", "messageId", "to", "subject", "body", "status"]) || !email(item.to) || !string(item.subject) || !string(item.body, 20000)) return invalid();
+    if (item.messageId !== undefined && !state.messages.some(message => message.id === item.messageId && message.accountId === item.accountId)) return invalid();
+    if (sent ? fields.mode !== "fixture" || !date(fields.sentAt) || fields.from !== state.accounts.find(account => account.id === item.accountId)?.address : fields.status !== "draft") return invalid();
+  }
   if (!state.calendars.length) return invalid();
   for (const calendar of state.calendars) if (!record(calendar) || !keys(calendar, ["id", "ownerId", "name", "color"]) || !unique(calendar.id) || calendar.ownerId !== ownerId || !string(calendar.name) || !/^#[0-9a-f]{6}$/i.test(calendar.color)) return invalid();
   for (const task of state.tasks) {
-    if (!record(task) || !keys(task, ["id", "ownerId", "title", "completed", "scheduledSlot", "calendarEventId"]) || !unique(task.id) || task.ownerId !== ownerId || !string(task.title) || typeof task.completed !== "boolean") return invalid();
+    if (!record(task) || !keys(task, ["id", "ownerId", "title", "completed", "scheduledSlot", "calendarEventId", "sourceMessageId", "sourceAccountId"]) || !unique(task.id) || task.ownerId !== ownerId || !string(task.title) || typeof task.completed !== "boolean") return invalid();
+    if ((task.sourceMessageId === undefined) !== (task.sourceAccountId === undefined) || (task.sourceMessageId !== undefined && !state.messages.some(message => message.id === task.sourceMessageId && message.accountId === task.sourceAccountId))) return invalid();
     if (task.scheduledSlot !== undefined && (!record(task.scheduledSlot) || !keys(task.scheduledSlot, ["start", "end"]) || !date(task.scheduledSlot.start) || !date(task.scheduledSlot.end) || task.scheduledSlot.start >= task.scheduledSlot.end)) return invalid();
     if ((task.calendarEventId === undefined) !== (task.scheduledSlot === undefined) || (task.calendarEventId !== undefined && !string(task.calendarEventId, 128))) return invalid();
   }
@@ -50,10 +75,10 @@ export function validatePersonalWorkspace(ownerId: string, value: unknown): Work
   for (const entry of state.activity) if (!record(entry) || !keys(entry, ["id", "ownerId", "actor", "action", "createdAt"]) || !unique(entry.id) || entry.ownerId !== ownerId || (entry.actor !== "You" && !/^Agent agt_[a-f0-9]{32}$/.test(entry.actor)) || !COMMANDS.has(entry.action) || !date(entry.createdAt)) return invalid();
   return structuredClone(state);
 }
-function assertCommand(input: unknown): asserts input is WorkspaceCommand {
+function assertCommand(input: unknown): asserts input is PersonalWorkspaceCommand {
   if (!record(input) || typeof input.type !== "string") fail("invalid_input", "A workspace command is required");
-  if (!COMMANDS.has(input.type)) fail("forbidden", "Only personal Task and Calendar commands are available");
-  if (input.type === "task.create" && Object.hasOwn(input, "messageId")) fail("forbidden", "Personal tasks cannot link provider mail");
+  if (!COMMANDS.has(input.type)) fail("forbidden", "Only personal workspace commands are available");
+
 }
 function agentEngine(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant) {
   if (grant.ownerUserId !== ownerId || grant.revoked) fail("unauthorized", "Personal agent access is unavailable");
@@ -63,13 +88,15 @@ function agentEngine(ownerId: string, state: WorkspaceState, grant: PersonalAgen
 }
 export function personalAgentSnapshot(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant): WorkspaceView {
   const view = agentEngine(ownerId, state, grant).snapshot({ kind: "agent", ownerId, agentId: grant.id });
+  if (!grant.scopes.includes("mail:read")) view.drafts = [];
   view.agents = []; return view;
 }
 export function applyPersonalAgentCommand(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant, input: unknown) {
   assertCommand(input);
+  if (input.type === "mail.examples.add") fail("forbidden", "Only a human can add example mail");
   const engine = agentEngine(ownerId, state, grant);
   let result = engine.command({ kind: "agent", ownerId, agentId: grant.id }, input) as Record<string, unknown>;
-  const readScope = input.type.startsWith("task.") ? "tasks:read" : "calendar:read";
+  const readScope = input.type.startsWith("task.") ? "tasks:read" : input.type.startsWith("mail.") ? "mail:read" : "calendar:read";
   if (!grant.scopes.includes(readScope)) result = { id: result.id, ...(result.deleted === true ? { deleted: true } : { updated: true }) };
   const next = engine.exportState(); next.agents = [];
   return { result, state: validatePersonalWorkspace(ownerId, next) };
@@ -77,6 +104,11 @@ export function applyPersonalAgentCommand(ownerId: string, state: WorkspaceState
 export function applyPersonalWorkspaceCommand(ownerId: string, state: WorkspaceState, input: unknown) {
   const initial = validatePersonalWorkspace(ownerId, state);
   assertCommand(input);
+  if (input.type === "mail.examples.add") {
+    if (Object.keys(input).some(key => key !== "type")) fail("invalid_input", "Unknown command field");
+    const result = addPersonalMailExamples(ownerId, initial);
+    return { result, state: validatePersonalWorkspace(ownerId, initial) };
+  }
   const engine = createWorkspaceEngine(initial);
   const result = engine.command({ kind: "human", ownerId }, input as WorkspaceCommand);
   return { result, state: validatePersonalWorkspace(ownerId, engine.exportState()) };

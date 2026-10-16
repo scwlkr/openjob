@@ -6,6 +6,7 @@ import addFormats from "ajv-formats";
 import { parse } from "yaml";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
 import { createProviderPreview, createProviderResourceRef } from "../shared/provider-preview.ts";
+import { PERSONAL_MAIL_ACCOUNTS, PERSONAL_MAIL_MESSAGES } from "../shared/personal-mail-examples.ts";
 
 const contractUrl = new URL("../openapi/openapi.yaml", import.meta.url);
 const EXPECTED_RELEASE_VERSION = JSON.parse(
@@ -637,7 +638,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   }
 });
 
-test("personal workspace schemas accept only Task/Calendar commands and provider-free views", async () => {
+test("personal workspace schemas permit invented Mail with Tasks/Calendar while excluding real provider records", async () => {
   const contract = await validateOpenApiContract(contractUrl);
   const { schemas } = contract.components;
   const validateCommand = compileSchema(schemas.PersonalWorkspaceCommand);
@@ -652,8 +653,15 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
     { type: "calendar.create", calendarId: "personal", title: "Focus", ...interval },
     { type: "calendar.update", eventId: "event_a", title: "Revised focus", ...interval },
     { type: "calendar.delete", eventId: "event_a" },
+    { type: "mail.examples.add" },
+    { type: "mail.read", messageId: "example-message-1", read: true },
+    { type: "mail.draft", messageId: "example-message-1", body: "Invented reply" },
+    { type: "mail.compose", accountId: "mail:example-gmail-personal", to: "reader@example.invalid", subject: "Local example", body: "Invented draft" },
+    { type: "mail.draft.update", draftId: "draft_a", to: "reader@example.invalid", subject: "Edited example", body: "Local only" },
+    { type: "mail.simulate-send", draftId: "draft_a" },
+    { type: "mail.send", draftId: "draft_a" },
   ];
-  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 9);
+  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 16);
   for (const command of commands) {
     assert.equal(validateCommand(command), true, command.type);
     assert.equal(validateCommand({ ...command, ownerId: "foreign_user" }), false, `${command.type} cannot override owner`);
@@ -663,7 +671,7 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
     { type: "task.create", title: "Private", messageId: "mail_a" },
     { type: "task.complete", taskId: "task_a", completed: "true" },
     { type: "task.schedule", taskId: "task_a", calendarId: "personal", start: "tomorrow", end: "later" },
-    { type: "mail.send", draftId: "draft_a" },
+    { type: "mail.compose", accountId: "real_provider_account", to: "reader@example.invalid", subject: "Wrong account", body: "Not accepted" },
     { type: "agent.grant", name: "Unknown agent", scopes: ["tasks:write"] },
   ]) assert.equal(validateCommand(command), false, command.type);
 
@@ -677,12 +685,17 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
   };
   assert.equal(validateView(view), true);
   for (const field of ["accounts", "messages", "drafts", "sent", "agents"]) {
-    assert.equal(validateView({ ...view, [field]: [{ id: "private_provider_record" }] }), false, `${field} must stay empty`);
+    assert.equal(validateView({ ...view, [field]: [{ id: "private_provider_record" }] }), false, `${field} cannot contain arbitrary provider or grant records`);
   }
   assert.equal(validateView({ ...view, tasks: [{ ...view.tasks[0], sourceMessageId: "private_mail" }] }), false);
   assert.equal(validateView({ ...view, calendars: [{ ...view.calendars[0], accountId: "provider_mailbox" }] }), false);
   assert.equal(validateView({ ...view, activity: [{ ...view.activity[0], action: "mail.send" }] }), false);
   assert.equal(validateView({ ...view, unexpectedCredentials: "private" }), false);
+  const examples = { ...view, accounts: PERSONAL_MAIL_ACCOUNTS.map(account => ({ ...account, ownerId: "user_a" })), messages: [...PERSONAL_MAIL_MESSAGES] };
+  assert.equal(validateView(examples), true);
+  assert.equal(validateView({ ...examples, messages: [{ ...PERSONAL_MAIL_MESSAGES[0], body: "Untrusted provider replacement" }] }), false);
+  assert.equal(validateView({ ...examples, accounts: [{ ...examples.accounts[0], mode: "provider" }] }), false);
+  assert.equal(validateView({ ...examples, tasks: [{ ...view.tasks[0], sourceMessageId: "example-message-1", sourceAccountId: "mail:example-gmail-personal" }] }), true);
   assert.equal(contract.paths["/api/v1/workspace/snapshot"].get["x-openjob-retryable"], true);
   assert.equal(contract.paths["/api/v1/workspace/commands"].post["x-openjob-retryable"], false);
   const agentId = "agt_" + "a".repeat(32);
@@ -692,7 +705,7 @@ test("personal workspace schemas accept only Task/Calendar commands and provider
   const grantInput = { name: "Personal planner", scopes: ["tasks:read", "tasks:write"], resourceIds: ["tasks:personal"] };
   assert.equal(validateGrantInput(grantInput), true);
   for (const invalid of [
-    { ...grantInput, scopes: ["mail:read"] },
+    { ...grantInput, scopes: ["mail:send"] },
     { ...grantInput, scopes: ["tasks:read", "tasks:read"] },
     { ...grantInput, resourceIds: ["grp_private"] },
     { ...grantInput, ownerUserId: "foreign_user" },

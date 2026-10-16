@@ -1,20 +1,21 @@
-export type PersonalAgentScope = "tasks:read" | "tasks:write" | "calendar:read" | "calendar:write";
-export type PersonalAgentResource = "tasks:personal" | "calendar:personal";
+import { PERSONAL_MAIL_RESOURCES } from "./personal-mail-examples.ts";
+export type PersonalAgentScope = "tasks:read" | "tasks:write" | "calendar:read" | "calendar:write" | "mail:read" | "mail:draft" | "mail:simulate-send";
+export type PersonalAgentResource = "tasks:personal" | "calendar:personal" | typeof PERSONAL_MAIL_RESOURCES[number];
 export type PersonalAgentInput = { name: string; scopes: PersonalAgentScope[]; resourceIds: PersonalAgentResource[] };
 export type PersonalAgentGrant = PersonalAgentInput & { id: string; ownerUserId: string; createdAt: string; expiresAt: string; revoked: boolean };
 export type StoredPersonalAgentGrant = PersonalAgentGrant & { tokenHash: string };
 export const PERSONAL_AGENT_ID = /^agt_[a-f0-9]{32}$/;
 export const PERSONAL_AGENT_TOKEN = /^oj_personal_([A-Za-z0-9_-]{1,128})\.(agt_[a-f0-9]{32})\.([A-Za-z0-9_-]{43})$/;
 export const PERSONAL_AGENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
-export const PERSONAL_AGENT_SCOPES: PersonalAgentScope[] = ["tasks:read", "tasks:write", "calendar:read", "calendar:write"];
-export const PERSONAL_AGENT_RESOURCES: PersonalAgentResource[] = ["tasks:personal", "calendar:personal"];
+export const PERSONAL_AGENT_SCOPES: PersonalAgentScope[] = ["tasks:read", "tasks:write", "calendar:read", "calendar:write", "mail:read", "mail:draft", "mail:simulate-send"];
+export const PERSONAL_AGENT_RESOURCES: PersonalAgentResource[] = ["tasks:personal", "calendar:personal", ...PERSONAL_MAIL_RESOURCES];
 function fail(code: string): never { throw Object.assign(new Error(code === "invalid_state" ? "Invalid stored personal grant" : "Invalid personal agent input"), { code }); }
 export function validatePersonalAgentInput(input: unknown): PersonalAgentInput {
   if (!input || typeof input !== "object" || Array.isArray(input)) fail("invalid_input");
   const value = input as Record<string, unknown>;
   if (Object.keys(value).sort().join(",") !== "name,resourceIds,scopes" || typeof value.name !== "string" || !value.name.trim() || [...value.name.trim()].length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(value.name)) fail("invalid_input");
-  if (!Array.isArray(value.scopes) || !value.scopes.length || value.scopes.length > 4 || value.scopes.some(scope => !PERSONAL_AGENT_SCOPES.includes(scope)) || new Set(value.scopes).size !== value.scopes.length) fail("invalid_input");
-  if (!Array.isArray(value.resourceIds) || !value.resourceIds.length || value.resourceIds.length > 2 || value.resourceIds.some(resource => !PERSONAL_AGENT_RESOURCES.includes(resource)) || new Set(value.resourceIds).size !== value.resourceIds.length) fail("invalid_input");
+  if (!Array.isArray(value.scopes) || !value.scopes.length || value.scopes.length > 7 || value.scopes.some(scope => !PERSONAL_AGENT_SCOPES.includes(scope)) || new Set(value.scopes).size !== value.scopes.length) fail("invalid_input");
+  if (!Array.isArray(value.resourceIds) || !value.resourceIds.length || value.resourceIds.length > 5 || value.resourceIds.some(resource => !PERSONAL_AGENT_RESOURCES.includes(resource)) || new Set(value.resourceIds).size !== value.resourceIds.length) fail("invalid_input");
   return { name: value.name.trim(), scopes: [...value.scopes], resourceIds: [...value.resourceIds] } as PersonalAgentInput;
 }
 export function parsePersonalAgentGrants(owner: string, encoded?: string): StoredPersonalAgentGrant[] {

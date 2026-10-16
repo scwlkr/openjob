@@ -419,6 +419,31 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(privateState.tasks.find(task => task.id === privateTask.id).completed, true);
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).title, "Persisted personal plan");
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).start, "2026-07-17T10:00:00.000Z");
+    // The authenticated Mail journey uses the same private document and strict
+    // response contract, with invented records and no provider transport.
+    const seedMail = await privateCall("initialAdmin", { type: "mail.examples.add" });
+    assert.equal(seedMail.status, 200);
+    assert.equal((await seedMail.json()).data.added, true);
+    const seeded = (await (await privateCall("initialAdmin")).json()).data;
+    assert.equal(seeded.accounts.length, 3); assert.equal(seeded.messages.length, 6);
+    const message = seeded.messages[0];
+    const linkedTask = await privateCall("initialAdmin", { type: "task.create", title: "Act on invented mail", messageId: message.id });
+    assert.equal(linkedTask.status, 200);
+    const mailTask = (await linkedTask.json()).data;
+    assert.equal(mailTask.sourceAccountId, message.accountId);
+    assert.equal((await privateCall("initialAdmin", { type: "task.schedule", taskId: mailTask.id, calendarId: "personal", start: "2026-07-18T10:00:00Z", end: "2026-07-18T10:30:00Z" })).status, 200);
+    assert.equal((await privateCall("initialAdmin", { type: "task.complete", taskId: mailTask.id, completed: true })).status, 200);
+    const reply = await privateCall("initialAdmin", { type: "mail.draft", messageId: message.id, body: "Invented reply saved through the API" });
+    assert.equal(reply.status, 200); const draft = (await reply.json()).data;
+    assert.equal(draft.accountId, message.accountId);
+    const realSend = await privateCall("initialAdmin", { type: "mail.send", draftId: draft.id });
+    assert.equal(realSend.status, 403); assert.equal((await realSend.json()).error.code, "sending_disabled");
+    await harness.restart();
+    const persistedMail = (await (await privateCall("initialAdmin")).json()).data;
+    assert.equal(persistedMail.drafts.find(item => item.id === draft.id).body, "Invented reply saved through the API");
+    assert.equal(persistedMail.tasks.find(item => item.id === mailTask.id).completed, true);
+    assert.equal((await (await privateCall("memberUser")).json()).data.messages.length, 0);
+    assert.equal((await (await privateCall("initialAdmin", { type: "mail.examples.add" })).json()).data.added, false);
     const previewPath = "/api/v1/workspace/provider-preview";
     const deniedPreview = await request({ actor: "invalid", method: "GET", path: previewPath });
     assert.equal(deniedPreview.status, 401); await validate(deniedPreview, previewPath, "get");

@@ -15,11 +15,15 @@ type Options = {
   requestId?: () => string;
 };
 const COMMAND_FIELDS: Record<string, string[]> = {
-  "task.create": ["type", "title"], "task.update": ["type", "taskId", "title"],
+  "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
   "task.complete": ["type", "taskId", "completed"], "task.unschedule": ["type", "taskId"],
   "task.delete": ["type", "taskId"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
   "calendar.create": ["type", "calendarId", "title", "start", "end"],
   "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
+  "mail.examples.add": ["type"], "mail.read": ["type", "messageId", "read"],
+  "mail.draft": ["type", "messageId", "body"], "mail.compose": ["type", "accountId", "to", "subject", "body"],
+  "mail.draft.update": ["type", "draftId", "to", "subject", "body"], "mail.simulate-send": ["type", "draftId"],
+  "mail.send": ["type", "draftId"],
 };
 
 export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, requestId = defaultRequestId }: Options) {
@@ -70,10 +74,13 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
           try { input = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
           catch { return fail("invalid_request", "A valid UTF-8 JSON command is required.", 400); }
           if (!input || typeof input !== "object" || Array.isArray(input) || !("type" in input) || typeof input.type !== "string") return fail("invalid_request", "A command object with a type is required.", 400);
-          if (!Object.hasOwn(COMMAND_FIELDS, input.type)) return fail("forbidden", "Only personal Tasks and Calendar commands are available.", 403);
+          if (!Object.hasOwn(COMMAND_FIELDS, input.type)) return fail("forbidden", "The personal workspace command is unavailable.", 403);
           const fields = Object.keys(input);
           const allowed = COMMAND_FIELDS[input.type];
-          if (fields.length !== allowed.length || fields.some(field => !allowed.includes(field))) return fail("invalid_request", "The command contains missing or unknown fields.", 400);
+          const required = input.type === "task.create" ? allowed.filter(field => field !== "messageId") : allowed;
+          if (required.some(field => !fields.includes(field)) || fields.some(field => !allowed.includes(field))) return fail("invalid_request", "The command contains missing or unknown fields.", 400);
+          if (input.type === "mail.send") return fail("sending_disabled", "Real sending is disabled. Invented mail may only be simulated locally.", 403);
+          if (input.type === "mail.examples.add" && personalToken) return fail("forbidden", "Only a human may add invented mail examples.", 403);
           // Owner identity is resolved above; neither request bodies nor fixture headers select it.
           data = personalToken ? await workspace.commandForAgent(personalToken, input) : await workspace.command(user!.userId, input);
         } else return fail("not_found", "The requested resource was not found.", 404);
@@ -90,6 +97,7 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         if (code === "authentication_required") return fail(code, "The personal agent credential is unavailable or expired.", 401);
         if (code === "invalid_input") return fail(code, "One or more command fields are invalid.", 400);
         if (code === "forbidden") return fail(code, "The personal workspace resource is unavailable.", 403);
+        if (code === "sending_disabled") return fail(code, "Real sending is disabled.", 403);
         if (code === "workspace_capacity") return fail(code, "Personal workspace capacity was exceeded.", 413);
         if (code === "conflict") return fail(code, "The workspace changed. Reload before retrying.", 409);
         return internalErrorResponse(requestId);

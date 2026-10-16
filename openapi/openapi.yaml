@@ -1393,10 +1393,12 @@ paths:
       operationId: getPersonalWorkspace
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
-      description: Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved
-        User; distinct personal agent credentials use their current stored owner, scopes and named
-        resources with immediate revocation. No human credential fallback. Mail and Agents arrays
-        remain empty. Fixture headers and Group credentials never authorize this API.
+      description: Authenticated personal Tasks, Calendar and explicitly invented Mail examples. Human
+        Firebase sessions use the resolved User; personal agent credentials require current stored
+        scopes and named example-mailbox resources with immediate revocation. No human credential fallback.
+        Only humans may add idempotent mail examples. Invented drafts and Simulated Sent never reach a
+        provider; mail.send always403sending_disabled. Real provider-preview messages and credential
+        data cannot be imported. Fixture headers and Group credentials never authorize this API.
       responses:
         "200":
           description: Personal workspace result.
@@ -1496,10 +1498,12 @@ paths:
       operationId: commandPersonalWorkspace
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
-      description: Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved
-        User; distinct personal agent credentials use their current stored owner, scopes and named
-        resources with immediate revocation. No human credential fallback. Mail and Agents arrays
-        remain empty. Fixture headers and Group credentials never authorize this API.
+      description: Authenticated personal Tasks, Calendar and explicitly invented Mail examples. Human
+        Firebase sessions use the resolved User; personal agent credentials require current stored
+        scopes and named example-mailbox resources with immediate revocation. No human credential fallback.
+        Only humans may add idempotent mail examples. Invented drafts and Simulated Sent never reach a
+        provider; mail.send always403sending_disabled. Real provider-preview messages and credential
+        data cannot be imported. Fixture headers and Group credentials never authorize this API.
       responses:
         "200":
           description: Personal workspace result.
@@ -1595,7 +1599,7 @@ paths:
       operationId: listPersonalAgentGrants
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
-      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent
+      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent
         grants. Public metadata never contains token hashes. The token is returned once on creation.
         Existing Group agent credentials cannot manage or use these grants.
       responses:
@@ -1689,7 +1693,7 @@ paths:
       operationId: createPersonalAgentGrant
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
-      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent
+      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent
         grants. Public metadata never contains token hashes. The token is returned once on creation.
         Existing Group agent credentials cannot manage or use these grants.
       responses:
@@ -1816,7 +1820,7 @@ paths:
       operationId: revokePersonalAgentGrant
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
-      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent
+      description: Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent
         grants. Public metadata never contains token hashes. The token is returned once on creation.
         Existing Group agent credentials cannot manage or use these grants.
       responses:
@@ -2139,8 +2143,8 @@ components:
       type: http
       scheme: bearer
       bearerFormat: OpenJobPersonalAgent
-      description: Distinct oj_personal_<owner>.<grant>.<secret> credential. Only granted tasks/calendar
-        scopes and tasks:personal/calendar:personal resources; expires after24hours, immediate
+      description: Distinct oj_personal_<owner>.<grant>.<secret> credential. Only granted tasks/calendar/invented-Mail
+        scopes and explicitly named personal/example-mailbox resources; expires after24hours, immediate
         revocation. Never refresh or fall back to a human identity.
     agentBearer:
       type: http
@@ -3493,7 +3497,7 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 4
+          maxItems: 7
           uniqueItems: true
           items:
             type: string
@@ -3502,16 +3506,22 @@ components:
               - tasks:write
               - calendar:read
               - calendar:write
+              - mail:read
+              - mail:draft
+              - mail:simulate-send
         resourceIds:
           type: array
           minItems: 1
-          maxItems: 2
+          maxItems: 5
           uniqueItems: true
           items:
             type: string
             enum:
               - tasks:personal
               - calendar:personal
+              - mail:example-gmail-personal
+              - mail:example-gmail-work
+              - mail:example-outlook
     PersonalAgentGrant:
       type: object
       additionalProperties: false
@@ -3539,7 +3549,7 @@ components:
         scopes:
           type: array
           minItems: 1
-          maxItems: 4
+          maxItems: 7
           uniqueItems: true
           items:
             type: string
@@ -3548,16 +3558,22 @@ components:
               - tasks:write
               - calendar:read
               - calendar:write
+              - mail:read
+              - mail:draft
+              - mail:simulate-send
         resourceIds:
           type: array
           minItems: 1
-          maxItems: 2
+          maxItems: 5
           uniqueItems: true
           items:
             type: string
             enum:
               - tasks:personal
               - calendar:personal
+              - mail:example-gmail-personal
+              - mail:example-gmail-work
+              - mail:example-outlook
         createdAt:
           type: string
           format: date-time
@@ -3620,6 +3636,26 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        sourceMessageId:
+          type: string
+          enum:
+            - example-message-1
+            - example-message-2
+            - example-message-3
+            - example-message-4
+            - example-message-5
+            - example-message-6
+        sourceAccountId:
+          type: string
+          enum:
+            - mail:example-gmail-personal
+            - mail:example-gmail-work
+            - mail:example-outlook
+      dependentRequired:
+        sourceMessageId:
+          - sourceAccountId
+        sourceAccountId:
+          - sourceMessageId
     PersonalWorkspaceCalendar:
       type: object
       additionalProperties: false
@@ -3696,7 +3732,7 @@ components:
           maxLength: 128
         actor:
           type: string
-          pattern: "^(You|Agent agt_[a-f0-9]{32})$"
+          pattern: ^(You|Agent agt_[a-f0-9]{32})$
         action:
           type: string
           enum:
@@ -3709,6 +3745,12 @@ components:
             - calendar.create
             - calendar.update
             - calendar.delete
+            - mail.examples.add
+            - mail.read
+            - mail.draft
+            - mail.compose
+            - mail.draft.update
+            - mail.simulate-send
         createdAt:
           type: string
           format: date-time
@@ -3728,12 +3770,12 @@ components:
       properties:
         accounts:
           type: array
-          maxItems: 0
-          items: false
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceExampleAccount"
         messages:
           type: array
-          maxItems: 0
-          items: false
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceExampleMessage"
         tasks:
           type: array
           items:
@@ -3748,12 +3790,12 @@ components:
             $ref: "#/components/schemas/PersonalWorkspaceEvent"
         drafts:
           type: array
-          maxItems: 0
-          items: false
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceDraft"
         sent:
           type: array
-          maxItems: 0
-          items: false
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceSent"
         agents:
           type: array
           maxItems: 0
@@ -3777,6 +3819,15 @@ components:
               type: string
               minLength: 1
               maxLength: 500
+            messageId:
+              type: string
+              enum:
+                - example-message-1
+                - example-message-2
+                - example-message-3
+                - example-message-4
+                - example-message-5
+                - example-message-6
         - type: object
           additionalProperties: false
           required:
@@ -3928,6 +3979,143 @@ components:
               type: string
               minLength: 1
               maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+          properties:
+            type:
+              type: string
+              const: mail.examples.add
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - messageId
+            - read
+          properties:
+            type:
+              type: string
+              const: mail.read
+            messageId:
+              type: string
+              enum:
+                - example-message-1
+                - example-message-2
+                - example-message-3
+                - example-message-4
+                - example-message-5
+                - example-message-6
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - messageId
+            - body
+          properties:
+            type:
+              type: string
+              const: mail.draft
+            messageId:
+              type: string
+              enum:
+                - example-message-1
+                - example-message-2
+                - example-message-3
+                - example-message-4
+                - example-message-5
+                - example-message-6
+            body:
+              type: string
+              minLength: 1
+              maxLength: 20000
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - accountId
+            - to
+            - subject
+            - body
+          properties:
+            type:
+              type: string
+              const: mail.compose
+            accountId:
+              type: string
+              enum:
+                - mail:example-gmail-personal
+                - mail:example-gmail-work
+                - mail:example-outlook
+            to:
+              type: string
+              format: email
+              maxLength: 254
+            subject:
+              type: string
+              minLength: 1
+              maxLength: 500
+            body:
+              type: string
+              minLength: 1
+              maxLength: 20000
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - draftId
+            - to
+            - subject
+            - body
+          properties:
+            type:
+              type: string
+              const: mail.draft.update
+            draftId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            to:
+              type: string
+              format: email
+              maxLength: 254
+            subject:
+              type: string
+              minLength: 1
+              maxLength: 500
+            body:
+              type: string
+              minLength: 1
+              maxLength: 20000
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - draftId
+          properties:
+            type:
+              type: string
+              const: mail.simulate-send
+            draftId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - draftId
+          properties:
+            type:
+              type: string
+              const: mail.send
+            draftId:
+              type: string
+              minLength: 1
+              maxLength: 128
+          description: Always denied with403sending_disabled. This protocol has no real provider send path.
     PersonalWorkspaceDeleted:
       type: object
       additionalProperties: false
@@ -3948,6 +4136,451 @@ components:
         - $ref: "#/components/schemas/PersonalWorkspaceTask"
         - $ref: "#/components/schemas/PersonalWorkspaceEvent"
         - $ref: "#/components/schemas/PersonalWorkspaceDeleted"
+        - $ref: "#/components/schemas/PersonalWorkspaceExampleMessage"
+        - $ref: "#/components/schemas/PersonalWorkspaceDraft"
+        - $ref: "#/components/schemas/PersonalWorkspaceSent"
+        - $ref: "#/components/schemas/PersonalMailExamplesResult"
+    PersonalWorkspaceExampleAccount:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - provider
+            - label
+            - address
+            - mode
+            - ownerId
+          properties:
+            id:
+              type: string
+              const: mail:example-gmail-personal
+            provider:
+              type: string
+              const: gmail
+            label:
+              type: string
+              const: Personal Gmail example
+            address:
+              type: string
+              const: alex.personal@example.invalid
+            mode:
+              type: string
+              const: fixture
+            ownerId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - provider
+            - label
+            - address
+            - mode
+            - ownerId
+          properties:
+            id:
+              type: string
+              const: mail:example-gmail-work
+            provider:
+              type: string
+              const: gmail
+            label:
+              type: string
+              const: Work Gmail example
+            address:
+              type: string
+              const: alex.work@example.invalid
+            mode:
+              type: string
+              const: fixture
+            ownerId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - provider
+            - label
+            - address
+            - mode
+            - ownerId
+          properties:
+            id:
+              type: string
+              const: mail:example-outlook
+            provider:
+              type: string
+              const: outlook
+            label:
+              type: string
+              const: Outlook example
+            address:
+              type: string
+              const: alex.outlook@example.invalid
+            mode:
+              type: string
+              const: fixture
+            ownerId:
+              type: string
+              minLength: 1
+              maxLength: 128
+    PersonalWorkspaceExampleMessage:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-1
+            accountId:
+              type: string
+              const: mail:example-gmail-personal
+            subject:
+              type: string
+              const: Launch checklist for Friday
+            from:
+              type: string
+              const: colleague1@example.invalid
+            to:
+              type: string
+              const: alex.personal@example.invalid
+            body:
+              type: string
+              const: Please review the invented launch checklist before Friday. The accessibility pass is ready.
+            receivedAt:
+              type: string
+              const: 2026-10-17T09:00:00.000Z
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-2
+            accountId:
+              type: string
+              const: mail:example-gmail-personal
+            subject:
+              type: string
+              const: Weekend trail plan
+            from:
+              type: string
+              const: colleague2@example.invalid
+            to:
+              type: string
+              const: alex.personal@example.invalid
+            body:
+              type: string
+              const: Shall we meet at the imaginary trailhead on Saturday morning?
+            receivedAt:
+              type: string
+              const: 2026-10-16T09:00:00.000Z
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-3
+            accountId:
+              type: string
+              const: mail:example-gmail-work
+            subject:
+              type: string
+              const: Design review notes
+            from:
+              type: string
+              const: colleague3@example.invalid
+            to:
+              type: string
+              const: alex.work@example.invalid
+            body:
+              type: string
+              const: Here are the fictional review notes. Please confirm the revised navigation.
+            receivedAt:
+              type: string
+              const: 2026-10-15T09:00:00.000Z
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-4
+            accountId:
+              type: string
+              const: mail:example-gmail-work
+            subject:
+              type: string
+              const: Quarterly planning agenda
+            from:
+              type: string
+              const: colleague4@example.invalid
+            to:
+              type: string
+              const: alex.work@example.invalid
+            body:
+              type: string
+              const: Please prepare three priorities for our example planning session.
+            receivedAt:
+              type: string
+              const: 2026-10-14T09:00:00.000Z
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-5
+            accountId:
+              type: string
+              const: mail:example-outlook
+            subject:
+              type: string
+              const: Community garden rota
+            from:
+              type: string
+              const: colleague5@example.invalid
+            to:
+              type: string
+              const: alex.outlook@example.invalid
+            body:
+              type: string
+              const: Can you take the fictional watering slot next Tuesday?
+            receivedAt:
+              type: string
+              const: 2026-10-13T09:00:00.000Z
+            read:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - accountId
+            - subject
+            - from
+            - to
+            - body
+            - receivedAt
+            - read
+          properties:
+            id:
+              type: string
+              const: example-message-6
+            accountId:
+              type: string
+              const: mail:example-outlook
+            subject:
+              type: string
+              const: Workshop materials
+            from:
+              type: string
+              const: colleague6@example.invalid
+            to:
+              type: string
+              const: alex.outlook@example.invalid
+            body:
+              type: string
+              const: The invented workshop handouts are ready for your review.
+            receivedAt:
+              type: string
+              const: 2026-10-12T09:00:00.000Z
+            read:
+              type: boolean
+    PersonalWorkspaceDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - to
+        - subject
+        - body
+        - status
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        accountId:
+          type: string
+          enum:
+            - mail:example-gmail-personal
+            - mail:example-gmail-work
+            - mail:example-outlook
+        messageId:
+          type: string
+          enum:
+            - example-message-1
+            - example-message-2
+            - example-message-3
+            - example-message-4
+            - example-message-5
+            - example-message-6
+        to:
+          type: string
+          format: email
+          maxLength: 254
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 500
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        status:
+          type: string
+          const: draft
+    PersonalWorkspaceSent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - from
+        - to
+        - subject
+        - body
+        - sentAt
+        - mode
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        accountId:
+          type: string
+          enum:
+            - mail:example-gmail-personal
+            - mail:example-gmail-work
+            - mail:example-outlook
+        messageId:
+          type: string
+          enum:
+            - example-message-1
+            - example-message-2
+            - example-message-3
+            - example-message-4
+            - example-message-5
+            - example-message-6
+        from:
+          type: string
+          enum:
+            - alex.personal@example.invalid
+            - alex.work@example.invalid
+            - alex.outlook@example.invalid
+        to:
+          type: string
+          format: email
+          maxLength: 254
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 500
+        body:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        sentAt:
+          type: string
+          format: date-time
+        mode:
+          type: string
+          const: fixture
+    PersonalMailExamplesResult:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - added
+        - accountIds
+        - messageIds
+      properties:
+        mode:
+          type: string
+          const: fixture
+        added:
+          type: boolean
+        accountIds:
+          type: array
+          minItems: 3
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - mail:example-gmail-personal
+              - mail:example-gmail-work
+              - mail:example-outlook
+        messageIds:
+          type: array
+          minItems: 6
+          maxItems: 6
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - example-message-1
+              - example-message-2
+              - example-message-3
+              - example-message-4
+              - example-message-5
+              - example-message-6
     InstallationId:
       type: string
       minLength: 16
@@ -4533,6 +5166,7 @@ components:
     ErrorCode:
       type: string
       enum:
+        - sending_disabled
         - provider_unavailable
         - forbidden
         - invalid_input

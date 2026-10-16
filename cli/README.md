@@ -40,7 +40,7 @@ only the binding name with `wrangler secret list --env preview`. Never put the
 secret in Git, a command argument, or terminal output. Provider passwords, MFA,
 and recovery material remain in their 1Password items.
 
-## Personal Tasks and Calendar
+## Personal Tasks, Calendar and invented Mail
 
 `openjob workspace providers --format json` reads the same provider adapter
 preview as the web app. It contains invented accounts/messages/calendars with
@@ -70,6 +70,7 @@ authenticated API. Web and CLI read and mutate the same server-owned records:
 openjob workspace snapshot --format json
 printf '%s' '{"type":"task.create","title":"Prepare the demo"}' | openjob workspace command --input - --format json
 openjob workspace command --input command.json --format json
+printf '%s' '{"type":"mail.examples.add"}' | openjob workspace command --input - --format json
 ```
 
 The strict command objects support `task.create` (`title`), `task.update`
@@ -81,11 +82,23 @@ The strict command objects support `task.create` (`title`), `task.update`
 for the default calendar and ISO timestamps with timezone offsets or `Z`.
 
 Normal `--profile`, `--format`, `--out` and `--quiet` conventions apply.
-No Group selection, fixture owner headers or Mail access are accepted here.
+No Group selection, fixture owner headers or real provider Mail access are accepted here.
 A linked task mutation also updates its calendar block.
 Commands are not retried for network/service errors: inspect a fresh snapshot
 before retrying an uncertain mutation. Hosted availability requires a reviewed
 release; fixture demonstrations do not establish deployed availability.
+
+`mail.examples.add` is human-only and idempotently adds three invented mailboxes
+and six messages while preserving Tasks, Calendar, drafts, read flags and grants.
+`task.create` may include one known example `messageId`; provenance stays private
+and is hidden from agents without that mailbox’s read scope. Invented Mail
+commands are `mail.read` (`messageId`, `read`), `mail.draft` (`messageId`, `body`),
+`mail.compose` (`accountId`, `to`, `subject`, `body`), `mail.draft.update`
+(`draftId`, `to`, `subject`, `body`) and `mail.simulate-send` (`draftId`). Editing
+keeps the original mailbox and draft ID. Bodies allow up to 20,000 characters
+inside the 32 KiB JSON request limit. Valid recipient addresses stay local;
+Simulated Sent uses the invented account’s `.invalid` sender. `mail.send` always
+returns `sending_disabled`; nothing reaches a provider or recipient.
 
 ### Scoped personal agents
 
@@ -113,6 +126,11 @@ an ID/acknowledgment rather than Task/Event content; reads require the matching
 read scope. Revocation, expiry and owner account deletion deny later calls.
 Personal credentials cannot administer grants or authorize existing Group APIs;
 Group agent credentials cannot authorize personal workspace calls.
+Invented mailbox resources are `mail:example-gmail-personal`,
+`mail:example-gmail-work` and `mail:example-outlook`. Grant `mail:read`,
+`mail:draft` and `mail:simulate-send` only as needed on specific example
+mailboxes. These grants never authorize real provider preview records or seed
+examples; simulation requires both draft and simulate-send capabilities.
 
 ## Scoped agent reads
 
