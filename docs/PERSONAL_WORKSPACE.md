@@ -13,6 +13,8 @@ not create accounts implicitly or accept demo owner headers as authentication.
   Linked Task and Calendar changes are committed together. Private Tasks never
   enter a Group Task list.
 
+Choose **Open linked task** on a saved Task-backed Calendar block to focus its exact Task. From there, edit, complete, reschedule or reopen source Mail. The action requires the complete block/Task/calendar relationship in the current scoped snapshot. Unsaved Task titles, new-task text, schedules and Calendar editor fields survive tab switches; owner/session changes clear them.
+
 The Personal Calendar is OpenJob-owned; it is not a Google, Outlook or CalDAV
 calendar. The **Mail** tab offers explicit **Add invented examples** activation:
 three fictional mailboxes and six fixed messages, saved in the same private
@@ -80,6 +82,8 @@ openjob workspace snapshot --agent-token-file ./planner.token --format json
 openjob workspace agent list --format json
 openjob workspace agent revoke AGENT_ID --yes
 ```
+
+Agents can similarly match a visible Calendar event’s `taskId` to a Task and its `calendarEventId` in `workspace snapshot`, with tasks:read and calendar:read on the relevant resources. Insufficient scopes redact the links or entire records.
 
 Agents can resolve an allowed Task source from the same `workspace snapshot` response by matching both `sourceMessageId` and `sourceAccountId` to a visible message. This needs tasks:read and mail:read on the named resources; Tasks-only snapshots redact both source fields. No extra navigation endpoint or provider permission exists.
 
