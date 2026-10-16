@@ -1,10 +1,11 @@
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from "./firestore-rest.ts";
 import { activeUserHistoryWrite, assertActiveUser } from "./user-history.ts";
-import { validateProviderConnection, type ProviderConnection, type ProviderConnectionStore } from "../server/providers/provider-connections.ts";
+import { providerConnectionFingerprint, validateProviderConnection, type ProviderConnection, type ProviderConnectionStore } from "../server/providers/provider-connections.ts";
 
 export type ProviderConnectionInput = Omit<ProviderConnection, "ownerId" | "revision">;
 export type DurableProviderConnectionStore = ProviderConnectionStore & {
   putForOwner(ownerId: string, input: ProviderConnectionInput, expectedRevision: string | null): Promise<ProviderConnection>;
+  approveReservedForOwner(ownerId: string, reservation: ProviderConnection): Promise<ProviderConnection>;
   revokeForOwner(ownerId: string, accountId: string, expectedRevision: string): Promise<ProviderConnection | null>;
   removeAllForUser(ownerId: string): Promise<number>;
 };
@@ -72,6 +73,19 @@ export function createFirestoreProviderConnectionStore(config: FirebaseConfig, f
         if (records.some(row => row.accountId !== candidate.accountId && (row.subject === candidate.subject || row.credentialRef === candidate.credentialRef))) fail("conflict");
         const updated = { ...candidate, revision: nextRevision(records) };
         return { records: [...records.filter(row => row.accountId !== candidate.accountId), updated], result: updated };
+      }) as ProviderConnection;
+    },
+    async approveReservedForOwner(owner, reservation) {
+      let pending: ProviderConnection;
+      try { pending = validateProviderConnection(reservation, owner); } catch { return fail("invalid_input"); }
+      if (pending.state !== "needs_consent" || !validRevision(pending.revision)) fail("invalid_input");
+      return await mutate(owner, records => {
+        const current = records.find(row => row.accountId === pending.accountId);
+        if (!current || current.state !== "needs_consent" || providerConnectionFingerprint(current) !== providerConnectionFingerprint(pending)) fail("conflict");
+        // One-use pending -> approved transition preserves the vault's reserved revision.
+        // Generic updates/revocations still mint revisions, and approved/revoked rows cannot use this path.
+        const approved = { ...current, state: "approved" as const };
+        return { records: records.map(row => row.accountId === current.accountId ? approved : row), result: approved };
       }) as ProviderConnection;
     },
     async revokeForOwner(owner, account, expectedRevision) {
