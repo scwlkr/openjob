@@ -651,6 +651,7 @@ test("personal workspace schemas permit invented Mail with Tasks/Calendar while 
     { type: "task.update", taskId: "task_a", title: "Updated plan" },
     { type: "task.complete", taskId: "task_a", completed: true },
     { type: "task.schedule", taskId: "task_a", calendarId: "personal", ...interval },
+    { type: "task.schedule-available", taskId: "task_a", calendarId: "personal", ...interval },
     { type: "task.unschedule", taskId: "task_a" },
     { type: "task.delete", taskId: "task_a" },
     { type: "calendar.create", calendarId: "personal", title: "Focus", ...interval },
@@ -664,7 +665,7 @@ test("personal workspace schemas permit invented Mail with Tasks/Calendar while 
     { type: "mail.simulate-send", draftId: "draft_a" },
     { type: "mail.send", draftId: "draft_a" },
   ];
-  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 17);
+  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 18);
   for (const command of commands) {
     assert.equal(validateCommand(command), true, command.type);
     assert.equal(validateCommand({ ...command, ownerId: "foreign_user" }), false, `${command.type} cannot override owner`);

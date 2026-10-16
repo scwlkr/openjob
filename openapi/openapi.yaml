@@ -5453,6 +5453,7 @@ components:
     ErrorCode:
       type: string
       enum:
+        - schedule_conflict
         - calendar_import_conflict
         - calendar_ical_unsupported
         - sending_disabled

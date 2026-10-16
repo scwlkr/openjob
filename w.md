@@ -1,3 +1,29 @@
+# npm registry verified13:19 UTC / latest tag correction needs human npm prompt
+
+Public exact-version reads now200. Stable0.3.7 and dev0.3.8-dev.1792154226.37c322be4d3d
+SHA512/shasums exactly match approved archives; source5502ebd/37c322b and channel
+metadata latest/dev are correct, registryVerified:true. Cache-bypassed packument
+shows latest AND dev point to dev version. One tag-only correction attempt
+npm dist-tag add @scwlkr/openjob@0.3.7 latest --registry=https://registry.npmjs.org
+stopped EOTP. No confirmed tag change; no retry/publish/version bump. Shane must
+complete this tag-only command security prompt; never share OTP/token/password.
+Fresh isolated registry installs and actual full UI-assets/API Task-create,
+schedule, completion, owner isolation, Host-Origin and shutdown smoke PASS both:
+/tmp/openjob-303-registry-stable (explicit0.3.7), /tmp/openjob-303-registry-dev (@dev).
+Dev updates returns current with exactdev; stable updates safely unavailable
+because live latest points to prerelease. Initial registry packages exclude
+WLK-304 persistence and WLK-306 work. Approved staged files/demos unchanged.
+Do not repoll registry until new evidence. Public npm URL:
+https://www.npmjs.com/package/@scwlkr/openjob
+
+WLK-306 checkpoint now has helper/domain/store/OpenAPI20 PASS, signed API9 PASS,
+and scoped CLI conflict regression fixed by adding missing ErrorCode enum.
+Native HTTP check cannot bundle because native Expo dependencies absent; no heavy
+install performed/no native claim. Independent static implementation review clean.
+Actual installed/UI/restart proof, final focused checks and integration pending.
+
+---
+
 # WLK-306 checkpoint / npm handoff readback13:13 UTC
 
 After parent reports Shane's13:12 'done', unauthenticated public registry GET and

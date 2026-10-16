@@ -187,3 +187,21 @@ test('workspace tasks filters authorized snapshots and runs from the standalone 
   await f.owner('b'); assert.deepEqual(await list(['--search', '[plan].*']), []);
   assert.deepEqual(f.failures, []);
 });
+
+test('existing CLI finds saved open time and submits the same conflict-checked command', async t => {
+  const f = await harness(t);
+  const command = async input => {
+    const result = await f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify(input));
+    assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data;
+  };
+  const task = await command({ type: 'task.create', title: 'CLI open-time work' });
+  const args = ['workspace', 'availability', '--task', task.id, '--schedule-start', '2027-05-11T09:00:00Z', '--schedule-end', '2027-05-11T11:00:00Z', '--minutes', '30', '--format', 'json'];
+  const found = await f.run(args); assert.equal(found.status, 0, found.stderr);
+  const slots = JSON.parse(found.stdout).data; assert.equal(slots.length, 4);
+  await command({ type: 'calendar.create', calendarId: 'personal', title: 'New booking', ...slots[0] });
+  const rejected = await f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify({ type: 'task.schedule-available', taskId: task.id, calendarId: 'personal', ...slots[0] }));
+  assert.deepEqual(f.failures, []); assert.equal(rejected.status, 6, rejected.stderr); assert.match(rejected.stderr, /schedule_conflict/);
+  await command({ type: 'task.schedule-available', taskId: task.id, calendarId: 'personal', ...slots[1] });
+  await f.owner('b'); const denied = await f.run(args); assert.notEqual(denied.status, 0);
+  assert.deepEqual(f.failures, []);
+});
