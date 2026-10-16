@@ -61,14 +61,15 @@ openjob updates
 npm install --global @scwlkr/openjob@dev
 ```
 
-At the16 October13:18 UTC verification, public `dev` correctly resolved to
-`0.3.8-dev.1792154226.37c322be4d3d`, while `latest` also pointed to that dev version.
-A tag-only correction to stable0.3.7 awaits the owner's npm security prompt;
-use the explicit stable version above until the corrected latest tag is verified.
-Do not republish existing versions. The stable update check safely reports
-unavailable while latest points to a prerelease. Both published artifact
-integrities match the approved archives. Public unscoped `openjob` belongs to a
-different project; use `@scwlkr/openjob`, retaining the `openjob` binary.
+At the16 October13:27 UTC verification, public `latest` correctly resolves to
+stable `0.3.7`; `dev` resolves to `0.3.8-dev.1792154226.37c322be4d3d`. Both installed
+channel checks report current. The initial tag assignment was corrected through
+the owner's npm security prompt; no version was republished. Both published
+artifact integrities match approved archives. You can use
+`npm install --global @scwlkr/openjob@latest` for stable. Public unscoped `openjob`
+belongs to a different project; use `@scwlkr/openjob`, retaining the `openjob`
+binary. Future main/release publication is not automatic; current CI builds
+downloadable artifacts only.
 
 The artifact records its selected channel. Registry checks stay disabled while
 package ownership is unverified (`registryVerified: false`); explicit checks
@@ -97,9 +98,8 @@ requires a clean checkout, refuses ref/version mismatch and sets the matching
 Delayed main builds refuse a newer fetched origin/main instead of assigning an
 old source to dev. Release artifacts remain bound to the published tag.
 
-Remaining: human npm security completion for the latest tag-only correction,
-then verify both live tags/channel checks. Initial artifact integrities and clean
-registry installations are verified. Ongoing automated registry
+Initial publication, tag correction, exact artifact integrities, clean registry
+installations and channel checks are verified. Ongoing automated registry
 publication still needs separately approved authentication/trusted publishing,
 serialization and stale-run protection. Current CI only builds downloadable
 artifacts; public latest/dev do not automatically follow this repository.

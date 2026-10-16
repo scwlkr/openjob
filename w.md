@@ -1,3 +1,24 @@
+# npm channels verified13:27 UTC / WLK-306 final delivery
+
+After Shane's tag-only npm security completion, cache-bypassed public metadata200:
+latest=0.3.7, dev=0.3.8-dev.1792154226.37c322be4d3d. Previously fresh-installed exact
+stable/dev binaries now both report selected-channel current. Reused verified
+integrities and full registry smoke; no repeated install/broadsuite, publish or
+tag mutation. Commands npm install -g @scwlkr/openjob@latest (or @dev), openjob app.
+Initial published packages exclude WLK-304 persistence and WLK-306 planner.
+Future main/release registry publication is NOT configured; CI artifacts only,
+needs separately approved publishing authentication/serialization/stale-run rules.
+
+WLK-306 PR83 created draft and attached. Reviewed functional code6e9e612 and
+final doc/test delta d3b9283 independently clean. Actual installed suite7/7 now
+uses schedule-available for persisted linked Task, plus installed CLI availability/
+stale conflict/reserve/owner proof1/1 PASS. Core39/39, CLI5/5, compile/brand/secret
+PASS. Final exact-head tarball/install receipts and merge in Linear. Native HTTP
+unavailable due absent Expo dependencies; no fullsuite/device claim. Useful saved
+planner5195 stays; original5193/5194 and approved archives preserved.
+
+---
+
 # WLK-306 ready for final exact-head integration
 
 Branch codex/wlk-306-find-time from main30760ac. Human-only Calendar Find time:
