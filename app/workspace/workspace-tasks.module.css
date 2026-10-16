@@ -1,0 +1,6 @@
+.metadata { margin: 10px 0 0 31px; overflow-wrap: anywhere; }
+.title { min-width: 0; overflow-wrap: anywhere; }
+.edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 16px; }
+.edit label { display: grid; min-width: min(200px, 100%); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.actions button { margin-left: 0; }

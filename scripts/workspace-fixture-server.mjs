@@ -69,5 +69,6 @@ const server = createServer((incoming, outgoing) => {
 });
 server.listen(port, '127.0.0.1', () => {
   console.log(`OpenJob FIXTURE workspace: http://127.0.0.1:${server.address().port} (simulated providers; sending disabled; local JSON persistence)`);
+  process.send?.({ type: 'workspace-fixture-ready' });
 });
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.close(() => process.exit(0)));
