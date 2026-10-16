@@ -92,7 +92,7 @@ the next implementation would need:
 
 Sending, provider draft changes and calendar writes are later, separately scoped
 operations. A first read-only connection does not authorize them. This checkout
-does not contain a live connector, credential provisioning flow or deployable
+does not contain a live connector, real credential provisioning flow or deployable
 OAuth configuration. No setup action above has been performed.
 
 ## Current evidence boundaries
