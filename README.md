@@ -1,5 +1,14 @@
 # OpenJob
 
+## Overnight workspace prototype
+
+Run `npm run dev:workspace` in the configured cloud checkout to open the
+fixture-backed Mail, Calendar, Tasks and Agents app. Application actions and
+saved state are real; provider connections and delivery are visibly simulated.
+See [the walkthrough](docs/WORKSPACE_DEMO.md) for the running app and shared CLI.
+No live mailbox or external calendar is connected by this prototype.
+
+
 One clear shared Task List for small working Groups. The hosted web and CLI use
 the same authenticated `/api/v1` Group, governance, and Task contracts.
 

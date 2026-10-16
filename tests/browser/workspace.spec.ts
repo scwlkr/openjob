@@ -85,7 +85,7 @@ test("fixture workspace connects mail, drafts, tasks, calendar and revocable age
 
 test("fixture workspace is usable on a phone", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/workspace");
+  await page.goto("/");
   await expect(page.getByTestId("mail-row").first()).toBeVisible();
   await page.getByTestId("mail-row").first().click();
   await expect(page.getByRole("button", { name: "Create task from mail" })).toBeVisible();

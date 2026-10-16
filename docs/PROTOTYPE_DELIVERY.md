@@ -11,7 +11,7 @@ and save a reply draft under the correct sending account. A second owner must
 not see or mutate the first owner's data. An explicitly scoped simulated agent
 can act within its resources; denied actions and revocation are observable.
 Application actions mutate persisted demo state through shared APIs and CLI.
-No command sends actual correspondence. Fixture identity selectors are not
+No command sends actual correspondence. Explicit simulated delivery only creates local fixture Sent records; it has a separate capability and cannot enable real sending. Fixture identity selectors are not
 production authentication, and fixture connections are never labeled live.
 
 ## Checks for this phase

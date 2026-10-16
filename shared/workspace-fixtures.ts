@@ -28,6 +28,6 @@ export function createFixtureWorkspace(): WorkspaceState {
       { id: "alex_event_review", calendarId: "alex_work", title: "Weekly design review", start: "2026-10-16T15:00:00.000Z", end: "2026-10-16T15:30:00.000Z" },
       { id: "sam_event_private", calendarId: "sam_personal", title: "Sam's private appointment", start: "2026-10-16T17:00:00.000Z", end: "2026-10-16T18:00:00.000Z" },
     ],
-    drafts: [], agents: [], activity: [],
+    drafts: [], sent: [], agents: [], activity: [],
   };
 }

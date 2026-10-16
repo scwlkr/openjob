@@ -14,6 +14,8 @@ if (executablePath) {
   if (install.error) throw install.error;
   if (install.status !== 0) process.exit(install.status ?? 1);
 }
-const result = spawnSync(process.execPath, [cli, "test", "--config", "tests/browser/playwright.config.ts"], { stdio: "inherit" });
-if (result.error) throw result.error;
-process.exit(result.status ?? 1);
+for (const config of ["tests/browser/playwright.config.ts", "tests/browser/workspace-app.config.ts"]) {
+  const result = spawnSync(process.execPath, [cli, "test", "--config", config], { stdio: "inherit" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
