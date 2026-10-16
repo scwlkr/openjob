@@ -1099,7 +1099,7 @@ export interface components {
             ownerId: string;
             actor: string;
             /** @enum {string} */
-            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
+            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.schedule-available" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
             /** Format: date-time */
             createdAt: string;
         };
@@ -1156,6 +1156,15 @@ export interface components {
         } | {
             /** @constant */
             type: "task.schedule";
+            taskId: string;
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "task.schedule-available";
             taskId: string;
             calendarId: string;
             /** Format: date-time */
@@ -4593,7 +4602,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"] & {
                         error?: {
                             /** @enum {unknown} */
-                            code?: "sign_in_method_unrecognized" | "conflict" | "calendar_import_conflict";
+                            code?: "sign_in_method_unrecognized" | "conflict" | "schedule_conflict" | "calendar_import_conflict";
                         };
                     };
                 };

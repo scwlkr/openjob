@@ -1,3 +1,29 @@
+# WLK-306 checkpoint / npm handoff readback13:13 UTC
+
+After parent reports Shane's13:12 'done', unauthenticated public registry GET and
+explicit npm view @scwlkr/openjob dist-tags versions against registry.npmjs.org
+BOTH return404. Neither package/version/tag currently readable. No publication
+retry and no changes to /tmp/openjob-303-publish-approved. Registry installs/update
+checks cannot be verified until actual publication completes. Parent thread is
+cloud-backed; local send_message_to_thread returned thread-not-found. Receipt in
+Linear WLK-303; report via delegated final outcome. Need non-secret command result,
+never OTP/token/password. Source WLK-304 demo5194 and original5193 preserved.
+
+Independent next workflow WLK-306: Find time for an open Task across all saved
+owner Calendar blocks. New isolated branch codex/wlk-306-find-time from merged
+main30760ac. Implementation checkpoint only: shared bounded finder (existing CLI
+runtime/facade packaging pattern), Calendar UI, existing CLI availability command,
+human-only task.schedule-available with final current-state overlap check inside
+existing CAS mutation, API/OpenAPI contracts. Type generation + root compile PASS.
+Not yet behavior-tested/reviewed/merged/published. Review design chose final server
+overlap check over advisory-only scheduling. Next: helper interval tests, CAS
+concurrency/owner-agent denial, CLI and actual packaged UI proof, narrow review,
+focused checks, draftPR/exact-head nondeploying merge. Check parse/options/help,
+activity validators across web/native, persistence, and useful error behavior.
+No live provider calendars/TLS/sends/new grants; no claims of complete feature.
+
+---
+
 # WLK-304 local persistence review checkpoint
 
 Branch `codex/wlk-304-local-workspace-persistence`, base37c322b (merged PR81).

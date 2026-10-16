@@ -1557,6 +1557,7 @@ paths:
                             enum:
                               - sign_in_method_unrecognized
                               - conflict
+                              - schedule_conflict
                               - calendar_import_conflict
               example:
                 error:
@@ -3934,6 +3935,7 @@ components:
             - task.update
             - task.complete
             - task.schedule
+            - task.schedule-available
             - task.unschedule
             - task.delete
             - calendar.create
@@ -4131,6 +4133,33 @@ components:
             type:
               type: string
               const: task.schedule
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          description: Human-only schedule with atomic current-owner Calendar overlap check; saved OpenJob calendars only.
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - calendarId
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: task.schedule-available
             taskId:
               type: string
               minLength: 1

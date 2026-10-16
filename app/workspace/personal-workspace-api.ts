@@ -46,7 +46,7 @@ export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
     try { body = JSON.parse(raw); } catch { throw invalidResponse(); }
     signal.throwIfAborted();
     if (!response.ok) {
-      const safe = new Set(["authentication_required", "account_deletion_pending", "sign_in_method_unrecognized", "conflict", "calendar_import_conflict", "calendar_ical_unsupported", "sync_expired", "workspace_capacity", "body_too_large", "invalid_input", "invalid_request", "forbidden"]);
+      const safe = new Set(["authentication_required", "account_deletion_pending", "sign_in_method_unrecognized", "conflict", "calendar_import_conflict", "schedule_conflict", "calendar_ical_unsupported", "sync_expired", "workspace_capacity", "body_too_large", "invalid_input", "invalid_request", "forbidden"]);
       throw new PersonalWorkspaceError(safe.has(body?.error?.code ?? "") ? body.error!.code! : "request_failed", response.status);
     }
     if (!body || typeof body !== "object" || !("data" in body)) throw new PersonalWorkspaceError("invalid_response", 502);
