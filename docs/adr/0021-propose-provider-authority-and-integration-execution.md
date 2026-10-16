@@ -6,6 +6,9 @@
 - Context: [platform blueprint](../PLATFORM_ARCHITECTURE.md)
 - Supersedes: none; live provider execution remains unconfigured
 
+The [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md) governs resource homes
+and grants; the technical execution/data defaults here remain Proposed.
+
 ## Context
 
 OpenJob owns Tasks, grants and its calendar blocks. Existing Mail and calendars
@@ -26,9 +29,11 @@ supported write creates that relationship.
 Keep provider-specific adapters behind capability-oriented interfaces for account
 identity, Mail reads/drafts/sending and Calendar reads/writes. Available operations
 reflect implemented adapter behavior plus actual consent/runtime configuration;
-one provider's success does not imply universal support. Connections bind explicit personal or Company/workspace ownership, controller,
-upstream subject, scopes, lifecycle and a server-only credential reference.
-Company membership or admin role alone cannot grant provider access. The
+one provider's success does not imply universal support. Connections has an account-level authorized management projection; each exposed
+mailbox/calendar resource has one home Workspace and explicit grants. Proposed
+binding metadata includes controller/upstream subject/scopes/lifecycle and a
+server-only credential reference. Central placement settles no credential storage
+or global ownership. Workspace membership/owner status alone grants no provider access. The
 credential broker resolves current bindings; users and agents never receive raw
 upstream credentials through the shared application API.
 
@@ -75,7 +80,7 @@ an explicit live-data prerequisite.
 [CONTRACTS](../build-spec/CONTRACTS.md) specifies the proposed operation states,
 idempotency, dispatch rechecks and connector boundaries. [RUNTIME](../build-spec/RUNTIME.md)
 specifies Firestore jobs/leases, scheduled bounded execution, encrypted credential
-storage and cleanup defaults. Later controlled offline Mail/Company work remains
+storage and cleanup defaults. Later controlled offline Mail/shared-Workspace work remains
 required (OJ-X5/R52); no offline provider effects. Invitation/RSVP and series
 writing remain required later Calendar work (OJ-K5–K6/R51), with separate
 notification permissions and explicit occurrence/series scope. All remain Proposed.

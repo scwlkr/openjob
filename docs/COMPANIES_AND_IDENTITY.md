@@ -1,208 +1,107 @@
-# Companies, people and workspace ownership
+# People, Workspaces and explicit access
 
-**Proposed — owner review pending.** This is a core part of the
-[platform blueprint](PLATFORM_ARCHITECTURE.md), elaborating
-[ADR 0020](adr/0020-propose-workspace-and-principal-boundaries.md).
-Nothing here creates accounts, companies, invitations, connections or grants.
+The [owner-confirmed core](ARCHITECTURE_ALIGNMENT.md) supersedes the previous
+Company → Workspace proposal. A company **is a Workspace** initially. This file
+elaborates that core; details labeled Proposed are not adopted by that confirmation.
+No accounts, grants, implementation or access are created by this document.
 
-## Recommendation: one person, several independent contexts
+## One identity, multiple Workspaces
 
-A person has one OpenJob **User** per installation, one personal workspace, and
-zero or more **Company memberships**. The same User can be an employee of Company
-A, an owner of Company B and a guest of Company C. These are independent grants,
-not separate duplicate logins or evidence of legal employment. A company never
-owns the person's OpenJob identity merely by inviting or employing them.
-
-A **Company** owns company workspaces, resource policies and company-owned data.
-A **Workspace** is an authorized work area owned by exactly one Company or one
-personal User. Resources belong to one workspace; they cannot have two company
-owners. Company is the organizational isolation boundary, and workspace/resource
-grants narrow access within it. Personal work has a separate ownership boundary.
-Existing deployments remain separate trust boundaries; no global identity merge
-across independent self-hosted installations is implied.
+One personal OpenJob User participates in independent Personal, company or family
+Workspaces. Each has exactly one accountable human owner. Internal member groups
+and permission sets organize access; they do not introduce a Company hierarchy.
+Resources have one home Workspace and remain attached through membership changes.
+Human administrative ownership does not transfer upstream credentials or grant
+automatic access to restricted content. Independent installations remain separate
+trust boundaries; identity federation is not implied.
 
 ```mermaid
 flowchart TB
-  Person[One OpenJob User] --> Personal[Personal workspace]
-  Person --> A[Company A membership: employee]
-  Person --> B[Company B membership: owner]
-  Person --> C[Company C membership: guest]
-  A --> AW[Company A workspaces and resource grants]
-  B --> BW[Company B workspaces and resource grants]
-  C --> CW[Only explicitly invited Company C resources]
+  Person[One personal OpenJob User] --> P[Personal Workspace]
+  Person --> A[Company A Workspace membership]
+  Person --> B[Company B Workspace membership]
+  A --> Groups[Internal member groups / permission sets]
+  A --> Resources[Home resources and explicit grants]
+  Agent[Connected external agent identity] --> GA[Independent grant in A]
+  Agent --> GB[Independent grant in B]
 ```
 
-## Personal authentication and company-controlled sign-in
+## Membership, ownership and departure
 
-Recommend a personally controlled authentication/recovery anchor for the User.
-A company-controlled login is a **company-context credential**, not a global
-sign-in method that unlocks personal work or another company. Initially companies
-invite existing personally authenticated Users; company SSO is disabled in the first Company release. Eligibility of independent
-personal anchors is assessed without disrupting existing Personal access; see
-[DOMAIN](build-spec/DOMAIN.md). If company sign-in is later supported, it authenticates only
-that company's permitted context. Opening Personal or another company requires
-an independent personal authentication or that other company's accepted proof.
+Invitations identify an intended recipient and selected resource/action grants.
+Joining a Workspace never exposes all Mail, calendars or tasks. Restricted
+individual and selected shared mailboxes coexist. Grants can address people,
+internal groups or connected agents without creating cross-Workspace authority.
 
-The User controls personal sign-in linking/removal/recovery with fresh personal
-proof; a company admin cannot reset the User's personal identity, add a global
-method or recover another company. The company manages only its own identity
-binding and membership. Before relying on company sign-in, require an independent
-personal anchor so departure/reassignment cannot strand the person's identity.
-An employee who has only a company login must establish that anchor before using
-personal or multi-company contexts; removing the last independent anchor requires
-replacement, not a downgrade to employer-only recovery.
+A Workspace has one owner, not multiple Owners. The current owner proposes transfer
+to another member, who accepts before the transfer takes effect. The current owner
+cannot leave first. Resources, membership and grants stay with the Workspace;
+transfer changes accountable administration, not source consent or mailbox privacy.
+Other departing members lose that Workspace's access and derived agent grants;
+Personal and other Workspaces stay intact. Reassignment of tasks/control is explicit.
 
-Use verified provider subject and configured company/IdP binding to classify a
-managed credential; email domain alone is insufficient. A managed/unknown-control
-method cannot silently become a personal anchor. Existing global sign-in links
-need assessment and an explicit compatibility policy before claiming this company
-isolation. This target policy is not implemented by current Google/Apple linking.
-Detailed protocol and migration design remains an acceptance prerequisite before
-company-controlled login is enabled; no enterprise SSO infrastructure is assumed.
+**Proposed details:** invitation expiry/single use/verified-recipient acceptance;
+membership invited/active/suspended/departed; Admin/Employee/Guest presets in
+[DOMAIN](build-spec/DOMAIN.md). Presets do not replace explicit grants or establish
+legal employment. Default shared TaskSpace/calendar creation also remains proposed;
+invitation recipients must see any initial grants before accepting.
 
-## What one OpenJob account can connect to and collaborate with
+## Central Connections, resources in their home Workspace
 
-| Relationship | Sensible default |
-| --- | --- |
-| Personal Google/Apple or later sign-in method | Independently controlled global User proof after explicit linking; no Mail/Calendar consent |
-| Company-managed login | Only an explicitly bound company-context proof; cannot unlock Personal or other companies |
-| Personal Gmail/Outlook/standards mailbox | Connect to personal workspace; explicit provider consent; private by default |
-| Company-provided individual mailbox/calendar | Connect within selected company under its resource policy; disclose company ownership and access before consent |
-| Company shared mailbox/calendar | Company-owned connection/resource, explicitly assigned operators and access grants |
-| Another company | Accept its invitation using the same User; independent role and resource grants |
-| Another person outside the company | Invite as guest to named company workspace/resources; no company-wide access |
-| Shared project across companies | One explicit owning company and guest grants, or a separately constituted joint company; never merge company boundaries silently |
-| Personal agent or company agent | Distinct principal under explicit resource/operation grants and current provider authority |
+One account-level Connections screen lists only connections the human may manage
+across their Workspaces. A provider binding can expose multiple resources; each
+mailbox/calendar has a chosen home Workspace and its own access boundary. There is
+no master owning Workspace, global Mail grant or administrative bypass. Central
+navigation does not settle where provider credentials are stored.
 
-Provider-specific restrictions still apply. An alias is not a separate mailbox;
-knowing an email address or owning its domain grants no OpenJob access. An account
-from a company-looking domain is not automatically company-owned. The connection
-flow must identify the destination and ownership contract explicitly.
+The proposed binding/resource schema must support that distinction. Connecting or
+reconnecting never changes a resource's home or shares it merely because another
+resource came from the same provider account. A Workspace owner cannot reuse a
+departed member's provider credential by assigning a new name. Continuity needs
+provider-supported authorization or explicit renewed consent. An alias remains a
+send identity, not an isolated mailbox. OpenJob accounts initially host no email.
 
-## Company creation and invitations
+## Connected agents and human control
 
-A User may explicitly create a Company and becomes its initial Owner. Creation
-is distinct from connecting providers, granting an agent or provisioning external
-accounts. Recommend one initial company workspace for deliberately shared work;
-company invitations state that workspace's visibility before acceptance.
+An external agent connects as a separate authenticated identity. The same identity
+may receive different, independently revocable grants in several Workspaces.
+OpenJob stores authorization and activity; it does not host a persistent agent
+per Workspace. A member can delegate a subset of their current rights only when
+Workspace policy permits member-connected agents. Removing/revoking A's grant
+must leave unrelated B grants alone. Departing A invalidates grants derived from
+that member's A authority even if the agent connection itself remains available.
 
-Owners/admins invite a person with a proposed company role and initial workspace
-access. An invitation has an intended verified recipient, expiry and explicit
-acceptance by the signed-in User. A new person creates their own identity; an
-existing person adds membership to the same identity. No automatic email-based
-User merging or domain-based enrollment. Invitations do not create invisible
-employee accounts, attach personal provider credentials or activate agent grants.
+**Proposed details:** exact credential binding/lifetime and grant UI, reviewed
+mailbox-set snapshots, operation vocabulary and sponsor-derived dispatch checks in
+DOMAIN/CONTRACTS. No new unattended Workspace-service grant is inferred. Agents
+receive neither a human session nor upstream credentials. Access administration
+remains a proposed human-only first-core boundary.
 
-Membership states are invited, active, suspended and departed. Only active
-memberships can authorize work. Basic member-directory information may be visible
-to company employees; guests see only collaborators needed for their assigned
-work. Directory visibility is not permission to inspect private resources.
+## Home and actions
 
-## Per-company roles and resource permissions
+Home can show authorized tasks, events and unread counts across Workspaces, with
+clear labels and no hidden-source metadata. Selecting an item enters its home
+Workspace. Mail/Calendar/Tasks actions and agent grants always use an explicit
+Workspace context. Context switching cannot retarget a draft, consent callback,
+queued send or cached edit. Home aggregation is not unified cross-Workspace Mail
+search or additional content access.
 
-| Role | Recommended responsibility | Default limits |
-| --- | --- | --- |
-| Owner | Company policy, owner/admin assignment, ownership transfer and deletion decisions | Cannot take ownership of a User's personal workspace or unrelated company data |
-| Admin | Invite/manage employees and guests, configure company-owned connections/workspaces within policy | Not an automatic mailbox-content reader or personal credential holder |
-| Employee (member) | Use company workspaces/resources granted by policy; create work where allowed | No membership administration or access to other employees' restricted Mail |
-| Guest | Collaborate on specifically invited workspaces/resources | No broad company directory, provider setup or company-wide discovery |
+## Proposed authentication and lifecycle details
 
-Roles apply independently per company. Workspace/resource grants can narrow
-roles; they cannot expand them beyond company policy. Recommend explicit named
-roles initially, not a configurable enterprise policy language. Company-wide
-admin does not bypass provider consent or automatically receive private mailbox
-read/send permission. Any administrative access to company-owned content must be
-an explicit policy/action with attributable activity, not an invisible backdoor.
+Independent personal authentication/recovery protects one identity across jobs.
+Company-managed SSO remains disabled in the proposed initial implementation;
+current Google/Apple linking needs eligibility assessment before claiming employer
+isolation. Unknown control is not automatically independent; preserve existing
+Personal use while assessing it. These protocol/eligibility defaults remain
+Proposed, not additional owner-confirmed decisions.
 
-## Switching contexts
+Identity/Workspace coordinates departure/deletion; Delegation disables derived
+grants; Connections owns provider/credential cleanup; Mail/Calendar invalidate
+readable projections; Tasks preserves Workspace work and reconciles planning.
+Local denial is distinct from completed provider cleanup or physical erasure.
+Proposed durations/storage/cleanup are in [RUNTIME](build-spec/RUNTIME.md).
 
-The app has a stable context switcher: Personal or a named Company, then an
-accessible Workspace. The selected context scopes Today, Mail, Calendar, Tasks,
-connections and agent management. Show the context near compose/send, sharing
-and connection actions. Do not combine companies' inboxes, task searches or
-agent resource pickers by default. Unfinished text belongs to its original
-context and is not silently resubmitted in another context.
-
-The API uses stable workspace/resource IDs and server-resolved membership. The
-CLI selects a context explicitly and includes it in structured results. Context
-selection is a request parameter, not authorization. Existing Task Groups must
-receive an explicit compatibility mapping; current Group membership does not
-turn into company employment or reveal personal Mail.
-
-## Ownership, connections and agents
-
-Personal resources belong to the personal workspace and remain private after a
-company membership changes. Company Tasks, workspaces, calendars and shared
-connections belong to that company. A restricted employee mailbox can still be
-company-owned without granting every colleague content access. The product must
-make ownership and effective access visible rather than calling both cases
-simply "my account."
-
-A connection records workspace/company ownership, verified upstream account,
-consented operations, credential reference and current human/service controller.
-OpenJob ownership and upstream authorization are separate: a company admin cannot
-reuse a departed employee's OAuth credentials by assigning a new label. Company
-continuity needs an appropriate provider-supported service/admin/shared-mailbox
-binding or renewed consent from an authorized replacement. Never copy a personal
-connection into company ownership merely because it was used for company work.
-
-Personal agents are controlled by a User. Company agents are controlled by a
-Company with named authorized managers and an attributable initiating/sponsoring
-human. Both are separate principals. A personal agent accessing company work
-needs company-permitted delegation by an active member; the person's access to
-another company never carries over. A company agent has no implicit access to
-managers' personal workspaces. Its credentials/grants cannot outlive the company
-policy or provider binding they depend on.
-
-Effective agent authority is the intersection of company/workspace policy,
-resource grant, current delegating human or approved company-service authority,
-agent operations, provider consent and connection state. Company-service grants
-need their own explicit lifecycle; they do not become perpetual employee tokens.
-No agent provisions company users, changes grants or connects providers merely
-because it can read Mail or write Tasks.
-
-## Departure, transfer and cross-company work
-
-- Suspend/depart membership first stops that member's company access and
-  delegations derived from it. Personal identity, personal resources and unrelated
-  memberships remain intact. Company records and shared work remain company-owned.
-- Reassign company Tasks and company-agent management explicitly. Transfer of the
-  last Owner must establish a successor; a company cannot silently become ownerless.
-- Connections owns credential/revocation cleanup. Remove personal delegated
-  bindings; reconnect company resources with proper upstream authority where
-  required. An unavailable provider leaves visible pending cleanup, not claimed
-  completed revocation. Previously downloaded content cannot be recalled.
-- Private source links in shared Tasks remain unavailable unless the recipient
-  separately has source access. Sharing a Task never copies its Mail body or
-  introduces a cross-company read grant.
-- Cross-company collaboration uses explicit guest invitations into one owner's
-  named resources. A Company B employee invited into Company A acts as a guest of
-  A; that does not invite B's colleagues, expose A to B or transfer resource ownership.
-
-Identity/Workspace coordinates lifecycle changes; Delegation stops grants;
-Connections owns provider/credential cleanup; Mail/Calendar invalidate projections;
-Tasks preserves company-owned work and reconciles its planning links. Retention
-and actual provider cleanup outcomes must be distinguishable from local access
-revocation. Concrete proposed durations and cleanup defaults are in
-[RUNTIME](build-spec/RUNTIME.md), pending owner review and implementation proof.
-
-## Tradeoffs and implementation implications
-
-This gives people continuity across jobs and companies meaningful ownership
-without fragmenting identity. It requires explicit membership and resource grants,
-context-scoped queries, ownership-aware connection setup and lifecycle coordination.
-The current owner-ID personal aggregate and separate Groups do not implement it.
-
-Separate logins per employer simplify isolation but fragment a person's work and
-create duplicate linking/recovery paths. A flat shared workspace with no Company
-entity is smaller but cannot express employer ownership, policy and departure
-clearly. Domain-based automatic membership is convenient but misidentifies people
-and grants access without invitation. A global cross-company inbox is convenient
-but makes context and sending identity ambiguous. We recommend the explicit model
-above, with basic roles and one company workspace first; enterprise federation,
-complex org hierarchy and fine-grained custom policy remain future scope.
-
-Detailed entity, role and effective-authorization contracts live in
-[DOMAIN](build-spec/DOMAIN.md); [PRODUCT](build-spec/PRODUCT.md) supplies stable
-requirements and [EXPERIENCE](build-spec/EXPERIENCE.md) supplies screen/flow states.
-All remain Proposed parts of this design.
+Useful legacy Task Groups do not automatically become Workspaces or internal
+member groups. Preserve actual users/data/consumers deliberately; disposable
+fixtures need no migration program. Implementation must verify relevant ownership,
+invitation, transfer, restricted-Mail and agent revocation boundaries before live use.

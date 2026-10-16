@@ -1,6 +1,6 @@
 # API, CLI and connector contract strategy
 
-**Current code inspected at `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.** New shapes/routes below are proposed. Implementation must re-read live contracts and update the one existing OpenAPI source; this document is not a parallel schema.
+**Current code inspected at `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.** The [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md) governs ownership/permissions; exact new shapes/routes below remain proposed. Implementation must re-read live contracts and update the one existing OpenAPI source; this document is not a parallel schema.
 
 ## Grounding in the current repository
 
@@ -22,18 +22,18 @@ See [current source tree](https://github.com/scwlkr/openjob/tree/9ba3929fbf0ccc3
 
 ## API evolution
 
-Use context-owned `/api/v1/workspaces/{workspaceId}/...` resources and `/api/v1/companies/...` membership administration. Where identified active consumers need old routes, use temporary adapters resolving the authenticated User's Personal/Group context. Otherwise replace obsolete prototype contracts and update clients together. Preserve useful behavior, not compatibility for its own sake. Never reinterpret a real resource ID or silently change its ownership; no migration ceremony is needed for disposable fixtures.
+Use context-owned `/api/v1/workspaces/{workspaceId}/...` resources for membership/resource administration, plus account-level `/api/v1/me/connections` management filtered to authorized bindings (proposed paths). Where identified active consumers need old routes, use temporary adapters resolving the authenticated User's Personal/Group context. Otherwise replace obsolete prototype contracts and update clients together. Preserve useful behavior, not compatibility for its own sake. Never reinterpret a real resource ID or silently change its ownership; no migration ceremony is needed for disposable fixtures.
 
 Proposed resource families:
 
 | Family | Minimum operations | Notes |
 |---|---|---|
-| `/me/contexts`, `/companies`, `/companies/{id}/memberships`, invitations | List permitted contexts; create Company; invite/accept; role/suspend/depart; transfer | Invitation acceptance and last-Owner invariant transactional; no inference from domain |
+| `/me/contexts`, `/workspaces`, `/workspaces/{id}/memberships`, internal groups, invitations/owner-transfer | List permitted contexts; create Workspace; invite/accept; permission sets/suspend/depart; owner proposes transfer and recipient accepts | Invitation acceptance and single-owner continuity invariant transactional; no inference from domain |
 | `/workspaces/{id}/task-spaces`, `/tasks` | List/detail/create/update/complete/reopen/delete; source and planning operations | Context-qualified IDs; optimistic revision; separate private-source response |
 | `/workspaces/{id}/calendars`, `/events`, `/availability` | List, bounded time-window reads, block/event mutations, busy projection | External event command returns Operation, local mutation may complete synchronously |
-| `/workspaces/{id}/connections` | Capabilities/status/list, begin/reconnect/disconnect | Consent callback is server-owned, state bound to original human/context; credential never response field |
+| `/me/connections` and Workspace resource bindings | List only manageable provider authorizations; connect/reconnect/status; bind mailbox/calendar home and explicit access; detach/disconnect with impact preview | Central management is not global authority or master ownership. Callback binds approved human/resource destinations; credential storage remains Proposed |
 | `/workspaces/{id}/mailboxes`, `/messages`, `/drafts` | Paged read/search, source-qualified detail, draft mutations, send, archive/trash | Provider message body fetched on demand; account identity explicit; send is an action with idempotency |
-| `/workspaces/{id}/agents`, `/delegations` | Create principal, list effective grants/activity, issue/revoke scoped credential | Human-only administration; personal/company controller distinction |
+| `/workspaces/{id}/agents`, `/delegations` | Connect external principal, list effective Workspace grants/activity, issue/revoke scoped credential | Members delegate current-right subsets under policy; no runtime provisioning or cross-Workspace grant union; exact administration API Proposed |
 | `/workspaces/{id}/operations/{operationId}` | Inspect status/result; reconcile or cancel before dispatch where supported | No blind retries of unknown effects; no raw provider error/token leakage |
 
 Route details and operationIds are finalized in the selected implementation slice's OpenAPI diff, not left to an owner product question. Prefer ordinary resource endpoints plus named cross-domain actions over one untyped catch-all command. Keep a temporary old-command adapter only while an actual active consumer needs it; otherwise remove the duplicate path in the coherent cutover.
@@ -60,7 +60,7 @@ The immutable intent contains chosen connection/provider subject, resource, appr
 
 ## CLI strategy
 
-Keep `openjob` and existing profiles/credential storage/output conventions. Add explicit `context list/use/current`, `--workspace ID` override, Company management and natural Mail/Calendar/Task operations that invoke the same API. Persisted current context is a client convenience; noninteractive destructive/external write commands require explicit context or a saved unambiguous profile and show context in structured output. Cross-context use requires an explicit switch/override; never choose a matching mailbox name globally.
+Keep `openjob` and existing profiles/credential storage/output conventions. Add explicit `context list/use/current`, `--workspace ID` override, Workspace/internal-group/accepted-owner-transfer management and natural Mail/Calendar/Task operations that invoke the same API. Persisted current context is a client convenience; noninteractive destructive/external write commands require explicit context or a saved unambiguous profile and show context in structured output. Cross-context use requires an explicit switch/override; never choose a matching mailbox name globally.
 
 Existing `workspace command --input` can remain a temporary compatibility path for active consumers; remove duplicate behavior when no longer needed. Add `--request-id` and `operation show` for external work. JSON/JSONL include IDs, context, revision, capability/operation state and nextCursor. Keep stdout machine-readable; diagnostics go to stderr. Exit success only for the command's documented completion level; queued/unknown state must be explicit and must not print “sent.” Reuse established exit-code mappings, extending with documented unknown/pending handling rather than inventing a separate CLI framework. New credential issuance keeps secure file delivery, no token echo into routine logs/shell history.
 
@@ -77,3 +77,16 @@ Write inputs include immutable Operation ID, exact provider target, expected pro
 At adapter/integration qualification, cover two accounts with colliding IDs, unauthorized context, cursor/page correctness, deleted records, invalid MIME, credential/scope change, reconnect subject, provider limits, revision conflict, revoked queued execution and ambiguous/duplicate external effects. These are targeted boundary cases, not a requirement to run the entire matrix on every UI slice. Each real adapter gets isolated approved-account proof only for its claimed capabilities. Synthetic fixture, injected transport, real read, real write and released support are distinct evidence labels.
 
 Prior to new IMAP TLS/login implementation, inspect/recover the unfinished WLK-302 work and current Linear history. Do not recreate it blindly. Use TLS certificate validation and supported authenticated submission; arbitrary hosts/ports need a reviewed allowlist/SSRF boundary. No insecure-login fallback or browser security bypass.
+
+## Confirmed boundaries to preserve in the schema diff
+
+Do not introduce a separate Company API/entity or multiple Workspace owners. Model
+internal groups and permission sets without silently expanding agent authority. A
+transfer changes accountable owner only on recipient acceptance and preserves resource
+homes/grants. Connection management and content authorization are separate checks.
+A provider authorization may expose several resources; R31 must define binding and
+whole-connection versus resource-detach effects without inferring global credential
+ownership from `/me/connections`. One upstream revocation must not be presented as
+a harmless single-resource detach. Home aggregation is a human authorized read
+projection; all mutations/grants remain Workspace-scoped. These changes affect the
+proposed contract only; existing OpenAPI remains implementation truth.

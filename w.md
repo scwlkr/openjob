@@ -1,38 +1,40 @@
-# WLK-310 — integrated specification, OWNER REVIEW PENDING
+# WLK-310 — owner-confirmed core reconciled, detail review pending
 
 Draft PR87: https://github.com/scwlkr/openjob/pull/87
 Worktree /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry
-Branch codex/wlk-310-platform-blueprint; baseline main9ba3929, prior design98f4da5.
-No application edits, feature implementation, adoption or merge authorized.
+Branch codex/wlk-310-platform-blueprint; main9ba3929; Library integration7b9cdcc.
+Documentation only. No features, access changes, merge or release authorized.
 
-Library OpenJob-Review-and-Build-Package-v1 integrated into this same proposal:
-docs/build-spec/README.md indexes ten detailed spec documents plus SOURCE.md;
-33 stable OJ requirements, 20 proposed defaults, 22 dependency-ordered slices.
-Blueprint/Companies/ADRs0019–0021 reconciled, all remain Proposed. ROADMAP P0–P5
-is the single design dependency map; Linear OpenJob remains sole execution queue.
-Market evidence and dated technical review memo retain facts versus hypotheses.
-Original deck/PDF/ZIP remain Library source snapshots. SOURCE.md records verified
-578003-byte ZIP, SHA256 and reconciliation. Local source retained in sibling
-openjob-review-input; no signed URLs/secrets in Git.
+Sean received the alignment and authorized this reconciliation; no further relay
+retries. docs/ARCHITECTURE_ALIGNMENT.md records actual owner turns from discussion
+01a145d7-6310-7083-9b8a-25f8e1f8b0dc and C01–C08, plus requirement/slice trace.
+Company IS Workspace; exactly one accountable human owner with recipient-accepted
+transfer before departure; resources/grants stay attached. Internal groups/permission
+sets and explicit invitations/resource/action access; restricted Mail stays restricted.
+Central account-level authorized Connections has no master Workspace/global access.
+External connected agent identity has independent revocable Workspace grants bounded
+by current sponsoring member rights/policy; no hosted persistent Workspace agent.
+Labeled authorized cross-Workspace Home opens actions inside their Workspace.
+Accounts initially host no Mail. These specific decisions supersede prior proposals.
 
-Proposed defaults: hosted authority, per-entity Firestore, encrypted credential
-repository, bounded durable jobs, metadata-only pilot cache, later full offline/
-Calendar/native/authenticated npm clients. Company SSO disabled initially;
-independent personal anchors assessed without disrupting existing Personal use.
-Three people/two Companies isolation/departure acceptance stays early in P1.
-No silent npm installation; automatic checks notify, installs remain explicit.
-Local Mac CI/manual-only Actions preserved. No heavy builds/browser use.
+Blueprint/Companies/ADR0020, all10 build-spec docs and mission pointer reconciled.
+ADR0020 records confirmed core plus Proposed details; ADR0019/0021 remain Proposed.
+Role presets/default resources/identity eligibility/runtime/storage/retention/offline
+and other scope proposals are NOT adopted. Feature development remains paused.
+Existing OJ33/D20/R22 IDs retained; one P0–P5 dependency map, Linear sole queue.
+Library ZIP/deck/PDF retain historical provenance; memo marked superseded where
+conflicting. Current editable design is repository Markdown. Prior source checksum
+and verification details remain docs/build-spec/SOURCE.md and Linear310.
 
-Independent review found/fixed safe first-read rendering, frozen outbound payload,
-explicit export owner and quote-retention rules; follow-up review clean.
-Validation: all33 requirements traced, all22 slice dependencies ordered; local
-links/fences19docs pass, ZIP size/hash/integrity pass, diff/secret checks pass.
-Docs only: app build/runtime/device tests not rerun; no new runtime claims.
-Next: owner accepts/amends (1) scope/ownership/full target, (2) hosted-first plus
-installed clients, (3) privacy/online-first pilot then controlled offline.
-Record actual acceptance before feature development. Accounts/keys/real effects
-and publication/deployment remain separate execution gates. No competing plan or
-batch of Linear issues created. Exact pushed head/checks recorded in PR/Linear.
+Independent review caught/fixed account-deactivation ordering: proposed deletion-pending
+permits only owner transfer/approved closure before deactivation, avoiding ownerless
+Workspaces. Verification: revised requirement/slice/confirmation trace, local links/fences,
+diff/secret checks and independent review recorded with pushed exact head in
+PR/Linear. Documentation-only; no app build/runtime/device campaign or heavy Mac
+process/browser use. Local CI/manual-only Actions and explicit npm installation
+remain. No automatic publication. Next: owner review of remaining detailed proposals
+and explicit development authorization; C01–C08 need no repeat questionnaire.
+Actual provider/credential/effect and release gates remain separate.
 
 ## Separate publication blocker
 

@@ -1,7 +1,8 @@
 # OpenJob platform blueprint
 
-**Status: Proposed for owner review — 16 October 2026.** This is a target
-architecture, not an implementation or infrastructure authorization. The
+**Status: owner-confirmed core with Proposed technical/detail choices — 16 October 2026.** This is a target
+architecture, not implementation authority. [C01–C08](ARCHITECTURE_ALIGNMENT.md)
+record actual owner confirmations; unrelated proposals await review. The
 [master mission](MASTER_MISSION.md) remains the product mandate; Linear remains
 the execution queue. New feature implementation remains paused pending owner review and authorization. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
 Detailed proposed requirements, screens, contracts, runtime defaults and the single
@@ -16,8 +17,8 @@ Its organizing unit is **work with context**: a conversation, the action it
 requires, the time reserved for it, and the reply or outcome that closes it.
 
 The initial user hypothesis is an independent professional managing several personal
-and work accounts. Company owners/admins establish shared work for employees and guests; a person
-may belong to several companies while keeping a personal workspace. Collaborators
+and work accounts. A person belongs to independent Personal, company or family Workspaces. Each has
+one accountable human owner; internal groups/permission sets organize explicit access. Collaborators
 share selected work without inheriting private mailbox access. An optional personal agent is a
 separate principal acting for a person, not a substitute for a complete human app.
 
@@ -29,16 +30,16 @@ that work with less context switching, not by counting modules or integrations.
 
 Platform scope: Mail, Calendar, Tasks, Connections, identities, permissions,
 agent activity and the integration mechanisms that join them. Web and native
-clients share semantics. Required full scope includes supported offline Mail/Company
+clients share semantics. Required full scope includes supported offline Mail/shared-Workspace
 work, Calendar invitations/series and real authenticated npm-installed desktop clients;
 the first live pilot is smaller (see OJ-K5–K6/OJ-X5–X7). Existing Group work
-remains useful. Companies, personal workspaces and independent company memberships are core
-platform concepts, even though the prototype does not implement company tenancy.
+remains useful. A company is a Workspace, not a container of Workspaces. This ownership/membership
+model is confirmed, though the prototype does not implement it.
 
-Non-goals: hosting mailboxes; duplicating Google/Microsoft identity or storage;
+Initial non-goals: hosting mailboxes (possible future product, not current scope); duplicating Google/Microsoft identity or storage;
 a documents/chat/office suite; a generic agent runtime; a plugin marketplace;
 full enterprise directory/federation suites, billing and speculative multi-region
-infrastructure. Basic company ownership, invitations and roles are in scope.
+infrastructure. Workspace ownership/invitations/grants are confirmed; role presets remain Proposed.
 The planning discipline should support a large system; the initial deployment
 should remain small. No forced account migration or AI subscription is required.
 
@@ -48,14 +49,15 @@ outcomes; clients share contracts; boundaries precede service extraction; preser
 working npm/Node/TypeScript/React/Expo/Firebase/Cloudflare components.
 ## 2. Experience and capability map
 
-Navigation target: **Today · Mail · Tasks · Calendar · Agents**, with
-**Connections** and account/workspace controls consistently accessible. Today is
-an overview and entry into work, not a fourth system of record. Navigation and
+Navigation: **Home** shows labeled authorized cross-Workspace tasks/events/unread
+counts. Opening work enters its Workspace, with **Today · Mail · Tasks · Calendar
+· Agents** and scoped actions. **Connections** is an account-level screen of
+authorized management bindings, not a master Workspace or wider content grant. Navigation and
 layout can differ on phones while keeping those destinations and relationships.
 
 | Journey | Product capability | Current evidence | Target architecture needed |
 | --- | --- | --- | --- |
-| Form or join companies | Create a company, invite employees/guests, accept independent memberships, switch context | Not implemented; personal owner and separate Group models only | Company ownership, membership/role lifecycle, workspace/resource grants and explicit invitations |
+| Form or join Workspaces | Single owner, accepted transfer, invitations with selected grants, internal permission groups, context switch | Not implemented; personal owner and separate Group models only | Workspace membership/resource grants; no Company hierarchy or implicit content access |
 | Start and connect | Sign in, choose workspace, connect accounts, see granted operations and sync status | Existing OpenJob identity; connector status and mock consent; no live connection UI/runtime | Identity + membership resolution; connection lifecycle; approved OAuth callback/secret broker |
 | Triage and reply | Account-aware Inbox, read/search, decide reply or action, draft and explicitly send from correct account | Invented saved Mail and draft/simulated Sent flow; provider read mappers tested with injected transports | Mail context with provider projections; durable reads/sync; separately authorized draft/send adapters |
 | Mail to Task | Preserve source conversation while creating or reopening private work | Real prototype API/CLI/UI operations, private links and roundtrip navigation | Stable connection-qualified references; explicit sharing policy; no copied private mail into Group Tasks |
@@ -63,7 +65,7 @@ layout can differ on phones while keeping those destinations and relationships.
 | Delegate work | Give an agent a named job and limited resources; review actions and revoke | Hashed, expiring scoped personal grants and CLI/API actions; simulation only for mail sending | Distinct agent principal, explicit delegation, operation receipts; pending work rechecks current grant |
 | Move between devices | Continue the same work with visible offline/sync state | Web/native Tasks/Calendar offline mechanisms; local npm saved fixture; device acceptance incomplete | Deliberate local-cache/server authority model, consistent contracts and platform-specific release proof |
 
-First-run target: sign in → Personal or accepted Company/workspace → choose provider and operations →
+First-run target: sign in → Personal or accepted Workspace → choose provider and operations →
 provider consent → verify identity and initial Inbox → first useful action.
 Examples are a separate explicit path with persistent labels; adding examples
 must never look like connecting an account. No unusable Connect button should
@@ -73,7 +75,7 @@ and allows work on OpenJob-owned Tasks/Calendar to continue.
 
 | Bounded context | Owns | Must not own |
 | --- | --- | --- |
-| Identity and Workspace | User IDs, sign-in links, Companies, invitations, memberships, workspace ownership and principal resolution | Provider mailbox passwords; inference of membership from matching email |
+| Identity and Workspace | User IDs, sign-in links, invitations, memberships, workspace ownership and principal resolution | Provider mailbox passwords; inference of membership from matching email |
 | Connections | Provider identity binding, approved scopes, credential references, lifecycle and sync eligibility | General Task state or client-visible credentials |
 | Mail | Mailbox/message/thread references, provider projections, draft intents, sending identity and outcomes | Provider truth for arbitrary folders or an invented universal thread model |
 | Tasks | OpenJob work items, completion, optional source references and planned interval relationship | Copies of private source mail in shared Group work |
@@ -95,7 +97,7 @@ local transaction.
 ```mermaid
 flowchart LR
   Person[Person] --> UI[Web / native apps]
-  Agent[Personal agent] --> CLI[Existing CLI / public API]
+  Agent[Connected external agent] --> CLI[Existing CLI / public API]
   UI --> App[OpenJob application]
   CLI --> App
   App --> Identity[Identity provider]
@@ -107,14 +109,14 @@ flowchart LR
 ```mermaid
 flowchart TB
   Clients[React web · Expo native · CLI] --> API[Versioned application API]
-  API --> Auth[Identity / Company / workspace / authorization]
+  API --> Auth[Identity / Workspace / authorization]
   Auth --> Domains[Mail · Tasks · Calendar · Delegation]
   Domains --> Store[Repositories: work / references / operation receipts]
   Domains --> Jobs[Integration execution + durable job records]
   Jobs --> Connectors[Provider adapters]
   Connectors --> External[Gmail · Microsoft Graph · IMAP / calendar providers]
   Connectors --> Vault[Credential broker / secret store]
-  Store --> Views[Authorized Today / Inbox / planning projections]
+  Store --> Views[Authorized Home / Today / Inbox / planning projections]
   Views --> API
 ```
 
@@ -125,39 +127,37 @@ separate process; only measured provider/runtime needs justify that split.
 See [ADR 0019](adr/0019-propose-modular-platform-and-runtime-boundaries.md).
 ## 5. Identity, tenancy and authorization
 
-Recommend one immutable User per installation with a personal workspace and
-independent memberships in multiple Companies. A Company owns company workspaces
-and resources; each Workspace belongs to exactly one Company or a personal User.
-Company policy establishes the organizational boundary; workspace/resource grants
-narrow it. The first Company release uses eligible independent personal authentication; Company
-SSO stays disabled. Any later Company-controlled login is context-only; Personal
-identity/recovery requires independent personal proof (DOMAIN and ADR 0020). Roles (Owner/Admin/Employee/Guest) apply per company. Employment never
-owns a person's identity or personal accounts. Membership alone does not expose
-restricted mailbox identities, connections or projections.
+The [confirmed core](ARCHITECTURE_ALIGNMENT.md) is one personal identity across
+independent Workspaces. A company is one Workspace; groups/permission sets organize
+access inside it. Every Workspace has exactly one accountable human owner. Transfer
+to another member requires acceptance before owner departure, while resource homes
+and grants remain attached to the Workspace. Owner status grants no automatic
+restricted-Mail reading or upstream credentials.
 
-The app/CLI selects Personal or Company and Workspace explicitly; authorization
-resolves membership and grants server-side. Company creation and invitations are
-explicit, with verified recipient acceptance; matching email/domain does not
-create membership. Cross-company work uses guests in explicitly owned resources,
-not a merged tenant. Existing Groups require a deliberate compatibility mapping.
+Invitations select resource/action access; membership grants no blanket content.
+The account-level Connections screen lists only manageable provider bindings;
+each mailbox/calendar has a chosen home Workspace. No master Workspace exists.
+Cross-Workspace Home is an authorized human projection, not unified Mail/search,
+agent grant aggregation or permission to mutate without Workspace context.
 
-Personal and company agents have distinct controlling owners; authority intersects
-current delegation/company policy, resource access and provider consent/state.
-Company departure removes only that context's access and derived grants. Company
-records remain company-owned; personal data and unrelated memberships remain
-intact. Transfers and connection reauthorization are explicit.
+A connected external agent identity receives independent per-Workspace grants.
+Members delegate subsets of current rights under policy; loss of membership or
+revocation stops derived work there, not unrelated Workspace grants. OpenJob stores
+authorization/activity without hosting a persistent agent per Workspace.
 
-See [Companies and identity](COMPANIES_AND_IDENTITY.md) for the recommended role,
-invitation, connection ownership, switching, departure and collaboration model,
-and [ADR 0020](adr/0020-propose-workspace-and-principal-boundaries.md) for alternatives.
+[People and Workspaces](COMPANIES_AND_IDENTITY.md), [DOMAIN](build-spec/DOMAIN.md)
+and [ADR 0020](adr/0020-propose-workspace-and-principal-boundaries.md) separate this
+confirmed core from Proposed role presets, authentication eligibility, default
+resources and field/credential schemas. Employment does not own personal identity;
+current sign-in links need actual compatibility proof before claiming isolation.
 ## 6. Authority, data and integration
 
 | Record | Authority | OpenJob representation |
 | --- | --- | --- |
-| User, Company, workspace, membership, grant | OpenJob, with identity-provider proofs | Stable IDs and explicit relationships |
+| User, Workspace, membership, grant | OpenJob, with identity-provider proofs | Stable IDs and explicit relationships |
 | Provider connection | OpenJob consent/binding metadata; provider verifies upstream identity | Workspace + connection ID, provider subject, capabilities, secret reference |
 | Mail content and provider calendars | External provider | Connection-qualified references and bounded projections/cursors |
-| Personal/company/Group Task | OpenJob | Task plus resource scope, completion and optional private source reference |
+| Personal/shared-Workspace/legacy Group Task | OpenJob | Task plus resource scope, completion and optional private source reference |
 | OpenJob calendar block | OpenJob | Owned interval and optional Task relationship |
 | Draft/send operation | Explicit chosen storage/destination | OpenJob draft or provider draft distinguished; durable intent/result, chosen identity |
 | Activity and sync receipts | OpenJob observations | Attributable operation IDs/outcomes; not proof of unseen provider state |
@@ -203,7 +203,7 @@ See [ADR 0021](adr/0021-propose-provider-authority-and-integration-execution.md)
 | Transition | Accountable context and effect |
 | --- | --- |
 | Disconnect / provider revocation | Connections first blocks execution and credential resolution, then owns durable credential/provider-revocation cleanup; Integration execution stops pending jobs; Mail/Calendar invalidate readable projections |
-| Human leaves Company/workspace | Identity/Workspace removes membership; Delegation disables affected grants; Connections resolves privately controlled accounts through explicit removal/transfer, never automatic disclosure to remaining members |
+| Human leaves Workspace | Identity/Workspace removes membership; Delegation disables affected grants; Connections resolves privately controlled accounts through explicit removal/transfer, never automatic disclosure to remaining members |
 | OpenJob account/workspace deletion | Identity/Workspace coordinates inactive state and context-owned cleanup; queued work loses authority first; each context reports pending/completed cleanup |
 | Task or OpenJob block removal | Task-planning application operation reconciles the canonical relationship; remote provider deletion requires a separate explicit supported operation |
 
@@ -268,7 +268,7 @@ provide the proposed workspace platform or real connected-account experience.
 
 | Current evidence / code | Architectural gap |
 | --- | --- |
-| `server/v1-runtime.ts`, `db/personal-workspace.ts`: hosted identity/API, owner aggregate with CAS and bounded JSON | No Company or general workspace/membership model; aggregate cannot be the eventual full Inbox store |
+| `server/v1-runtime.ts`, `db/personal-workspace.ts`: hosted identity/API, owner aggregate with CAS and bounded JSON | No general shared-Workspace/membership model; aggregate cannot be the eventual full Inbox store |
 | `shared/workspace-engine.ts`, `shared/personal-workspace.ts`: shared operations; OpenAPI + CLI | Prototype command surface needs evolution into stable context-owned operations, not duplicate engines |
 | `server/providers/provider-connections.ts`, token-vault and OAuth modules | Mock-only execution; missing approved production callback, secure store/refresh and runtime bindings |
 | Gmail/Outlook/IMAP read adapters; provider-preview API | Translation proof is not live connection/sync or integrated authoritative Mail; IMAP WLK-302 checkpoint remains unrecovered |
@@ -282,14 +282,15 @@ P5 required provider/Calendar/offline/native/npm completion. Its 22 stable slice
 are design references, not a second execution queue. Select/reconcile a Linear
 item only after review and development authorization.
 
-Early P1 acceptance retains the three-person/two-Company proof: Alex is Employee
-in A and Admin in B; Sam owns A with no B membership; Jo owns B and is Guest in A.
+Proposed P1 fixture retains three people/two shared Workspaces: Alex contributes
+in A and administers B; Sam is sole owner of A with no B membership; Jo is sole
+owner of B and a named collaborator in A. Role labels/presets remain Proposed.
 Each retains Personal work. Show invitations, role/resource visibility and context
 switching; Alex leaving A preserves Personal and B.
 
-Owner review covers the three choices in [DECISIONS](build-spec/DECISIONS.md):
-product/ownership and full scope, hosted-first runtime with installed clients, and
-privacy/online-first pilot followed by controlled offline capability. Proposed
+C01–C08 are confirmed. Remaining review in [DECISIONS](build-spec/DECISIONS.md)
+covers detailed policy/full scope, hosted-first runtime with installed clients,
+and privacy/online-first pilot followed by controlled offline capability. Proposed
 technical defaults cover repositories, encrypted credentials, bounded runner,
 retention and cleanup. Specific accounts/keys/provider effects and releases are
 later execution gates. Provider order follows approved access and evidence; it

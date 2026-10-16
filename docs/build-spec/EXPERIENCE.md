@@ -1,42 +1,58 @@
 # Experience and interaction specification
 
-**Proposed.** Use current OpenJob brand tokens/components and platform conventions. These screen contracts are enough to implement layout and behavior without new product interviews; they are not pixel-perfect approved mockups.
+**Detailed screens Proposed under the [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md).** Use current OpenJob brand tokens/components and platform conventions. These screen contracts are enough to implement layout and behavior without new product interviews; they are not pixel-perfect approved mockups.
 
 ## Shell and routing
 
-Persistent context selector: Personal or Company → Workspace. Main destinations: Today, Mail, Tasks, Calendar, Agents. Connections and Settings are reachable without abandoning the selected module. Company settings exist only for permitted Company actions. On narrow screens use native-friendly navigation while preserving destination names and context visibility. Keep legacy Groups discoverable as “Groups (existing)” until deliberately mapped; they are not Companies.
+Home is the human overview across authorized Workspaces, with labeled tasks,
+events and unread counts. Selecting work enters its Workspace. A single Workspace
+picker lists Personal, company and family contexts; a company is itself a Workspace,
+not an extra selector layer. Main Workspace destinations: Today, Mail, Tasks,
+Calendar, Agents. Account-level Connections and Settings remain reachable.
+Workspace settings require appropriate administration rights. Legacy Task Groups
+stay discoverable until deliberately mapped; they are not internal member groups.
 
-Proposed URL scope: `/workspaces/:workspaceId/{today|mail|tasks|calendar|agents|connections}`; selected item IDs live in route/query state so Back, Forward and copied links work. Context switch changes the route and clears transient selected objects/results; it does not retarget a draft. A user lacking the linked resource sees “Unavailable in this context” with no title/address leakage. Never quietly switch to a different owner to make a link resolve.
+Proposed routes: `/home`, `/connections`, and
+`/workspaces/:workspaceId/{today|mail|tasks|calendar|agents|settings}`. Connection
+setup may link from a Workspace but opens central management with explicit resource
+destination/authority. Selected IDs support Back/Forward and deep links. Context
+switch clears transient results, never retargets drafts/consent/jobs. Inaccessible
+links say “Unavailable in this context” without title/address leakage. Home grants
+no unified Mail search, agent aggregation or additional resource access.
 
 ## Screen contracts
 
 | Screen / IDs | Primary content and actions | States and guardrails |
 |---|---|---|
-| Start / OJ-I1, OJ-X1 | Sign in; establish eligible Personal context; accept pending invitation or create Company; optional Connect account | Continue with empty Tasks/Calendar without a provider. Example mode is a separate labeled choice. Failed identity proof retains invitation and gives actionable recovery |
-| Context picker / OJ-I3 | Personal; active Company memberships with role; accessible workspaces | Suspended/departed context is unavailable. Draft indicator names origin. No combined company-wide inbox or cross-company search |
+| Start / OJ-I1, OJ-X1 | Sign in; establish eligible Personal context; accept pending invitation or create Workspace; optional Connect account | Continue with empty Tasks/Calendar without a provider. Example mode is a separate labeled choice. Failed identity proof retains invitation and gives actionable recovery |
+| Context picker / OJ-I3 | Accessible Workspaces, membership and accountable owner; no Company hierarchy | Suspended/departed context is unavailable. Draft indicator names origin. No blanket unified Mail or cross-Workspace search |
+| Home / OJ-X1 | Authorized cross-Workspace tasks/events/unread counts, labeled with Workspace; open item into its context | No inaccessible metadata or content; actions enter explicit Workspace; revocation removes stale projection access |
 | Today / OJ-X1, OJ-T3, OJ-K3 | Selected context/date; overdue/due/unscheduled open tasks; calendar agenda; connection warnings; one-click task/open-source/plan | Authorized projection only. No content duplication or new task state. Empty day offers Create task/Calendar block/Connect account |
 | Mail / OJ-M1 | Authorized account/folder picker, paged message list, read pane, search, source-linked task action | Persistent account/provider label and sync timestamp. Loading differs from empty; partial failure names affected account. Unsupported folders/search explain limits |
 | Compose / OJ-M2–M4 | New/reply/reply-all, To/Cc/Bcc, subject, text, chosen From identity, selected attachments, Save draft and Send | From fixed to verified permitted account/alias. Context and identity repeated beside Send. Review recipient changes on reply-all. Close preserves draft; discard is explicit |
 | Tasks / OJ-T1–T3 | Open/completed filters, literal search, due/assignee/priority filters; details, notes, source, plan/complete/reopen | Source hidden unless separately allowed. Private source is never previewed in shared list. Concurrent edit keeps local text for comparison, no silent overwrite |
 | Plan task / OJ-T3, OJ-K1–K3 | Destination calendar, time zone, start/end or duration, available-slot suggestions, exact pending change preview | OpenJob vs external target clearly labeled. Stale/unreadable calendars disclaim incomplete availability. Recheck before commit; explicit conflict override only when permitted |
 | Calendar / OJ-K1–K4 | Day/week/agenda, calendar toggles, timezone, event details, create/edit; import/export | All-day separate from timed; recurrent provider occurrences read-only if write unsupported. Busy-only grants reveal no event title/attendees. Export names data boundary |
-| Agents / OJ-A1–A3 | Agent list/controller/state; create identity; grant wizard; resource and operation selection; effective access; activity; revoke | No check-all default. Read/draft/send/delete separate. Grant preview names source authority/expiry. Credential shown once through secure delivery; later view cannot reveal it |
-| Connections / OJ-C1–C3 | Ownership, provider identity, operations, consent status, freshness, reconnect/disable/disconnect | Missing runtime setup is explicit and blocks fake Connect. Consent canceled never appears connected. Disable first stops work; upstream cleanup pending separately |
-| Company settings / OJ-I2–I5 | Company basics, members/invitations, roles, workspace/resource access, ownership transfer, suspended/departed members | Owner-only owner assignment/transfer; Admin cannot promote self to Owner or read private Mail. Invite preview names initial visible resources |
+| Agents / OJ-A1–A3 | Connected external agent identities and their selected-Workspace grants; connect identity; grant wizard; resource and operation selection; effective access; activity; revoke | No check-all default. Read/draft/send/delete separate. Grant preview names source authority/expiry. No hosted/persistent agent runtime. Per-Workspace revocation leaves unrelated grants intact; credential UX remains Proposed |
+| Connections (account-level) / OJ-C1–C3 | Only manageable provider bindings across Workspaces; resource homes, provider identity, operations, status, reconnect/disable/disconnect | Central screen grants no global access; preview affected resource homes and recheck management authority. Missing runtime setup blocks fake Connect. Consent canceled never appears connected. Disable first stops work; upstream cleanup pending separately |
+| Workspace settings / OJ-I2–I5 | Workspace basics, members/invitations, internal groups/permission sets, explicit resource access, ownership transfer, suspended/departed members | Exactly one human owner; recipient accepts transfer before prior owner leaves. Role presets remain Proposed and do not grant private Mail. Invite preview names initial visible resources |
 | Activity / OJ-A3, OJ-X4 | Actor, operation, context/resource, sending identity, timestamps, outcome and repair action | Redacted titles/body by default; users only see records for resources/actions they may inspect. “Provider accepted” does not mean delivered/read |
 
 ## Critical interaction flows
 
 ### Connect an account
 
-1. Select Personal/Company workspace and show who owns the connection and who can access content
-2. Select provider and only implemented requested operations; show read and write consent separately
-3. Begin server-bound consent with current context; redirect can be canceled or interrupted
-4. Callback verifies session/owner/context/state/provider identity. Show the actual upstream account before completion
-5. Create active connection only after durable credential/metadata binding; initial sync begins with visible state
-6. Show actual Inbox results or explicit empty/blocked outcome. Never insert examples into a live mailbox
+1. Open account-level Connections; list only bindings the human may manage
+2. Choose provider and implemented requested operations; distinguish Mail consent from sign-in
+3. Show exposed mailbox/calendar resources and chosen home Workspace for each, with restricted/shared access preview
+4. Bind consent/state to the initiating human and approved destinations; navigation cannot retarget it
+5. Verify provider identity and durable authorized resource bindings before activation; fail closed if destination authority changed
+6. Show actual results or honest empty/blocked state; no example data in live accounts
 
-Account switching during consent must not change the original destination. If that membership is lost, callback terminates without activating access and cleanup runs. A provider account already bound in the same workspace is reconnected through its existing connection ID; it is not duplicated.
+Proposed binding details and reconnect/disconnect impact across resources are
+finished in R31, not inferred from central UI placement. Existing authorized
+binding/resource IDs should reconnect without duplicate accounts; no default master
+Workspace, implicit credential sharing or automatic exposure of sibling resources.
 
 ### Mail → Task → Calendar → reply
 
@@ -46,11 +62,29 @@ Plan opens a preview showing task, calendar, identity, time and ownership. Savin
 
 ### Grant an agent
 
-Choose Personal or Company controller → name → selected resources → selected operations → expiry → review effective permissions. A mailbox set is a saved selection, not an automatic entitlement to future accounts. Grant stores its reviewed resource membership/version; adding a mailbox requires reviewed grant expansion. Default all writes off. Keep current 24-hour personal token lifetime initially; no silent long-lived refresh credentials. Company agent managers do not automatically grant their personal accounts. Revoke immediately changes UI to revoked and blocks newly dispatched work; in-flight/previously completed actions remain visibly distinct.
+Select an externally connected agent identity (or connect one) → choose Workspace
+→ selected resources/operations → review current delegating rights and policy →
+expiry → confirm. The same identity can have independent grants elsewhere; never
+merge them into all-Workspace access. No agent process is provisioned or hosted.
+A member may delegate only a subset of current access where policy permits it.
 
-### Company departure
+Proposed mailbox sets save a reviewed resource snapshot/version; adding a mailbox
+requires reviewed grant expansion. Default writes off and the existing 24-hour
+credential lifetime remain proposed initial details. Revoking this Workspace grant
+blocks new dispatch there and preserves other independent grants. In-flight and
+completed effects remain visibly distinct; disconnecting the external identity
+entirely is a separate action with a preview of affected grants.
 
-Admin/Owner reviews subject's Company memberships/grants, owned control responsibilities and tasks needing reassignment. Suspension blocks access immediately and is reversible by authorized action. Departure ends membership; company records remain. Last Owner is blocked until successor accepts ownership. Provider access may need renewed consent by a new controller; show “reconnect required” rather than silently reusing departed-user tokens. Personal/B are untouched. Current draft from departed A is locked and is not copied to Personal automatically.
+### Workspace departure and ownership transfer
+
+An authorized human reviews membership/grants, task reassignment and credential
+binding consequences. Suspension denies access; departure ends membership. The
+single owner initiates transfer to an eligible member and remains accountable until
+acceptance completes; departure before transfer is blocked. Workspace resources
+remain attached. Provider authority may need renewed consent: never reassign a
+departed user's tokens silently. Personal and other Workspaces remain unaffected.
+Drafts from departed A are locked, not copied into Personal. Derived A agent grants
+stop, while the external identity and unrelated B grants remain independently valid.
 
 ## State vocabulary and recovery
 
@@ -77,4 +111,4 @@ Test repeated clicks, Back/Forward, deep links, reload, Cancel/Close/reopen, con
 
 R51 adds an attendee section to supported provider-event editing with explicit organizer, recipients, availability and “send invitations/update/cancellation” preview. Saving an OpenJob block never sends invitations. RSVP shows the provider invitation and whether the response notifies the organizer. Series editing starts with “this occurrence” or “entire series,” previews the effect and preserves exceptions; “this and following” is offered only when faithfully supported. New local recurring blocks can use the same recurrence UI without external notification. A Task can link to one specific occurrence; recurrence does not create recurring Tasks automatically.
 
-R52 adds per-context offline settings with mailbox/calendar selection, cached range/size, storage protection, last sync and clear-cache control. Company policy limits choices. A denied queued Company edit opens an explicit recovery state tied to its original context; it is never relabeled Personal. R53 adapts all these flows to native controls. R54 adds installed-app account/profile/version/channel and update-available notice; “update” gives the explicit npm action and restart guidance rather than silently replacing the running app.
+R52 adds per-context offline settings with mailbox/calendar selection, cached range/size, storage protection, last sync and clear-cache control. Workspace policy limits choices. A denied queued shared-Workspace edit opens an explicit recovery state tied to its original context; it is never relabeled Personal. R53 adapts all these flows to native controls. R54 adds installed-app account/profile/version/channel and update-available notice; “update” gives the explicit npm action and restart guidance rather than silently replacing the running app.

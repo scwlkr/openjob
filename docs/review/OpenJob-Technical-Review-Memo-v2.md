@@ -1,5 +1,9 @@
 # OpenJob review companion
 
+> Historical Library review summary. Company hierarchy/agent/navigation details
+> are superseded by [owner-confirmed alignment](../ARCHITECTURE_ALIGNMENT.md).
+> Current editable detail is the build specification; this memo is not authority.
+
 Decision companion v2 · 16 October 2026 · Aligned to the detailed build specification
 
 Purpose: connect the product case to explicit technical choices, evidence and review gates. The standing [Master Mission](https://github.com/scwlkr/openjob/blob/9ba3929fbf0ccc3e24e2577410a355fa3798736e/docs/MASTER_MISSION.md) remains the mandate. This memo does not replace the blueprint, accept its ADRs or authorize implementation, live access, deployment or release.

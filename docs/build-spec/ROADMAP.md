@@ -1,17 +1,17 @@
 # Dependency-ordered build roadmap
 
-**Design artifact, not an execution queue.** Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
+**Design artifact, not an execution queue.** [C01–C08](../ARCHITECTURE_ALIGNMENT.md) are confirmed core; other design defaults remain Proposed and feature development is still paused. Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
 
 ## Stage outcomes
 
 | Phase | Outcome | Exit proof |
 |---|---|---|
-| P0 · Adopt and reconcile | Reviewed product/architecture defaults and one current handoff | Owner acceptance recorded; current PR/code/Linear reconciled; no unnecessary rediscovery |
-| P1 · Establish ownership | Personal and multiple Companies, explicit grants, safe membership lifecycle | Three people/two Companies isolation/departure scenario passes |
+| P0 · Adopt and reconcile | Reviewed product/architecture defaults and one current handoff | Confirmed core distinguished from remaining Proposed detail; development authorization recorded before implementation; current PR/code/Linear reconciled; no unnecessary rediscovery |
+| P1 · Establish ownership | Personal and multiple Workspaces, explicit grants, safe membership lifecycle | Three people/two Workspaces isolation/departure scenario passes |
 | P2 · Unify the product | Coherent shell and owned Task/Calendar work with scoped agents | Human/API/CLI workflow on durable isolated fixtures, no UI-only policy |
 | P3 · Connect real accounts | One authorized provider's live read/sync with secure credentials and minimal retained data | Real paged Inbox, reconnect/revocation, cleanup and restart proof |
 | P4 · Close the real work loop | Real Calendar planning, draft/send, useful agent subset and honest uncertain effects | Receive/read → Task → provider Calendar → complete → authorized reply; deny/revoke tests |
-| P5 · Complete the platform | Provider breadth, richer Calendar, Company offline, native and full npm experience | Capability matrix and named-platform release evidence, not a single successful demo |
+| P5 · Complete the platform | Provider breadth, richer Calendar, Workspace offline, native and full npm experience | Capability matrix and named-platform release evidence, not a single successful demo |
 
 Critical dependency spine: R00 → R01 → R10 → R11/R12 → R20/R21/R22 → R30/R31 → R32/R33 → R40/R41/R42/R43 → R50–R55. Some work can run independently: UI shell follows context contracts; connector read/write adapters can be fixture-tested before credentials; native/npm client work can start after contract stabilization. One integration owner merges these results and verifies the exact head. Do not create parallel task engines or duplicate ownership models to parallelize.
 
@@ -20,9 +20,9 @@ Critical dependency spine: R00 → R01 → R10 → R11/R12 → R20/R21/R22 → R
 ### R00 · Adopt the reviewed build contract
 Dependencies: owner design review. Trace: all requirements; D01–D20.
 
-Deliver: accepted/changed decision record in canonical PR #87 docs, preserving mission and proposed/accepted distinctions; link adopted index from existing handoff. Reconcile deck, architecture and these requirements. Keep review-only copies immutable or clearly superseded.
+Deliver: existing owner-confirmed core plus accepted/changed remaining decision record in canonical PR #87 docs, preserving mission and proposed/accepted distinctions; link adopted index from existing handoff. Reconcile deck, architecture and these requirements. Keep review-only copies immutable or clearly superseded.
 
-Acceptance: owner choices are recorded with actual review reference; pilot authorization is a separate future gate; Company/offline/native/npm/calendar follow-on scope is not silently dropped. No application implementation starts while the explicit design pause remains active.
+Acceptance: owner choices are recorded with actual review reference; pilot authorization is a separate future gate; Workspace/offline/native/npm/calendar follow-on scope is not silently dropped. No application implementation starts while the explicit design pause remains active.
 
 ### R01 · Establish the exact resumable baseline
 Dependencies: R00 and authorized development environment. Trace: OJ-A4, OJ-X3, OJ-X6.
@@ -36,46 +36,46 @@ Acceptance: current commit/branch, relevant checks, runtime mode and exact next 
 ### R10 · Introduce workspace-owned repositories
 Dependencies: R01. Trace: OJ-I3, OJ-T1, OJ-T3, OJ-X4.
 
-Deliver: explicit User/Company/Workspace/Resource identifiers, per-entity repositories and context-qualified ownership checks; retained User/data mapping where needed; coherent replacement of obsolete fixture contracts, with temporary compatibility only for identified active consumers.
+Deliver: explicit User/Workspace/Resource identifiers, per-entity repositories and context-qualified ownership checks; retained User/data mapping where needed; coherent replacement of obsolete fixture contracts, with temporary compatibility only for identified active consumers.
 
 Acceptance: ownership-qualified CRUD denies foreign IDs; useful Personal/shared-task behavior remains; obsolete project-owned tests are revised honestly; Tasks and Calendar no longer require one growing Mail aggregate. Regenerate disposable fixtures. Test a migration/rollback only if actual data must be retained; no production migration without authorization.
 
-### R11 · Add independent identity and Company onboarding
+### R11 · Add independent identity and Workspace onboarding
 Dependencies: R10. Trace: OJ-I1, OJ-I2.
 
-Deliver: personal-anchor eligibility handling, Company creation/default workspace, explicit intended-recipient invitation acceptance and per-company membership. Keep company SSO disabled and preserve existing Personal identity during assessment.
+Deliver: personal-anchor eligibility handling, Workspace creation with single human owner and proposed default resources, explicit intended-recipient invitation acceptance and per-workspace membership. Keep workspace SSO disabled and preserve existing Personal identity during assessment.
 
-Acceptance: Alex/Sam/Jo can create/join the specified two-Company fixture; existing User adds a membership rather than duplicate login; wrong recipient, expired/canceled/replayed invitation and known managed-only identity cannot acquire wider access; owner/admin role assignment rules enforced; callback/context interruption tested.
+Acceptance: Alex/Sam/Jo can create/join the specified two-Workspace fixture; existing User adds a membership rather than duplicate login; wrong recipient, expired/canceled/replayed invitation and known managed-only identity cannot acquire wider access; single owner, explicit permission sets/internal groups, and proposed role limits enforced; callback/context interruption tested.
 
-### R12 · Enforce resource grants and Company lifecycle
+### R12 · Enforce resource grants and Workspace lifecycle
 Dependencies: R11. Trace: OJ-I3–I5, OJ-C1, OJ-A2, OJ-X4.
 
 Deliver: named resource operations, explicit connection ownership/controller metadata, guest visibility, suspension/departure, successor transfer and lifecycle cleanup coordination.
 
-Acceptance: Admin cannot inspect restricted employee Mail; guest has only named resources; Company B learns nothing from employee's guest role in A; departure first denies new A actions and preserves A work plus Personal/B; last Owner cannot depart unowned; pending provider cleanup is visible. Test API and repository paths, not just hidden controls.
+Acceptance: Admin cannot inspect restricted employee Mail; guest has only named resources; Workspace B learns nothing from employee's guest role in A; departure first denies new A actions and preserves A work plus Personal/B; sole owner cannot depart before recipient accepts transfer; transfer preserves resource homes/grants; pending provider cleanup is visible. Test API and repository paths, not just hidden controls.
 
 ## P2 · Unify the product
 
 ### R20 · Build the context-aware app shell
 Dependencies: R11/R12. Trace: OJ-X1, OJ-I3, OJ-C2.
 
-Deliver: Today/Mail/Tasks/Calendar/Agents plus Connections/settings, durable selected context, deep links and first-run empty states. Keep examples visibly separate and retain old Groups access.
+Deliver: authorized labeled cross-Workspace Home, Workspace Today/Mail/Tasks/Calendar/Agents/settings and account-level authorized Connections, durable selected context, deep links and first-run empty states. Keep examples visibly separate and retain old Groups access.
 
-Acceptance: a new user can create a Task/block without connecting a provider; no unusable fake Connect control; Back/Forward, reload and context switch retain the correct draft/item context; inaccessible deep link leaks no title/address; responsive keyboard/touch navigation works.
+Acceptance: a new user can create a Task/block without connecting a provider; Home reveals only permitted tasks/events/unread counts and enters the correct Workspace for actions; central Connections has no master resource owner or management bypass; no unusable fake Connect control; Back/Forward, reload and context switch retain the correct draft/item context; inaccessible deep link leaks no title/address; responsive keyboard/touch navigation works.
 
 ### R21 · Finish owned tasks and planning semantics
 Dependencies: R10/R20. Trace: OJ-T1–T3, OJ-K2–K4.
 
-Deliver: consistent useful shared + Personal/company task fields; TaskSource protected relation; local Task/block transaction; conflict-aware availability; keep useful import/export behavior. Implement bounded versioned JSON export of authorized OpenJob Task/Calendar data and authored drafts, alongside existing iCalendar exchange. One canonical relationship, no duplicate scheduling engine.
+Deliver: consistent useful shared + Personal/workspace task fields; TaskSource protected relation; local Task/block transaction; conflict-aware availability; keep useful import/export behavior. Implement bounded versioned JSON export of authorized OpenJob Task/Calendar data and authored drafts, alongside existing iCalendar exchange. One canonical relationship, no duplicate scheduling engine.
 
-Acceptance: create/edit/assign/complete/reopen/delete and list filters work in UI/API/CLI; repeating source creation opens existing task or explicitly creates another; shared task does not expose source; schedule/reschedule/unschedule/delete leave no orphan link; concurrent edit and DST/invalid interval reject or recover correctly. Completion neither sends Mail nor deletes calendar history. Export omits provider credentials, hidden source metadata and unauthorized drafts; Company Admin status cannot export restricted Mail.
+Acceptance: create/edit/assign/complete/reopen/delete and list filters work in UI/API/CLI; repeating source creation opens existing task or explicitly creates another; shared task does not expose source; schedule/reschedule/unschedule/delete leave no orphan link; concurrent edit and DST/invalid interval reject or recover correctly. Completion neither sends Mail nor deletes calendar history. Export omits provider credentials, hidden source metadata and unauthorized drafts; Workspace Admin status cannot export restricted Mail.
 
 ### R22 · Extend scoped agent/API/CLI contracts
 Dependencies: R12/R21. Trace: OJ-A1–A4, OJ-I3.
 
-Deliver: explicit personal/company agent principal/controller, operation-granular grants, reviewed mailbox sets, expiry/revoke UI, context selection/structured CLI output, additive OpenAPI endpoints/adapters.
+Deliver: connected external agent identity with independent per-Workspace operation-granular grants, reviewed mailbox sets, expiry/revoke UI, context selection/structured CLI output, additive OpenAPI endpoints/adapters.
 
-Acceptance: one allowed and one denied operation per resource family; write-only response contains no read content; credential cannot act as human; mailbox-set addition does not expand existing grant; same app/API/CLI action has same semantics; old fixture token gains no live authority; generated types and API checks pass. Access administration remains human-only.
+Acceptance: one allowed and one denied operation per resource family; write-only response contains no read content; credential cannot act as human; mailbox-set addition does not expand existing grant; same app/API/CLI action has same semantics; old fixture token gains no live authority; generated types and API checks pass. Members delegate only permitted subsets of current rights under policy. Workspace A revoke leaves unrelated B grant valid; membership loss stops derived A work. No persistent Workspace agent runtime. Human-only access administration remains proposed.
 
 ## P3 · Connect real accounts
 
@@ -89,9 +89,9 @@ Acceptance: restart after enqueue resumes; two runners cannot double-dispatch th
 ### R31 · Bind one authorized live connection
 Dependencies: R30; approved hosted/data defaults and specific resource/credential authorization. Trace: OJ-C1, OJ-C2, OJ-I1.
 
-Deliver: secure credential repository/broker, provider consent callback or supported standards authentication, upstream identity verification, refresh serialization, reconnect and durable revoke cleanup for the selected provider. Finish crypto/key-rotation and runtime binding design before touching real tokens.
+Deliver: secure credential repository/broker, central authorized connection management, explicit resource-home bindings, provider consent callback or supported standards authentication, upstream identity verification, refresh serialization, reconnect and durable revoke cleanup for the selected provider. Finish crypto/key-rotation and runtime binding design before touching real tokens.
 
-Acceptance: cancel/replay/wrong-state/wrong-subject paths fail closed; original context remains bound during login; tokens stay server-side/redacted; expired refresh or removed scope becomes reconnect-required; credential rotation/revocation and cleanup retry proven in isolated setup. Production remains disabled until authorized bindings and verification exist.
+Acceptance: cancel/replay/wrong-state/wrong-subject paths fail closed; original context remains bound during login; tokens stay server-side/redacted; expired refresh or removed scope becomes reconnect-required; credential rotation/revocation and cleanup retry proven in isolated setup. Prove resource-detach versus whole-provider revocation impact/authority across any shared upstream binding; central navigation must not grant global credentials/content. Production remains disabled until authorized bindings and verification exist.
 
 ### R32 · Integrate real Mail reads and sync
 Dependencies: R31. Trace: OJ-M1, OJ-C1–C3, OJ-X4.
@@ -153,17 +153,17 @@ Deliver: explicit attendee review and invitation/update/cancel/RSVP operations; 
 
 Acceptance: selected organizer/identity and exact attendees shown before notification; no duplicate invitation after retry; single-instance exception leaves series unchanged; series edit/cancel correct; DST and moved/canceled occurrences round-trip; unsupported “this and following” fails before effects. Native/web/CLI present same scope choice.
 
-### R52 · Deliver controlled offline Company and Mail work
+### R52 · Deliver controlled offline Workspace and Mail work
 Dependencies: R12/R21/R43. Trace: OJ-X2, OJ-X5.
 
-Deliver: per-context offline policy, opt-in bounded Mail cache on supported secure clients, explicit Company Task/block edit queue, local authored draft retention and conflict/access recovery. No offline provider effects.
+Deliver: per-context offline policy, opt-in bounded Mail cache on supported secure clients, explicit Workspace Task/block edit queue, local authored draft retention and conflict/access recovery. No offline provider effects.
 
-Acceptance: encrypted cache/key handling verified on each supported client; lock/logout/disconnect disables access; departing Company cannot upload queued work; concurrent version conflict retains authored changes safely; context switch never exposes cached other-company Mail; browser limitation is explicit where platform protection is inadequate. State claims list what was actually exercised.
+Acceptance: encrypted cache/key handling verified on each supported client; lock/logout/disconnect disables access; departing Workspace cannot upload queued work; concurrent version conflict retains authored changes safely; context switch never exposes cached other-workspace Mail; browser limitation is explicit where platform protection is inadequate. State claims list what was actually exercised.
 
 ### R53 · Verify the native clients end to end
 Dependencies: stable R20–R43 contracts; R51/R52 for their advertised features. Trace: OJ-X3, OJ-X5, OJ-X7.
 
-Deliver: iOS and Android native feature parity for Company/context, connected Mail/Tasks/Calendar/Agents and authorized offline scope. Apply existing accessibility, privacy, encryption, notification, OTA-signing and device-release ADRs.
+Deliver: iOS and Android native feature parity for Workspace/context, connected Mail/Tasks/Calendar/Agents and authorized offline scope. Apply existing accessibility, privacy, encryption, notification, OTA-signing and device-release ADRs.
 
 Acceptance: simulator/emulator plus required physical-device evidence for exact artifacts; login interruption, deep link/context switch, keyboard/touch/screen reader, background/foreground, offline restart, grant revocation and update recovery; record unavailable checks as blockers. Store submission/OTA release remains separately authorized.
 

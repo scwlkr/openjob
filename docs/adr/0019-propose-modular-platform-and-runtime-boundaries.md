@@ -6,6 +6,9 @@
 - Context: [platform blueprint](../PLATFORM_ARCHITECTURE.md)
 - Supersedes: none; no stack migration or infrastructure is authorized
 
+The [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md) governs Workspace and
+connected-agent boundaries; this runtime/modularity ADR otherwise remains Proposed.
+
 ## Context
 
 OpenJob has a working TypeScript/React/Expo product with hosted Cloudflare API
@@ -21,7 +24,7 @@ WStack favors simple boundaries and preserving components that earn their place.
 
 ## Proposed decision
 
-Use one modular application with bounded contexts for Identity/Company/Workspace,
+Use one modular application with bounded contexts for Identity/Workspace,
 Connections, Mail, Tasks, Calendar and Delegation/Activity. Application operations
 coordinate contexts; repositories hide persistence choices. Public clients use
 one versioned API/OpenAPI contract, preserving the existing CLI and the principle
