@@ -21,6 +21,7 @@ const stateIndex = process.argv.indexOf('--state-file');
 if (stateIndex >= 0 && !process.argv[stateIndex + 1]) throw new Error('Use --state-file PATH.');
 const localState = await openPersonalWorkspaceState(stateIndex >= 0 ? process.argv[stateIndex + 1] : undefined);
 const firestore = localState.firestore;
+try {
 const config = { projectId: 'openjob-dev', clientEmail: 'browser-fixture@example.invalid', privateKey: await createPrivateKey() };
 const users = createFirestoreUserStore(config, firestore.fetch);
 const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectId, fetchImplementation: authority.fetch, now: () => Date.parse(now) });
@@ -45,6 +46,7 @@ const server = createServer(async (incoming, outgoing) => {
   if (process.env.OPENJOB_LOCAL_API_TOKEN && incoming.headers['x-openjob-local-api'] !== process.env.OPENJOB_LOCAL_API_TOKEN) { outgoing.writeHead(403).end(); return; }
   try {
     const url = new URL(incoming.url, `http://${incoming.headers.host || '127.0.0.1:4181'}`);
+    if (url.pathname === '/__test/state-mode' && incoming.method === 'GET') { outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify({ mode: localState.filePath ? 'saved' : 'temporary' })); return; }
     const owner = url.pathname.match(/^\/__test\/session\/(alex|sam)$/)?.[1];
     if (owner && incoming.method === 'GET') {
       outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -70,11 +72,12 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.writeHead(user ? 200 : 401, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       outgoing.end(JSON.stringify(user ? { data: { ...user, usernameRequired: !user.username, groups: [] } } : { error: { code: 'authentication_required' } })); return;
     }
-    const response = await localState.execute(() => (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request), incoming.method === 'POST');
+    const response = await localState.execute(() => (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request), !['GET', 'HEAD'].includes(incoming.method));
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));
     outgoing.end(Buffer.from(await response.arrayBuffer()));
-  } catch {
-    outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end('{"error":{"code":"test_server_failure"}}');
+  } catch (error) {
+    outgoing.writeHead(500, { 'content-type': 'application/json' });
+    outgoing.end(JSON.stringify({ error: error.localStateError ? { code: error.uncertain ? 'local_state_uncertain' : 'local_state_save_failed', message: error.uncertain ? 'Local save is uncertain. Stop and restart to inspect saved work.' : 'Local save failed. Previous work was preserved; check disk access before trying again.' } : { code: 'test_server_failure' } }));
   }
 });
 server.listen(port, '127.0.0.1', () => {
@@ -89,3 +92,5 @@ for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
   server.close(() => { void localState.close().then(() => process.exit(0)); });
 });
 server.once('error', () => { void localState.close().finally(() => process.exit(1)); });
+
+} catch (error) { await localState.close(); throw error; }

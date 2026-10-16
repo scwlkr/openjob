@@ -1,4 +1,5 @@
 // Only the two invented owners and their existing personal-domain records persist.
+import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { validatePersonalWorkspace } from '../shared/personal-workspace.ts';
 import { parsePersonalAgentGrants } from '../shared/personal-agent-grants.ts';
@@ -31,11 +32,11 @@ export function validateLocalSnapshot(value) {
     if (!/^user_[a-f0-9]{32}$/.test(owner) || owners.has(owner)) fail();
     owners.add(owner); allowed.add(name);
     const slot = PREFIX + `v1UserSignInMethods/${owner}/providers/google`;
-    if (JSON.stringify(records.get(slot)?.fields) !== JSON.stringify(fields)) fail();
+    if (!isDeepStrictEqual(records.get(slot)?.fields, fields)) fail();
     allowed.add(slot);
     const directory = PREFIX + `v1UserDirectory/${owner}`;
     const user = records.get(directory)?.fields;
-    if (!exact(user, ['userId', 'emptyShellEligible', 'createdAt']) || field(user, 'userId', 'stringValue') !== owner || field(user, 'emptyShellEligible', 'booleanValue') !== true || !Number.isFinite(Date.parse(field(user, 'createdAt', 'timestampValue')))) fail();
+    if (!exact(user, ['userId', 'emptyShellEligible', 'createdAt']) || field(user, 'userId', 'stringValue') !== owner || typeof field(user, 'emptyShellEligible', 'booleanValue') !== 'boolean' || !Number.isFinite(Date.parse(field(user, 'createdAt', 'timestampValue')))) fail();
     allowed.add(directory);
     const workspaceName = PREFIX + `v1PersonalWorkspaces/${owner}`;
     const workspace = records.get(workspaceName)?.fields;

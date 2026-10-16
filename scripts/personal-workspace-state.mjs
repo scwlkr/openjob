@@ -40,8 +40,10 @@ export async function openPersonalWorkspaceState(filePath, { writeSnapshot = wri
   function snapshot() { return { kind: 'openjob-local-prototype', version: 1, ...firestore.exportState() }; }
   async function persist() {
     if (paused) throw new Error('Local storage is paused after an uncertain save; restart to inspect saved work.');
-    const text = JSON.stringify(validateLocalSnapshot(snapshot())) + '\n';
-    try { await writeSnapshot(path, text); } catch (error) { if (error.uncertain) paused = true; throw error; }
+    try {
+      const text = JSON.stringify(validateLocalSnapshot(snapshot())) + '\n';
+      await writeSnapshot(path, text);
+    } catch (error) { if (error.uncertain) paused = true; error.localStateError = true; throw error; }
   }
   try {
     await lock.writeFile(`OpenJob local prototype process ${process.pid}\n`);
@@ -57,11 +59,12 @@ export async function openPersonalWorkspaceState(filePath, { writeSnapshot = wri
   } catch (error) { await close(); throw error; }
   function execute(operation, save = false) {
     const result = queue.then(async () => {
-      if (closed || paused) throw new Error('Local storage unavailable; restart to inspect saved work.');
+      if (closed || paused) throw Object.assign(new Error('Local storage unavailable; restart to inspect saved work.'), { localStateError: true, uncertain: paused });
       const before = firestore.exportState();
       try {
         const response = await operation();
-        if (save && response.ok) await persist();
+        if (!response.ok) firestore.restoreState(before);
+        else if (save) await persist();
         return response;
       } catch (error) { if (!error.uncertain) firestore.restoreState(before); throw error; }
     });
