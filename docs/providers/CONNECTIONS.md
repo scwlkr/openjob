@@ -1,12 +1,12 @@
 # Owner connection and credential broker boundary
 
-The connection reader composes the Gmail wire adapter with injected server-side
+The connection reader composes the Gmail and Outlook wire adapters with injected server-side
 connection records and a credential broker. Production defaults have no reader,
 records or broker configured. There is no live mode, environment enable switch,
 upstream-token API parameter or browser connection control.
 
 An explicit `mock` execution mode requires a supplied HTTP transport. The
-isolated test server supplies invented Gmail responses, in-memory connection
+isolated test server supplies invented Gmail and Graph responses, in-memory connection
 records and a fake broker. The authenticated API, existing CLI and app can read
 that protocol path in tests. Accounts and records are visibly marked **mock**;
 the independent synthetic examples remain available. Neither mode is a real
@@ -17,15 +17,15 @@ mailbox connection or an OAuth verification result.
 The store interface always receives an owner: `listForOwner(ownerId)` and
 `getForOwner(ownerId, accountId)`. Returned rows must match that owner and account.
 Malformed, duplicate or foreign records fail closed. A connection binds the
-account to a subject, address, approved read scopes, expiry and revision.
+account to a provider, subject, address, approved read scopes, expiry and revision.
 
 Only an active owner with current approval and read consent can reach credential
 lookup. The broker receives an opaque reference and the expected owner/account/
 subject context; its credential never enters public account data. Approval
 checks compare the current record with the original fingerprint, including its
 reference, subject, scopes, expiry and revision. The reader checks around broker
-lookup, before each Gmail GET and before response delivery. Changed, deleted,
-expired or revoked approval stops the read. The Gmail adapter also checks the
+lookup, before each provider GET and before response delivery. Changed, deleted,
+expired or revoked approval stops the read. Each adapter also checks the
 resolved credential subject/scope/expiry and returned mailbox profile.
 
 Public account metadata contains capability/status reasons, not credential
@@ -43,10 +43,10 @@ provider writes or queued sending.
 
 ## Demonstrated without credentials
 
-The HTTP test harness has an approved Alex mock Gmail account, a separate
-needs-consent example and Sam's own account. It runs profile/labels/list/get
-through the real Gmail mapper. Message pages retain account/thread/label IDs;
-UTF-8 plain text is decoded. The app can create a title-only personal Task from
+The HTTP test harness has approved Alex and Sam accounts for Gmail and Outlook,
+plus separate needs-consent examples. It runs profile/list/detail/folder reads
+through the real provider mappers. Message pages retain account/thread/folder
+IDs and bounded UTF-8 plain text. The app can create a title-only personal Task from
 the example. Revocation and consent denial return no Mail and cause no new
 broker lookups or provider HTTP requests. Loopback test controls affect only
 those in-memory records; they are not application account-management APIs.
@@ -63,7 +63,10 @@ Reads check the active owner before and after retrieval. Cleanup is idempotent.
 
 `server/providers/provider-token-vault.ts` adapts an injected vault reader to the
 credential broker. The vault record must match the exact owner, account, subject,
-credential reference and connection revision. Approval is checked before lookup
+credential reference, provider and connection revision. Legacy absent-provider
+records mean Gmail; new Outlook bindings explicitly identify Outlook. Subjects
+are unique within a provider, while account IDs and credential references cannot
+be reused across a single owner's connections. Approval is checked before lookup
 and after the vault returns. Neither module provisions storage or supplies a real
 vault. Evidence reconstructs the repository over isolated fake Firestore transport
 and uses invented vault credentials; it does not verify a live database.
@@ -86,7 +89,8 @@ There is still no production OAuth callback/refresh flow, provisioned credential
 vault or live provider configuration. The runtime has no configured repository
 or broker and cannot enable live reads. Implement and review those bindings,
 verify deletion and the cloud runtime, then obtain separate approval for one
-test account. See [Gmail reads](GMAIL_READ.md) and [setup requirements](README.md).
+test account. See [Gmail reads](GMAIL_READ.md), [Outlook reads](OUTLOOK_READ.md)
+and [setup requirements](README.md).
 
 REST semantics: [conditional writes](https://firebase.google.com/docs/firestore/reference/rest/v1/Precondition)
 and [atomic commit](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/commit).

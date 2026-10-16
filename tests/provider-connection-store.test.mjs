@@ -93,3 +93,15 @@ test('100-account/encoded byte bounds and injected revision reuse reject before 
   for (let index = 0; index < 12; index++) { try { await big.store.putForOwner(OWNER, { ...input(`big_${index}`), scopes }, null); } catch (error) { assert.equal(error.code, 'connection_capacity'); bounded = true; break; } }
   assert.equal(bounded, true);
 });
+
+test('provider metadata preserves legacy Gmail while allowing same subject only across distinct providers', async () => {
+  const f = await fixture();
+  const gmail = await f.store.putForOwner(OWNER, input(), null);
+  const outlook = await f.store.putForOwner(OWNER, { ...input('outlook_fixture'), provider: 'outlook', subject: gmail.subject, scopes: ['Mail.Read', 'User.Read'] }, null);
+  assert.equal(outlook.provider, 'outlook'); assert.equal((await f.reopen().getForOwner(OWNER, outlook.accountId)).provider, 'outlook');
+  assert.equal((await f.reopen().listForOwner(OWNER)).length, 2);
+  await assert.rejects(f.store.putForOwner(OWNER, { ...input('gmail_second'), provider: 'gmail', subject: gmail.subject }, null), code('conflict'));
+  await assert.rejects(f.store.putForOwner(OWNER, { ...input('outlook_second'), provider: 'outlook', subject: gmail.subject }, null), code('conflict'));
+  await assert.rejects(f.store.putForOwner(OWNER, { ...input('outlook_ref_collision'), provider: 'outlook', credentialRef: gmail.credentialRef }, null), code('conflict'));
+  for (const provider of ['imap', null, 'OUTLOOK']) await assert.rejects(f.store.putForOwner(OWNER, { ...input('invalid_provider'), provider }, null), code('invalid_input'));
+});

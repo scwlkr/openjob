@@ -138,7 +138,8 @@ test("authenticated provider preview isolates accounts, pages messages and expos
   const previewResponse = await refreshed;
   expect(previewResponse.status()).toBe(200);
   const previewBody = await previewResponse.json() as { data: ProviderPreview };
-  expect(previewBody.data.connectors).toHaveLength(1);
+  expect(previewBody.data.connectors).toHaveLength(2);
+  expect(previewBody.data.connectors[1]).toMatchObject({ provider: "outlook", adapter: "outlook-graph-read", status: "not_connected", liveExecutionEnabled: false });
   expect(previewBody.data.connectors[0]).toMatchObject({ provider: "gmail", adapter: "gmail-rest-read", status: "not_connected", consent: "required", liveExecutionEnabled: false, implementedOperations: ["mail.read", "mail.labels"] });
   const connections = page.getByRole("region", { name: "Provider connections", exact: true });
   await expect(connections).toContainText("Implemented · not connected");

@@ -204,3 +204,20 @@ test('retryCleanup does not revoke an active vault write in a successful callbac
   assert.deepEqual(await f.flow.retryCleanup(OWNER), { completed: 0, pending: 1 }); assert.equal((await f.store.listForOwner(OWNER))[0].state, 'needs_consent'); assert.equal(f.counts.delete, 0);
   release(); assert.equal((await callback).status, 'approved');
 });
+
+test('Google OAuth refuses an Outlook reservation and never provisions, approves or revokes it', async () => {
+  const f = await fixture(); let protectedRow;
+  const put = f.connections.putForOwner;
+  f.connections.putForOwner = async (...args) => { const result = await put(...args); protectedRow = { ...result, provider: 'outlook', scopes: ['Mail.Read', 'User.Read'] }; f.connections.getForOwner = async () => structuredClone(protectedRow); return structuredClone(protectedRow); };
+  let revokes = 0; f.connections.revokeForOwner = async () => { revokes++; throw new Error('Outlook must not be revoked by Google OAuth.'); };
+  await assert.rejects(f.callback(await f.begin()), safe(['cleanup_required']));
+  assert.equal(f.counts.write, 0); assert.equal(f.counts.delete, 0); assert.equal(revokes, 0); assert.equal(protectedRow.state, 'needs_consent');
+  const changed = await fixture();
+  changed.hooks.write = async () => {
+    const row = await changed.store.getForOwner(OWNER, 'gmail_new');
+    changed.connections.getForOwner = async () => ({ ...row, provider: 'outlook', scopes: ['Mail.Read', 'User.Read'] });
+  };
+  changed.connections.revokeForOwner = async () => { throw new Error('No cross-provider cleanup.'); };
+  await assert.rejects(changed.callback(await changed.begin()), safe(['cleanup_required']));
+  assert.equal(changed.counts.write, 1); assert.equal(changed.counts.delete, 0);
+});

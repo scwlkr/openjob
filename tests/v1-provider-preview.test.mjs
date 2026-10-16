@@ -34,7 +34,7 @@ test('signed provider preview uses account-qualified owner references, cursor is
   await validate(response.clone(), '/api/v1/workspace/provider-preview', 'get');
   const preview = (await response.json()).data;
   assert.equal(preview.mode, 'synthetic'); assert.equal(f.calls[0].ownerId, 'user_a');
-  assert.equal(preview.connectors.length, 1);
+  assert.equal(preview.connectors.length, 2);
   const connector = preview.connectors[0];
   assert.deepEqual(Object.keys(connector).sort(), ['adapter', 'consent', 'implementedOperations', 'liveExecutionEnabled', 'message', 'provider', 'status', 'unsupportedOperations']);
   assert.equal(connector.adapter, 'gmail-rest-read'); assert.equal(connector.provider, 'gmail');
@@ -149,4 +149,20 @@ test('provider preview preserves generic standard failures and initialization er
   const handler = createV1ProviderPreviewHandler(() => { throw new Error('private'); }, () => 'req_init');
   const response = await handler(new Request('https://openjob.example.invalid/api/v1/workspace/provider-preview'));
   assert.equal(response.status, 500); assert.equal((await response.json()).error.requestId, 'req_init');
+});
+
+test('human Outlook preview maps injected Graph pages with owner/provider cursor isolation and no secret leakage', async () => {
+  const f = await fixture(); const mock = await createMockProviderConnectionHarness({ owners: { alex: 'user_a', sam: 'user_b' }, isOwnerActive: async owner => [...f.users.values()].some(user => user.userId === owner && !user.deletionPending) }); f.connect(mock.reader);
+  const validate = await createOpenApiResponseValidator();
+  const call = async (accountId, cursor) => { const response = await f.request(new URLSearchParams({ accountId, ...(cursor ? { cursor } : {}) }).toString()); await validate(response.clone(), '/api/v1/workspace/provider-preview', 'get'); return response; };
+  const response = await call(mock.accountIds.outlookAlex); assert.equal(response.status, 200, await response.clone().text()); const first = (await response.json()).data;
+  assert.equal(first.mode, 'mock'); assert.equal(first.accounts.find(account => account.id === mock.accountIds.outlookAlex).provider, 'outlook'); assert.equal(first.accounts.some(account => account.id === mock.accountIds.outlookSam), false);
+  assert.equal(first.messages.length, 2); assert.equal(first.messages[0].upstreamId, 'AAMkMessage1=='); assert.equal(first.messages[0].subject, 'Outlook fixture: prepare the launch'); assert.match(first.messages[0].body, /Outlook Graph wire mapper for alex/); assert.equal(first.folders[0].name, 'Inbox'); assert.equal(first.syncCursor, null);
+  const next = await call(mock.accountIds.outlookAlex, first.nextCursor); assert.equal(next.status, 200); const page = (await next.json()).data; assert.equal(page.messages.length, 1); assert.equal(page.nextCursor, null);
+  assert.deepEqual(first.connectors.map(row => [row.provider, row.adapter, row.liveExecutionEnabled]), [['gmail', 'gmail-rest-read', false], ['outlook', 'outlook-graph-read', false]]);
+  for (const privateValue of ['fixture_outlook_ref_', 'mock_outlook_access_', 'credentialRef', 'accessToken', 'revision', 'scopes']) assert.equal(JSON.stringify(first).includes(privateValue), false);
+  assert.equal((await call(mock.accountIds.alex, first.nextCursor)).status, 400);
+  const before = { ...mock.counters }; assert.equal((await f.request(new URLSearchParams({ accountId: mock.accountIds.outlookAlex }).toString(), { token: 'b' })).status, 403); assert.deepEqual(mock.counters, before);
+  const consent = await call(mock.accountIds.outlookConsent); assert.equal(consent.status, 200); assert.deepEqual((await consent.json()).data.messages, []); assert.deepEqual(mock.counters, before);
+  mock.controls.revoke(mock.accountIds.outlookAlex); const revoked = await call(mock.accountIds.outlookAlex); assert.equal(revoked.status, 200); assert.deepEqual((await revoked.json()).data.messages, []); assert.deepEqual(mock.counters, before);
 });

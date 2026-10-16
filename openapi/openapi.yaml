@@ -3196,6 +3196,10 @@ components:
 
   schemas:
     ProviderConnectorStatus:
+      oneOf:
+        - $ref: "#/components/schemas/GmailConnectorStatus"
+        - $ref: "#/components/schemas/OutlookConnectorStatus"
+    GmailConnectorStatus:
       type: object
       additionalProperties: false
       required:
@@ -3246,6 +3250,62 @@ components:
               - mail.draft
               - mail.send
               - sync.history
+              - reconnect
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+    OutlookConnectorStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - adapter
+        - status
+        - consent
+        - liveExecutionEnabled
+        - implementedOperations
+        - unsupportedOperations
+        - message
+      properties:
+        provider:
+          type: string
+          const: outlook
+        adapter:
+          type: string
+          const: outlook-graph-read
+        status:
+          type: string
+          const: not_connected
+        consent:
+          type: string
+          const: required
+        liveExecutionEnabled:
+          type: boolean
+          const: false
+        implementedOperations:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - mail.read
+              - mail.folders
+        unsupportedOperations:
+          type: array
+          minItems: 6
+          maxItems: 6
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - calendar.read
+              - calendar.write
+              - mail.draft
+              - mail.send
+              - mail.delta
               - reconnect
         message:
           type: string

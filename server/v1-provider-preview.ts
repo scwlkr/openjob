@@ -3,6 +3,7 @@ import type { OpenJobUser } from "./v1-identity.ts";
 import { createProviderWorkspacePreview } from "./provider-workspace-preview.ts";
 import type { ProviderPreview } from "../shared/provider-contracts.ts";
 import type { ProviderConnectionReader } from "./providers/provider-connections.ts";
+import { describeOutlookReadAdapter } from "./providers/outlook-read-adapter.ts";
 import { describeGmailReadAdapter } from "./providers/gmail-read-adapter.ts";
 import { isInactiveUserError } from "../db/user-history.ts";
 import {
@@ -42,7 +43,7 @@ export function createV1ProviderPreviewApi({ users, verifyIdToken, connections, 
           if (values.length) input[key] = values[0];
         }
         const snapshot = await preview(user.userId, input);
-        const data: ProviderPreview = { ...snapshot, connectors: describeGmailReadAdapter() };
+        const data: ProviderPreview = { ...snapshot, connectors: [...describeGmailReadAdapter(), ...describeOutlookReadAdapter()] };
         const current = await users.resolve(identity);
         if (!current || current.userId !== user.userId || current.deletionPending) return accountDeletionPendingResponse(requestId);
         return jsonResponse({ data });
