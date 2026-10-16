@@ -243,4 +243,6 @@ Mail optionally retains only authored unfinished composition/reply text in a
 separate owner-bound browser buffer. It survives offline reload and restores
 when online Mail loads again; no offline inbox or automatic submit/send is
 provided. Explicit save clears that authored buffer without clearing newer
-typing. Review the restored mailbox, recipient and content before saving.
+typing. Competing tabs cannot overwrite or clear a newer recovery buffer: the
+stale tab keeps its editor text and asks you to copy it before reloading to review
+the saved version. Review the restored mailbox, recipient and content before saving.

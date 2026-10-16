@@ -16,7 +16,9 @@ test('Firebase restoration uses exact SDK local identity only on network failure
   let code = 'auth/network-request-failed';
   const user = { uid: 'sdk_alex', tenantId: 'tenant_fixture', providerData: [{ providerId: 'google.com' }], async getIdTokenResult() { if (code) throw Object.assign(new Error('SDK failed.'), { code }); return { signInProvider: 'google.com' }; }, async getIdToken() { throw Object.assign(new Error('Still offline.'), { code: 'auth/network-request-failed' }); } };
   globalThis.__offlineAuthUser = user;
-  function observe() { return new Promise((resolve, reject) => { const cancel = createFirebaseAuth().observe(value => { cancel(); resolve(value); }, error => { cancel(); reject(error); }); }); }
+  function observe(options = { allowOfflineRestore: true }) { return new Promise((resolve, reject) => { const cancel = createFirebaseAuth(options).observe(value => { cancel(); resolve(value); }, error => { cancel(); reject(error); }); }); }
+  await assert.rejects(observe({}), error => error.code === 'auth/network-request-failed');
+  await assert.rejects(observe({ allowOfflineRestore: false }), error => error.code === 'auth/network-request-failed');
   const restored = await observe(); assert.deepEqual(restored.localIdentity, { uid: 'sdk_alex', tenantId: 'tenant_fixture' }); assert.equal(restored.signInMethod, 'google');
   await assert.rejects(restored.getIdToken(), error => error.code === 'auth/network-request-failed');
   code = 'auth/user-disabled'; await assert.rejects(observe(), error => error.code === 'auth/user-disabled');

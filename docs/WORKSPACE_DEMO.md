@@ -190,6 +190,8 @@ owner IDs are process-local and old browser bindings intentionally fail closed.
    them; reconnect/reload and return to Mail to recover them. The inbox and saved
    server draft bodies are not available after an offline reload. Nothing is
    submitted or sent automatically; review mailbox/recipient before explicit save.
+   A stale tab cannot replace or clear another tab's newer recovery text; its
+   editor stays open with a warning to copy it before reloading and reviewing.
 
 The required browser lane runs this built demo against actual Chromium,
 IndexedDB, Web Locks and the service worker, including offline cold reload,

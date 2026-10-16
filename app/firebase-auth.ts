@@ -193,7 +193,7 @@ async function primaryCredentialProof(
       };
 }
 
-export function createFirebaseAuth(): OpenJobAuth {
+export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOfflineRestore?: boolean } = {}): OpenJobAuth {
   let forceAccountSelection = false;
   let secondaryGeneration = 0;
   let activeSecondaryGeneration: number | null = null;
@@ -234,7 +234,7 @@ export function createFirebaseAuth(): OpenJobAuth {
               listener(null);
               return;
             }
-            void sessionFor(user, true)
+            void sessionFor(user, allowOfflineRestore)
               .then((session) => {
                 if (active && currentEmission === emission) listener(session);
               })

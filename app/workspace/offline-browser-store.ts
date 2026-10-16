@@ -65,6 +65,7 @@ export function createBrowserOfflineWorkspace({ identityKey, signal, read, write
   let generation: string; try { generation = env.storage.getItem(MARKER) ?? '0'; } catch { return fail(); }
   let boundOwner: string | null = null;
   let lastSeen: string | null = null;
+  let lastAuthoredSeen = JSON.stringify(null);
   const changed = () => { try { env.storage.setItem(CHANGED, randomUUID()); env.events.dispatchEvent(new Event(BROWSER_OFFLINE_CHANGED_EVENT)); } catch { /* Persistence succeeded; a notification failure does not undo it. */ } };
   const guard = () => { if (signal.aborted) fail('revoked'); let current: string; try { current = env.storage.getItem(MARKER) ?? '0'; } catch { fail(); } if (current !== generation) fail('revoked'); };
   async function transaction<T>(change: (current: Database) => { result: T; save?: boolean }): Promise<T> {
@@ -101,8 +102,28 @@ export function createBrowserOfflineWorkspace({ identityKey, signal, read, write
     async loadBinding() { return locked(async () => { const owner = await transaction(current => ({ result: current.identities[identityKey]?.ownerUserId ?? null })); boundOwner = owner; return owner; }); },
     async bindOwner(owner) { if (!ownerId(owner)) fail(); await locked(() => transaction(current => { const prior = current.identities[identityKey]; if (prior && prior.ownerUserId !== owner) fail('revoked'); if (!prior && Object.keys(current.identities).length >= 3) fail(); current.identities[identityKey] = prior ?? { ownerUserId: owner }; return { result: undefined, save: true }; })); boundOwner = owner; },
     offline, clear: () => clearBrowserOfflineWorkspace(env),
-    loadAuthored: () => locked(() => transaction(current => ({ result: entry(current).authored ? validateBrowserAuthoredMailRecovery(entry(current).authored) : null }))),
-    saveAuthored: value => { const checked = validateBrowserAuthoredMailRecovery(value); return locked(() => transaction(current => { entry(current).authored = checked; return { result: undefined, save: true }; })); },
-    clearAuthored: () => locked(() => transaction(current => { delete entry(current).authored; return { result: undefined, save: true }; })),
+    loadAuthored: () => locked(async () => {
+      const value = await transaction(current => ({ result: entry(current).authored ? validateBrowserAuthoredMailRecovery(entry(current).authored) : null }));
+      lastAuthoredSeen = JSON.stringify(value); return value;
+    }),
+    saveAuthored: value => {
+      const checked = validateBrowserAuthoredMailRecovery(value);
+      return locked(async () => {
+        await transaction(current => {
+          const item = entry(current);
+          if (JSON.stringify(item.authored ?? null) !== lastAuthoredSeen) fail('changed_in_another_tab');
+          item.authored = checked; return { result: undefined, save: true };
+        });
+        lastAuthoredSeen = JSON.stringify(checked);
+      });
+    },
+    clearAuthored: () => locked(async () => {
+      await transaction(current => {
+        const item = entry(current);
+        if (JSON.stringify(item.authored ?? null) !== lastAuthoredSeen) fail('changed_in_another_tab');
+        delete item.authored; return { result: undefined, save: true };
+      });
+      lastAuthoredSeen = JSON.stringify(null);
+    }),
   };
 }

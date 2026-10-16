@@ -132,3 +132,35 @@ test("a stale editor in a second tab cannot overwrite a newer browser edit", asy
   await expect(saved(other).getByLabel("Task title", { exact: true })).toHaveValue("Stale second tab title");
   await expect(row(other)).toContainText(`${title} newer`);
 });
+
+test("competing unfinished Mail recovery writes and clears retain saved text and stale editor input", async ({ page, context, request }) => {
+  const token = (await (await request.get("/__test/session/alex")).json()).token;
+  expect((await request.post("/api/v1/workspace/commands", { headers: { authorization: `Bearer ${token}` }, data: { type: "mail.examples.add" } })).status()).toBe(200);
+  await page.goto("/workspace");
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await page.getByLabel("Keep unfinished drafts in this browser", { exact: true }).check();
+  const stored = (tab: Page) => tab.evaluate(() => new Promise<string>((resolve, reject) => {
+    const open = indexedDB.open("openjob-private-workspace-v1", 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => { const db = open.result; const read = db.transaction("private-state", "readonly").objectStore("private-state").get("current"); read.onsuccess = () => { db.close(); resolve(JSON.stringify(read.result)); }; read.onerror = () => { db.close(); reject(read.error); }; };
+  }));
+  await expect.poll(() => stored(page)).toContain('"enabled":true');
+  const other = await context.newPage();
+  await other.goto("/workspace");
+  await other.getByRole("button", { name: "Mail", exact: true }).click();
+  await expect(other.getByLabel("Keep unfinished drafts in this browser", { exact: true })).toBeChecked();
+  for (const tab of [page, other]) await tab.getByRole("button", { name: "Compose draft", exact: true }).click();
+  await page.getByLabel("Message", { exact: true }).fill("First tab saved authored text");
+  await expect.poll(() => stored(page)).toContain("First tab saved authored text");
+  await other.getByLabel("Message", { exact: true }).fill("Second tab editor must survive");
+  await expect(other.getByText(/^Unfinished text changed in another tab\./)).toBeVisible();
+  await expect(other.getByLabel("Message", { exact: true })).toHaveValue("Second tab editor must survive");
+  expect(await stored(page)).toContain("First tab saved authored text");
+  expect(await stored(page)).not.toContain("Second tab editor must survive");
+  await other.getByLabel("Keep unfinished drafts in this browser", { exact: true }).uncheck();
+  await expect(other.getByText(/^Unfinished text changed in another tab\./)).toBeVisible();
+  expect(await stored(page)).toContain("First tab saved authored text");
+  await page.reload();
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await expect(page.getByLabel("Message", { exact: true })).toHaveValue("First tab saved authored text");
+});

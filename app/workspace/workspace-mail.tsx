@@ -40,7 +40,13 @@ export default function WorkspaceMail({ view, busy, command, ref, recovery }: Pr
     recoveryQueue.current = recoveryQueue.current.catch(() => undefined).then(async () => {
       if (store.signal.aborted) return;
       if (clear) await store.clear(); else await store.save(buffer);
-    }).catch(() => { if (!store.signal.aborted) setRecoveryNotice("Unfinished text could not be saved in this browser. Keep the editor open."); });
+    }).catch((failure: unknown) => {
+      if (store.signal.aborted) return;
+      const issue = failure as { code?: string };
+      setRecoveryNotice(issue?.code === "changed_in_another_tab"
+        ? "Unfinished text changed in another tab. Your editor text is kept here. Copy it before reloading to review saved text."
+        : "Unfinished text could not be saved in this browser. Keep the editor open.");
+    });
   }
   function composeEdit(field: "to" | "subject" | "body", value: string) {
     editVersion.current += 1;

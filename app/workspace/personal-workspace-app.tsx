@@ -14,7 +14,7 @@ type Lease = { session: AuthSession | null | undefined; epoch: number; controlle
 type Props = { auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
 
 export default function PersonalWorkspaceApp({ auth, client }: Props) {
-  const activeAuth = useMemo(() => auth || createFirebaseAuth(), [auth]);
+  const activeAuth = useMemo(() => auth || createFirebaseAuth({ allowOfflineRestore: true }), [auth]);
   const activeClient = useMemo(() => client || createPersonalWorkspaceClient(), [client]);
   const [lease, setLease] = useState<Lease>(() => ({ session: undefined, epoch: 0, controller: new AbortController() }));
   const activeLease = useRef(lease);
