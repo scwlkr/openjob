@@ -11,6 +11,7 @@ const qaPasswordTenantId = qaPasswordTenantIdFor("preview");
 
 export default defineConfig({
   define: {
+    __OPENJOB_WORKSPACE_FIXTURE__: "true",
     __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(
       webFirebaseConfigFor("preview"),
     ),
@@ -40,5 +41,11 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 4175,
     strictPort: true,
+    proxy: {
+      "/api/workspace": {
+        target: "http://127.0.0.1:4180", changeOrigin: true,
+        configure(proxy) { proxy.on("proxyReq", request => request.removeHeader("origin")); },
+      },
+    },
   },
 });

@@ -1,3 +1,4 @@
+import WorkspaceApp from "../../../app/workspace/workspace-app";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { OpenJobPage } from "../../../app/page";
@@ -8,7 +9,7 @@ const inviteToken = window.location.pathname.match(/^\/invites\/([^/]+)$/)?.[1];
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {window.location.pathname === "/account-deletion" ? (
+    {window.location.pathname === "/workspace" ? <WorkspaceApp /> : window.location.pathname === "/account-deletion" ? (
       <AccountDeletionClient />
     ) : (
       <OpenJobPage inviteToken={inviteToken ? decodeURIComponent(inviteToken) : undefined} />

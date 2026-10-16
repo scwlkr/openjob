@@ -90,3 +90,7 @@ export type SetTaskStateResponse = JsonResponse<
 export type ListAgentGrantsResponse = JsonResponse<
   operations["listAgentGrants"]["responses"][200]
 >;
+
+export type CreateAgentGrantResponse = JsonResponse<
+  operations["createAgentGrant"]["responses"][201]
+>;

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import {
@@ -17,6 +18,7 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
+  const workspaceFixture = process.env.OPENJOB_WORKSPACE_FIXTURE === "1";
   const prototypeConfigPath = process.env.OPENJOB_ASSIGNEE_COLUMNS_PROTOTYPE
     ? "app/prototype/assignee-columns/wrangler.prototype.jsonc"
     : undefined;
@@ -36,7 +38,11 @@ export default defineConfig(async () => {
   ].serviceId;
 
   return {
+    resolve: workspaceFixture ? {
+      alias: { "cloudflare:workers": fileURLToPath(new URL("./server/workspace-local-bindings.ts", import.meta.url)) },
+    } : undefined,
     define: {
+      __OPENJOB_WORKSPACE_FIXTURE__: JSON.stringify(process.env.OPENJOB_WORKSPACE_FIXTURE === "1"),
       __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfig),
       __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(appleServiceId),
       __OPENJOB_GIT_COMMIT__: JSON.stringify(gitCommit),
@@ -47,10 +53,10 @@ export default defineConfig(async () => {
     },
     plugins: [
       vinext(),
-      cloudflare({
+      ...(!workspaceFixture ? [cloudflare({
         configPath: prototypeConfigPath,
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-      }),
+      })] : []),
     ],
   };
 });

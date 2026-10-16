@@ -89,7 +89,7 @@ function renderEnvelope(envelope, format) {
   const rows = Array.isArray(envelope.data) ? envelope.data : [envelope.data];
   if (rows.length === 0) return "";
   if (rows.every((value) => value && typeof value === "object")) {
-    const fields = Object.keys(rows[0]);
+    const fields = [...new Set(rows.flatMap(value => Object.keys(value)))];
     const header = fields.map(headerFor).join("\t");
     return `${header}\n${rows.map((value) => fields.map((field) => formatValue(value[field])).join("\t")).join("\n")}\n`;
   }

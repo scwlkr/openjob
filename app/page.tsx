@@ -59,5 +59,8 @@ export function OpenJobPage({ inviteToken }: { inviteToken?: string }) {
 }
 
 export default function Home() {
-  return <OpenJobPage />;
+  return <>
+    {__OPENJOB_WORKSPACE_FIXTURE__ && <a href="/workspace" style={{ display: "block", padding: "12px 20px", background: "var(--oj-selected)", color: "var(--oj-link)" }}>Open Mail, Calendar and Tasks prototype · simulated providers</a>}
+    <OpenJobPage />
+  </>;
 }

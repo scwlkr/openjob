@@ -175,6 +175,12 @@ Do not invent uptime, adoption, cost, or speed targets without a baseline. Commi
 
 ## Sean’s continuous operating model
 
+### Overnight prototype directive — 16 October 2026
+
+The owner requests a full working prototype by morning Central (working target 7 AM), accepting rough edges and aggressive application refactoring. Prioritize a connected Mail, Calendar, Tasks and agent experience over legacy compatibility, migration work or pixel-exact historical screens. Use up to three bounded implementation workers under one integration owner. External providers may be simulated when visibly labeled; application actions and persisted state must be real behind shared APIs/CLI where practical. Deliver a running/reproducible demo and walkthrough. A prototype is not completed live provider integration or production readiness.
+
+Project-owned test standards may change through reviewed implementation to match this phase. Keep cheap compile/type and functional checks for account isolation, authorization, revocation and accidental real sending. Preserve external branch protections. No production release, live correspondence, credentials/settings changes, spending or permanent deletion of live data is authorized. See [prototype delivery](PROTOTYPE_DELIVERY.md).
+
 ### The session loop
 
 Resume → choose → implement → verify → land → record → continue.

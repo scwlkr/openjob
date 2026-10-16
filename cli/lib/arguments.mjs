@@ -18,6 +18,7 @@ const VALUE_OPTIONS = new Set([
   "--status",
   "--text",
   "--text-file",
+  "--token-out",
   "--user-id",
   "--username",
 ]);

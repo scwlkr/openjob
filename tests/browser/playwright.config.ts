@@ -1,8 +1,9 @@
 import { defineConfig } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "openjob-web.spec.ts",
+  testMatch: ["openjob-web.spec.ts", "workspace.spec.ts"],
   fullyParallel: false,
   outputDir: "../../output/playwright/test-results",
   reporter: "line",
@@ -15,7 +16,8 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npx vite --config vite.config.ts",
+    cwd: fileURLToPath(new URL("../..", import.meta.url)),
+    command: "node scripts/dev-workspace.mjs --port 4175 --test",
     port: 4175,
     reuseExistingServer: false,
     timeout: 120_000,
