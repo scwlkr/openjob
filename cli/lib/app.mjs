@@ -7,12 +7,18 @@ import { extname, resolve, sep } from 'node:path';
 import { automaticUpdateNotice } from './updates.mjs';
 
 export async function runApp(args, pkg) {
-  const port = args.length === 0 ? 5191 : args.length === 2 && args[0] === '--port' ? Number(args[1]) : NaN;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Use openjob app [--port 1-65535].');
+  const options = new Map();
+  for (let i = 0; i < args.length; i += 2) {
+    if (!['--port', '--state-file'].includes(args[i]) || !args[i + 1] || options.has(args[i])) throw new Error('Use openjob app [--port 1-65535] [--state-file PATH].');
+    options.set(args[i], args[i + 1]);
+  }
+  const port = Number(options.get('--port') ?? 5191);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Use a loopback port from 1 to 65535.');
+  const stateFile = options.has('--state-file') ? resolve(options.get('--state-file')) : null;
   const root = fileURLToPath(new URL('../app/', import.meta.url));
   try { await readFile(resolve(root, 'web/index.html')); } catch { throw new Error('Packaged app assets are missing. From a source checkout use npm run app:pack, then install its tarball.'); }
   const apiToken = randomBytes(32).toString('hex');
-  const api = spawn(process.execPath, [resolve(root, 'api/server.mjs'), '--test-only', '--port', '0'], { env: { ...process.env, OPENJOB_LOCAL_API_TOKEN: apiToken }, stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  const api = spawn(process.execPath, [resolve(root, 'api/server.mjs'), '--test-only', '--port', '0', ...(stateFile ? ['--state-file', stateFile] : [])], { env: { ...process.env, OPENJOB_LOCAL_API_TOKEN: apiToken }, stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
   let server, interval, stopping = false;
   const stop = () => {
     if (stopping) return; stopping = true;
@@ -53,7 +59,7 @@ export async function runApp(args, pkg) {
     server.once('error', error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; stop(); });
     server.listen(port, '127.0.0.1', () => {
       console.log(`OpenJob ${pkg.version} (@${pkg.openjobDistribution?.channel ?? 'latest'}): http://127.0.0.1:${port}/workspace`);
-      console.log('Local prototype: synthetic Alex/Sam identities, invented providers and temporary API state. Real sending is disabled. Stop with Ctrl+C.');
+      console.log(`Local prototype: synthetic Alex/Sam identities and invented providers. ${stateFile ? 'Workspace saved to ' + stateFile : 'Temporary API state'}. Real sending is disabled. Stop with Ctrl+C.`);
       void automaticUpdateNotice(pkg);
       interval = setInterval(() => { void automaticUpdateNotice(pkg); }, 6 * 60 * 60 * 1000); interval.unref();
     });

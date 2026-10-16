@@ -1,3 +1,13 @@
+# WLK-304 local persistence checkpoint (publication now prioritized)
+
+Branch `codex/wlk-304-local-workspace-persistence` from merged WLK-303/main `37c322b`. Linear WLK-304 records practical acceptance: opt-in `openjob app --state-file PATH`, stable synthetic owners/work across restart, atomic private bounded JSON saves, single writer, visible corruption/write failures, no provider/auth secrets persisted. Default temporary demo on http://127.0.0.1:5193/workspace is unchanged and remains useful.
+
+Initial implementation only: new personal-workspace-state/schema modules, fake Firestore snapshot/revision export/restore, optional server save/load/serialization, CLI state-file routing. Actual app bundle build and tsc pass. Persistence/restart/failure tests and narrow implementation review are NOT completed; do not merge or publish this checkpoint. Known review areas: startup-failure lock release, shutdown while writes drain, stable synthetic owner schema and private fields, retry/uncertain-commit semantics, corruption preservation. A design critique favored explicit fake-store snapshot over a duplicate domain adapter; save/load whitelist keeps only synthetic user ownership and workspace/grant-hash/receipt fields, never authority keys or session tokens.
+
+At 12:45 UTC Shane approved publication as @scwlkr/openjob. This does not authorize new credentials/grants/security settings. Work is checkpointed while existing npm identity/scope is rechecked; do not publish WLK-304 code. Publish only a separately verified approved artifact from merged WLK-303. Read-only prior result: npm ENEEDAUTH, scoped registry404, unscopedopenjob belongs to another maintainer. Current live-channel verification remains pending. WLK-302 TLS/login remains unrecovered and excluded. PatriBible and existing unrelated checkout untouched.
+
+---
+
 # Local WLK-303 integration checkpoint
 
 Isolated Mac checkout/branch `codex/wlk-303-npm-distribution` from main `5358f6cc0c030d478aafea7d4762fdab68d799e3`. Existing Desktop/dev/openjob and PatriBible remain untouched. WLK-302 cloud stop was accepted per parent; final TLS/login checkpoint is not recovered and is excluded here. Linear WLK-303 remains the execution record. Parent authorized non-overlapping integration after fresh main/PR/branch verification; inaccessible WLK-302 is no longer a generic merge blocker. No WLK-302 branch or PR is published; preserve any cloud-only work for later recovery.
