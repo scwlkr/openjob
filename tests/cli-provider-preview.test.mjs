@@ -46,6 +46,14 @@ test('existing human CLI reads the shared synthetic adapter with scoped account 
   const ok = async args => { const result = await f.run(['--format', 'json', ...args]); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
   const initial = await ok([]);
   assert.equal(initial.mode, 'synthetic'); assert.equal(initial.messages.length, 2); assert.ok(initial.nextCursor);
+  assert.equal(initial.connectors.length, 1);
+  assert.deepEqual(Object.keys(initial.connectors[0]).sort(), ['adapter', 'consent', 'implementedOperations', 'liveExecutionEnabled', 'message', 'provider', 'status', 'unsupportedOperations']);
+  assert.equal(initial.connectors[0].adapter, 'gmail-rest-read'); assert.equal(initial.connectors[0].status, 'not_connected');
+  assert.equal(initial.connectors[0].consent, 'required'); assert.equal(initial.connectors[0].liveExecutionEnabled, false);
+  assert.deepEqual(initial.connectors[0].implementedOperations, ['mail.read', 'mail.labels']);
+  assert.match(initial.connectors[0].message, /no live account is connected/i);
+  assert.match(initial.connectors[0].message, /runtime execution remains disabled/i);
+  assert.match(initial.connectors[0].message, /explicit consent/i);
   assert.equal(initial.accounts.every(account => !account.capabilities.send.available && !account.capabilities.calendarWrite.available), true);
   const next = await ok(['--account', initial.selectedAccountId, '--cursor', initial.nextCursor]);
   assert.equal(next.messages.length, 1); assert.equal(next.nextCursor, null);
@@ -66,6 +74,7 @@ test('existing human CLI reads the shared synthetic adapter with scoped account 
   const foreign = await f.run(['--account', initial.selectedAccountId, '--format', 'json']);
   assert.notEqual(foreign.status, 0); assert.match(foreign.stderr, /forbidden/); assert.equal(foreign.stdout, ''); assert.equal(foreign.stderr.includes(initial.selectedAccountId), false);
   const b = await ok([]); assert.notEqual(b.selectedAccountId, initial.selectedAccountId);
+  assert.deepEqual(b.connectors, initial.connectors, 'public adapter catalog does not disclose owner identity or credentials');
   assert.equal(f.calls.filter(call => call.path.startsWith('/api/')).every(call => call.method === 'GET' && !call.headers['x-openjob-fixture-owner'] && !call.headers['x-openjob-fixture-agent']), true);
   assert.deepEqual(f.failures, []);
 });
@@ -74,7 +83,7 @@ test('provider CLI rejects agent credentials and invalid query options before au
   const f = await harness(t);
   for (const args of [
     ['--agent-token-file', '/absent'], ['--account', ''], ['--account', '../private'],
-    ['--account', 'x'.repeat(129)], ['--cursor', 'x'.repeat(513)], ['--cursor', 'private\nvalue'],
+    ['--account', 'x'.repeat(129)], ['--cursor', 'x'.repeat(4097)], ['--cursor', 'private\nvalue'],
     ['--cursor', 'a', '--cursor', 'b'], ['--group', 'grp_fixture'], ['--input', '-'],
   ]) { const result = await f.run(args); assert.equal(result.status, 2, result.stderr); assert.equal(result.stdout, ''); }
   assert.deepEqual(f.calls, []);

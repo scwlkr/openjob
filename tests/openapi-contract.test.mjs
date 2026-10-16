@@ -719,6 +719,7 @@ test("provider preview response schemas preserve opaque Unicode upstream identit
   const contract = await validateOpenApiContract(contractUrl);
   const validate = compileSchema(contract.paths["/api/v1/workspace/provider-preview"].get.responses["200"].content["application/json"].schema);
   const data = await createProviderPreview({ ownerId: "schema_fixture" });
+  assert.deepEqual(data.connectors, [], "synthetic adapter records do not claim real connector integration");
   const accountId = data.selectedAccountId;
   const upstream = "漢".repeat(256);
   const reference = kind => createProviderResourceRef(accountId, kind, upstream);
@@ -730,6 +731,23 @@ test("provider preview response schemas preserve opaque Unicode upstream identit
   assert.equal(validate({ data }), true, JSON.stringify(validate.errors));
   assert.equal(validate({ data: { ...data, messages: [{ ...data.messages[0], id: "x".repeat(3073) }] } }), false);
   assert.equal(validate({ data: { ...data, messages: [{ ...data.messages[0], upstreamId: upstream + "漢" }] } }), false);
+  const connector = {
+    provider: "gmail", adapter: "gmail-rest-read", status: "not_connected", consent: "required", liveExecutionEnabled: false,
+    implementedOperations: ["mail.read", "mail.labels"],
+    unsupportedOperations: ["calendar.read", "calendar.write", "mail.draft", "mail.send", "sync.history", "reconnect"],
+    message: "Read adapter implemented; no approved account or provider consent. Live execution disabled.",
+  };
+  assert.equal(validate({ data: { ...data, connectors: [connector] } }), true);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...connector, liveExecutionEnabled: true }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...connector, status: "connected" }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...connector, accessToken: "private" }] } }), false);
+  assert.equal(validate({ data: { ...data, connectors: [{ ...connector, implementedOperations: ["mail.send"] }] } }), false);
+  const { connectors: omitted, ...withoutCatalog } = data;
+  assert.deepEqual(omitted, []);
+  assert.equal(validate({ data: withoutCatalog }), false);
+  assert.equal(validate({ data: { ...data, syncCursor: null } }), true);
+  assert.equal(validate({ data: { ...data, nextCursor: "x".repeat(4096) } }), true);
+  assert.equal(validate({ data: { ...data, nextCursor: "x".repeat(4097) } }), false);
 });
 
 test("validation rejects broken operations and examples", async () => {

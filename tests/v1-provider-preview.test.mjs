@@ -18,7 +18,7 @@ async function fixture() {
   const api = createV1ProviderPreviewApi({
     users: { async resolve(identity) { return users.get(identity.uid) ?? null; } },
     async verifyIdToken(request) { verifies++; return verifier(request); },
-    async preview(ownerId, input) { calls.push({ ownerId, input }); const result = await createProviderPreview({ ownerId, ...input }); await hooks.afterRead?.(); return result; },
+    async preview(ownerId, input) { calls.push({ ownerId, input }); const result = hooks.read ? await hooks.read(ownerId, input) : await createProviderPreview({ ownerId, ...input }); await hooks.afterRead?.(); return result; },
     requestId: () => 'req_provider_fixture',
   });
   const request = (query = '', { token = 'a', headers = {}, method = 'GET' } = {}) => api.fetch(new Request(`https://openjob.example.invalid/api/v1/workspace/provider-preview${query ? '?' + query : ''}`, { method, headers: { authorization: `Bearer ${tokens[token] ?? token}`, ...headers } }));
@@ -32,8 +32,19 @@ test('signed provider preview uses account-qualified owner references, cursor is
   await validate(response.clone(), '/api/v1/workspace/provider-preview', 'get');
   const preview = (await response.json()).data;
   assert.equal(preview.mode, 'synthetic'); assert.equal(f.calls[0].ownerId, 'user_a');
+  assert.equal(preview.connectors.length, 1);
+  const connector = preview.connectors[0];
+  assert.deepEqual(Object.keys(connector).sort(), ['adapter', 'consent', 'implementedOperations', 'liveExecutionEnabled', 'message', 'provider', 'status', 'unsupportedOperations']);
+  assert.equal(connector.adapter, 'gmail-rest-read'); assert.equal(connector.provider, 'gmail');
+  assert.equal(connector.status, 'not_connected'); assert.equal(connector.consent, 'required'); assert.equal(connector.liveExecutionEnabled, false);
+  assert.deepEqual(connector.implementedOperations, ['mail.read', 'mail.labels']);
+  assert.deepEqual(connector.unsupportedOperations, ['calendar.read', 'calendar.write', 'mail.draft', 'mail.send', 'sync.history', 'reconnect']);
+  assert.match(connector.message, /no live account is connected/i);
+  assert.match(connector.message, /runtime execution remains disabled/i);
+  assert.match(connector.message, /explicit consent/i);
   assert.equal(preview.accounts.filter(account => account.provider === 'gmail').length, 2);
   assert.equal(preview.accounts.every(account => account.mode === 'synthetic' && !account.capabilities.send.available && !account.capabilities.draft.available && !account.capabilities.calendarWrite.available), true);
+  assert.equal(preview.accounts.some(account => account.id === connector.adapter), false, 'unconnected adapter catalog entries are never selectable accounts');
   assert.equal(preview.messages.every(message => message.accountId === preview.selectedAccountId), true);
   assert.ok(preview.nextCursor);
   const nextResponse = await f.request(new URLSearchParams({ accountId: preview.selectedAccountId, cursor: preview.nextCursor }).toString());
@@ -52,6 +63,7 @@ test('signed provider preview uses account-qualified owner references, cursor is
     const data = (await result.json()).data;
     assert.deepEqual(data.messages, []); assert.deepEqual(data.events, []); assert.equal(data.nextCursor, null);
   }
+  assert.equal((await f.request(new URLSearchParams({ accountId: connector.adapter }).toString())).status, 403);
 });
 
 test('provider preview rejects opaque agents, forged authentication and malformed query before adapter reads', async () => {
@@ -62,13 +74,25 @@ test('provider preview rejects opaque agents, forged authentication and malforme
     const response = await f.request('', { headers: { authorization: `bEaReR   ${token}` } });
     assert.equal(response.status, 401); assert.equal(f.verifies, checked);
   }
-  for (const query of ['accountId=', 'cursor=', 'accountId=a&accountId=b', 'cursor=x&cursor=y', 'ownerId=user_b', 'accountId=../private', 'cursor=' + 'x'.repeat(513), 'cursor=%0Aprivate']) {
+  for (const query of ['accountId=', 'cursor=', 'accountId=a&accountId=b', 'cursor=x&cursor=y', 'ownerId=user_b', 'accountId=../private', 'cursor=' + 'x'.repeat(4097), 'cursor=%0Aprivate']) {
     const response = await f.request(query); assert.equal(response.status, 400);
     const body = await response.json(); assert.equal(body.error.requestId, 'req_provider_fixture'); assert.equal(JSON.stringify(body).includes('private'), false);
   }
   assert.equal((await f.request('', { headers: { origin: 'https://attacker.example.invalid' } })).status, 403);
   assert.equal((await f.request('', { method: 'POST' })).status, 404);
   assert.equal(f.calls.length, 0);
+});
+
+test('provider API accepts adapter cursors up to 4096 bytes while rejecting longer query values before adapter dispatch', async () => {
+  const f = await fixture();
+  const snapshot = await createProviderPreview({ ownerId: 'user_a' });
+  f.hooks.read = async (ownerId, input) => { assert.equal(ownerId, 'user_a'); assert.equal(input.cursor, 'x'.repeat(4096)); return snapshot; };
+  assert.equal((await f.request('cursor=' + 'x'.repeat(4096))).status, 200);
+  assert.equal(f.calls.length, 1);
+  assert.equal((await f.request('cursor=' + 'x'.repeat(4097))).status, 400);
+  assert.equal(f.calls.length, 1, 'oversized cursor never reaches the adapter');
+  delete f.hooks.read;
+  assert.equal((await f.request('cursor=' + 'x'.repeat(513))).status, 400, 'synthetic adapter still validates its own canonical cursor format and bound');
 });
 
 test('provider preview fences async reads after User removal, identity change or deletion', async () => {

@@ -7,8 +7,11 @@ message, folder or event ID in different accounts. References therefore retain
 their owning account and record kind. Provider calendars remain authoritative
 external records; OpenJob Personal Calendar and Tasks remain separate.
 
-The adapter implementation in this cycle is synthetic. Provider names describe
-invented examples, not verified Gmail, Microsoft Graph, IMAP or CalDAV support.
+The application preview uses the synthetic adapter. A separate [Gmail REST read
+adapter](GMAIL_READ.md) now implements message/label translation, with execution
+closed by default and only invented HTTP transport evidence. Provider names in
+the preview describe examples, not verified live Gmail, Microsoft Graph, IMAP or
+CalDAV connections.
 Capabilities describe this adapter's implemented operations. An unsupported
 operation must fail before any side effect; a button or a scope label is not
 evidence that a provider operation exists. Message content is plain text and
@@ -64,9 +67,10 @@ the next implementation would need:
    references rather than values in project files. Agents receive OpenJob scopes,
    never upstream credentials. Google's [web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server)
    describes the authorization and refresh flow.
-4. A live read adapter behind this contract, tested against that account for
-   identity mapping, body/label/thread reads, calendar reads, pagination, refresh,
-   revocation and delta/resync behavior. Verify the existing cloud runtime and
+4. A reviewed runtime binding to the implemented Gmail read adapter, then tests
+   against that account for identity mapping, body/label/thread reads, pagination
+   and revocation. Google Calendar, token refresh and history/delta sync remain
+   separate unsupported work in this bounded Mail read implementation. Verify the existing cloud runtime and
    Firestore bindings in the authorized environment before calling it durable
    live integration. Current development evidence uses a fake Firestore transport.
 

@@ -534,7 +534,7 @@ async function main(raw) {
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();
-    for (const [option, key, maximum] of [["--account", "accountId", 128], ["--cursor", "cursor", 512]]) {
+    for (const [option, key, maximum] of [["--account", "accountId", 128], ["--cursor", "cursor", 4096]]) {
       const value = parsed.options.get(String(option));
       if (value !== undefined) {
         if (typeof value !== "string" || !value || value.length > Number(maximum) || (key === "accountId" ? !/^[A-Za-z0-9_-]+$/.test(value) : !/^[\x21-\x7e]+$/.test(value))) throw new CliError("usage_error", "Use a bounded provider account ID and opaque cursor.", 2);

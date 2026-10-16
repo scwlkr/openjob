@@ -9,8 +9,14 @@ import styles from "./workspace.module.css";
 
 type Props = { session: AuthSession; signal: AbortSignal; client: PersonalWorkspaceClient; busy: boolean; command: (input: WorkspaceCommand, notice: string) => Promise<boolean> };
 type Page = { accountId?: string; cursor?: string; history: (string | undefined)[] };
-const statusLabels = { ready: "Ready (synthetic)", reconnect_required: "Reconnect required", error: "Provider error", unsupported: "Unsupported" };
+const statusLabels = { ready: "Ready (synthetic)", reconnect_required: "Reconnect required", error: "Provider error", unsupported: "Unsupported", not_connected: "Not connected", needs_consent: "Mail consent required" };
 const capabilities: [keyof ProviderAccount["capabilities"], string][] = [["mailRead", "Mail read"], ["draft", "Mail draft"], ["send", "Mail send"], ["calendarRead", "Calendar read"], ["calendarWrite", "Calendar write"], ["reconnect", "Reconnect"]];
+const operationLabels: Record<string, string> = {
+  "mail.read": "Read messages", "mail.labels": "Read labels", "mail.draft": "Create drafts", "mail.send": "Send mail",
+  "mail.write": "Change mailbox data", "mail.history": "Mail history synchronization", "mail.delta": "Mail change synchronization",
+  "calendar.read": "Read provider calendars", "calendar.write": "Change provider calendars",
+};
+const operationLabel = (operation: string) => operationLabels[operation] || operation.replaceAll(".", " ");
 const exampleTime = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
 export default function PersonalWorkspaceMail({ session, signal, client, busy, command }: Props) {
@@ -55,6 +61,18 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
   return <section aria-label="Authenticated provider preview">
     <button disabled={signal.aborted} onClick={() => { requestController.current?.abort(); setRevision((value) => value + 1); setSelectedMessageId(""); }}>Refresh preview</button>
     <p className={styles.banner}>Synthetic Mail preview · fictional provider data returned through your authenticated API. No live provider connection, credentials, drafts or sending. These examples are not saved Mail.</p>
+    {data && <section className={styles.panel} aria-label="Provider connections"><div className={styles.reader}>
+      <h2>Provider connections</h2>
+      {data.connectors.map((connector) => <article key={connector.adapter} data-testid="provider-connection">
+        <h3>Gmail read adapter</h3><p><strong>Implemented · not connected</strong></p>
+        <p>Gmail Mail-read consent required · live execution disabled.</p>
+        <p>Gmail consent is separate from your OpenJob sign-in.</p>
+        <p>{connector.message}</p>
+        <dl className={styles.providerCapabilities}><div><dt><strong>Implemented reads</strong></dt><dd>{connector.implementedOperations.map(operationLabel).join(", ")}</dd></div><div><dt><strong>Not supported</strong></dt><dd>{connector.unsupportedOperations.map(operationLabel).join(", ")}</dd></div></dl>
+        <p className={styles.small}>Next step: choose an approved test account and complete owner-reviewed setup for read-only Mail consent.</p>
+      </article>)}
+      {!data.connectors.length && <p>No provider connections are available in this build.</p>}
+    </div></section>}
     <label className={styles.filter}>Preview account<select aria-label="Preview account" value={page.accountId || data?.selectedAccountId || ""} disabled={!accountOptions.length} onChange={(event) => selectAccount(event.target.value)}>{!accountOptions.length && <option value="">Loading synthetic accounts…</option>}{accountOptions.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.provider} · synthetic</option>)}</select></label>
     {failed && <p role="alert" className={styles.error}>Provider preview could not be loaded. Your saved Tasks and Calendar are unchanged. Choose another available account or reopen Mail preview.</p>}
     {!data && !failed && <p role="status">Loading authenticated synthetic preview…</p>}
@@ -63,7 +81,7 @@ export default function PersonalWorkspaceMail({ session, signal, client, busy, c
         <p className={styles.eyebrow}>SYNTHETIC {selectedAccount.provider.toUpperCase()} ACCOUNT</p><h2>{selectedAccount.label}</h2><p>{selectedAccount.address}</p>
         <p data-testid="provider-status"><strong>{statusLabels[selectedAccount.status]}</strong> · {selectedAccount.statusReason}</p>
         <p data-testid="provider-sync">{selectedAccount.sync.state === "synthetic_ready" ? "Synthetic snapshot ready" : "Preview sync blocked"} · {selectedAccount.sync.reason}</p>
-        <p className={styles.small}>Fixed example snapshot time: {exampleTime(selectedAccount.sync.asOf)}. This is fixture time, not a live sync timestamp.</p>
+        <p className={styles.small}>Fixed example snapshot time: {selectedAccount.sync.asOf ? exampleTime(selectedAccount.sync.asOf) : "unavailable"}. This is fixture time, not a live sync timestamp.</p>
         <dl className={styles.providerCapabilities}>{capabilities.map(([capability, label]) => <div key={capability}><dt><strong>{label}</strong> · {selectedAccount.capabilities[capability].available ? "Available in synthetic adapter" : "Unavailable"}</dt><dd>{selectedAccount.capabilities[capability].reason}</dd></div>)}</dl>
       </div></section>
       <div className={styles.mailGrid}>

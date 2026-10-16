@@ -2,6 +2,7 @@ import type { FirebaseTokenIdentity } from "./firebase-id-token.ts";
 import type { OpenJobUser } from "./v1-identity.ts";
 import { createProviderPreview } from "../shared/provider-preview.ts";
 import type { ProviderPreview } from "../shared/provider-contracts.ts";
+import { describeGmailReadAdapter } from "./providers/gmail-read-adapter.ts";
 import { isInactiveUserError } from "../db/user-history.ts";
 import {
   defaultRequestId, errorResponse, jsonResponse, internalErrorResponse,
@@ -35,10 +36,11 @@ export function createV1ProviderPreviewApi({ users, verifyIdToken, preview = (ow
         const input: { accountId?: string; cursor?: string } = {};
         for (const key of ["accountId", "cursor"] as const) {
           const values = url.searchParams.getAll(key);
-          if (values.length > 1 || values.length === 1 && (!values[0] || values[0].length > (key === "accountId" ? 128 : 512) || (key === "accountId" ? !/^[A-Za-z0-9_-]+$/.test(values[0]) : !/^[\x21-\x7e]+$/.test(values[0])))) return fail("invalid_request", "The provider query is invalid.", 400);
+          if (values.length > 1 || values.length === 1 && (!values[0] || values[0].length > (key === "accountId" ? 128 : 4096) || (key === "accountId" ? !/^[A-Za-z0-9_-]+$/.test(values[0]) : !/^[\x21-\x7e]+$/.test(values[0])))) return fail("invalid_request", "The provider query is invalid.", 400);
           if (values.length) input[key] = values[0];
         }
-        const data = await preview(user.userId, input);
+        const snapshot = await preview(user.userId, input);
+        const data: ProviderPreview = { ...snapshot, connectors: describeGmailReadAdapter() };
         const current = await users.resolve(identity);
         if (!current || current.userId !== user.userId || current.deletionPending) return accountDeletionPendingResponse(requestId);
         return jsonResponse({ data });

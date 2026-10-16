@@ -1893,7 +1893,9 @@ paths:
       description: Human Firebase identity only. Invented provider adapter accounts, capabilities,
         account-qualified references and paginated records. No real credentials, provider network
         requests, writes or sending. Fixture headers and all agent credentials are denied or ignored;
-        no human authentication fallback for agent tokens.
+        no human authentication fallback for agent tokens. The separate connector catalog describes
+        the implemented Gmail read adapter as not_connected, consent required and live execution
+        disabled. It never adds an unconnected account or permits provider execution.
       parameters:
         - name: accountId
           in: query
@@ -1908,7 +1910,7 @@ paths:
           schema:
             type: string
             minLength: 1
-            maxLength: 512
+            maxLength: 4096
             pattern: ^[!-~]+$
           example: pv1.synthetic_example
       responses:
@@ -1986,6 +1988,24 @@ paths:
                   events: []
                   nextCursor: null
                   syncCursor: pv1.synthetic_example
+                  connectors:
+                    - provider: gmail
+                      adapter: gmail-rest-read
+                      status: not_connected
+                      consent: required
+                      liveExecutionEnabled: false
+                      implementedOperations:
+                        - mail.read
+                        - mail.labels
+                      unsupportedOperations:
+                        - calendar.read
+                        - calendar.write
+                        - mail.draft
+                        - mail.send
+                        - sync.history
+                        - reconnect
+                      message: Read-only Gmail adapter implemented; no approved account or provider read consent. Live
+                        execution disabled.
         "400":
           $ref: "#/components/responses/ValidationErrorResponse"
         "401":
@@ -3010,6 +3030,62 @@ components:
               requestId: req_01J0INTERNAL
 
   schemas:
+    ProviderConnectorStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - adapter
+        - status
+        - consent
+        - liveExecutionEnabled
+        - implementedOperations
+        - unsupportedOperations
+        - message
+      properties:
+        provider:
+          type: string
+          const: gmail
+        adapter:
+          type: string
+          const: gmail-rest-read
+        status:
+          type: string
+          const: not_connected
+        consent:
+          type: string
+          const: required
+        liveExecutionEnabled:
+          type: boolean
+          const: false
+        implementedOperations:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - mail.read
+              - mail.labels
+        unsupportedOperations:
+          type: array
+          minItems: 6
+          maxItems: 6
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - calendar.read
+              - calendar.write
+              - mail.draft
+              - mail.send
+              - sync.history
+              - reconnect
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
     ProviderPreviewCapability:
       type: object
       additionalProperties: false
@@ -3262,6 +3338,7 @@ components:
         - events
         - nextCursor
         - syncCursor
+        - connectors
       properties:
         mode:
           type: string
@@ -3294,12 +3371,18 @@ components:
           oneOf:
             - type: string
               minLength: 1
-              maxLength: 512
+              maxLength: 4096
             - type: "null"
         syncCursor:
-          type: string
-          minLength: 1
-          maxLength: 512
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 512
+            - type: "null"
+        connectors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderConnectorStatus"
     PersonalAgentGrantInput:
       type: object
       additionalProperties: false
