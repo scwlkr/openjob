@@ -1,6 +1,6 @@
 # OpenJob CLI
 
-The new [packaged workspace instructions](https://github.com/scwlkr/openjob/blob/main/docs/NPM_INSTALL.md) cover `openjob app`, local tarball installation and notice-only latest/dev updates. Public registry publication remains pending; the historical GitHub CLI-only artifact below does not contain workspace app assets.
+The new [packaged workspace instructions](https://github.com/scwlkr/openjob/blob/main/docs/NPM_INSTALL.md) cover `openjob app`, local tarball installation and notice-only latest/dev updates. Initial scoped registry packages are published; the historical GitHub CLI-only artifact below does not contain workspace app assets.
 
 Requires macOS and Node.js 22.13 or newer. Install OpenJob v0.3.7 from GitHub:
 
@@ -190,3 +190,14 @@ write failure prevents token delivery after issuance, the error identifies
 the new grant and its revoke command without exposing the credential; revoke
 it and issue a new grant to a fresh file. The token is not recoverable from
 the service.
+
+### Find saved open time
+
+`openjob workspace availability --task ID --schedule-start ISO --schedule-end ISO
+--minutes 30 --format json` returns up to12 slots across saved owner calendars.
+Choose a slot explicitly and submit `task.schedule-available` through
+`workspace command --input FILE`. Current blocks are rechecked atomically; an
+occupied slot returns `schedule_conflict`, exit6, without moving the Task.
+Human sessions only; seven-day maximum window, whole minutes5–480, explicit
+ISO time zones. Live provider calendars are not checked. Manual scheduling is
+unchanged. See [the workflow](../docs/PERSONAL_WORKSPACE.md#find-time-for-a-task).

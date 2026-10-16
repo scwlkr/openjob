@@ -47,9 +47,9 @@ test('offline, HTTP errors, invalid tags, downgrades and equal versions are quie
   }
   for (const version of ['0.3.7', '0.3.6']) assert.equal((await checkForUpdates(pkg, { fetchImplementation: async () => Response.json({ latest: version }) })).status, 'current');
 });
-test('artifact workflow tracks main and published releases without registry publication', async () => {
+test('optional artifact workflow is manual only without registry publication', async () => {
   const source = await readFile(new URL('../.github/workflows/npm-artifacts.yml', import.meta.url), 'utf8');
-  assert.match(source, /branches: \[main\]/); assert.match(source, /types: \[published\]/); assert.match(source, /release\.prerelease/);
+  assert.match(source, /workflow_dispatch:/); assert.doesNotMatch(source, /^  (push|release|schedule):/m);
   assert.doesNotMatch(source, /^\s*run:.*npm publish/m);
 });
 

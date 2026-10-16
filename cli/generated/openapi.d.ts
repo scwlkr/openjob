@@ -1099,7 +1099,7 @@ export interface components {
             ownerId: string;
             actor: string;
             /** @enum {string} */
-            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
+            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.schedule-available" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
             /** Format: date-time */
             createdAt: string;
         };
@@ -1156,6 +1156,15 @@ export interface components {
         } | {
             /** @constant */
             type: "task.schedule";
+            taskId: string;
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "task.schedule-available";
             taskId: string;
             calendarId: string;
             /** Format: date-time */
@@ -1700,7 +1709,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "calendar_import_conflict" | "calendar_ical_unsupported" | "sending_disabled" | "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "schedule_conflict" | "calendar_import_conflict" | "calendar_ical_unsupported" | "sending_disabled" | "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -4593,7 +4602,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"] & {
                         error?: {
                             /** @enum {unknown} */
-                            code?: "sign_in_method_unrecognized" | "conflict" | "calendar_import_conflict";
+                            code?: "sign_in_method_unrecognized" | "conflict" | "schedule_conflict" | "calendar_import_conflict";
                         };
                     };
                 };

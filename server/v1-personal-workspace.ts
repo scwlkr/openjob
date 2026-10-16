@@ -18,6 +18,7 @@ type Options = {
 const COMMAND_FIELDS: Record<string, string[]> = {
   "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
   "task.complete": ["type", "taskId", "completed"], "task.unschedule": ["type", "taskId"],
+  "task.schedule-available": ["type", "taskId", "calendarId", "start", "end"],
   "task.delete": ["type", "taskId"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
   "calendar.create": ["type", "calendarId", "title", "start", "end"],
   "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
@@ -100,6 +101,7 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
           const allowed = COMMAND_FIELDS[input.type];
           const required = input.type === "task.create" ? allowed.filter(field => field !== "messageId") : allowed;
           if (required.some(field => !fields.includes(field)) || fields.some(field => !allowed.includes(field))) return fail("invalid_request", "The command contains missing or unknown fields.", 400);
+          if (input.type === "task.schedule-available" && personalToken) return fail("forbidden", "Finding and reserving open time requires a human session.", 403);
           if (input.type === "mail.send") return fail("sending_disabled", "Real sending is disabled. Invented mail may only be simulated locally.", 403);
           if (input.type === "mail.examples.add" && personalToken) return fail("forbidden", "Only a human may add invented mail examples.", 403);
           // Owner identity is resolved above; neither request bodies nor fixture headers select it.
@@ -123,6 +125,7 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         if (code === "sending_disabled") return fail(code, "Real sending is disabled.", 403);
         if (code === "workspace_capacity") return fail(code, "Personal workspace capacity was exceeded.", 413);
         if (code === "sync_expired") return fail(code, "This offline batch expired. Refresh and review saved Tasks and Calendar.", 409);
+        if (code === "schedule_conflict") return fail(code, "This time overlaps saved Calendar work. Refresh and choose another slot.", 409);
         if (code === "conflict") return fail(code, "The workspace changed. Reload before retrying.", 409);
         return internalErrorResponse(requestId);
       }

@@ -1,3 +1,25 @@
+## Find saved Calendar time for a Task
+
+Calendar offers open slots across all saved owner calendars for an open Task,
+with an explicit UTC window (up to seven days) and duration (5–480 minutes).
+The person chooses a suggestion; `task.schedule-available` rechecks current saved
+blocks inside the atomic mutation and rejects a newly occupied slot without
+moving the Task. A verified existing Task block is excluded during rescheduling.
+The existing CLI exposes the same calculation with `workspace availability`.
+This human-only flow checks saved OpenJob blocks, including Calendar-file imports;
+it does not read live provider calendars or book external events. Manual
+scheduling remains available. [Usage](docs/PERSONAL_WORKSPACE.md#find-time-for-a-task).
+
+## Saved packaged local workspace
+
+The npm-installed prototype accepts `openjob app --state-file PATH`. Saved
+synthetic owner identities, Tasks/linked Calendar, invented Mail/drafts, grant
+hashes/revocations and sync receipts survive restarts in bounded private,
+unencrypted JSON. Atomic saves precede success; one writer owns each file and
+invalid files fail without reset. Session signing keys/tokens and provider vault
+material are excluded. Default mode remains temporary and actual sending remains
+disabled. See [installation and recovery](docs/NPM_INSTALL.md).
+
 # Features
 
 ## Packaged npm workspace
@@ -43,3 +65,5 @@ The native saved-on-device workspace persists a Tasks/Calendar projection and pe
 Web **Saved Tasks and Calendar** reuses that shared controller/API with completed IndexedDB writes, UID+tenant owner binding, whole-operation Web Locks, stale-editor rejection and cross-tab purge. Explicit public-shell preparation enables offline reload in the credential-free built demo; production Firebase/Vinext offline bootstrap remains unverified. Optional separate Mail recovery retains only authored unfinished text through offline reload and restores it after reconnect, never an inbox or API response. Browser storage is origin-local and not app-encrypted; CLI remains online-only. See [fresh-checkout demo steps](docs/WORKSPACE_DEMO.md#fresh-checkout-browser-offline-demo).
 
 Calendar files provide provider-neutral exchange without a provider connection. Download a selected Calendar’s blocks and scheduled Tasks as an iCalendar file; preview a local supported file and explicitly confirm import as standalone blocks. Opaque stable UIDs, UTC times, escaped/folded titles, atomic revision checks and durable duplicate detection preserve existing work. Import requires Calendar read/write access; export requires read. Changed duplicate UIDs conflict without overwriting records or Task links. The bounded subset accepts up to 50 timed UTC events / 16 KiB and rejects recurrence, local/all-day times, invitations, alarms, URLs, attachments and unsupported properties. This is file transfer, not provider synchronization or sending. [Guide](docs/PERSONAL_WORKSPACE.md#calendar-file-exchange).
+
+Local npm distribution uses `npm run npm:prepare -- dev|latest` and a separate explicitly approved `npm:publish` command. Preparation checks, packs and clean-prefix runs real assets/API; publication reuses existing npm authentication and exact sealed bytes. Actions artifact generation is manual-only, with no automatic push/release publishing or new access. See [local release](docs/NPM_LOCAL_RELEASE.md).

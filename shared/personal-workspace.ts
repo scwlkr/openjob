@@ -20,7 +20,7 @@ export type PersonalWorkspaceStore = {
   snapshotForAgent(token: string): Promise<WorkspaceView>;
   commandForAgent(token: string, input: unknown): Promise<unknown>;
 };
-const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete", "calendar.import", "mail.read", "mail.draft", "mail.compose", "mail.draft.update", "mail.simulate-send", "mail.send", "mail.examples.add"]);
+const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.schedule-available", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete", "calendar.import", "mail.read", "mail.draft", "mail.compose", "mail.draft.update", "mail.simulate-send", "mail.send", "mail.examples.add"]);
 const KEYS = ["accounts", "messages", "tasks", "calendars", "events", "drafts", "sent", "agents", "activity"];
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code }); }
 export function assertPersonalWorkspaceOwner(ownerId: string) {
