@@ -1,10 +1,10 @@
 # OpenJob platform blueprint
 
 **Status: owner-confirmed core with Proposed technical/detail choices — 16 October 2026.** This is a target
-architecture, not implementation authority. [C01–C10](ARCHITECTURE_ALIGNMENT.md)
+architecture, not implementation authority. [C01–C13](ARCHITECTURE_ALIGNMENT.md)
 record actual owner confirmations; unrelated proposals await review. The
 [master mission](MASTER_MISSION.md) remains the product mandate; Linear remains
-the execution queue. New feature implementation remains paused pending owner review and authorization. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
+the execution queue. C13 authorizes owner-useful implementation under the confirmed baseline. Baseline inspected: `9ba3929fbf0ccc3e24e2577410a355fa3798736e`.
 Detailed proposed requirements, screens, contracts, runtime defaults and the single
 dependency roadmap are integrated in [the build specification](build-spec/README.md).
 [DECISIONS](build-spec/DECISIONS.md) is the short owner review list;
@@ -232,14 +232,13 @@ preferences guide justified new components; they do not authorize a rewrite.
 The installed Node app currently packages a synthetic local API, not a privately
 hosted production account server. Hosted, local demo and eventual self-hosted
 profiles must have explicit identity, storage, secret and background-job bindings.
-Recommended first live-provider profile: the existing hosted service, because
-identity and remote API clients already exist. Hosting remains undecided: Shane asked for options; this is unselected.
-A secure local-service-first choice would instead need explicit identity, local
-secret storage, background lifecycle and remote-agent access decisions before
-implementation. Local CI/publishing preference does not determine where the app
-service is hosted. The shared domain/API boundaries can be reviewed independently
-of this deployment choice. Keep development/production resources separate. No new infrastructure, secrets,
-routes, provider registration or security grants are authorized by this document.
+C11 selects portable Node/Compose services for a future rented Linux server.
+The earlier existing-hosted-stack recommendation remains an alternative, not the
+selected direction. Preserve useful Firebase repositories; extract runtime bindings
+rather than rewrite the app. Exact target, credentials and public ingress remain
+pending separate setup. Local preparation is authorized; no server has been bought
+or deployed. Keep development/production resources separate and private business
+infrastructure out of the repository.
 
 Owner preference: local Mac CI/package/publish, manual-only Actions. Reviewed
 artifacts retain source/version/channel identity; npm publishing, hosted deploys
@@ -288,7 +287,7 @@ owner of B and a named collaborator in A. Role labels/presets remain Proposed.
 Each retains Personal work. Show invitations, role/resource visibility and context
 switching; Alex leaving A preserves Personal and B.
 
-C01–C10 are confirmed. Build for Shane first with progressive real onboarding and
+C01–C13 are confirmed. Build for Shane first with progressive real onboarding and
 early iOS; shared work online, personal offline Tasks/Calendar retained, full offline
 Mail deferred. Hosting and technical detail remain under review in DECISIONS. Proposed
 technical defaults cover repositories, encrypted credentials, bounded runner,

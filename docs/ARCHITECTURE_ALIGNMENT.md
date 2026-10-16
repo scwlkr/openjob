@@ -1,9 +1,11 @@
 # Owner-confirmed workspace architecture
 
 **Confirmed core, 16 October 2026.** These decisions supersede conflicting PR #87
-proposals. The later C09–C10 pilot/staging decisions below also apply. These confirmations
-do not adopt hosting, exact storage/retention choices, role presets,
-full specification, or ADRs 0019/0021, and do not authorize feature implementation.
+proposals. The later C09–C13 pilot, Linux preparation and execution decisions also apply. These confirmations
+do not adopt exact storage/retention choices, role presets,
+full specification, or ADRs 0019/0021, and do not grant the excluded consequential actions. C13 now authorizes bounded
+implementation under the coherent confirmed baseline; unrelated proposals are not
+blanket-adopted.
 
 ## Confirmed decisions
 
@@ -17,8 +19,11 @@ full specification, or ADRs 0019/0021, and do not authorize feature implementati
 | C06 | Externally connected agent identity has independent revocable grants per Workspace; members may delegate subsets of current rights when policy permits | No persistent Workspace-hosted agent/runtime; no inherited human/provider credentials or cross-Workspace grant |
 | C07 | OpenJob accounts initially have no hosted mailbox; existing providers connect | Hosted inboxes remain a possible future product, not current scope |
 | C08 | Home may show labeled authorized tasks/events/unread counts across Workspaces; opening work enters its Workspace | Actions remain Workspace-scoped; no blanket unified Mail/content/search or agent authority |
-| C09 | Build the first usable Mail/Calendar/Tasks/agent-permission loop for Shane’s daily use; progressively onboard real accounts/connectors/mailboxes with his participation; include an early usable iOS TestFlight path | Do not wait for broad multi-user/provider/platform readiness; advanced Calendar and company SSO stage later. No present feature-work, provider-grant, credential, real-send or TestFlight distribution authority |
+| C09 | Build the first usable Mail/Calendar/Tasks/agent-permission loop for Shane’s daily use; progressively onboard real accounts/connectors/mailboxes with his participation; include an early usable iOS TestFlight path | Do not wait for broad multi-user/provider/platform readiness; advanced Calendar and company SSO stage later. C09 alone granted no feature authority; C13 later lifts that pause. Specific provider/credential/send/TestFlight approvals remain separate |
 | C10 | Online-first shared work; retain existing personal offline Task/Calendar support; initially fetch Mail bodies on demand and defer full offline email | Exact cache caps, retention, storage/crypto and later offline mechanics remain Proposed; online-first does not select hosting |
+| C11 | Prepare portable local Docker Compose app/server configuration for a future rented WLKR LABS Linux server, separate services; retain Node/TypeScript and useful Firebase adapters | Shane purchases a target later; probable provider/budget is intent, not a purchase or verified price. No provisioning, access/firewall changes, migration, or private business infrastructure copied. A home companion is future scope |
+| C12 | Match rigor to current users/consequences: owner-first disposable prototype, usable shipping and cheap primary-flow checks | Backup drills/failover/enterprise hardening/exhaustive edge cases/fixture migration do not block pilot. Preserve basic permissions/revocation/no-accidental-send, honest results, secrets and repository protections; no deliberate destructive live-data authority |
+| C13 | Proceed with tonight’s coherent owner-useful implementation and setup; ordinary reviewed non-deploying source/doc merges may proceed | No ritual whole-blueprint acceptance prerequisite. Actual publication, TestFlight distribution, real correspondence, purchases, new credentials or security-sensitive configuration still need applicable approvals |
 
 ## Actual confirmation record
 
@@ -71,13 +76,36 @@ This records C09–C10 only, not adoption of the whole blueprint or permission t
 begin features, configure accounts/credentials, send externally, distribute a
 TestFlight build or publish production releases. Specific approvals still apply.
 
+## Tonight’s go-ahead — 16 October, 6:12 p.m. Central
+
+Sean relayed owner message source `Sentinel_68889bbeef5c819185f33f5f37cafaf9`
+from parent task `01a0f838-a174-70eb-a090-8bdce60620f1`, source time 23:12 UTC:
+
+> Go ahead and proceed with everything we've got going on tonight and make my life as easy as possible. Just go ahead and get everything set up, whether you want to do, like, start configuring servers, whatever. Just get cooking.
+
+The accompanying handoff records the Linux rental direction: Shane intends to buy
+a server later (probably OVHcloud, approximately $10/month budget), running separate
+services with a possible future home companion. These are owner intentions, not a
+purchase, published provider-price verification, or deployed infrastructure. Prepare
+portable local Compose and an explicit deploy path; no actual target is authorized
+yet. Keep working Node/TypeScript/Firebase where useful; no hosting-driven rewrite.
+
+The same handoff records Shane’s 5:43 p.m. Central (22:43 UTC) instruction to match
+rigor to real users/consequences. He accepts incidental disposable-data loss for
+his solo prototype. C12 removes backup/failover/exhaustive-fixture ceremony as pilot
+blockers, not basic access/send/secret/protection checks. Preserve stopped WLK-302
+work before overlap; prepare installed app/server through Linear. C13 lifts the
+previous feature pause within this bounded scope; specific consequential actions
+listed in C13 remain separate. This does not adopt every prior technical proposal.
+
 ## What remains proposed
 
 Detailed role presets/default resources, identity eligibility protocol, exact API
-schemas, hosting, repositories, encrypted credential storage, jobs, retention,
+schemas, exact runtime/storage composition, encrypted credential storage, jobs, retention,
 later offline/platform mechanics and release approach remain at their prior
 authority. C09–C10 settle pilot priority and online/offline staging only; hosting
-is expressly undecided.
+was undecided at that point; C11 now selects the portable Linux direction, with
+provider/target purchase and exact configuration still unresolved.
 See [DECISIONS](build-spec/DECISIONS.md). Stable OJ and R IDs retain their intent
 where applicable, with wording revised to this Workspace boundary. Design status,
 implementation proof, merge and release are separate facts.
@@ -98,6 +126,9 @@ Stable OJ and R IDs describe revised design intent, not completed implementation
 | C08 | OJ-I3, OJ-X1 | R20 | EXPERIENCE Home; DOMAIN authorized projections |
 | C09 | OJ-C1, OJ-C2, OJ-M1, OJ-T1, OJ-K1, OJ-A1, OJ-X1, OJ-X3, OJ-X7 | R11, R12, R20, R22, R31, R33, R40, R41, R43, R53 | Owner-first pilot path; EXPERIENCE onboarding; early R53 milestone |
 | C10 | OJ-C3, OJ-M1, OJ-X2, OJ-X5 | R21, R32, R52, R53 | RUNTIME confirmed staging versus proposed mechanics |
+| C11 | OJ-A4, OJ-X3, OJ-X6, OJ-X7 | R01, R10, R31, R54 | Portable Node/Compose setup; no purchased/deployed target |
+| C12 | OJ-A3, OJ-X1, OJ-X4 | R01, R30, R55 | Proportionate pilot verification; later production qualification separate |
+| C13 | OJ-X1, OJ-X6 | R00, R01, R10, R54 | Implementation authorized; specific consequential actions excluded |
 
 Blueprint/Companies/ADR 0020 describe the same boundary. RUNTIME/ADRs 0019/0021
 retain their Proposed technical status. COMPLETENESS/HANDOFF/SOURCE preserve this

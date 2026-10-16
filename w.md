@@ -3,7 +3,7 @@
 Draft PR87: https://github.com/scwlkr/openjob/pull/87
 Worktree /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry
 Branch codex/wlk-310-platform-blueprint; main9ba3929; Library integration7b9cdcc.
-Documentation only. No features, access changes, merge or release authorized.
+C13 now authorizes bounded implementation/reviewed non-deploying merges; consequential release/access actions remain separate.
 
 Sean received the alignment and authorized this reconciliation; no further relay
 retries. docs/ARCHITECTURE_ALIGNMENT.md records actual owner turns from discussion
@@ -17,30 +17,24 @@ by current sponsoring member rights/policy; no hosted persistent Workspace agent
 Labeled authorized cross-Workspace Home opens actions inside their Workspace.
 Accounts initially host no Mail. These specific decisions supersede prior proposals.
 
-Latest owner clarification (16Oct4:36p.m.Central, relayed21:36UTC by Sean) recorded
-verbatim in ARCHITECTURE_ALIGNMENT C09–C10. Build for Shane’s daily use first;
-progressively have him set up/authorize specific real accounts/mailboxes when
-connectors are ready; include an early usable iOS TestFlight candidate. Broad
-multi-user/provider/platform readiness is not an initial pilot prerequisite.
-Shared work starts online; keep personal offline Task/Calendar; Mail bodies fetched
-on demand initially and full offline Mail deferred. Hosting remains UNDECIDED:
-Shane asked for options, researched separately by Sean. No whole-blueprint adoption.
+Latest authority: C11–C13 in ARCHITECTURE_ALIGNMENT record Sean’s handoff and exact
+23:12UTC/6:12p.m.Central owner quote, source Sentinel_68889bbeef5c819185f33f5f37cafaf9.
+Proceed tonight with useful owner-first implementation; no ritual whole-blueprint
+acceptance gate. Portable local Node/Docker Compose app/server for future rented
+WLKR LABS Linux services; Shane purchases target later. No server bought/deployed.
+No forced Firebase/Rust rewrite; no business secrets/infrastructure copied.
+C12 records22:43UTC/5:43p.m.Central proportional rigor: disposable solo pilot,
+cheap primary flow/compile and basic permissions/revocation/no-send/secrets/protections;
+backup/failover/enterprise/exhaustive fixtures not blockers. Native releases and
+specific purchases/credentials/provider/send/TestFlight/publication remain separate.
 
-Existing OJ33/D20/R22 IDs retained. R53 has early pilot milestone alongside owned/
-read-connected/live work and later full parity; partial milestone is not full Done.
-Minimum pilot foundations keep ownership/access/send-safety; broad invite/admin/
-lifecycle matrix later unless needed by an enabled path. Advanced Calendar/SSO
-staged later. Actual TestFlight distribution/native gates, provider grants/credentials,
-external sending/effects and production releases retain specific approvals.
-No features start from this documentation update. Linear remains sole queue.
-
-Blueprint/ADRs/build-spec/mission/handoff/source reconciled. Confirmed core/pilot
-staging distinguished from Proposed role presets/default resources/identity,
-hosting/storage/retention/crypto/jobs and later offline mechanics. Approved npm
-artifact and WLK302 preserved. Checks/review/exact pushed head in PR87/Linear310;
-no heavy builds/browser/device/runtime campaign for docs. LocalCI/manualActions,
-explicit npm installation unchanged. Next: hosting options and remaining detailed
-review/development authority; do not re-ask C01–C10 as unsettled questions.
+Next coherent slice: portable Node composition plus actual packaged assets, runnable
+persistent labeled synthetic app and fail-closed real-service setup path; local Compose
+and straightforward later deploy instructions. Linear sole queue; pending302 preserved.
+Current cloud history shows TLS/login implementation progress but no recovered file/
+branch/checkpoint: do not duplicate or claim integrated. No IMAP overlap in this slice.
+Original approved npm artifact/auth handoff remains separate. PatriBible coordinator
+acknowledged bounded Node/web build plan; no Xcode/native heavy phase planned.
 
 ## Separate publication blocker
 

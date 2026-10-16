@@ -36,7 +36,7 @@ limits. Actual distribution requires its specific approval and applicable native
 artifact/device/privacy gates; a design request does not publish a build. Shared
 work is online-first; preserve personal offline Task/Calendar, fetch initial Mail
 bodies on demand and label unavailable offline content without losing authored text.
-Hosting remains undecided and is not selected by onboarding or online-first behavior.
+C11 selects portable Linux hosting; exact target/configuration remains unresolved and is not selected by onboarding or online-first behavior.
 
 ## Screen contracts
 

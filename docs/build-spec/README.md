@@ -2,7 +2,7 @@
 
 **Owner-confirmed core plus Proposed detail · 16 October 2026 · documentation only**
 
-This is the detailed implementation specification supporting draft [PR #87](https://github.com/scwlkr/openjob/pull/87), not a competing platform proposal. The master mission is the mandate. [platform blueprint](../PLATFORM_ARCHITECTURE.md), [Companies and Identity](../COMPANIES_AND_IDENTITY.md), and [ADR 0019](../adr/0019-propose-modular-platform-and-runtime-boundaries.md), [0020](../adr/0020-propose-workspace-and-principal-boundaries.md), and [0021](../adr/0021-propose-provider-authority-and-integration-execution.md) are the architecture baseline. The [owner confirmation record](../ARCHITECTURE_ALIGNMENT.md) supersedes conflicting Company hierarchy, ownership, agent and navigation proposals. ADR 0020 records that confirmed core plus Proposed detail; ADRs 0019/0021 remain Proposed. C09–C10 confirm owner-first daily-use/early-iOS priority and online/offline staging; hosting remains undecided. This package does not authorize implementation/access or prove production behavior.
+This is the detailed implementation specification supporting draft [PR #87](https://github.com/scwlkr/openjob/pull/87), not a competing platform proposal. The master mission is the mandate. [platform blueprint](../PLATFORM_ARCHITECTURE.md), [Companies and Identity](../COMPANIES_AND_IDENTITY.md), and [ADR 0019](../adr/0019-propose-modular-platform-and-runtime-boundaries.md), [0020](../adr/0020-propose-workspace-and-principal-boundaries.md), and [0021](../adr/0021-propose-provider-authority-and-integration-execution.md) are the architecture baseline. The [owner confirmation record](../ARCHITECTURE_ALIGNMENT.md) supersedes conflicting Company hierarchy, ownership, agent and navigation proposals. ADR 0020 records that confirmed core plus Proposed detail; ADRs 0019/0021 remain Proposed. C09–C10 confirm owner-first daily-use/early-iOS priority and online/offline staging; C11 selects portable Linux hosting; exact target/configuration remains unresolved. C13 authorizes bounded implementation; the package alone grants no excluded access/release action and proves no production behavior.
 
 ## Read in this order
 
@@ -21,13 +21,13 @@ This is the detailed implementation specification supporting draft [PR #87](http
 - Owner’s latest explicit direction and applicable access/release constraints govern the work
 - Mission: `docs/MASTER_MISSION.md` on main, inspected at `9ba3929fbf0ccc3e24e2577410a355fa3798736e`
 - Historical pre-alignment design snapshot: PR #87 at `98f4da596c743c7bf577afb6b584ac38d408ab9f`
-- Confirmed core: [C01–C10 and actual user turn references](../ARCHITECTURE_ALIGNMENT.md)
+- Confirmed core: [C01–C13 and actual user turn references](../ARCHITECTURE_ALIGNMENT.md)
 - This package: detailed proposed elaboration beyond that core. Where it adds a default, the decision register records it as proposed. Do not mistake prose for owner acceptance
 - Execution status and next work: [Linear OpenJob](https://linear.app/wlkr-labs/project/openjob-fa4830c93118), current code/PR state and compact `w.md`
 - Contract truth after implementation: one `openapi/openapi.yaml` plus tested domain contracts. No competing API generated from this prose
 - Market context: [evidence register](../market-evidence.md). The differentiator is a hypothesis, not validated demand
 
-This directory is the integrated proposed detail set in PR #87. After owner review, record accepted/amended decisions once in these documents and the corresponding ADRs. The Library ZIP and executive deck/memo are source snapshots and summaries, not independently changing authorities. See [source provenance and reconciliation](SOURCE.md). Only C01–C10 have confirmation references; no whole-package acceptance is recorded; Linear alone tracks execution.
+This directory is the integrated proposed detail set in PR #87. After owner review, record accepted/amended decisions once in these documents and the corresponding ADRs. The Library ZIP and executive deck/memo are source snapshots and summaries, not independently changing authorities. See [source provenance and reconciliation](SOURCE.md). Only C01–C13 have confirmation references; no whole-package acceptance is recorded; Linear alone tracks execution.
 
 ## What “build this” should mean
 

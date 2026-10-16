@@ -70,5 +70,5 @@ proposals in ADRs 0019/0021 and RUNTIME.
   invitation decisions. Cross-Workspace collaboration remains explicitly granted.
 
 The confirmed core is ready to guide design. Detailed proposals still await review;
-feature development remains paused. This documentation reconciliation authorizes
-no implementation, grants, credentials, provider effects, merge or release.
+C13 now authorizes bounded owner-useful implementation and reviewed non-deploying
+merges. It does not authorize credentials, provider effects, publication or release.

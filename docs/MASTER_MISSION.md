@@ -37,7 +37,7 @@ actual discussion references are in [architecture alignment](ARCHITECTURE_ALIGNM
 The later [C09–C10 pilot clarification](ARCHITECTURE_ALIGNMENT.md) prioritizes
 Shane’s daily use, incremental actual account onboarding and early iOS TestFlight;
 shared work online-first, personal offline Task/Calendar retained and full offline
-Mail deferred with initial on-demand bodies. Hosting remains undecided; detailed
+Mail deferred with initial on-demand bodies. C11 selects portable Linux hosting; exact target/configuration remains unresolved; detailed
 roles/schemas/runtime/retention/offline mechanics still await review.
 
 ### Product principles

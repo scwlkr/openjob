@@ -1,6 +1,6 @@
 # Dependency-ordered build roadmap
 
-**Design artifact, not an execution queue.** [C01–C10](../ARCHITECTURE_ALIGNMENT.md) are confirmed core; other design defaults remain Proposed and feature development is still paused. Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
+**Design artifact, not an execution queue.** [C01–C13](../ARCHITECTURE_ALIGNMENT.md) are confirmed core; other design defaults remain Proposed and C13 authorizes bounded owner-useful development. Phases express dependencies and proof. They have no invented dates, staffing, estimates or live status. Linear OpenJob remains the sole backlog/status source; use an existing matching issue before creating anything. Slice IDs below are stable references to design outcomes, not instructions to open a batch of issues immediately.
 
 ## Stage outcomes
 
@@ -16,7 +16,7 @@
 ## Confirmed owner-first pilot path
 
 C09 makes Shane’s daily-use pilot the first delivery target, not a broad launch.
-After remaining review and explicit development authority, complete the minimum
+Under C13’s current development authority, complete the minimum
 R10–R12 ownership/access foundations needed for enabled paths, R20/R21/R22 owned
 work/permissions, then incrementally connect real resources through R30–R33 and
 R40–R43. At each connector step, ask Shane to set up/authorize the particular
@@ -42,17 +42,17 @@ shared work starts online and Mail bodies are initially on demand (C10).
 Dependencies below distinguish **minimum pilot foundations** from full slice
 acceptance. Keep the same IDs and one Linear execution queue; select bounded
 milestones in existing issues rather than creating a second pilot backlog.
-Hosting remains undecided: choose/review actual runtime before live bindings; this
+C11 selects portable Linux hosting; exact target/configuration remains unresolved: choose/review actual runtime before live bindings; this
 path does not select Cloudflare, local authority or a deployment automatically.
 
 ## P0 · Adopt and reconcile
 
 ### R00 · Adopt the reviewed build contract
-Dependencies: owner design review. Trace: all requirements; D01–D20.
+Dependencies: confirmed baseline C01–C13; no new ritual whole-package adoption gate. Trace: all requirements; D01–D20.
 
 Deliver: existing owner-confirmed core plus accepted/changed remaining decision record in canonical PR #87 docs, preserving mission and proposed/accepted distinctions; link adopted index from existing handoff. Reconcile deck, architecture and these requirements. Keep review-only copies immutable or clearly superseded.
 
-Acceptance: owner choices are recorded with actual review reference; pilot authorization is a separate future gate; Workspace/offline/native/npm/calendar follow-on scope is not silently dropped. No application implementation starts while the explicit design pause remains active.
+Acceptance: owner choices are recorded with actual review reference; specific provider/effect/distribution authorization remains separate; Workspace/offline/native/npm/calendar follow-on scope is not silently dropped. C13 lifts the prior feature pause for bounded owner-useful work; preserve specific consequential approvals.
 
 ### R01 · Establish the exact resumable baseline
 Dependencies: R00 and authorized development environment. Trace: OJ-A4, OJ-X3, OJ-X6.
@@ -207,7 +207,7 @@ Acceptance: fresh install/login/connected workflow/restart on each claimed platf
 ### R55 · Pass whole-product release and recovery evidence
 Dependencies: accepted applicable R50–R54 outcomes. Trace: OJ-X3, OJ-X4, all core requirements.
 
-Deliver: full requirement/capability/platform matrix, privacy/data inventory, isolated backup/restore proof, cleanup/reporting, user-facing support limits and Shane’s observed pilot learnings plus later broader-user validation; no invented general demand. Set operational objectives only after measured behavior, not invented availability promises.
+Deliver: full requirement/capability/platform matrix, privacy/data inventory, production backup/restore proof only when consequential data/rollout justifies it, cleanup/reporting, user-facing support limits and Shane’s observed pilot learnings plus later broader-user validation; no invented general demand. Set operational objectives only after measured behavior, not invented availability promises.
 
 Acceptance: critical negative permission tests and source-link retention checks pass on release head; authorized real provider workflow complete; restore cannot revive revoked grants; no unresolved ambiguous send hidden as success; exact published/deployed artifacts verified; production rollout permission separate. Market value claims remain hypotheses until actual user evidence is recorded.
 
@@ -229,8 +229,14 @@ Acceptance: critical negative permission tests and source-link retention checks 
 
 ## Every slice's evidence contract
 
-Selected Linear item links requirement/slice IDs and contains changed surfaces, exact source commit, fixture vs live evidence, checks run/passed/failed/not run, relevant permission denial, UI proof where useful and delivery status. Routine cycle: cheap compile/type + affected happy path and changed isolation/send-safety boundary. Run broader protocol/fault/device matrices at the corresponding integration/release qualification or when a change invalidates them, not after every minor edit. The acceptance lists identify evidence the outcome eventually needs; they are not a mandate for a large fresh test campaign per commit.
+Selected Linear item links requirement/slice IDs and contains changed surfaces, exact source commit, fixture vs live evidence, checks run/passed/failed/not run, relevant permission denial, UI proof where useful and delivery status. Routine cycle: cheap compile/type + affected happy path and changed isolation/send-safety boundary. Run broader matrices only where actual users/consequences or applicable release gates justify them or when a change invalidates them, not after every minor edit. The acceptance lists identify evidence the outcome eventually needs; they are not a mandate for a large fresh test campaign per commit.
 
 Follow current `npm run`/AGENTS required gates and external protections. Revise obsolete project-owned expectations when needed for the accepted prototype evolution; do not disguise failures. OpenAPI/type, browser/CLI/native and secret checks apply where affected. Re-read scripts before invoking; a documented command is not permission to deploy/reset/provision. Test migration/rollback only for actual data/consumers that must be preserved, never as ceremony for disposable fixtures.
 
 “Done” requires the issue's acceptance and delivery criteria, not merely a PR or successful build. Architecture acceptance, implementation merge, live test and production release are four different facts. If blocked on external authorization, complete independent fixtures/contracts/UI and report the exact required account/resource/action instead of repeating discovery or calling the full slice complete.
+
+C12 pilot verification: cheap compile/primary-flow checks, relevant isolation/
+scopes/revocation/no-accidental-send and secret checks plus external protections.
+Do not run exhaustive full suites, backup/failover drills or fixture migrations as
+a gate for disposable solo-prototype changes. Revise obsolete project-owned test
+expectations honestly. Production/native releases retain their applicable scope.

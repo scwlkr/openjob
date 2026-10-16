@@ -1,6 +1,6 @@
 # Product requirements
 
-**Detailed requirements Proposed under the [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md).** Confirmed Workspace/owner/grant/Connections/agent/Home/no-hosted-Mail decisions govern conflicting earlier wording; unrelated scope, fields and technical defaults still await review. C09–C10 also confirm owner-first/early-iOS priority and online/offline staging; hosting remains undecided. IDs are stable traceability anchors, not issue IDs. “Core” is the complete in-scope product outcome, delivered through several slices; it is not a claim that the prototype already implements it. The first live pilot is deliberately smaller than that full outcome. Later required capabilities are specified below, not left as an indefinite wish list.
+**Detailed requirements Proposed under the [owner-confirmed core](../ARCHITECTURE_ALIGNMENT.md).** Confirmed Workspace/owner/grant/Connections/agent/Home/no-hosted-Mail decisions govern conflicting earlier wording; unrelated scope, fields and technical defaults still await review. C09–C10 also confirm owner-first/early-iOS priority and online/offline staging; C11 selects portable Linux hosting; exact target/configuration remains unresolved. IDs are stable traceability anchors, not issue IDs. “Core” is the complete in-scope product outcome, delivered through several slices; it is not a claim that the prototype already implements it. The first live pilot is deliberately smaller than that full outcome. Later required capabilities are specified below, not left as an indefinite wish list.
 
 ## Product promise and intended user
 
@@ -94,9 +94,9 @@ read-connected work may precede approved provider writes; do not call those writ
 complete or send without approval. Broader three-person/provider/platform acceptance
 below remains a later full-slice target, not an up-front launch requirement.
 
-Hosting is still undecided. Provider grants/credentials, external sends/Calendar
+C11 selects portable Node/Compose preparation for a future rented Linux server; no target has been bought or deployed. Provider grants/credentials, external sends/Calendar
 effects, TestFlight distribution and production releases need specific approvals.
-Feature work remains paused in this documentation reconciliation.
+C13 now authorizes bounded owner-useful implementation; full-blueprint adoption wording is not a prerequisite.
 
 ## Full acceptance story
 

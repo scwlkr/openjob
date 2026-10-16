@@ -1,8 +1,24 @@
 # Runtime, deployment and data policy
 
-**Hosting is undecided; runtime/storage mechanics remain Proposed.** The [confirmed decisions](../ARCHITECTURE_ALIGNMENT.md) include C09 owner-first/early-iOS priority and C10 online-first shared work, retained personal offline Task/Calendar, initial on-demand Mail bodies and deferred full offline Mail. They do not select hosting or credential storage. This describes a candidate runtime and later client target, not an accepted profile. It does not provision infrastructure, upload credentials, authorize real accounts or publish anything.
+**C11 selects portable Linux hosting; exact target/configuration remains unresolved; runtime/storage mechanics remain Proposed.** The [confirmed decisions](../ARCHITECTURE_ALIGNMENT.md) include C09 owner-first/early-iOS priority and C10 online-first shared work, retained personal offline Task/Calendar, initial on-demand Mail bodies and deferred full offline Mail. C11 subsequently selects portable Linux service preparation; exact target and credential storage/bindings remain to implement or separately authorize. Earlier hosted-stack details below are alternatives, not a blanket-adopted profile. It does not provision infrastructure, upload credentials, authorize real accounts or publish anything.
 
-## Unselected option: hosted authority, installable clients
+## Selected direction: portable Linux services
+
+C11 selects a future rented WLKR LABS Linux host, not a particular purchased server.
+Prepare a portable Node app/service and local Docker Compose configuration with
+separate service boundaries. The installed app must carry real assets; retain a
+clearly labeled synthetic profile and a separate real-service composition that
+fails closed when required bindings are absent. Reuse domain handlers/API and
+Firebase/Firestore adapters where useful; no Rust/database migration follows from
+this choice. Extract Cloudflare-specific environment imports behind composition.
+
+Default local Compose publishes loopback only; future public ingress/auth/runtime
+configuration is a later authorized setup. No cloud provider purchase, firewall,
+DNS, credentials or live deployment is performed by preparation. Keep private
+business infrastructure and secrets out of this public repository. A future home
+companion does not require synchronization/failover work tonight.
+
+## Earlier hosted-stack option (not selected by C11)
 
 The existing hosted-first recommendation would use Cloudflare application/API plus Firebase identity and Firestore repositories as authoritative service; Shane asked for hosting options and has not selected this proposal. Keep React web, Expo mobile and the existing npm/Node CLI. Add a production-mode npm-installed app client to that service; retain the current synthetic local app as an explicitly separate demo mode. Local Mac CI/package/publish is a delivery preference, independent of where the authoritative app runs.
 
@@ -37,7 +53,7 @@ Firestore transactions may retry and must keep reads before writes; provider eff
 
 ## Proposed pilot data policy
 
-C10 confirms initial on-demand body retrieval and online/offline staging. Remaining values below are proposed technical defaults, not adopted retention, legal compliance claims or current configuration. Accept them with the hosting decision; implement and test cleanup before importing real data.
+C10 confirms initial on-demand body retrieval and online/offline staging. Remaining values below are proposed technical defaults, not adopted retention, legal compliance claims or current configuration. Choose only the mechanics needed for the authorized pilot; keep basic access/cleanup honest. Do not make production backup drills a pilot prerequisite.
 
 | Data | Proposed storage/retention | Disconnect/deletion handling |
 |---|---|---|
@@ -56,7 +72,7 @@ Reply quoting is omitted by default. A person may explicitly insert reviewed sou
 
 These caps are initial engineering/privacy defaults, not product archive limits or capacity/SLO promises. Search/read beyond cache delegates to the provider. Adjust cache sizes from observed performance without broadening the accepted body-retention policy. Cache identifiers/headers are still private data and need the same access boundary.
 
-Before public production rollout, extend the existing privacy inventory with actual processors/data locations, app-store disclosures, account export/deletion behavior, operator access, backups/restore and retention. Choose an approved hosting/data region from available resources; do not promise residency from a global edge URL. Backup policy must show what can be restored, who can restore it, and how revoked/deleted state cannot be resurrected into active access. Run an isolated restore rehearsal. The pilot is not evidence of regulatory readiness.
+Before public production rollout, extend the existing privacy inventory with actual processors/data locations, app-store disclosures, account export/deletion behavior, operator access, backups/restore and retention. Choose an approved hosting/data region from available resources; do not promise residency from a global edge URL. Backup policy must show what can be restored, who can restore it, and how revoked/deleted state cannot be resurrected into active access. Production restore/compliance qualification belongs to later scope when real consequences justify it; no rehearsal blocks the disposable owner pilot.
 
 ## Full-product offline and installed clients
 

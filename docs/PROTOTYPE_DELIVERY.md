@@ -16,12 +16,14 @@ production authentication, and fixture connections are never labeled live.
 
 ## Checks for this phase
 
-`npm test` retains builds, TypeScript, API contracts, native quick checks,
-deterministic domain/CLI tests, functional browser checks and secret checks.
-Failures remain failures. External branch protections are not bypassed.
-Functional checks must cover account isolation, agent scopes/revocation and
-send denial, plus the cross-module workflow. Native quick checks do not prove
-native launch, devices or store readiness; ADR0017 still governs releases.
+Latest owner instruction (16 October 5:43 p.m. Central/22:43 UTC) supersedes the
+former exhaustive per-change gate for this solo prototype. Use cheap affected
+compile/type and primary-flow checks plus relevant account isolation, scoped-agent
+revocation, no-accidental-send and secret checks. Keep external repository protections.
+Full suites, backup/failover drills, enterprise hardening and fixture migration do
+not block disposable owner-pilot progress. Record failures/not-run checks honestly.
+Native releases still require their applicable artifact/device/privacy evidence;
+source-only changes do not prove native runtime or live providers.
 
 Historical Variant B pixel comparisons are obsolete for this overhaul. Their
 renderer was undocumented and the default browser artifact was unavailable.

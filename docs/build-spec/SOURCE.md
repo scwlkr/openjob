@@ -1,6 +1,6 @@
 # Source provenance and integration
 
-**Documentation only. C01–C10 core/pilot staging is owner-confirmed; unrelated detail remains Proposed.**
+**Documentation only. C01–C13 core/pilot staging is owner-confirmed; unrelated detail remains Proposed.**
 
 Source: Shane's Library **OpenJob-Review-and-Build-Package-v1.zip**, materialized
 on 16 October 2026 through the Library tool and its current transfer helper.
@@ -39,7 +39,7 @@ the editable proposed specification, avoiding duplicate binary review copies.
 | Narrow pilot | Required provider breadth, Calendar invitations/series, offline shared-Workspace/Mail, native and authenticated npm outcomes remain in OJ-K5–K6/OJ-X5–X7 and R50–R55 |
 
 The initial Library integration adopted no decisions. Subsequent explicit owner
-confirmation is now recorded only for [C01–C10](../ARCHITECTURE_ALIGNMENT.md);
+confirmation is now recorded only for [C01–C13](../ARCHITECTURE_ALIGNMENT.md);
 conflicting historical proposals are superseded. No completed implementation slice,
 new access or working feature is recorded. Requirement coverage checks validate document consistency only.
 The current OpenAPI remains the implemented contract, and Linear OpenJob remains
@@ -60,5 +60,5 @@ are not adopted. The OJ/R IDs are retained with revised semantics and coverage c
 The subsequent 4:36 p.m. Central owner clarification is recorded verbatim in
 ARCHITECTURE_ALIGNMENT (C09–C10): owner-first progressive onboarding, early usable
 iOS, online-first shared work/preserved personal offline and on-demand initial
-Mail bodies. Hosting remains undecided; no whole-package adoption or distribution
+Mail bodies. C11 selects portable Linux hosting; exact target/configuration remains unresolved; no whole-package adoption or distribution
 authority follows. Original OJ/D/R IDs remain unchanged.
