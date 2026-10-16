@@ -83,6 +83,7 @@ const TASK_OPTIONS = new Map([
 ]);
 const COMMAND_OPTIONS = new Map([
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
+  ["workspace providers", new Set([...OUTPUT_OPTIONS, "--account", "--cursor"])],
   ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
   ["workspace agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
   ["workspace agent list", new Set(OUTPUT_OPTIONS)],
@@ -150,6 +151,7 @@ Global options:
 const RESOURCE_HELP = {
   workspace: `Usage:
   openjob workspace snapshot
+  openjob workspace providers [--account <account-id>] [--cursor <cursor>]
   openjob workspace command --input <path|->
   openjob workspace agent grant --name <name> --scopes <comma-list> --resources <comma-list> --token-out <new-path>
   openjob workspace agent list
@@ -530,6 +532,18 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "providers" && rest.length === 0) {
+    const query = new URLSearchParams();
+    for (const [option, key, maximum] of [["--account", "accountId", 128], ["--cursor", "cursor", 512]]) {
+      const value = parsed.options.get(String(option));
+      if (value !== undefined) {
+        if (typeof value !== "string" || !value || value.length > Number(maximum) || (key === "accountId" ? !/^[A-Za-z0-9_-]+$/.test(value) : !/^[\x21-\x7e]+$/.test(value))) throw new CliError("usage_error", "Use a bounded provider account ID and opaque cursor.", 2);
+        query.set(String(key), value);
+      }
+    }
+    const response = /** @type {import("./openapi-types.ts").ProviderPreviewResponse} */ (await apiRequest(`/workspace/provider-preview${query.size ? `?${query}` : ""}`, {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    writeResult(response); return;
+  }
   if (resource === "workspace" && command === "agent" && rest[0] === "grant" && rest.length === 1) {
     const prepared = preparePersonalAgentGrant(parsed.options);
     let response;

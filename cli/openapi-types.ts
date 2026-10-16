@@ -1,4 +1,5 @@
 import type { operations } from "./generated/openapi";
+export type ProviderPreviewResponse = JsonResponse<operations["getProviderPreview"]["responses"][200]>;
 
 export type PersonalWorkspaceSnapshotResponse = JsonResponse<operations["getPersonalWorkspace"]["responses"][200]>;
 export type PersonalWorkspaceCommandRequest = operations["commandPersonalWorkspace"]["requestBody"]["content"]["application/json"];

@@ -868,10 +868,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspace/provider-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an owner-scoped synthetic provider adapter preview
+         * @description Human Firebase identity only. Invented provider adapter accounts, capabilities, account-qualified references and paginated records. No real credentials, provider network requests, writes or sending. Fixture headers and all agent credentials are denied or ignored; no human authentication fallback for agent tokens.
+         */
+        get: operations["getProviderPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProviderPreviewCapability: {
+            available: boolean;
+            reason: string;
+        };
+        ProviderPreviewAccount: {
+            id: string;
+            /** @enum {string} */
+            provider: "gmail" | "outlook" | "imap";
+            label: string;
+            /** Format: email */
+            address: string;
+            /** @constant */
+            mode: "synthetic";
+            /** @enum {string} */
+            status: "ready" | "reconnect_required" | "error" | "unsupported";
+            statusReason: string;
+            capabilities: {
+                mailRead: components["schemas"]["ProviderPreviewCapability"];
+                calendarRead: components["schemas"]["ProviderPreviewCapability"];
+                draft: components["schemas"]["ProviderPreviewCapability"];
+                send: components["schemas"]["ProviderPreviewCapability"];
+                calendarWrite: components["schemas"]["ProviderPreviewCapability"];
+                reconnect: components["schemas"]["ProviderPreviewCapability"];
+            };
+            sync: {
+                /** @enum {string} */
+                state: "synthetic_ready" | "blocked";
+                /** Format: date-time */
+                asOf: string;
+                reason: string;
+            };
+            upstreamId: string;
+        };
+        ProviderPreviewMessage: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            threadId: string;
+            folderIds: string[];
+            subject: string;
+            from: string;
+            to: string;
+            body: string;
+            /** Format: date-time */
+            receivedAt: string;
+            read: boolean;
+            upstreamThreadId: string;
+        };
+        ProviderPreviewFolder: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            name: string;
+        };
+        ProviderPreviewCalendar: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            name: string;
+            color: string;
+        };
+        ProviderPreviewEvent: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            calendarId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        };
+        ProviderPreview: {
+            /** @constant */
+            mode: "synthetic";
+            accounts: components["schemas"]["ProviderPreviewAccount"][];
+            selectedAccountId: string;
+            messages: components["schemas"]["ProviderPreviewMessage"][];
+            folders: components["schemas"]["ProviderPreviewFolder"][];
+            calendars: components["schemas"]["ProviderPreviewCalendar"][];
+            events: components["schemas"]["ProviderPreviewEvent"][];
+            nextCursor: string | null;
+            syncCursor: string;
+        };
         PersonalAgentGrantInput: {
             name: string;
             scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
@@ -1293,7 +1397,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */
@@ -4555,6 +4659,161 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    getProviderPreview: {
+        parameters: {
+            query?: {
+                /** @example pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal */
+                accountId?: string;
+                /** @example pv1.synthetic_example */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Synthetic provider preview; never cached. No live connection or credentials. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "mode": "synthetic",
+                     *         "accounts": [
+                     *           {
+                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
+                     *             "provider": "gmail",
+                     *             "label": "Personal Gmail preview",
+                     *             "address": "alex@gmail.example.invalid",
+                     *             "mode": "synthetic",
+                     *             "status": "ready",
+                     *             "statusReason": "Invented preview; no live provider connection.",
+                     *             "capabilities": {
+                     *               "mailRead": {
+                     *                 "available": true,
+                     *                 "reason": "Synthetic read adapter only."
+                     *               },
+                     *               "calendarRead": {
+                     *                 "available": true,
+                     *                 "reason": "Synthetic read adapter only."
+                     *               },
+                     *               "draft": {
+                     *                 "available": false,
+                     *                 "reason": "Live integration is unavailable."
+                     *               },
+                     *               "send": {
+                     *                 "available": false,
+                     *                 "reason": "Live integration is unavailable."
+                     *               },
+                     *               "calendarWrite": {
+                     *                 "available": false,
+                     *                 "reason": "Live integration is unavailable."
+                     *               },
+                     *               "reconnect": {
+                     *                 "available": false,
+                     *                 "reason": "Live integration is unavailable."
+                     *               }
+                     *             },
+                     *             "sync": {
+                     *               "state": "synthetic_ready",
+                     *               "asOf": "2026-10-16T03:00:00.000Z",
+                     *               "reason": "Synthetic fixture snapshot."
+                     *             },
+                     *             "upstreamId": "account_personal"
+                     *           }
+                     *         ],
+                     *         "selectedAccountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
+                     *         "messages": [
+                     *           {
+                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1",
+                     *             "accountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
+                     *             "upstreamId": "upstream_message_1",
+                     *             "threadId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1",
+                     *             "folderIds": [
+                     *               "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox"
+                     *             ],
+                     *             "subject": "Invented planning message",
+                     *             "from": "mia@example.invalid",
+                     *             "to": "alex@gmail.example.invalid",
+                     *             "body": "Synthetic example only.",
+                     *             "receivedAt": "2026-10-16T03:00:00.000Z",
+                     *             "read": false,
+                     *             "upstreamThreadId": "thread_shared"
+                     *           }
+                     *         ],
+                     *         "folders": [
+                     *           {
+                     *             "id": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox",
+                     *             "accountId": "pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal",
+                     *             "upstreamId": "INBOX",
+                     *             "name": "Inbox"
+                     *           }
+                     *         ],
+                     *         "calendars": [],
+                     *         "events": [],
+                     *         "nextCursor": null,
+                     *         "syncCursor": "pv1.synthetic_example"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ProviderPreview"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationErrorResponse"];
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Foreign account or cross-origin request denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or provider preview unavailable. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "provider_unavailable",
+                     *         "message": "This provider preview is unavailable.",
+                     *         "requestId": "req_provider_fixture"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "provider_unavailable";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
         };

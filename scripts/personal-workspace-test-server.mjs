@@ -4,6 +4,7 @@ import { createFirestorePersonalWorkspaceStore } from '../db/personal-workspace.
 import { createFirestoreUserStore } from '../db/users.ts';
 import { createV1PersonalWorkspaceApi } from '../server/v1-personal-workspace.ts';
 import { createV1PersonalAgentGrantsApi } from '../server/v1-personal-agent-grants.ts';
+import { createV1ProviderPreviewApi } from '../server/v1-provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
 import { createFakeFirestore, createPrivateKey } from '../tests/support/fake-firestore.mjs';
 import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens.mjs';
@@ -18,6 +19,7 @@ const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectI
 const workspace = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
 const api = createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken });
 const grantsApi = createV1PersonalAgentGrantsApi({ workspace, users, verifyIdToken });
+const providerPreviewApi = createV1ProviderPreviewApi({ users, verifyIdToken });
 const sessions = new Map();
 for (const owner of ['alex', 'sam']) {
   const token = await authority.issue({ uid: `personal_browser_${owner}` });
@@ -36,7 +38,7 @@ const server = createServer(async (incoming, outgoing) => {
     const headers = new Headers();
     for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);
     const request = new Request(url, { method: incoming.method, headers, ...(incoming.method === 'POST' ? { body: incoming, duplex: 'half' } : {}) });
-    const response = await (url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request);
+    const response = await (url.pathname === '/api/v1/workspace/provider-preview' ? providerPreviewApi : url.pathname.startsWith('/api/v1/workspace/agent-grants') ? grantsApi : api).fetch(request);
     outgoing.writeHead(response.status, Object.fromEntries(response.headers));
     outgoing.end(Buffer.from(await response.arrayBuffer()));
   } catch {

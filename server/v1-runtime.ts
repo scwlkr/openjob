@@ -8,6 +8,7 @@ import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestorePersonalWorkspaceStore } from "@/db/personal-workspace";
 import { createV1PersonalWorkspaceApi, createV1PersonalWorkspaceHandler } from "./v1-personal-workspace";
 import { createV1PersonalAgentGrantsApi, createV1PersonalAgentGrantsHandler } from "./v1-personal-agent-grants";
+import { createV1ProviderPreviewApi, createV1ProviderPreviewHandler } from "./v1-provider-preview";
 import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
@@ -57,6 +58,7 @@ type V1Runtime = {
   tasksApi: ReturnType<typeof createV1TasksApi>;
   personalWorkspaceApi: ReturnType<typeof createV1PersonalWorkspaceApi>;
   personalAgentGrantsApi: ReturnType<typeof createV1PersonalAgentGrantsApi>;
+  providerPreviewApi: ReturnType<typeof createV1ProviderPreviewApi>;
 };
 
 let runtime: V1Runtime | null = null;
@@ -158,6 +160,7 @@ function getRuntime() {
     }),
     personalWorkspaceApi: createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken }),
     personalAgentGrantsApi: createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken }),
+    providerPreviewApi: createV1ProviderPreviewApi({ users, verifyIdToken }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,
@@ -210,6 +213,7 @@ export const handleV1NotificationSubscriptionsRequest =
 export const handleV1TasksRequest = createV1TasksHandler(getTasksApi);
 export const handleV1PersonalWorkspaceRequest = createV1PersonalWorkspaceHandler(() => getRuntime().personalWorkspaceApi);
 export const handleV1PersonalAgentGrantsRequest = createV1PersonalAgentGrantsHandler(() => getRuntime().personalAgentGrantsApi);
+export const handleV1ProviderPreviewRequest = createV1ProviderPreviewHandler(() => getRuntime().providerPreviewApi);
 
 export function retryPendingAccountDeletions() {
   const configuredTarget = (env as FirebaseBindings)

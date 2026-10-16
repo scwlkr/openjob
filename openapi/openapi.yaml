@@ -23,6 +23,7 @@ tags:
   - name: Tasks
   - name: Agents
   - name: Workspace
+  - name: Providers
 security:
   - firebaseBearer: []
 paths:
@@ -1881,6 +1882,152 @@ paths:
           $ref: "#/components/responses/RateLimitedResponse"
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
+  /api/v1/workspace/provider-preview:
+    get:
+      tags:
+        - Providers
+      summary: Read an owner-scoped synthetic provider adapter preview
+      operationId: getProviderPreview
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Human Firebase identity only. Invented provider adapter accounts, capabilities,
+        account-qualified references and paginated records. No real credentials, provider network
+        requests, writes or sending. Fixture headers and all agent credentials are denied or ignored;
+        no human authentication fallback for agent tokens.
+      parameters:
+        - name: accountId
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+          example: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+            pattern: ^[!-~]+$
+          example: pv1.synthetic_example
+      responses:
+        "200":
+          description: Synthetic provider preview; never cached. No live connection or credentials.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderPreview"
+              example:
+                data:
+                  mode: synthetic
+                  accounts:
+                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                      provider: gmail
+                      label: Personal Gmail preview
+                      address: alex@gmail.example.invalid
+                      mode: synthetic
+                      status: ready
+                      statusReason: Invented preview; no live provider connection.
+                      capabilities:
+                        mailRead:
+                          available: true
+                          reason: Synthetic read adapter only.
+                        calendarRead:
+                          available: true
+                          reason: Synthetic read adapter only.
+                        draft:
+                          available: false
+                          reason: Live integration is unavailable.
+                        send:
+                          available: false
+                          reason: Live integration is unavailable.
+                        calendarWrite:
+                          available: false
+                          reason: Live integration is unavailable.
+                        reconnect:
+                          available: false
+                          reason: Live integration is unavailable.
+                      sync:
+                        state: synthetic_ready
+                        asOf: 2026-10-16T03:00:00.000Z
+                        reason: Synthetic fixture snapshot.
+                      upstreamId: account_personal
+                  selectedAccountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                  messages:
+                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_message_1
+                      accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                      upstreamId: upstream_message_1
+                      threadId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_thread_1
+                      folderIds:
+                        - pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                      subject: Invented planning message
+                      from: mia@example.invalid
+                      to: alex@gmail.example.invalid
+                      body: Synthetic example only.
+                      receivedAt: 2026-10-16T03:00:00.000Z
+                      read: false
+                      upstreamThreadId: thread_shared
+                  folders:
+                    - id: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal_inbox
+                      accountId: pa_aaaaaaaaaaaaaaaaaaaaaaaa_gmail_personal
+                      upstreamId: INBOX
+                      name: Inbox
+                  calendars: []
+                  events: []
+                  nextCursor: null
+                  syncCursor: pv1.synthetic_example
+        "400":
+          $ref: "#/components/responses/ValidationErrorResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          description: Foreign account or cross-origin request denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Route unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Sign-in Method unrecognized or provider preview unavailable.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+                  - properties:
+                      error:
+                        properties:
+                          code:
+                            enum:
+                              - sign_in_method_unrecognized
+                              - provider_unavailable
+              example:
+                error:
+                  code: provider_unavailable
+                  message: This provider preview is unavailable.
+                  requestId: req_provider_fixture
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+
 components:
   securitySchemes:
     personalWorkspaceAgentBearer:
@@ -2863,6 +3010,296 @@ components:
               requestId: req_01J0INTERNAL
 
   schemas:
+    ProviderPreviewCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - available
+        - reason
+      properties:
+        available:
+          type: boolean
+        reason:
+          type: string
+    ProviderPreviewAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - provider
+        - label
+        - address
+        - mode
+        - status
+        - statusReason
+        - capabilities
+        - sync
+        - upstreamId
+      properties:
+        id:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        provider:
+          type: string
+          enum:
+            - gmail
+            - outlook
+            - imap
+        label:
+          type: string
+        address:
+          type: string
+          format: email
+        mode:
+          type: string
+          const: synthetic
+        status:
+          type: string
+          enum:
+            - ready
+            - reconnect_required
+            - error
+            - unsupported
+        statusReason:
+          type: string
+        capabilities:
+          type: object
+          additionalProperties: false
+          required:
+            - mailRead
+            - calendarRead
+            - draft
+            - send
+            - calendarWrite
+            - reconnect
+          properties:
+            mailRead:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+            calendarRead:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+            draft:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+            send:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+            calendarWrite:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+            reconnect:
+              $ref: "#/components/schemas/ProviderPreviewCapability"
+        sync:
+          type: object
+          additionalProperties: false
+          required:
+            - state
+            - asOf
+            - reason
+          properties:
+            state:
+              type: string
+              enum:
+                - synthetic_ready
+                - blocked
+            asOf:
+              type: string
+              format: date-time
+            reason:
+              type: string
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ProviderPreviewMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - threadId
+        - folderIds
+        - subject
+        - from
+        - to
+        - body
+        - receivedAt
+        - read
+        - upstreamThreadId
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        threadId:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        folderIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 3072
+        subject:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        body:
+          type: string
+        receivedAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+        upstreamThreadId:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ProviderPreviewFolder:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - name
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          type: string
+    ProviderPreviewCalendar:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - name
+        - color
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          type: string
+        color:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+    ProviderPreviewEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - calendarId
+        - title
+        - start
+        - end
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        title:
+          type: string
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+    ProviderPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - accounts
+        - selectedAccountId
+        - messages
+        - folders
+        - calendars
+        - events
+        - nextCursor
+        - syncCursor
+      properties:
+        mode:
+          type: string
+          const: synthetic
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPreviewAccount"
+        selectedAccountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPreviewMessage"
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPreviewFolder"
+        calendars:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPreviewCalendar"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPreviewEvent"
+        nextCursor:
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 512
+            - type: "null"
+        syncCursor:
+          type: string
+          minLength: 1
+          maxLength: 512
     PersonalAgentGrantInput:
       type: object
       additionalProperties: false
@@ -3919,6 +4356,7 @@ components:
     ErrorCode:
       type: string
       enum:
+        - provider_unavailable
         - forbidden
         - invalid_input
         - invalid_content_type

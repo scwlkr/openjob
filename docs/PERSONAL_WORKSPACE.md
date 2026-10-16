@@ -19,6 +19,16 @@ Creating a Task from that preview saves only the example title, with no mailbox
 reference. No sending is implemented. Existing Group read-only agent credentials do not
 grant this workspace access.
 
+## Provider preview
+
+The Mail preview reads synthetic account, message, folder and calendar data
+through the authenticated provider-preview API and existing CLI. Account-qualified
+references keep upstream IDs distinct across owners and multiple accounts from
+the same provider. The UI exposes capability limits and connection/sync states;
+it cannot reconnect, send or write provider records. A preview Calendar is not
+the saved OpenJob Personal Calendar. Example-to-Task still saves only its title.
+See the [provider boundary and smallest real integration setup](providers/README.md).
+
 ## Existing CLI
 
 After authenticating an existing human profile through the normal OpenJob CLI:
