@@ -1,40 +1,41 @@
-# WLK-310 — owner-confirmed core reconciled, detail review pending
+# WLK-313 — portable installed app and Node service
 
-Draft PR87: https://github.com/scwlkr/openjob/pull/87
-Worktree /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry
-Branch codex/wlk-310-platform-blueprint; main9ba3929; Library integration7b9cdcc.
-C13 now authorizes bounded implementation/reviewed non-deploying merges; consequential release/access actions remain separate.
+Worktree: /Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-product-entry
+Branch: codex/wlk-313-portable-runtime; baseline e40b7b1 (merged PR87).
+Linear: https://linear.app/wlkr-labs/issue/WLK-313
 
-Sean received the alignment and authorized this reconciliation; no further relay
-retries. docs/ARCHITECTURE_ALIGNMENT.md records actual owner turns from discussion
-01a145d7-6310-7083-9b8a-25f8e1f8b0dc and C01–C08, plus requirement/slice trace.
-Company IS Workspace; exactly one accountable human owner with recipient-accepted
-transfer before departure; resources/grants stay attached. Internal groups/permission
-sets and explicit invitations/resource/action access; restricted Mail stays restricted.
-Central account-level authorized Connections has no master Workspace/global access.
-External connected agent identity has independent revocable Workspace grants bounded
-by current sponsoring member rights/policy; no hosted persistent Workspace agent.
-Labeled authorized cross-Workspace Home opens actions inside their Workspace.
-Accounts initially host no Mail. These specific decisions supersede prior proposals.
+PR87 reconciled the owner-confirmed Workspace core and practical owner-pilot scope.
+C01–C13 authority/provenance is retained in docs/ARCHITECTURE_ALIGNMENT.md.
+Company IS Workspace, transferable human owner, explicit permissions, external agents
+and independent revocation; no persistent hosted Workspace agent. That future domain
+is not claimed implemented by this portable Personal runtime.
 
-Latest authority: C11–C13 in ARCHITECTURE_ALIGNMENT record Sean’s handoff and exact
-23:12UTC/6:12p.m.Central owner quote, source Sentinel_68889bbeef5c819185f33f5f37cafaf9.
-Proceed tonight with useful owner-first implementation; no ritual whole-blueprint
-acceptance gate. Portable local Node/Docker Compose app/server for future rented
-WLKR LABS Linux services; Shane purchases target later. No server bought/deployed.
-No forced Firebase/Rust rewrite; no business secrets/infrastructure copied.
-C12 records22:43UTC/5:43p.m.Central proportional rigor: disposable solo pilot,
-cheap primary flow/compile and basic permissions/revocation/no-send/secrets/protections;
-backup/failover/enterprise/exhaustive fixtures not blockers. Native releases and
-specific purchases/credentials/provider/send/TestFlight/publication remain separate.
+WLK313 packages real web/API assets and a portable Node service sharing existing
+Firebase identity, Firestore stores, Personal workspace and agent APIs with the
+Cloudflare composition. `openjob app` remains the visibly synthetic, persistent
+local demo. `openjob server` is separate: no fixture sessions, missing configuration
+shows setup and API/health503. `/account` uses existing sign-in and explicit account/
+username creation; Group administration is unavailable. Presence-only health is not
+credential verification. No live Firebase/provider sign-in or real sends are proven.
 
-Next coherent slice: portable Node composition plus actual packaged assets, runnable
-persistent labeled synthetic app and fail-closed real-service setup path; local Compose
-and straightforward later deploy instructions. Linear sole queue; pending302 preserved.
-Current cloud history shows TLS/login implementation progress but no recovered file/
-branch/checkpoint: do not duplicate or claim integrated. No IMAP overlap in this slice.
-Original approved npm artifact/auth handoff remains separate. PatriBible coordinator
-acknowledged bounded Node/web build plan; no Xcode/native heavy phase planned.
+Local Compose runs loopback-bound demo5191 and separate setup-only service5192;
+its demo state volume survives restart. `npm run server:bundle` creates the portable
+allowlisted archive with source/file hashes for later authorized Linux setup. No
+server purchased/provisioned/deployed; no new access/credentials, npm publication,
+iOS build/distribution or provider configuration. See docs/PORTABLE_SERVICE.md.
+
+Practical source checks: root TypeScript compile,32 brand assets,10 distribution
+checks,4 portable-service checks,9 Personal/agent-grant checks; secret scan and diff
+check passed. Linux Docker image built; actual Mail→Task→Calendar→complete→draft
+flow plus account isolation/send denial and restart persistence passed. Final exact
+source installation/container proof and independent review are recorded in Linear/PR.
+Actual Firebase onboarding awaits separately approved development configuration and
+provider/domain setup; no anonymous or demo fallback is used by the real service.
+
+WLK302 cloud history shows unfinished ImapFlow TLS/login implementation progress,
+but no recovered source/branch/commit. Preserve that work; do not duplicate it or
+claim integration. WLK313 does not change its scope. PatriBible resource coordination
+acknowledged bounded Node/web packaging; no ordinary Chrome or native heavy phase.
 
 ## Separate publication blocker
 

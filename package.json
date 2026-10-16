@@ -58,7 +58,9 @@
     "app:pack": "npm run app:build && npm pack ./dist/npm --pack-destination ./dist",
     "test:distribution": "node --test tests/npm-distribution.test.mjs",
     "npm:prepare": "node scripts/npm-publication.mjs prepare",
-    "npm:publish": "node scripts/npm-publication.mjs publish"
+    "npm:publish": "node scripts/npm-publication.mjs publish",
+    "test:portable": "node --test tests/portable-service.test.mjs",
+    "server:bundle": "node scripts/prepare-server-bundle.mjs"
   },
   "dependencies": {
     "@napi-rs/keyring": "1.3.0",
