@@ -1,10 +1,16 @@
 import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspace-contracts.ts";
+import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
 import { createWorkspaceEngine } from "./workspace-engine.ts";
 
 export type PersonalWorkspaceStore = {
   snapshot(ownerUserId: string): Promise<WorkspaceView>;
   command(ownerUserId: string, input: unknown): Promise<unknown>;
   removeAllForUser(ownerUserId: string): Promise<number>;
+  createAgent(ownerUserId: string, input: PersonalAgentInput): Promise<{ agent: PersonalAgentGrant; token: string }>;
+  listAgents(ownerUserId: string): Promise<PersonalAgentGrant[]>;
+  revokeAgent(ownerUserId: string, id: string): Promise<boolean>;
+  snapshotForAgent(token: string): Promise<WorkspaceView>;
+  commandForAgent(token: string, input: unknown): Promise<unknown>;
 };
 const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete"]);
 const KEYS = ["accounts", "messages", "tasks", "calendars", "events", "drafts", "sent", "agents", "activity"];
@@ -41,14 +47,36 @@ export function validatePersonalWorkspace(ownerId: string, value: unknown): Work
     if (event.taskId !== undefined && !state.tasks.some(task => task.id === event.taskId && task.calendarEventId === event.id && task.scheduledSlot?.start === event.start && task.scheduledSlot.end === event.end)) return invalid();
   }
   for (const task of state.tasks) if (task.calendarEventId && !state.events.some(event => event.id === task.calendarEventId && event.taskId === task.id)) return invalid();
-  for (const entry of state.activity) if (!record(entry) || !keys(entry, ["id", "ownerId", "actor", "action", "createdAt"]) || !unique(entry.id) || entry.ownerId !== ownerId || entry.actor !== "You" || !COMMANDS.has(entry.action) || !date(entry.createdAt)) return invalid();
+  for (const entry of state.activity) if (!record(entry) || !keys(entry, ["id", "ownerId", "actor", "action", "createdAt"]) || !unique(entry.id) || entry.ownerId !== ownerId || (entry.actor !== "You" && !/^Agent agt_[a-f0-9]{32}$/.test(entry.actor)) || !COMMANDS.has(entry.action) || !date(entry.createdAt)) return invalid();
   return structuredClone(state);
 }
-export function applyPersonalWorkspaceCommand(ownerId: string, state: WorkspaceState, input: unknown) {
-  const initial = validatePersonalWorkspace(ownerId, state);
+function assertCommand(input: unknown): asserts input is WorkspaceCommand {
   if (!record(input) || typeof input.type !== "string") fail("invalid_input", "A workspace command is required");
   if (!COMMANDS.has(input.type)) fail("forbidden", "Only personal Task and Calendar commands are available");
   if (input.type === "task.create" && Object.hasOwn(input, "messageId")) fail("forbidden", "Personal tasks cannot link provider mail");
+}
+function agentEngine(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant) {
+  if (grant.ownerUserId !== ownerId || grant.revoked) fail("unauthorized", "Personal agent access is unavailable");
+  const initial = validatePersonalWorkspace(ownerId, state);
+  initial.agents = [{ id: grant.id, ownerId, name: `Agent ${grant.id}`, scopes: grant.scopes, resourceIds: grant.resourceIds.map(id => id === "calendar:personal" ? "personal" : id), revoked: false, createdAt: grant.createdAt }];
+  return createWorkspaceEngine(initial);
+}
+export function personalAgentSnapshot(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant): WorkspaceView {
+  const view = agentEngine(ownerId, state, grant).snapshot({ kind: "agent", ownerId, agentId: grant.id });
+  view.agents = []; return view;
+}
+export function applyPersonalAgentCommand(ownerId: string, state: WorkspaceState, grant: PersonalAgentGrant, input: unknown) {
+  assertCommand(input);
+  const engine = agentEngine(ownerId, state, grant);
+  let result = engine.command({ kind: "agent", ownerId, agentId: grant.id }, input) as Record<string, unknown>;
+  const readScope = input.type.startsWith("task.") ? "tasks:read" : "calendar:read";
+  if (!grant.scopes.includes(readScope)) result = { id: result.id, ...(result.deleted === true ? { deleted: true } : { updated: true }) };
+  const next = engine.exportState(); next.agents = [];
+  return { result, state: validatePersonalWorkspace(ownerId, next) };
+}
+export function applyPersonalWorkspaceCommand(ownerId: string, state: WorkspaceState, input: unknown) {
+  const initial = validatePersonalWorkspace(ownerId, state);
+  assertCommand(input);
   const engine = createWorkspaceEngine(initial);
   const result = engine.command({ kind: "human", ownerId }, input as WorkspaceCommand);
   return { result, state: validatePersonalWorkspace(ownerId, engine.exportState()) };

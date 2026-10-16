@@ -10,6 +10,7 @@ import { createFixtureWorkspace } from "../../shared/workspace-fixtures";
 import { createPersonalWorkspaceClient, PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import WorkspaceTasks from "./workspace-tasks";
 import WorkspaceCalendar from "./workspace-calendar";
+import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import styles from "./workspace.module.css";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
@@ -55,7 +56,7 @@ export default function PersonalWorkspaceApp({ auth, client }: Props) {
   return <div className={styles.workspace}><header className={styles.header}><OpenJobBrand /><span>Personal workspace</span></header><main className={styles.main}>
     <h1>Your tasks and time, together</h1><p>Sign in with your existing OpenJob account to open your saved Tasks and Calendar.</p>
     {lease.session === undefined ? <p role="status">Restoring your session…</p> : <div className={styles.actions}><button disabled={signingIn} onClick={() => signIn("google")}>Continue with Google</button><button disabled={signingIn} onClick={() => signIn("apple")}>Continue with Apple</button></div>}
-    {authError && <p role="alert">{authError}</p>}<p><Link href="/">Account setup and existing Groups</Link></p><p className={styles.small}>Mail provider connections and personal agent access are upcoming. Synthetic Mail is available as a clearly labeled preview after sign-in.</p>
+    {authError && <p role="alert">{authError}</p>}<p><Link href="/">Account setup and existing Groups</Link></p><p className={styles.small}>Mail provider connections are upcoming. Personal agent access can be reviewed after sign-in. Synthetic Mail is available as a clearly labeled preview after sign-in.</p>
   </main></div>;
 }
 
@@ -107,6 +108,7 @@ function PersonalSession({ session, signal, client, onSignOut }: { session: Auth
         {view && tab === "Tasks" && <WorkspaceTasks view={view} busy={busy} command={command} />}
         {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
         {view && tab === "Mail preview" && <><p className={styles.banner}>Synthetic Mail preview · fictional messages, no provider connection, no sending. This mail is not saved to your account.</p><div className={styles.mailGrid}><section className={styles.panel} aria-label="Synthetic messages">{messages.map((message) => <button className={styles.message} key={message.id} onClick={() => setSelectedMessage(message.id)}><strong>{message.subject}</strong><small>{message.from} · synthetic</small></button>)}</section><section className={styles.panel} aria-label="Synthetic message reader">{selected ? <div className={styles.reader}><h2>{selected.subject}</h2><p>{selected.from}</p><pre className={styles.body}>{selected.body}</pre><button disabled={busy} onClick={() => command({ type: "task.create", title: selected.subject }, "Task created from a synthetic example; no mailbox link was saved")}>Create personal task from example</button></div> : <p className={styles.empty}>Select a fictional message to explore the preview.</p>}</section></div></>}
-        {view && tab === "Agents" && <section className={styles.panel}><h2 className={styles.sectionHeading}>Personal agent access is upcoming</h2><p className={styles.inset}>This authenticated workspace does not create or simulate agent grants. Scoped agent access will be available through the shared API when supported.</p></section>}
+        {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}
+        {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id} data-testid="personal-activity"><strong>{entry.actor}</strong> · {entry.action} <small>{new Date(entry.createdAt).toLocaleString()}</small></p>)}</details>}
       </main></div></div>;
 }

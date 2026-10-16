@@ -60,11 +60,38 @@ The strict command objects support `task.create` (`title`), `task.update`
 for the default calendar and ISO timestamps with timezone offsets or `Z`.
 
 Normal `--profile`, `--format`, `--out` and `--quiet` conventions apply.
-No Group selection, fixture owner headers, Mail access or agent credentials
-are accepted here. A linked task mutation also updates its calendar block.
+No Group selection, fixture owner headers or Mail access are accepted here.
+A linked task mutation also updates its calendar block.
 Commands are not retried for network/service errors: inspect a fresh snapshot
 before retrying an uncertain mutation. Hosted availability requires a reviewed
 release; fixture demonstrations do not establish deployed availability.
+
+### Scoped personal agents
+
+The same CLI can issue distinct, revocable 24-hour personal workspace grants:
+
+```sh
+openjob workspace agent grant --name "Personal planner" --scopes tasks:read,tasks:write,calendar:read,calendar:write --resources tasks:personal,calendar:personal --token-out /private/path/personal-token
+openjob workspace agent list --format json
+openjob workspace snapshot --agent-token-file /private/path/personal-token --format json
+openjob workspace command --agent-token-file /private/path/personal-token --input command.json --format json
+openjob workspace agent revoke agt_0123456789abcdef0123456789abcdef --yes
+```
+
+Grant requires explicit comma-separated scopes/resources and a new private token
+file. Tokens are written atomically with mode 0600; never to stdout, public
+`--out`, or an existing file. `--force` is rejected. Only public grant metadata
+is printed. If delivery fails after issuance, inspect the grant list and revoke
+the identified grant before creating another. Issuance is not retried after
+network or service failures.
+
+Personal token files must be regular private files (mode 0600); `-` may read a
+token from stdin, but command JSON and token cannot both use stdin. Agent calls
+never refresh a human credential or fall back to one. Write-only grants receive
+an ID/acknowledgment rather than Task/Event content; reads require the matching
+read scope. Revocation, expiry and owner account deletion deny later calls.
+Personal credentials cannot administer grants or authorize existing Group APIs;
+Group agent credentials cannot authorize personal workspace calls.
 
 ## Scoped agent reads
 

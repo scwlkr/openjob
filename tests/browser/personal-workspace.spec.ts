@@ -80,3 +80,47 @@ test("identity swaps clear edits and reject deferred old-session writes and read
   await expect(page.getByLabel("Task title", { exact: true })).toHaveCount(0);
   await expect(row).toHaveCount(0);
 });
+
+test("human agent controls show effective scopes, isolate owners and revoke real API access", async ({ page, request }, testInfo) => {
+  const name = `Personal helper ${Date.now()}`;
+  const owner = await (await request.get("/__test/session/alex")).json() as { token: string };
+  const issuedResponse = await request.post("/api/v1/workspace/agent-grants", {
+    headers: { authorization: `Bearer ${owner.token}` },
+    data: { name, scopes: ["tasks:read", "tasks:write"], resourceIds: ["tasks:personal"] },
+  });
+  expect(issuedResponse.status()).toBe(201);
+  const issued = (await issuedResponse.json() as { data: { agent: { id: string }; token: string } }).data;
+  const acted = await request.post("/api/v1/workspace/commands", { headers: { authorization: `Bearer ${issued.token}` }, data: { type: "task.create", title: `${name} task` } });
+  expect(acted.status()).toBe(200);
+  expect((await request.get("/api/v1/workspace/agent-grants", { headers: { authorization: `Bearer ${issued.token}` } })).status()).toBe(401);
+  await page.goto("/");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("task-row").filter({ hasText: `${name} task` })).toBeVisible();
+  await page.getByText("Recent activity", { exact: true }).click();
+  await expect(page.getByTestId("personal-activity").filter({ hasText: issued.agent.id })).toContainText("task.create");
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  const row = page.getByTestId("personal-agent-row").filter({ hasText: name });
+  await expect(row).toContainText("Effective scopes: tasks:read, tasks:write");
+  await expect(row).toContainText("Effective resources: tasks:personal");
+  expect((await page.content()).includes(issued.token)).toBe(false);
+  expect((await page.content()).includes("tokenHash")).toBe(false);
+  await page.getByLabel("Test identity", { exact: true }).selectOption("sam");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await expect(page.getByText("No personal agents have access.", { exact: false })).toBeVisible();
+  await expect(row).toHaveCount(0);
+  await page.getByLabel("Test identity", { exact: true }).selectOption("alex");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await expect(row).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await row.getByRole("button", { name: "Revoke access", exact: true }).click();
+  await expect(row).toContainText("Revoked");
+  await expect(row.getByRole("button", { name: "Revoke access", exact: true })).toBeDisabled();
+  expect((await request.get("/api/v1/workspace/snapshot", { headers: { authorization: `Bearer ${issued.token}` } })).status()).toBe(401);
+  await page.reload();
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await expect(row).toContainText("Revoked");
+  await page.screenshot({ path: testInfo.outputPath("personal-workspace-agent-grants.png"), fullPage: true });
+});

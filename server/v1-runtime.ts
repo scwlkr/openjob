@@ -7,6 +7,7 @@ import { createFirestoreNotificationSubscriptionStore } from "@/db/notification-
 import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestorePersonalWorkspaceStore } from "@/db/personal-workspace";
 import { createV1PersonalWorkspaceApi, createV1PersonalWorkspaceHandler } from "./v1-personal-workspace";
+import { createV1PersonalAgentGrantsApi, createV1PersonalAgentGrantsHandler } from "./v1-personal-agent-grants";
 import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
@@ -55,6 +56,7 @@ type V1Runtime = {
   notificationSubscriptionsApi: ReturnType<typeof createV1NotificationSubscriptionsApi>;
   tasksApi: ReturnType<typeof createV1TasksApi>;
   personalWorkspaceApi: ReturnType<typeof createV1PersonalWorkspaceApi>;
+  personalAgentGrantsApi: ReturnType<typeof createV1PersonalAgentGrantsApi>;
 };
 
 let runtime: V1Runtime | null = null;
@@ -155,6 +157,7 @@ function getRuntime() {
       verifyIdToken,
     }),
     personalWorkspaceApi: createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken }),
+    personalAgentGrantsApi: createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,
@@ -206,6 +209,7 @@ export const handleV1NotificationSubscriptionsRequest =
   createV1NotificationSubscriptionsHandler(getNotificationSubscriptionsApi);
 export const handleV1TasksRequest = createV1TasksHandler(getTasksApi);
 export const handleV1PersonalWorkspaceRequest = createV1PersonalWorkspaceHandler(() => getRuntime().personalWorkspaceApi);
+export const handleV1PersonalAgentGrantsRequest = createV1PersonalAgentGrantsHandler(() => getRuntime().personalAgentGrantsApi);
 
 export function retryPendingAccountDeletions() {
   const configuredTarget = (env as FirebaseBindings)

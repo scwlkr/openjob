@@ -8,6 +8,7 @@ import { createFirestoreNotificationSubscriptionStore } from "../db/notification
 import { createFirestoreTaskStore } from "../db/v1-tasks.ts";
 import { createFirestorePersonalWorkspaceStore } from "../db/personal-workspace.ts";
 import { createV1PersonalWorkspaceApi } from "../server/v1-personal-workspace.ts";
+import { createV1PersonalAgentGrantsApi } from "../server/v1-personal-agent-grants.ts";
 import { createFirestoreUserStore } from "../db/users.ts";
 import { runV1AcceptanceScenario } from "../scripts/v1-acceptance-scenario.mjs";
 import { validateOpenApiContract } from "../scripts/validate-openapi.mjs";
@@ -135,6 +136,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       const groupsApi = createV1GroupsApi({ groups, users, verifyIdToken });
       const personalWorkspaces = createFirestorePersonalWorkspaceStore(config, firestore.fetch);
       const personalWorkspaceApi = createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken });
+      const personalAgentGrantsApi = createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken });
       const tasksApi = createV1TasksApi({ agents: agentGrants, tasks, users, verifyIdToken });
       const notificationSubscriptionsApi = createV1NotificationSubscriptionsApi({
         subscriptions: notificationSubscriptions,
@@ -175,6 +177,7 @@ test("the complete hosted backend preserves existing Groups during its two-ident
       return {
         fetch(request) {
           const pathname = new URL(request.url).pathname;
+          if (pathname.startsWith("/api/v1/workspace/agent-grants")) return personalAgentGrantsApi.fetch(request);
           if (pathname.startsWith("/api/v1/workspace/")) return personalWorkspaceApi.fetch(request);
           if (pathname.startsWith("/api/v1/agent-grants")) return agentGrantsApi.fetch(request);
           if (pathname === "/api/v1/me/deletion") {
@@ -399,6 +402,27 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(privateState.tasks.find(task => task.id === privateTask.id).completed, true);
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).title, "Persisted personal plan");
     assert.equal(privateState.events.find(event => event.taskId === privateTask.id).start, "2026-07-17T10:00:00.000Z");
+    const personalGrantPath = "/api/v1/workspace/agent-grants";
+    const issuedPersonal = await request({ actor: "initialAdmin", method: "POST", path: personalGrantPath, body: { name: "Personal planner", scopes: ["tasks:read", "tasks:write", "calendar:read", "calendar:write"], resourceIds: ["tasks:personal", "calendar:personal"] } });
+    assert.equal(issuedPersonal.status, 201);
+    const { agent: personalGrant, token: personalToken } = (await issuedPersonal.clone().json()).data;
+    ephemeralCapabilityMaterial.push(personalToken);
+    await validate(issuedPersonal, personalGrantPath, "post", { allowedSecrets: [personalToken] });
+    const personalList = await request({ actor: "initialAdmin", method: "GET", path: personalGrantPath });
+    assert.equal(personalList.status, 200); await validate(personalList, personalGrantPath, "get");
+    for (const method of ["GET", "POST"]) {
+      const deniedAdmin = await request({ authorization: personalToken, method, path: personalGrantPath, ...(method === "POST" ? { body: { name: "Denied", scopes: ["tasks:read"], resourceIds: ["tasks:personal"] } } : {}) });
+      assert.equal(deniedAdmin.status, 401); await validate(deniedAdmin, personalGrantPath, method.toLowerCase());
+    }
+    const personalAgentEdit = await request({ authorization: personalToken, method: "POST", path: "/api/v1/workspace/commands", body: { type: "task.update", taskId: privateTask.id, title: "Personal agent revision" } });
+    assert.equal(personalAgentEdit.status, 200); await validate(personalAgentEdit, "/api/v1/workspace/commands", "post");
+    const grantResource = `${personalGrantPath}/${personalGrant.id}`;
+    const foreignRevoke = await request({ actor: "memberUser", method: "DELETE", path: grantResource });
+    assert.equal(foreignRevoke.status, 404); await validate(foreignRevoke, `${personalGrantPath}/{agentId}`, "delete");
+    const personalRevoke = await request({ actor: "initialAdmin", method: "DELETE", path: grantResource });
+    assert.equal(personalRevoke.status, 204); await validate(personalRevoke, `${personalGrantPath}/{agentId}`, "delete");
+    const revokedPersonal = await request({ authorization: personalToken, method: "GET", path: "/api/v1/workspace/snapshot" });
+    assert.equal(revokedPersonal.status, 401); await validate(revokedPersonal, "/api/v1/workspace/snapshot", "get");
     const groupsAfter = await request({
       actor: "initialAdmin",
       method: "GET",

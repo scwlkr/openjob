@@ -15,6 +15,8 @@ const VALUE_OPTIONS = new Set([
   "--out",
   "--priority",
   "--profile",
+  "--scopes",
+  "--resources",
   "--status",
   "--text",
   "--text-file",

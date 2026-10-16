@@ -803,7 +803,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or group-agent credentials are accepted. Responses are never cached. */
+        /** @description Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved User; distinct personal agent credentials use their current stored owner, scopes and named resources with immediate revocation. No human credential fallback. Mail and Agents arrays remain empty. Fixture headers and Group credentials never authorize this API. */
         get: operations["getPersonalWorkspace"];
         put?: never;
         post?: never;
@@ -822,9 +822,47 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Human Firebase identity only. Owner comes from the resolved OpenJob User. Personal Tasks and Calendar only; Mail and Agents arrays remain empty. No fixture identity headers or group-agent credentials are accepted. Responses are never cached. */
+        /** @description Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved User; distinct personal agent credentials use their current stored owner, scopes and named resources with immediate revocation. No human credential fallback. Mail and Agents arrays remain empty. Fixture headers and Group credentials never authorize this API. */
         post: operations["commandPersonalWorkspace"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/agent-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        get: operations["listPersonalAgentGrants"];
+        put?: never;
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        post: operations["createPersonalAgentGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspace/agent-grants/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa */
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        delete: operations["revokePersonalAgentGrant"];
         options?: never;
         head?: never;
         patch?: never;
@@ -834,6 +872,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PersonalAgentGrantInput: {
+            name: string;
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
+            resourceIds: ("tasks:personal" | "calendar:personal")[];
+        };
+        PersonalAgentGrant: {
+            id: string;
+            ownerUserId: string;
+            name: string;
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
+            resourceIds: ("tasks:personal" | "calendar:personal")[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            revoked: boolean;
+        };
+        PersonalWorkspaceUpdated: {
+            id: string;
+            /** @constant */
+            updated: true;
+        };
         PersonalWorkspaceTask: {
             id: string;
             ownerId: string;
@@ -866,8 +926,7 @@ export interface components {
         PersonalWorkspaceActivity: {
             id: string;
             ownerId: string;
-            /** @constant */
-            actor: "You";
+            actor: string;
             /** @enum {string} */
             action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete";
             /** Format: date-time */
@@ -943,7 +1002,7 @@ export interface components {
             /** @constant */
             deleted: true;
         };
-        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"];
+        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceUpdated"] | components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"];
         /** @description Opaque installation identifier with no User information. */
         InstallationId: string;
         /** @description Canonical opaque OpenJob User ID independent of provider subjects. */
@@ -4080,6 +4139,351 @@ export interface operations {
                         data: components["schemas"]["PersonalWorkspaceCommandResult"];
                     };
                 };
+            };
+            /** @description Invalid bounded JSON command or fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource, command, agent identity or Origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed concurrently; reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "conflict",
+                     *         "message": "The workspace changed. Reload before retrying.",
+                     *         "requestId": "req_personal_conflict"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Request or workspace capacity exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Content type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    listPersonalAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful personal grant operation. Responses are never cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                     *           "ownerUserId": "user_example",
+                     *           "name": "Personal planner",
+                     *           "scopes": [
+                     *             "tasks:read",
+                     *             "tasks:write"
+                     *           ],
+                     *           "resourceIds": [
+                     *             "tasks:personal"
+                     *           ],
+                     *           "createdAt": "2026-10-16T03:00:00.000Z",
+                     *           "expiresAt": "2026-10-17T03:00:00.000Z",
+                     *           "revoked": false
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["PersonalAgentGrant"][];
+                    };
+                };
+            };
+            /** @description Invalid bounded JSON command or fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource, command, agent identity or Origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed concurrently; reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "conflict",
+                     *         "message": "The workspace changed. Reload before retrying.",
+                     *         "requestId": "req_personal_conflict"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Request or workspace capacity exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Content type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    createPersonalAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Personal planner",
+                 *       "scopes": [
+                 *         "tasks:read",
+                 *         "tasks:write"
+                 *       ],
+                 *       "resourceIds": [
+                 *         "tasks:personal"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["PersonalAgentGrantInput"];
+            };
+        };
+        responses: {
+            /** @description Successful personal grant operation. Responses are never cached. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "agent": {
+                     *           "id": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                     *           "ownerUserId": "user_example",
+                     *           "name": "Personal planner",
+                     *           "scopes": [
+                     *             "tasks:read",
+                     *             "tasks:write"
+                     *           ],
+                     *           "resourceIds": [
+                     *             "tasks:personal"
+                     *           ],
+                     *           "createdAt": "2026-10-16T03:00:00.000Z",
+                     *           "expiresAt": "2026-10-17T03:00:00.000Z",
+                     *           "revoked": false
+                     *         },
+                     *         "token": "oj_personal_user_example.agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            agent: components["schemas"]["PersonalAgentGrant"];
+                            /** @description One-time private personal workspace credential. Store in a private file; never log it. */
+                            token: string;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid bounded JSON command or fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Resource, command, agent identity or Origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Route unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed concurrently; reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "conflict",
+                     *         "message": "The workspace changed. Reload before retrying.",
+                     *         "requestId": "req_personal_conflict"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Request or workspace capacity exceeded. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Content type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    revokePersonalAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa */
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grant revoked. Later personal workspace agent calls are denied. */
+            204: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Invalid bounded JSON command or fields. */
             400: {

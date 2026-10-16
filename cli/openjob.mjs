@@ -2,6 +2,7 @@
 // @ts-check
 
 import { prepareAgentGrant, deliverAgentGrant } from "./lib/agent-grant.mjs";
+import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
 import {
   apiRequestWithIdToken as requestApiWithIdToken,
@@ -81,8 +82,11 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
-  ["workspace snapshot", new Set(OUTPUT_OPTIONS)],
-  ["workspace command", new Set([...OUTPUT_OPTIONS, "--input"])],
+  ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
+  ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
+  ["workspace agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
+  ["workspace agent list", new Set(OUTPUT_OPTIONS)],
+  ["workspace agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
   ["agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--group", "--name", "--token-out"])],
   ["agent list", new Set(OUTPUT_OPTIONS)],
   ["agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
@@ -147,10 +151,15 @@ const RESOURCE_HELP = {
   workspace: `Usage:
   openjob workspace snapshot
   openjob workspace command --input <path|->
+  openjob workspace agent grant --name <name> --scopes <comma-list> --resources <comma-list> --token-out <new-path>
+  openjob workspace agent list
+  openjob workspace agent revoke <agent-id> [--yes]
 
 Uses the selected human profile's personal Tasks and Calendar API.
 Commands are strict JSON task.create/update/complete/schedule/unschedule/delete
-or calendar.create/update/delete objects. No Mail, fixture identities or agent credentials.
+or calendar.create/update/delete objects. No Mail or fixture identities.
+snapshot/command accept --agent-token-file <path|-> for personal scoped credentials,
+with no credential refresh or human fallback. command input and token cannot both use stdin.
 Mutations are not automatically retried after network or service failures.`,
   agent: `Usage:
   openjob agent grant --group <group-id> --name <name> --token-out <new-path>
@@ -448,7 +457,7 @@ async function main(raw) {
 
   const parsed = parseArguments(raw);
   const [resource, command, ...rest] = parsed.positionals;
-  validateCommandOptions(resource, command, parsed.options);
+  validateCommandOptions(resource, resource === "workspace" && command === "agent" ? `agent ${rest[0]}` : command, parsed.options);
   const profile = resolveCliProfile(
     parsed.options.get(PROFILE_OPTION),
     process.env,
@@ -456,10 +465,15 @@ async function main(raw) {
   const agentTokenFile = parsed.options.get("--agent-token-file");
   let agentToken;
   if (typeof agentTokenFile === "string") {
-    if (!parsed.options.has("--group")) throw new CliError("usage_error", "Agent reads require explicit --group.", 2);
-    agentToken = readTextSource(agentTokenFile);
-    if (!/^oj_agent_agt_[a-f0-9]{32}\.[A-Za-z0-9_-]{43}$/.test(agentToken)) {
-      throw new CliError("input_invalid", "Agent token file must contain one valid agent credential.", 2);
+    if (resource === "workspace") {
+      if (agentTokenFile === "-" && parsed.options.get("--input") === "-") throw new CliError("usage_error", "The personal credential and command input cannot both use stdin.", 2);
+      agentToken = readPersonalAgentToken(agentTokenFile);
+    } else {
+      if (!parsed.options.has("--group")) throw new CliError("usage_error", "Agent reads require explicit --group.", 2);
+      agentToken = readTextSource(agentTokenFile);
+      if (!/^oj_agent_agt_[a-f0-9]{32}\.[A-Za-z0-9_-]{43}$/.test(agentToken)) {
+        throw new CliError("input_invalid", "Agent token file must contain one valid agent credential.", 2);
+      }
     }
   }
   const storedApi = createApiClient(process.env, agentToken, profile, { allowCredentialRefresh: agentToken === undefined });
@@ -516,6 +530,29 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "agent" && rest[0] === "grant" && rest.length === 1) {
+    const prepared = preparePersonalAgentGrant(parsed.options);
+    let response;
+    try { response = /** @type {import("./openapi-types.ts").CreatePersonalAgentGrantResponse} */ (await apiRequest("/workspace/agent-grants", { method: "POST", body: JSON.stringify(prepared.body) })); }
+    catch (error) {
+      if (!(error instanceof CliError) || !["service_unavailable", "invalid_response"].includes(error.code) && error.exitStatus !== 8) throw error;
+      throw new CliError("agent_grant_uncertain", "Personal grant issuance could not be confirmed. Inspect openjob workspace agent list and revoke uncertain grants before retrying. No automatic retry was made.", 8);
+    }
+    writeResult({ data: deliverPersonalAgentGrant(response, prepared) });
+    return;
+  }
+  if (resource === "workspace" && command === "agent" && rest[0] === "list" && rest.length === 1) {
+    const response = /** @type {import("./openapi-types.ts").ListPersonalAgentGrantsResponse} */ (await apiRequest("/workspace/agent-grants", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    if (!Array.isArray(response?.data)) throw new CliError("invalid_response", "Invalid personal grant list.", 8);
+    writeResult({ data: response.data.map(publicPersonalAgent) }); return;
+  }
+  if (resource === "workspace" && command === "agent" && rest[0] === "revoke" && rest.length === 2) {
+    const id = rest[1];
+    if (!/^agt_[a-f0-9]{32}$/.test(id)) throw new CliError("usage_error", "Use a personal Agent ID returned by openjob workspace agent list.", 2);
+    await confirmDestructiveAction(`Revoke personal agent ${id}?`, "Non-interactive personal agent revocation requires --yes.", parsed.options);
+    await apiRequest(`/workspace/agent-grants/${id}`, { method: "DELETE" });
+    writeResult({ data: { id, revoked: true } }); return;
+  }
   if (resource === "workspace" && command === "snapshot" && rest.length === 0) {
     const response = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
     writeResult(response);
