@@ -42,12 +42,27 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         const user = identity ? await users.resolve(identity) : null;
         if (!personalToken && !user) return signInMethodUnrecognizedResponse(requestId);
         if (user?.deletionPending) return accountDeletionPendingResponse(requestId);
-        const agentSnapshot = personalToken ? await workspace.snapshotForAgent(personalToken) : null;
         const url = new URL(request.url);
+        const sync = url.pathname === "/api/v1/workspace/task-calendar-sync";
+        if (sync && personalToken) return fail("forbidden", "Offline synchronization requires a human session.", 403);
+        if (sync && url.search) return fail("invalid_input", "Sync does not accept query parameters.", 400);
+        const agentSnapshot = personalToken ? await workspace.snapshotForAgent(personalToken) : null;
         const origin = request.headers.get("origin");
         if (origin && origin !== url.origin) return fail("origin_denied", "Cross-origin workspace requests are denied.", 403);
         let data: unknown;
-        if (url.pathname === "/api/v1/workspace/snapshot" && request.method === "GET") {
+        if (sync && request.method === "GET") {
+          if (!workspace.readTaskCalendarSync) return fail("unavailable", "Offline synchronization is unavailable.", 503);
+          data = await workspace.readTaskCalendarSync(user!.userId);
+        } else if (sync && request.method === "POST") {
+          if (!workspace.syncTaskCalendar) return fail("unavailable", "Offline synchronization is unavailable.", 503);
+          if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return fail("invalid_content_type", "Sync requires application/json.", 415);
+          const reader = request.body?.getReader(); if (!reader) return fail("invalid_input", "A sync batch is required.", 400);
+          const chunks: Uint8Array[] = []; let length = 0;
+          for (;;) { const { done, value } = await reader.read(); if (done) break; length += value.byteLength; if (length > 512 * 1024) { await reader.cancel(); return fail("body_too_large", "Sync batches cannot exceed 512 KiB.", 413); } chunks.push(value); }
+          const bytes = new Uint8Array(length); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+          let input: unknown; try { input = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { return fail("invalid_input", "A valid sync batch is required.", 400); }
+          data = await workspace.syncTaskCalendar(user!.userId, input);
+        } else if (url.pathname === "/api/v1/workspace/snapshot" && request.method === "GET") {
           data = personalToken ? agentSnapshot : await workspace.snapshot(user!.userId);
         } else if (url.pathname === "/api/v1/workspace/commands" && request.method === "POST") {
           if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
@@ -99,6 +114,7 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         if (code === "forbidden") return fail(code, "The personal workspace resource is unavailable.", 403);
         if (code === "sending_disabled") return fail(code, "Real sending is disabled.", 403);
         if (code === "workspace_capacity") return fail(code, "Personal workspace capacity was exceeded.", 413);
+        if (code === "sync_expired") return fail(code, "This offline batch expired. Refresh and review saved Tasks and Calendar.", 409);
         if (code === "conflict") return fail(code, "The workspace changed. Reload before retrying.", 409);
         return internalErrorResponse(requestId);
       }

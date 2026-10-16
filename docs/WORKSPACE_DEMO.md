@@ -100,10 +100,7 @@ retrieval, durable restart, isolation, scope denial and revocation. Functional
 theme/responsive checks replace historical pixel comparisons under
 [the owner-approved prototype policy](PROTOTYPE_DELIVERY.md).
 
-Provider OAuth/sync/remote search/attachments, real sending, production authentication
-for the new workspace, multi-user hosting, offline conflict resolution and
-native workspace screens remain unimplemented. Native quick checks cover the
-existing app only; device/store evidence remains a release requirement.
+Provider OAuth/sync/remote search/attachments, real sending, live provider integration and multi-user fixture hosting remain unimplemented. The authenticated workspace and native personal surfaces are separate from this loopback fixture. Native personal Tasks/Calendar have encrypted offline edits and explicit conflict review; web/CLI remain online-only. Native quick checks do not prove a device; device/store evidence remains a release requirement.
 
 ## Owner review outside this environment
 
@@ -125,3 +122,30 @@ remains an independent, read-only provider example with title-only Task creation
 Named personal agents can be scoped to each invented mailbox. See the
 [authenticated workspace guide](PERSONAL_WORKSPACE.md) for API/CLI commands and
 scope rules. This does not configure live Mail or change Firebase sign-in.
+
+## Reproduce the native offline cycle in this cloud environment
+
+The loopback web fixture above is unchanged and does not claim native offline
+behavior. Do not reset its saved state to exercise the offline feature.
+The cloud proof uses fresh synthetic identities, fake Firestore transport and
+injected storage; it needs no production secrets, grants or correspondence:
+
+```sh
+node --test tests/tasks-calendar-sync*.test.mjs tests/native-personal-workspace-http.test.mjs
+```
+
+The actual native controller/API HTTP test edits a private Task offline,
+restarts under a provisional personal-only session, restores online, loses a
+committed response and retries once without another write. It then preserves a
+newer server edit as a conflict, requires another review if the server changes
+again, applies the explicit local choice, and checks that an edit queued during
+sync remains pending afterward. Mail, grants and source provenance survive;
+none enters the personal cache. Native component/storage tests exercise the
+visible pending/review/confirmation flow and persistence failures.
+
+For a separately configured development device build, follow the
+[native offline walkthrough](PERSONAL_WORKSPACE.md#native-offline-tasks-and-calendar).
+There is no running device/emulator preview in this environment. Cloud tests and
+Metro exports do not establish native durability, encryption, keyboard or
+release acceptance. No deployment or new credentials are required for the
+isolated proof above.

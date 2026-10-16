@@ -1,6 +1,7 @@
 /* global __dirname */
 
 const { getSentryExpoConfig } = require("@sentry/react-native/metro");
+const path = require("node:path");
 
 module.exports = getSentryExpoConfig(__dirname, {
   annotateReactComponents: false,
@@ -8,3 +9,6 @@ module.exports = getSentryExpoConfig(__dirname, {
   includeWebReplay: false,
   injectReleaseForWeb: false,
 });
+
+// Native Tasks/Calendar sync uses the same pure runtime validation as the API.
+module.exports.watchFolders = [path.resolve(__dirname, "../shared")];

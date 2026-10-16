@@ -1,4 +1,6 @@
 import { createNativePersonalWorkspaceApi } from "../personal-workspace-api";
+import { createSqlCipherOfflineWorkspaceCache } from '../offline-workspace-cache';
+import * as Crypto from 'expo-crypto';
 import {
   readNativeApplicationId,
   type OpenJobRuntimeConfig,
@@ -45,6 +47,7 @@ export async function purgeNativeAuthStateWithoutRuntimeConfig() {
     keyStorageKey: `openjob.native.cache.${environment}.v1`,
     keychainService: `${keychainService}.cache`,
   });
+  const personalCache = createSqlCipherOfflineWorkspaceCache({ databaseName: `openjob-${environment}-personal-offline-v1.db`, keyStorageKey: `openjob.native.personal-offline.${environment}.v1`, keychainService: `${keychainService}.personal-offline` });
 
   let marked = false;
   try {
@@ -56,6 +59,7 @@ export async function purgeNativeAuthStateWithoutRuntimeConfig() {
   const cleanup = await Promise.allSettled([
     clearNativeProviderSessionWithoutConfiguration(),
     domainCache.purge(),
+    personalCache.purge(),
     store.clear(),
   ]);
   const failures = cleanup.flatMap((result) =>
@@ -97,10 +101,17 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
     keyStorageKey: `openjob.native.cache.${config.environment}.v1`,
     keychainService: `${config.keychainService}.cache`,
   });
-  registerLocalDomainPurgeBoundary(() => domainCache.purge());
+  const personalCache = createSqlCipherOfflineWorkspaceCache({ databaseName: `openjob-${config.environment}-personal-offline-v1.db`, keyStorageKey: `openjob.native.personal-offline.${config.environment}.v1`, keychainService: `${config.keychainService}.personal-offline` });
+  registerLocalDomainPurgeBoundary(async () => {
+    const results = await Promise.allSettled([domainCache.purge(), personalCache.purge()]);
+    if (results.some(result => result.status === 'rejected')) throw new Error('Could not purge local domain caches.');
+  });
 
   return new NativeAuthCoordinator({
     ...personalWorkspace,
+    personalOfflineCache: personalCache,
+    loadPersonalOfflineCache: (owner, guard) => personalCache.load(owner, guard),
+    offlineRandomUUID: Crypto.randomUUID,
     claimUsername: (token, username) =>
       api.claimUsername(token, username),
     clearCleanupPending: () => store.clearCleanupPending(),

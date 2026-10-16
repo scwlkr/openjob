@@ -58,21 +58,41 @@ test('native personal client and auth controller complete the private HTTP workf
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
   const base = `http://127.0.0.1:${server.address().port}/api/v1`;
-  const native = createNativePersonalWorkspaceApi({ apiBaseUrl: base });
+  let disconnected = false; let loseSyncResponse = false; let pauseSyncResponse = false;
+  let releaseSync; let syncDispatched;
+  const native = createNativePersonalWorkspaceApi({ apiBaseUrl: base, fetchImplementation: async (url, options) => {
+    if (disconnected) throw new TypeError('Invented offline transport');
+    const response = await fetch(url, options);
+    if (String(url).endsWith('/task-calendar-sync') && options?.method === 'POST') {
+      if (loseSyncResponse) { loseSyncResponse = false; throw new TypeError('Invented lost acknowledgment'); }
+      if (pauseSyncResponse) { pauseSyncResponse = false; syncDispatched(); await new Promise(resolve => { releaseSync = resolve; }); }
+    }
+    return response;
+  } });
   let who = 'alex'; let stored = null;
+  let personalRecord = null;
+  const personalOfflineCache = {
+    async load(owner, guard = () => undefined) { guard(); return personalRecord?.ownerUserId === owner ? structuredClone(personalRecord) : null; },
+    async save(record, guard = () => undefined) { guard(); personalRecord = structuredClone(record); },
+    async purge() { personalRecord = null; },
+  };
   const noop = async () => undefined;
-  const coordinator = new NativeAuthCoordinator({
+  const makeCoordinator = () => new NativeAuthCoordinator({
     ...native,
+    personalOfflineCache, offlineRandomUUID: () => crypto.randomUUID(), loadPersonalOfflineCache: owner => personalOfflineCache.load(owner),
     signInWithProvider: async provider => ({ provider, idToken: 'invented-provider-proof' }),
     exchangeProviderCredential: async () => ({ provider: 'google', idToken: sessions[who].token, refreshToken: 'invented-refresh', expiresAt: Date.parse(now) + 3600000 }),
+    refreshSession: async () => ({ provider: 'google', idToken: sessions[who].token, refreshToken: 'invented-refresh', expiresAt: Date.parse(now) + 3600000 }),
     getMe: async token => { const response = await fetch(`${base}/me`, { headers: { authorization: `Bearer ${token}` } }); assert.equal(response.status, 200); return (await response.json()).data; },
     listSignInMethods: async () => ['google'], now: () => Date.parse(now), loadCleanupPending: async () => false, loadDeletionReceipt: async () => null,
     loadStoredSession: async () => stored, saveStoredSession: async session => { stored = session; }, clearStoredSession: async () => { stored = null; },
-    clearProviderSession: noop, purgeLocalDomainCache: noop, markCleanupPending: noop, clearCleanupPending: noop, clearDeletionReceipt: noop,
+    clearProviderSession: noop, purgeLocalDomainCache: () => personalOfflineCache.purge(), markCleanupPending: noop, clearCleanupPending: noop, clearDeletionReceipt: noop,
+    loadLocalTaskListCache: async () => null,
   });
+  let coordinator = makeCoordinator();
   assert.equal((await coordinator.signIn('google')).kind, 'signed-in');
-  const controller = coordinator.getPersonalWorkspaceController(); const owner = sessions.alex.owner;
-  assert.deepEqual(Object.keys(controller).sort(), ['commandPersonalWorkspace', 'listPersonalAgents', 'readPersonalWorkspace', 'revokePersonalAgent']);
+  let controller = coordinator.getPersonalWorkspaceController(); const owner = sessions.alex.owner;
+  assert.deepEqual(Object.keys(controller).sort(), ['commandPersonalWorkspace', 'listPersonalAgents', 'offline', 'readPersonalWorkspace', 'revokePersonalAgent']);
   const command = input => controller.commandPersonalWorkspace(owner, input);
   await command({ type: 'mail.examples.add' });
   let view = await controller.readPersonalWorkspace(owner); assert.equal(view.accounts.length, 3); assert.equal(view.messages.length, 6);
@@ -95,7 +115,67 @@ test('native personal client and auth controller complete the private HTTP workf
   await controller.revokePersonalAgent(owner, agent.id);
   assert.equal((await controller.listPersonalAgents(owner))[0].revoked, true);
   assert.equal((await fetch(`${base}/workspace/snapshot`, { headers: { authorization: `Bearer ${agentToken}` } })).status, 401);
+
+  // Personal-only cold restart, durable pending edits, ambiguous response replay
+  // and conflict review all use the actual coordinator/API/HTTP/store composition.
+  let offline = controller.offline;
+  assert.equal((await offline.refresh(owner)).status, 'synced');
+  disconnected = true;
+  assert.equal((await offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'Saved while offline' })).status, 'pending');
+  coordinator = makeCoordinator();
+  assert.equal((await coordinator.restoreCachedSession()).provisional, true, 'personal cache restores without a Group cache');
+  offline = coordinator.getPersonalWorkspaceController().offline;
+  assert.equal((await offline.load(owner)).projection.tasks[0].title, 'Saved while offline');
+  await offline.sync(owner).catch(error => assert.equal(error.code, 'revoked'));
+  assert.equal(personalRecord.pending.projection.tasks[0].title, 'Saved while offline');
+  disconnected = false;
+  assert.equal((await coordinator.restore()).kind, 'signed-in');
+  controller = coordinator.getPersonalWorkspaceController(); offline = controller.offline;
+  loseSyncResponse = true;
+  assert.equal((await offline.sync(owner)).status, 'pending');
+  const committedOnce = db.commitAttempts();
+  assert.equal((await offline.sync(owner)).status, 'synced');
+  assert.equal(db.commitAttempts(), committedOnce, 'lost response replay does not write again');
+  assert.equal((await controller.readPersonalWorkspace(owner)).tasks[0].sourceMessageId, 'example-message-3', 'private provenance survives stripped projection');
+  await offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'Ambiguous local proposal' });
+  loseSyncResponse = true; assert.equal((await offline.sync(owner)).status, 'pending');
+  await command({ type: 'task.update', taskId: task.id, title: 'Server changed after lost response' });
+  const afterNewerServer = db.commitAttempts();
+  const replayConflict = await offline.sync(owner);
+  assert.equal(replayConflict.status, 'conflict', 'historical receipt cannot silently replace the local proposal');
+  assert.equal(replayConflict.projection.tasks[0].title, 'Ambiguous local proposal');
+  assert.equal(replayConflict.currentServer.projection.tasks[0].title, 'Server changed after lost response');
+  assert.equal(db.commitAttempts(), afterNewerServer);
+  assert.equal((await offline.resolve(owner, 'server')).status, 'synced');
+  await offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'My local version' });
+  await command({ type: 'task.update', taskId: task.id, title: 'Newer server version' });
+  let conflict = await offline.sync(owner);
+  assert.equal(conflict.status, 'conflict');
+  assert.equal(conflict.projection.tasks[0].title, 'My local version');
+  assert.equal(conflict.currentServer.projection.tasks[0].title, 'Newer server version');
+  await command({ type: 'task.update', taskId: task.id, title: 'Changed again during review' });
+  conflict = await offline.resolve(owner, 'local');
+  assert.equal(conflict.status, 'conflict', 'unseen newer revision requires another review');
+  assert.equal(conflict.currentServer.projection.tasks[0].title, 'Changed again during review');
+  await offline.resolve(owner, 'local');
+  assert.equal((await offline.sync(owner)).status, 'synced');
+  assert.equal((await controller.readPersonalWorkspace(owner)).tasks[0].title, 'My local version');
+  await offline.edit(owner, { type: 'calendar.create', calendarId: 'personal', title: 'Offline manual block', start: '2027-06-02T12:00:00.000Z', end: '2027-06-02T12:30:00.000Z' });
+  const dispatched = new Promise(resolve => { syncDispatched = resolve; }); pauseSyncResponse = true;
+  const flushing = offline.sync(owner); await dispatched;
+  const laterEdit = offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'Newer local edit survives ack' });
+  releaseSync(); await flushing;
+  assert.equal((await laterEdit).status, 'pending');
+  assert.equal((await offline.sync(owner)).status, 'synced');
+  const saved = await controller.readPersonalWorkspace(owner);
+  assert.equal(saved.tasks[0].title, 'Newer local edit survives ack');
+  assert.equal(saved.events.filter(event => event.title === 'Offline manual block').length, 1);
+  assert.equal(saved.sent.length, 1, 'sync preserves simulated Mail');
+  assert.equal((await controller.listPersonalAgents(owner))[0].revoked, true, 'sync preserves grants');
+  assert.doesNotMatch(JSON.stringify(personalRecord), /sourceMessageId|sourceAccountId|accounts|messages|drafts|sentAt|idToken|refreshToken/);
   await coordinator.signOut(); who = 'sam'; await coordinator.signIn('google');
+  assert.equal(personalRecord, null, 'sign-out purges personal offline state');
+  await assert.rejects(offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'Old owner offline edit' }), error => error.code === 'revoked');
   const afterSwitch = commandRequests;
   await assert.rejects(command({ type: 'task.create', title: 'Old UI must not write as Sam' }), error => error.code === 'revoked');
   assert.equal(commandRequests, afterSwitch);
