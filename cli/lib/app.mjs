@@ -9,11 +9,13 @@ import { automaticUpdateNotice } from './updates.mjs';
 export async function runApp(args, pkg) {
   const options = new Map();
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--port', '--state-file'].includes(args[i]) || !args[i + 1] || options.has(args[i])) throw new Error('Use openjob app [--port 1-65535] [--state-file PATH].');
+    if (!['--port', '--state-file', '--listen-address'].includes(args[i]) || !args[i + 1] || options.has(args[i])) throw new Error('Use openjob app [--port 1-65535] [--state-file PATH].');
     options.set(args[i], args[i + 1]);
   }
   const port = Number(options.get('--port') ?? 5191);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Use a loopback port from 1 to 65535.');
+  const listen = options.get('--listen-address') ?? '127.0.0.1';
+  if (listen !== '127.0.0.1' && !(listen === '0.0.0.0' && process.env.OPENJOB_CONTAINER_LOCAL_ONLY === '1')) throw new Error('Non-loopback demo binding is reserved for the loopback-published local Compose profile.');
   const stateFile = options.has('--state-file') ? resolve(options.get('--state-file')) : null;
   const root = fileURLToPath(new URL('../app/', import.meta.url));
   try { await readFile(resolve(root, 'web/index.html')); } catch { throw new Error('Packaged app assets are missing. From a source checkout use npm run app:pack, then install its tarball.'); }
@@ -58,7 +60,7 @@ export async function runApp(args, pkg) {
       } catch { outgoing.writeHead(404).end('Not found'); }
     });
     server.once('error', error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; stop(); });
-    server.listen(port, '127.0.0.1', () => {
+    server.listen(port, listen, () => {
       if (stopping) { server.closeAllConnections(); server.close(); return; }
       console.log(`OpenJob ${pkg.version} (@${pkg.openjobDistribution?.channel ?? 'latest'}): http://127.0.0.1:${port}/workspace`);
       console.log(`Local prototype: synthetic Alex/Sam identities and invented providers. ${stateFile ? 'Workspace saved to ' + stateFile : 'Temporary API state'}. Real sending is disabled. Stop with Ctrl+C.`);

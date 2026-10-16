@@ -1,3 +1,4 @@
+import { createPersonalApplication } from './personal-application.ts';
 import { createFirestoreAgentGrantStore } from "@/db/agent-grants";
 import { createV1AgentGrantsApi } from "./v1-agent-grants";
 import { env, waitUntil } from "cloudflare:workers";
@@ -6,9 +7,9 @@ import { createFirestoreAccountDeletionJobStore } from "@/db/account-deletions";
 import { createFirestoreNotificationSubscriptionStore } from "@/db/notification-subscriptions";
 import { createFirestoreTaskStore } from "@/db/v1-tasks";
 import { createFirestorePersonalWorkspaceStore } from "@/db/personal-workspace";
-import { createV1PersonalWorkspaceApi, createV1PersonalWorkspaceHandler } from "./v1-personal-workspace";
-import { createV1PersonalAgentGrantsApi, createV1PersonalAgentGrantsHandler } from "./v1-personal-agent-grants";
-import { createV1ProviderPreviewApi, createV1ProviderPreviewHandler } from "./v1-provider-preview";
+import { createV1PersonalWorkspaceHandler } from "./v1-personal-workspace";
+import { createV1PersonalAgentGrantsHandler } from "./v1-personal-agent-grants";
+import { createV1ProviderPreviewHandler } from "./v1-provider-preview";
 import { createFirestoreUserStore } from "@/db/users";
 import { VAPID_PUBLIC_KEY } from "@/shared/push";
 import { createFirebaseIdTokenVerifier } from "./firebase-id-token";
@@ -56,9 +57,9 @@ type V1Runtime = {
   identityApi: ReturnType<typeof createV1IdentityApi>;
   notificationSubscriptionsApi: ReturnType<typeof createV1NotificationSubscriptionsApi>;
   tasksApi: ReturnType<typeof createV1TasksApi>;
-  personalWorkspaceApi: ReturnType<typeof createV1PersonalWorkspaceApi>;
-  personalAgentGrantsApi: ReturnType<typeof createV1PersonalAgentGrantsApi>;
-  providerPreviewApi: ReturnType<typeof createV1ProviderPreviewApi>;
+  personalWorkspaceApi: ReturnType<typeof createPersonalApplication>['personalWorkspaceApi'];
+  personalAgentGrantsApi: ReturnType<typeof createPersonalApplication>['personalAgentGrantsApi'];
+  providerPreviewApi: ReturnType<typeof createPersonalApplication>['providerPreviewApi'];
 };
 
 let runtime: V1Runtime | null = null;
@@ -158,9 +159,7 @@ function getRuntime() {
       verifyCredentialToken: verifyIdToken.verifyToken,
       verifyIdToken,
     }),
-    personalWorkspaceApi: createV1PersonalWorkspaceApi({ workspace: personalWorkspaces, users, verifyIdToken }),
-    personalAgentGrantsApi: createV1PersonalAgentGrantsApi({ workspace: personalWorkspaces, users, verifyIdToken }),
-    providerPreviewApi: createV1ProviderPreviewApi({ users, verifyIdToken }),
+    ...createPersonalApplication({ workspace: personalWorkspaces, users, verifyIdToken }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,

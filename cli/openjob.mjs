@@ -32,6 +32,7 @@ import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope, writeRawPrivateFile } from "./lib/output.mjs";
 import { resolveCliProfile } from "./lib/profiles.mjs";
+import { runService } from "./lib/service.mjs";
 import { runApp } from "./lib/app.mjs";
 import { automaticUpdateNotice, checkForUpdates } from "./lib/updates.mjs";
 import packageJson from "./package.json" with { type: "json" };
@@ -127,7 +128,7 @@ const COMMAND_OPTIONS = new Map([
   ["invite join", new Set(OUTPUT_OPTIONS)],
 ]);
 
-if (process.argv[2] !== "app") process.once("SIGINT", () => process.exit(130));
+if (!["app", "server"].includes(process.argv[2])) process.once("SIGINT", () => process.exit(130));
 
 const HELP = `OpenJob
 
@@ -136,6 +137,7 @@ Usage:
 
 Local app and updates:
   openjob app [--port 5191] [--state-file PATH]   Run the packaged workspace prototype
+  openjob server [--port 5192] [--host 127.0.0.1|0.0.0.0]  Run the configured Node service
   openjob updates             Check the installed latest/dev channel (JSON)
   OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 
@@ -457,6 +459,7 @@ function inviteToken(raw) {
 
 /** @param {string[]} raw */
 async function main(raw) {
+  if (raw[0] === "server" && !raw.includes("--help")) return runService(raw.slice(1));
   if (raw[0] === "app" && !raw.includes("--help")) return runApp(raw.slice(1), packageJson);
   if (raw[0] === "updates" && !raw.includes("--help")) {
     if (raw.length !== 1) throw new CliError("usage_error", "Use openjob updates.", 2);

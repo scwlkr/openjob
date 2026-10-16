@@ -1,0 +1,42 @@
+name: openjob-local
+x-app: &app
+  image: openjob-local:pilot
+  build:
+    context: .
+    dockerfile: deployment/Dockerfile
+  init: true
+services:
+  demo:
+    <<: *app
+    profiles: [demo]
+    command: [node, openjob.mjs, app, --port, '5191', --state-file, /state/workspace.json, --listen-address, 0.0.0.0]
+    environment:
+      OPENJOB_CONTAINER_LOCAL_ONLY: '1'
+    ports: ['127.0.0.1:5191:5191']
+    volumes: [demo-state:/state]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:5191/__test/state-mode').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+  service:
+    <<: *app
+    profiles: [service]
+    command: [node, openjob.mjs, server, --host, 0.0.0.0, --port, '5192']
+    environment:
+      OPENJOB_PUBLIC_ORIGIN: ${OPENJOB_PUBLIC_ORIGIN:-http://127.0.0.1:5192}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+      FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
+      FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+      APPLE_SIGN_IN_SERVICE_ID: ${APPLE_SIGN_IN_SERVICE_ID:-}
+    ports: ['127.0.0.1:5192:5192']
+    healthcheck:
+      test: [CMD, node, app/service/healthcheck.mjs]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+volumes:
+  demo-state:

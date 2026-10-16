@@ -201,3 +201,11 @@ occupied slot returns `schedule_conflict`, exit6, without moving the Task.
 Human sessions only; seven-day maximum window, whole minutes5–480, explicit
 ISO time zones. Live provider calendars are not checked. Manual scheduling is
 unchanged. See [the workflow](../docs/PERSONAL_WORKSPACE.md#find-time-for-a-task).
+
+## Packaged app and portable server
+
+Full app tarballs include `openjob app` (explicit saved synthetic demo) and
+`openjob server` (Node/Firebase service setup, port5192 by default). The latter
+fails closed without separately approved Firebase inputs and never supplies a
+fixture login. It does not enable real providers/sending. See
+[portable setup](https://github.com/scwlkr/openjob/blob/main/docs/PORTABLE_SERVICE.md).

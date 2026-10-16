@@ -1,0 +1,7 @@
+# Allow only the built, reviewed npm package and Dockerfile into the build context.
+**
+!deployment/
+!deployment/Dockerfile
+!dist/
+!dist/npm/
+!dist/npm/**
