@@ -49,6 +49,12 @@ an account and `--cursor <opaque-cursor>` for the next message page. Account
 references and cursors are scoped to the authenticated owner and selected
 mailbox. This command uses the normal human profile; it rejects agent tokens.
 No live provider connection, credentials, synchronization or sending occurs.
+The separate `connectors` catalog reports adapter implementation status. The
+Gmail read adapter is listed as `not_connected`, with required consent and
+`liveExecutionEnabled: false`; it is not a selectable mailbox. Its implemented
+operations are message/label reads. Calendar, drafts, sending, history sync
+and reconnection remain unavailable. The CLI exposes no enable switch or
+provider credential input.
 
 The existing human profile also owns a personal workspace through the shared
 authenticated API. Web and CLI read and mutate the same server-owned records:

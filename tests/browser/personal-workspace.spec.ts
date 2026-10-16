@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { ProviderPreview } from "../../shared/provider-contracts";
 
 test("authenticated personal tasks and calendar persist through the real bearer API", async ({ page }, testInfo) => {
   const marker = `Personal task ${Date.now()}`;
@@ -134,7 +135,20 @@ test("authenticated provider preview isolates accounts, pages messages and expos
   await expect(page.getByTestId("provider-status")).toContainText("Ready (synthetic)");
   const refreshed = page.waitForResponse((response) => response.url().includes("/api/v1/workspace/provider-preview") && response.request().method() === "GET");
   await page.getByRole("button", { name: "Refresh preview", exact: true }).click();
-  expect((await refreshed).status()).toBe(200);
+  const previewResponse = await refreshed;
+  expect(previewResponse.status()).toBe(200);
+  const previewBody = await previewResponse.json() as { data: ProviderPreview };
+  expect(previewBody.data.connectors).toHaveLength(1);
+  expect(previewBody.data.connectors[0]).toMatchObject({ provider: "gmail", adapter: "gmail-rest-read", status: "not_connected", consent: "required", liveExecutionEnabled: false, implementedOperations: ["mail.read", "mail.labels"] });
+  const connections = page.getByRole("region", { name: "Provider connections", exact: true });
+  await expect(connections).toContainText("Implemented · not connected");
+  await expect(connections).toContainText("Gmail Mail-read consent required");
+  await expect(connections).toContainText("live execution disabled");
+  await expect(connections).toContainText("Gmail consent is separate from your OpenJob sign-in");
+  await expect(connections).toContainText("Read messages, Read labels");
+  await expect(connections.getByRole("button")).toHaveCount(0);
+  await expect(connections.getByRole("textbox")).toHaveCount(0);
+  expect((await connections.innerText()).includes("@")).toBe(false);
   await expect(page.getByTestId("provider-message")).toHaveCount(2);
   await expect(page.getByText(/Fixed example snapshot time:/)).toBeVisible();
   const capabilities = page.getByRole("region", { name: "Provider status" });
@@ -181,6 +195,7 @@ test("authenticated provider preview isolates accounts, pages messages and expos
     const value = await page.getByRole("option", { name: label }).getAttribute("value");
     await account.selectOption(value!);
     await expect(page.getByTestId("provider-status")).toContainText(state);
+    await expect(page.getByRole("region", { name: "Provider connections", exact: true })).toContainText("live execution disabled");
     await expect(page.getByTestId("provider-sync")).toContainText("Preview sync blocked");
     await expect(page.getByTestId("provider-message")).toHaveCount(0);
     await expect(page.getByTestId("provider-event")).toHaveCount(0);
@@ -201,6 +216,7 @@ test("provider preview remains usable at tablet and phone widths", async ({ page
   for (const [width, label] of [[820, "tablet"], [390, "phone"]] as const) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByTestId("provider-message")).toHaveCount(2);
+    await expect(page.getByRole("region", { name: "Provider connections", exact: true })).toContainText("Gmail Mail-read consent required");
     await page.getByTestId("provider-message").first().click();
     await expect(page.getByRole("region", { name: "Synthetic message reader" })).toContainText("Thread reference");
     await page.getByRole("button", { name: "Next messages", exact: true }).click();

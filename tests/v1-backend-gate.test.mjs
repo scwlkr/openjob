@@ -412,6 +412,9 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(previewResponse.status, 200); await validate(previewResponse, previewPath, "get");
     const preview = (await previewResponse.json()).data;
     assert.equal(preview.mode, "synthetic");
+    assert.deepEqual(preview.connectors.map(connector => [connector.provider, connector.status, connector.consent, connector.liveExecutionEnabled]), [["gmail", "not_connected", "required", false]]);
+    assert.ok(preview.connectors[0].implementedOperations.includes("mail.read"));
+    assert.ok(preview.connectors[0].unsupportedOperations.includes("mail.send"));
     assert.ok(preview.accounts.length >= 2);
     assert.ok(preview.messages.length > 0);
     const foreignPreview = await request({ actor: "memberUser", method: "GET", path: `${previewPath}?accountId=${encodeURIComponent(preview.selectedAccountId)}` });

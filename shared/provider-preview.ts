@@ -96,7 +96,7 @@ export async function createProviderPreview({ ownerId, accountId, cursor }: { ow
   const selectedAccountId = accountId ?? ownedAccounts[0].id; const { scope, account } = await selection(ownerId, selectedAccountId);
   if (account.status !== "ready") {
     if (cursor !== undefined) fail("invalid_cursor", "Unavailable accounts have no message pages");
-    return { mode: "synthetic", accounts: ownedAccounts, selectedAccountId, messages: [], folders: [], calendars: [], events: [], nextCursor: null, syncCursor: encode({ version: 1, mode: "delta", owner: scope, account: selectedAccountId, position: 0 }) };
+    return { mode: "synthetic", connectors: [], accounts: ownedAccounts, selectedAccountId, messages: [], folders: [], calendars: [], events: [], nextCursor: null, syncCursor: encode({ version: 1, mode: "delta", owner: scope, account: selectedAccountId, position: 0 }) };
   }
-  return { mode: "synthetic", accounts: ownedAccounts, selectedAccountId, ...await adapter.listMessages({ ownerId, accountId: selectedAccountId, cursor }) };
+  return { mode: "synthetic", connectors: [], accounts: ownedAccounts, selectedAccountId, ...await adapter.listMessages({ ownerId, accountId: selectedAccountId, cursor }) };
 }

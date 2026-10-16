@@ -877,7 +877,7 @@ export interface paths {
         };
         /**
          * Read an owner-scoped synthetic provider adapter preview
-         * @description Human Firebase identity only. Invented provider adapter accounts, capabilities, account-qualified references and paginated records. No real credentials, provider network requests, writes or sending. Fixture headers and all agent credentials are denied or ignored; no human authentication fallback for agent tokens.
+         * @description Human Firebase identity only. Invented provider adapter accounts, capabilities, account-qualified references and paginated records. No real credentials, provider network requests, writes or sending. Fixture headers and all agent credentials are denied or ignored; no human authentication fallback for agent tokens. The separate connector catalog describes the implemented Gmail read adapter as not_connected, consent required and live execution disabled. It never adds an unconnected account or permits provider execution.
          */
         get: operations["getProviderPreview"];
         put?: never;
@@ -892,6 +892,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProviderConnectorStatus: {
+            /** @constant */
+            provider: "gmail";
+            /** @constant */
+            adapter: "gmail-rest-read";
+            /** @constant */
+            status: "not_connected";
+            /** @constant */
+            consent: "required";
+            /** @constant */
+            liveExecutionEnabled: false;
+            implementedOperations: ("mail.read" | "mail.labels")[];
+            unsupportedOperations: ("calendar.read" | "calendar.write" | "mail.draft" | "mail.send" | "sync.history" | "reconnect")[];
+            message: string;
+        };
         ProviderPreviewCapability: {
             available: boolean;
             reason: string;
@@ -974,7 +989,8 @@ export interface components {
             calendars: components["schemas"]["ProviderPreviewCalendar"][];
             events: components["schemas"]["ProviderPreviewEvent"][];
             nextCursor: string | null;
-            syncCursor: string;
+            syncCursor: string | null;
+            connectors: components["schemas"]["ProviderConnectorStatus"][];
         };
         PersonalAgentGrantInput: {
             name: string;
@@ -4761,7 +4777,29 @@ export interface operations {
                      *         "calendars": [],
                      *         "events": [],
                      *         "nextCursor": null,
-                     *         "syncCursor": "pv1.synthetic_example"
+                     *         "syncCursor": "pv1.synthetic_example",
+                     *         "connectors": [
+                     *           {
+                     *             "provider": "gmail",
+                     *             "adapter": "gmail-rest-read",
+                     *             "status": "not_connected",
+                     *             "consent": "required",
+                     *             "liveExecutionEnabled": false,
+                     *             "implementedOperations": [
+                     *               "mail.read",
+                     *               "mail.labels"
+                     *             ],
+                     *             "unsupportedOperations": [
+                     *               "calendar.read",
+                     *               "calendar.write",
+                     *               "mail.draft",
+                     *               "mail.send",
+                     *               "sync.history",
+                     *               "reconnect"
+                     *             ],
+                     *             "message": "Read-only Gmail adapter implemented; no approved account or provider read consent. Live execution disabled."
+                     *           }
+                     *         ]
                      *       }
                      *     }
                      */
