@@ -3,7 +3,7 @@ import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { basename, resolve, dirname } from 'node:path';
-import { publicationIdentity, verifyRegistryOwner, verifyPublicationManifest, publicationDecision, verifyPublishingEnvironment, PUBLISH_ENVIRONMENTS, assertPublicationRuntime, verifyPublishedRelease } from '../distribution/publication.mjs';
+import { publicationIdentity, verifyRegistryOwner, verifyPublicationManifest, publicationDecision, verifyPublishingEnvironment, PUBLISH_ENVIRONMENTS, assertPublicationRuntime, verifyPublishedRelease, stableApprovalComment, verifyStableArtifactApproval } from '../distribution/publication.mjs';
 
 const [mode, target] = process.argv.slice(2);
 if (!['prepare', 'publish'].includes(mode) || !target) throw new Error('Use npm-publication.mjs prepare DIST_DIRECTORY | publish PLAN_JSON.');
@@ -59,7 +59,7 @@ if (mode === 'prepare') {
   const plan = { identity, filename: basename(packed.filename), integrity: digest(await readFile(resolve(dirname(directory), packed.filename))) };
   await writeFile(resolve(dirname(directory), 'publication.json'), JSON.stringify(plan, null, 2) + '\n');
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `channel=${identity.channel}\nenvironment=${identity.environment}\nversion=${identity.version}\nartifact_name=openjob-npm-publication-${identity.source}-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}\n`);
-  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `## Exact npm artifact awaiting publication\n\nPackage: ${identity.name}@${identity.version}\n\nChannel: ${identity.channel}; source: ${identity.source}; ref: ${identity.ref}\n\nIntegrity: ${plan.integrity}\n\nThe publish job uses these same bytes; stable requires the owner environment approval.\n`);
+  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `## Exact npm artifact awaiting publication\n\nPackage: ${identity.name}@${identity.version}\n\nChannel: ${identity.channel}; source: ${identity.source}; ref: ${identity.ref}\n\nIntegrity: ${plan.integrity}\n\nThe publish job uses these same bytes. Stable owner approval must include this exact comment: ${stableApprovalComment(identity, plan.integrity)}\n`);
   console.log(JSON.stringify({ ...plan, published: false }));
 } else {
 
@@ -72,6 +72,10 @@ if (mode === 'prepare') {
   const version = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number);
   if (version[0] < 11 || version[0] === 11 && (version[1] < 5 || version[1] === 5 && version[2] < 1)) throw new Error('OIDC publication requires npm11.5.1+.');
   await verifyEnvironments();
+  if (identity.channel === 'latest') {
+    if (!/^[1-9][0-9]*$/.test(process.env.GITHUB_RUN_ID ?? '')) throw new Error('Missing exact workflow run identity.');
+    verifyStableArtifactApproval(identity, plan.integrity, await github(`/environments/${identity.environment}`), await github(`/actions/runs/${process.env.GITHUB_RUN_ID}/approvals`));
+  }
   const decision = publicationDecision(identity, plan.integrity, await registry(), await registry(`/${encodeURIComponent(identity.version)}`));
   freshSource();
   if (decision === 'publish') {

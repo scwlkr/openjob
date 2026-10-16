@@ -1,3 +1,43 @@
+# WLK-307 final disabled proposal and local candidate
+
+Prepared on codex/wlk-307-npm-publishing from main714e850. Live read-only check:
+main unchanged714e850, no competing open PR. No environments/variables/trust
+records/credentials created; no activation, release, tag, deployment or publish.
+Exact access proposal: docs/NPM_PUBLISHING_PROPOSAL.md. Both workflow jobs disabled
+unless absent OPENJOB_NPM_PUBLISHING_ENABLED=true. Two package-level OIDC bindings
+scwlkr/openjob / npm-publish.yml / openjob-npm-dev(main) and
+openjob-npm-release(v*). Dev auto-publication after activation; stable owner review.
+Main/workflow writers gain package-level publication authority across npm tags.
+GitHub contents/actions read, publish-only id-token write; no long-lived token.
+
+GitHub REST does not expose admin-bypass configuration. Owner must disable it in
+UI; code independently reads exact run approval history and requires scwlkr
+ID206951249 approved exact environment ID/name + version/SHA512 comment. Any
+rejection for that environment fails closed, requires new run. Review caught
+mixed-history approval bug; fixed with both-order regressions. Real OIDC remains
+unverified until owner-authorized setup. No claims that disabled policy tests
+prove live protection settings. Sealed attempt-specific artifacts, current-ref /
+monotonic registry guards, no write retries or tag repair.
+
+Candidate /tmp/openjob-307-candidate/scwlkr-openjob-0.3.8.tgz from clean checkpoint
+578aa44c8587376c5bf07bd45e54973838abd468, metadata candidate-unpublished/v0.3.8,
+registryVerified:false; not a valid stable publication plan. SHA256
+3c9e99d26828cfd4007eaed9505b978f77d6c24495b91cc1bc18e371beddc06c.
+54 files compared against reviewed WLK306 planner archive: ONLY package.json
+changed; all UI/API/persistence/planner bytes identical. Clean-prefix install
+/tmp/openjob-307-candidate-prefix, restart suite7/7, existingCLI availability1/1,
+real installed assets/API/create-schedule-complete/owner isolation/HostOrigin/
+shutdown PASS. Candidate does not require source checkout. Policy+distribution17
+PASS, tsc noEmit PASS, secret check PASS. Native/device/fullsuite not claimed.
+No candidate rebuild for publisher-only changes; preserved reviewed bytes.
+
+Initial approved npm archives and saved demos5193/5194/5195 retained. WLK302 cloud
+TLS/login remains unrecovered and excluded. WLK307 stays InProgress pending owner
+persistent-access approval + live setup validation. Draft PR only, do not merge
+or activate before owner decision. Prior durable history follows.
+
+---
+
 # WLK-307 publishing preparation — NO ACCESS/ACTIVATION/PUBLICATION
 
 Branch codex/wlk-307-npm-publishing from reviewed main714e850. User requested

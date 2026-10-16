@@ -50,7 +50,8 @@ token is read-only; no repository secret or npm token is added. Use hosted Node2
   separate approval per push.
 - Stable: published, non-draft, non-prerelease GitHub release only; exact
   `v<package-version>` tag in main history. Owner reviews source/version/SHA512
-  and uploaded tarball, then approves the stable environment job. Creating
+  and uploaded tarball, then approves the stable environment job with the exact
+  comment printed in the build summary: `Approve @scwlkr/openjob@VERSION SHA512`. Creating
   that release is a separate human decision. Live release/tag is rechecked.
 
 The build seals immutable bytes before environment approval. Publish downloads
@@ -60,8 +61,16 @@ workflow; final current-ref/monotonic-version/registry checks reject stale runs,
 downgrades and conflicting existing versions. Exact version+integrity+tag match
 is a no-op. No automatic tag repair or write retry. Manual publishers are outside
 that lock. Read-only checks require both environments/ref rules and stable
-owner review/admin-bypass-off before any environment job can run; unknown fields
-fail closed. Real protection/OIDC behavior needs approved live setup to verify.
+owner reviewer configuration before any environment job can run. GitHub's public
+REST environment schema does not expose the administrator-bypass setting: disable
+it in the UI and verify it there. Independently, publication reads this exact
+workflow run's approval history and requires scwlkr's approved record for the
+same environment ID/name with the exact version/integrity comment. A bypass or
+an older artifact's approval cannot satisfy that digest check. Any rejection for
+that environment in the run fails closed, even alongside approval; start a new
+reviewed run rather than relying on unordered history. Real protection/
+OIDC behavior needs approved live setup to verify.
+[GitHub run approval history](https://docs.github.com/en/rest/actions/workflow-runs#get-the-review-history-for-a-workflow-run)
 [GitHub environment behavior](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 
 ## Minimal owner setup after proposal review

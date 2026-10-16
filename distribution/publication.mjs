@@ -40,7 +40,6 @@ export function verifyPublishingEnvironment(channel, environment, policies) {
   const expected = channel === 'dev' ? { name: 'main', type: 'branch' } : { name: 'v*', type: 'tag' };
   if (policies?.total_count !== 1 || policies.branch_policies?.length !== 1 || policies.branch_policies[0].name !== expected.name || policies.branch_policies[0].type !== expected.type) fail('Publishing environment has unexpected allowed refs.');
   if (channel === 'latest') {
-    if (environment.can_admins_bypass !== false) fail('Stable approval cannot permit administrator bypass.');
     const rule = environment.protection_rules?.find(item => item.type === 'required_reviewers');
     if (!rule || rule.reviewers?.length !== 1 || rule.reviewers[0].type !== 'User' || rule.reviewers[0].reviewer?.id !== 206951249 || rule.reviewers[0].reviewer.login !== 'scwlkr') fail('Stable publication requires the owner environment reviewer.');
   }
@@ -51,4 +50,14 @@ export function assertPublicationRuntime(env) {
 }
 export function verifyPublishedRelease(identity, release, expectedId) {
   if (!Number.isSafeInteger(expectedId) || expectedId < 1 || release?.id !== expectedId || release.tag_name !== identity.ref.slice('refs/tags/'.length) || release.draft !== false || release.prerelease !== false || !release.published_at) fail('The approved stable release is no longer published at its exact tag.');
+}
+
+export function stableApprovalComment(identity, integrity) {
+  return `Approve ${identity.name}@${identity.version} ${integrity}`;
+}
+export function verifyStableArtifactApproval(identity, integrity, environment, approvals) {
+  const comment = stableApprovalComment(identity, integrity);
+  const forEnvironment = item => item.environments?.some(env => env.id === environment?.id && env.name === environment?.name);
+  if (Array.isArray(approvals) && approvals.some(item => item.state === 'rejected' && forEnvironment(item))) fail('This run contains a rejected stable environment review; start a new reviewed run.');
+  if (!Number.isSafeInteger(environment?.id) || environment.name !== PUBLISH_ENVIRONMENTS.latest || !Array.isArray(approvals) || !approvals.some(item => item.state === 'approved' && item.user?.id === 206951249 && item.user.login === 'scwlkr' && item.comment === comment && item.environments?.some(env => env.id === environment.id && env.name === environment.name))) fail('Stable publication requires an explicit owner approval comment for this exact artifact in this run.');
 }
