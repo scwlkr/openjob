@@ -1,8 +1,6 @@
 import { PERSONAL_MAIL_RESOURCES } from "./personal-mail-examples.ts";
-export type PersonalAgentScope = "tasks:read" | "tasks:write" | "calendar:read" | "calendar:write" | "mail:read" | "mail:draft" | "mail:simulate-send";
-export type PersonalAgentResource = "tasks:personal" | "calendar:personal" | typeof PERSONAL_MAIL_RESOURCES[number];
-export type PersonalAgentInput = { name: string; scopes: PersonalAgentScope[]; resourceIds: PersonalAgentResource[] };
-export type PersonalAgentGrant = PersonalAgentInput & { id: string; ownerUserId: string; createdAt: string; expiresAt: string; revoked: boolean };
+import type { PersonalAgentScope, PersonalAgentResource, PersonalAgentInput, PersonalAgentGrant } from "./personal-workspace-contracts.ts";
+export type { PersonalAgentScope, PersonalAgentResource, PersonalAgentInput, PersonalAgentGrant } from "./personal-workspace-contracts.ts";
 export type StoredPersonalAgentGrant = PersonalAgentGrant & { tokenHash: string };
 export const PERSONAL_AGENT_ID = /^agt_[a-f0-9]{32}$/;
 export const PERSONAL_AGENT_TOKEN = /^oj_personal_([A-Za-z0-9_-]{1,128})\.(agt_[a-f0-9]{32})\.([A-Za-z0-9_-]{43})$/;

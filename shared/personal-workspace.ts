@@ -3,7 +3,8 @@ import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspac
 import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
 import { createWorkspaceEngine } from "./workspace-engine.ts";
 
-export type PersonalWorkspaceCommand = WorkspaceCommand | { type: "mail.examples.add" };
+import type { PersonalWorkspaceCommand } from "./personal-workspace-contracts.ts";
+export type { PersonalWorkspaceCommand } from "./personal-workspace-contracts.ts";
 export type { PersonalMailExamplesResult } from "./personal-mail-examples.ts";
 
 export type PersonalWorkspaceStore = {

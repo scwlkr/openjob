@@ -1,3 +1,4 @@
+import { createNativePersonalWorkspaceApi } from "../personal-workspace-api";
 import {
   readNativeApplicationId,
   type OpenJobRuntimeConfig,
@@ -71,6 +72,7 @@ export async function purgeNativeAuthStateWithoutRuntimeConfig() {
 
 export function createNativeAuthController(config: OpenJobRuntimeConfig) {
   const api = createNativeOpenJobApi({ apiBaseUrl: config.apiBaseUrl });
+  const personalWorkspace = createNativePersonalWorkspaceApi({ apiBaseUrl: config.apiBaseUrl });
   const qaPasswordTenantId =
     config.environment === "preview" ? config.qaPasswordTenantId : null;
   const firebase = createFirebaseAuthClient({
@@ -98,6 +100,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
   registerLocalDomainPurgeBoundary(() => domainCache.purge());
 
   return new NativeAuthCoordinator({
+    ...personalWorkspace,
     claimUsername: (token, username) =>
       api.claimUsername(token, username),
     clearCleanupPending: () => store.clearCleanupPending(),

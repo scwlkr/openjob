@@ -246,6 +246,26 @@ test("bootstraps the branded preview shell from its embedded bundle", async () =
   expect(screen.queryByText("OPENJOB")).not.toBeOnTheScreen();
 });
 
+test("opens personal workspace through the authenticated app and preserves its editor across Groups", async () => {
+  const personal = {
+    readPersonalWorkspace: jest.fn(async () => ({ accounts: [], messages: [], tasks: [], calendars: [], events: [], drafts: [], sent: [], agents: [], activity: [] })),
+    commandPersonalWorkspace: jest.fn(async () => undefined),
+    listPersonalAgents: jest.fn(async () => []),
+    revokePersonalAgent: jest.fn(async () => undefined),
+  };
+  await renderNativeApp(previewConfig, authController({ getPersonalWorkspaceController: () => personal }));
+  await screen.findByRole("header", { name: "Personal workspace" });
+  await waitFor(() => expect(screen.queryByText("Working online…")).toBeNull());
+  expect(personal.readPersonalWorkspace).toHaveBeenCalledWith("usr_one");
+  await fireEvent.press(screen.getByRole("button", { name: "Tasks" }));
+  await fireEvent.changeText(screen.getByLabelText("New task"), "Keep my native draft");
+  await fireEvent.press(screen.getByRole("button", { name: "Existing Groups" }));
+  await screen.findByRole("header", { name: "Choose a Group" });
+  await fireEvent.press(screen.getByRole("button", { name: "Personal workspace" }));
+  expect(screen.getByLabelText("New task")).toHaveDisplayValue("Keep my native draft");
+  expect(personal.commandPersonalWorkspace).not.toHaveBeenCalled();
+});
+
 test("offers Retry and sign out when bootstrap fails fatally", async () => {
   const controller = authController();
   const diagnostics = diagnosticsController();

@@ -1,3 +1,4 @@
+import type { NativePersonalWorkspaceApi, NativePersonalWorkspaceController } from "../personal-workspace-contracts";
 import type {
   NativeCachedTaskList,
   NativeGroup,
@@ -227,7 +228,7 @@ export class OpenJobApiError extends Error {
   }
 }
 
-export type NativeAuthDependencies = {
+export type NativeAuthDependencies = Partial<NativePersonalWorkspaceApi> & {
   claimUsername(
     idToken: string,
     username: string,
@@ -1087,6 +1088,41 @@ export class NativeAuthCoordinator implements NativeTaskListController {
         });
       }) ?? (() => undefined)
     );
+  }
+
+  private readonly personalWorkspaceFacade: NativePersonalWorkspaceController = Object.freeze({
+    readPersonalWorkspace: (owner: string) => this.withPersonalSession(owner, token => this.dependencies.readPersonalWorkspace!(token, owner)),
+    commandPersonalWorkspace: (owner: string, input: Parameters<NativePersonalWorkspaceController["commandPersonalWorkspace"]>[1]) => this.withPersonalSession(owner, token => this.dependencies.commandPersonalWorkspace!(token, input)),
+    listPersonalAgents: (owner: string) => this.withPersonalSession(owner, token => this.dependencies.listPersonalAgents!(token, owner)),
+    revokePersonalAgent: (owner: string, id: string) => this.withPersonalSession(owner, token => this.dependencies.revokePersonalAgent!(token, id)),
+  });
+
+  getPersonalWorkspaceController(): NativePersonalWorkspaceController | undefined {
+    return this.dependencies.readPersonalWorkspace && this.dependencies.commandPersonalWorkspace && this.dependencies.listPersonalAgents && this.dependencies.revokePersonalAgent ? this.personalWorkspaceFacade : undefined;
+  }
+
+  private async withPersonalSession<T>(owner: string, operation: (token: string) => Promise<T>): Promise<T> {
+    const epoch = this.operationEpoch;
+    const guard = () => {
+      this.assertCurrentOperation(epoch);
+      if (!owner || this.activeResult?.user.userId !== owner || this.activeResult.provisional) throw new ProviderSignInError("revoked");
+      if (!this.getPersonalWorkspaceController()) throw new ProviderSignInError("unavailable");
+    };
+    guard();
+    const session = await this.currentSession(epoch);
+    guard();
+    try {
+      const identity = await this.dependencies.getMe(session.idToken);
+      guard();
+      if (identity.userId !== owner) throw new ProviderSignInError("revoked");
+      const result = await operation(session.idToken);
+      guard();
+      return result;
+    } catch (error) {
+      // A late failure from an old identity cannot revoke or act on the new one.
+      guard();
+      throw error;
+    }
   }
 
   async listGroups() {

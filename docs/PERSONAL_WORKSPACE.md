@@ -152,3 +152,27 @@ tools; the private owner walkthrough has portable captures. No deployment,
 Firestore publish, auth/security setting change or credential creation occurred.
 A read-only database metadata check could not authenticate, so live edition and
 runtime behavior remain unverified; the adapter preserves the existing REST API.
+
+## Native personal workspace
+
+The Expo app opens **Personal workspace** for confirmed signed-in users.
+**Existing Groups** retains its read-only Task List. Personal Mail, Tasks, Calendar
+and Agents use the same authenticated API and shared commands as web/CLI.
+Mail starts empty; **Add invented examples** explicitly adds fixture mailboxes.
+Create and schedule a private Task from a message, complete it, open its linked
+Calendar block and return to the exact source to save/edit a reply. Compose and
+**Simulate send** save fixture state only; actual delivery is disabled.
+
+Tasks and manual Calendar blocks support create/edit/delete, with confirmation
+for deletion. Schedule fields accept UTC ISO timestamps (for example
+`2027-06-02T14:00:00Z`); impossible dates and nonincreasing slots are rejected.
+Module and Group navigation preserve unfinished input. Owner/session changes
+clear it; provisional/offline sessions must restore before personal access.
+Agents shows effective scopes/resources, expiry, activity and confirmed revoke.
+Use the existing CLI for agent issuance; no secret is displayed in the app.
+
+This surface is online-only, with no personal disk cache, offline mutation queue
+or automatic mutation retry. After an uncertain request, reconnect and Refresh
+to inspect saved state before changing it again. Native controller, HTTP and
+component checks do not prove device keyboards, backgrounding or native storage.
+Cross-platform device/release gates in ADR0017 still apply.
