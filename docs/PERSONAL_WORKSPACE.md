@@ -46,8 +46,12 @@ activation is human-only. Existing Task and Calendar commands are unchanged.
 
 ## Provider preview
 
-The Mail preview reads synthetic account, message, folder and calendar data
-through the authenticated provider-preview API and existing CLI. Account-qualified
+The Mail preview reads synthetic examples and explicitly labeled mock Gmail/Outlook
+protocol accounts through the authenticated provider-preview API and existing CLI.
+In the cloud personal demo, select **Mock Outlook protocol · Alex** to read mapped
+Graph text/folder pages, then create a title-only Task. These are invented HTTP
+responses, not a live Microsoft connection. Consent-required/revoked accounts
+return no Mail; switching to Sam exposes only Sam's accounts. Account-qualified
 references keep upstream IDs distinct across owners and multiple accounts from
 the same provider. The UI exposes capability limits and connection/sync states;
 it cannot reconnect, send or write provider records. A preview Calendar is not

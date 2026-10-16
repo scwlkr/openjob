@@ -119,6 +119,11 @@ messages without resetting existing Tasks, Calendars or grants. The shared Mail
 controls above also work here: create a private linked Task, schedule/complete
 it, save/edit a reply and inspect local Simulated Sent. The **Mail preview** tab
 remains an independent, read-only provider example with title-only Task creation.
+The built personal demo also offers **Mock Outlook protocol · Alex/Sam** and mock
+Gmail accounts, using real read mappers with injected invented HTTP responses.
+Select Outlook, read/paginate its plain text and create a title-only Task. The
+consent-required example makes no broker/provider reads. No Microsoft sign-in or
+live mailbox access is configured; the Google-only mock OAuth path is unchanged.
 Named personal agents can be scoped to each invented mailbox. See the
 [authenticated workspace guide](PERSONAL_WORKSPACE.md) for API/CLI commands and
 scope rules. This does not configure live Mail or change Firebase sign-in.
