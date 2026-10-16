@@ -1,5 +1,6 @@
 import type { AccountDeletionStatusReceipt } from "./openjob-contracts";
 import { isOpenJobTimestamp } from "./openjob-timestamp";
+import { clearBrowserOfflineWorkspace } from "./workspace/offline-browser-store";
 
 export const SELECTED_GROUP_KEY = "openjob:selected-group-id";
 export const TASK_EDITOR_DRAFT_KEY = "openjob:pending-task-editor";
@@ -239,12 +240,13 @@ export function clearAccountDeletionStatusReceipt(
   return true;
 }
 
-export function clearBrowserPrivateState({
+export async function clearBrowserPrivateState({
   preserveTaskDraft = false,
 }: {
   preserveTaskDraft?: boolean;
 } = {}) {
   if (typeof window === "undefined") return;
+  const offlinePurge = clearBrowserOfflineWorkspace();
   let failure: unknown;
   try {
     window.localStorage.removeItem(SELECTED_GROUP_KEY);
@@ -258,5 +260,6 @@ export function clearBrowserPrivateState({
       failure ??= error;
     }
   }
+  try { await offlinePurge; } catch (error) { failure ??= error; }
   if (failure) throw failure;
 }

@@ -176,3 +176,65 @@ async function selectNotificationGroup(notification) {
 self.addEventListener("notificationclick", (event) => {
   event.waitUntil(selectNotificationGroup(event.notification));
 });
+
+// Public shell only. Private API responses and credentials never enter Cache Storage.
+const WORKSPACE_SHELL_CACHE = "openjob-workspace-shell-v1";
+const SHELL_ASSET_LIMIT = 192;
+const SHELL_BYTE_LIMIT = 16 * 1024 * 1024;
+function publicShellUrl(value, base = self.location.origin) {
+  const url = new URL(value, base);
+  if (url.origin !== self.location.origin || url.search || url.hash || /\/(?:api|auth|__test)(?:\/|$)/i.test(url.pathname)) return null;
+  if (url.pathname === "/workspace") return url;
+  if (/^\/(?:assets|_next\/static)\/[A-Za-z0-9_./-]*[.-][A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|svg|png|webp)$/u.test(url.pathname)) return url;
+  return null;
+}
+async function prepareWorkspaceShell() {
+  const queue = [new URL("/workspace", self.location.origin)];
+  const seen = new Set(); const responses = []; let bytes = 0;
+  while (queue.length) {
+    const url = queue.shift();
+    if (seen.has(url.href)) continue;
+    seen.add(url.href);
+    if (seen.size > SHELL_ASSET_LIMIT) throw new Error("Public shell is too large.");
+    const response = await fetch(url.href, { credentials: "omit", redirect: "error", cache: "no-store", headers: { "accept": url.pathname === "/workspace" ? "text/html" : "*/*" } });
+    if (!response.ok || response.type === "opaque" || response.redirected || response.headers.has("set-cookie")) throw new Error("Public shell unavailable.");
+    const buffer = await response.clone().arrayBuffer(); bytes += buffer.byteLength;
+    if (buffer.byteLength > 2 * 1024 * 1024 || bytes > SHELL_BYTE_LIMIT) throw new Error("Public shell is too large.");
+    const contentType = response.headers.get("content-type") ?? "";
+    if (url.pathname === "/workspace" && !contentType.includes("text/html")) throw new Error("Public shell unavailable.");
+    responses.push([url.href, response]);
+    if (/html|javascript|css/.test(contentType)) {
+      const text = new TextDecoder().decode(buffer);
+      for (const match of text.matchAll(/["'(]([^"'()\s<>]+\.(?:js|css|woff2?|svg|png|webp))["')]/g)) {
+        const resource = /^(?:assets|_next\/static)\//.test(match[1]) ? `/${match[1]}` : match[1];
+        const asset = publicShellUrl(resource, url.href);
+        if (asset && asset.pathname !== "/workspace" && !seen.has(asset.href)) queue.push(asset);
+      }
+    }
+  }
+  const cache = await caches.open(WORKSPACE_SHELL_CACHE);
+  // Publish the HTML last so a failed asset write preserves the previous prepared page.
+  for (const [url, response] of responses.reverse()) await cache.put(url, response);
+  for (const request of await cache.keys()) if (!seen.has(request.url)) await cache.delete(request);
+}
+self.addEventListener("message", event => {
+  if (event.data?.type !== "openjob:prepare-offline-shell") return;
+  event.waitUntil(prepareWorkspaceShell().then(
+    () => event.ports?.[0]?.postMessage({ type: "openjob:offline-shell-ready" }),
+    () => event.ports?.[0]?.postMessage({ type: "openjob:offline-shell-failed" }),
+  ));
+});
+self.addEventListener("fetch", event => {
+  const request = event.request;
+  if (request.method !== "GET" || request.headers.has("authorization")) return;
+  const url = publicShellUrl(request.url);
+  if (!url) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(WORKSPACE_SHELL_CACHE);
+    if (url.pathname !== "/workspace") {
+      const cached = await cache.match(url.href); if (cached) return cached;
+    }
+    try { return await fetch(request); }
+    catch (error) { const cached = await cache.match(url.href); if (cached) return cached; throw error; }
+  })());
+});

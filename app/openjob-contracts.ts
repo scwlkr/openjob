@@ -123,6 +123,8 @@ export type AccountDeletionStatus =
 export type AuthenticationMethod = SignInMethod | "qa-password";
 
 export type AuthSession = {
+  /** Local cache identity only; server authorization always verifies the ID token. */
+  localIdentity?: { uid: string; tenantId: string | null };
   signInMethod: AuthenticationMethod;
   getIdToken(): Promise<string>;
 };

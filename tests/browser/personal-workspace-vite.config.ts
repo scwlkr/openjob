@@ -15,7 +15,7 @@ export default defineConfig({
     __OPENJOB_QA_PASSWORD_AUTH__: "null",
   },
   server: { host: "127.0.0.1", port: 4178, strictPort: true, proxy: {
-    "/api/v1/workspace": { target: "http://127.0.0.1:4181", changeOrigin: false },
+    "/api/v1": { target: "http://127.0.0.1:4181", changeOrigin: false },
     "/__test": { target: "http://127.0.0.1:4181", changeOrigin: false },
   } },
 });

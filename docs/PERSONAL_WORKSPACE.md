@@ -205,7 +205,7 @@ conflicts are conservative: there is no automatic field merge. Source-Mail
 provenance stays server-owned and is preserved on surviving Tasks.
 
 Signing out/switching users or revocation/deletion purges private local state,
-including pending work. Mail, agent credentials, web/CLI offline editing,
+including pending work. Mail, agent credentials, CLI offline editing,
 background sync and provider Calendar writes are outside this slice. Real
 native durability, encryption bridges, rendering and keyboard behavior remain
 device acceptance work; no release is implied.
@@ -215,3 +215,32 @@ The human-only authenticated sync endpoint is
 `POST` accepts `{operationId,baseRevision,expiresAt,projection}` and acknowledges
 `{data:{operationId,revision}}`. Personal agent credentials cannot replace this
 domain. Existing command/snapshot endpoints remain unchanged.
+
+## Browser saved Tasks and Calendar
+
+The authenticated web workspace offers **Saved Tasks and Calendar** separately
+from the complete online Mail/source workflow. Refresh once while verified, then
+edit Tasks and Calendar offline. Pending batches use the same shared controller,
+revision checks and human-only API as native. Explicit sync and confirmed
+whole-domain conflict choices preserve uncertain operations; competing tabs use
+Web Locks and reject stale editor proposals without losing input.
+
+IndexedDB stores a strict Tasks/Calendar projection after transaction completion.
+Firebase UID+tenant is bound online to the verified OpenJob owner; restoration
+never chooses a last owner. Mail/source references, tokens and grants are excluded.
+Signout/switch/deletion/revocation purge private work and fence other tabs. Remote
+revocation is unverifiable while offline. Browser storage is not app-encrypted;
+eviction/private-mode restrictions can prevent durability. Unsupported storage
+keeps saved mode unavailable while preserving the online workflow.
+
+**Prepare offline page** explicitly caches bounded public code/assets using the
+existing notification service worker, without requesting notification permission.
+API/auth/Bearer responses are never cached. Full offline reload is verified in
+the [built isolated demo](WORKSPACE_DEMO.md#fresh-checkout-browser-offline-demo);
+production Vinext/Firebase offline bootstrap remains unverified.
+
+Mail optionally retains only authored unfinished composition/reply text in a
+separate owner-bound browser buffer. It survives offline reload and restores
+when online Mail loads again; no offline inbox or automatic submit/send is
+provided. Explicit save clears that authored buffer without clearing newer
+typing. Review the restored mailbox, recipient and content before saving.

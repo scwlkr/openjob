@@ -100,7 +100,7 @@ retrieval, durable restart, isolation, scope denial and revocation. Functional
 theme/responsive checks replace historical pixel comparisons under
 [the owner-approved prototype policy](PROTOTYPE_DELIVERY.md).
 
-Provider OAuth/sync/remote search/attachments, real sending, live provider integration and multi-user fixture hosting remain unimplemented. The authenticated workspace and native personal surfaces are separate from this loopback fixture. Native personal Tasks/Calendar have encrypted offline edits and explicit conflict review; web/CLI remain online-only. Native quick checks do not prove a device; device/store evidence remains a release requirement.
+Provider OAuth/sync/remote search/attachments, real sending, live provider integration and multi-user fixture hosting remain unimplemented. The authenticated workspace and native personal surfaces are separate from this loopback fixture. Native personal Tasks/Calendar have encrypted offline edits and explicit conflict review; the built personal web demo below exercises browser offline storage. CLI remains online-only. Native quick checks do not prove a device; device/store evidence remains a release requirement.
 
 ## Owner review outside this environment
 
@@ -149,3 +149,52 @@ There is no running device/emulator preview in this environment. Cloud tests and
 Metro exports do not establish native durability, encryption, keyboard or
 release acceptance. No deployment or new credentials are required for the
 isolated proof above.
+
+## Fresh-checkout browser offline demo
+
+Use an authorized cloud checkout with Node22.13 or newer (verified here with
+Node24.19/npm11.9). Inspect `package.json`, `native/package.json` and
+`native/patches` before installing: root postinstall runs native `npm ci`, whose
+postinstall applies the existing patch-package patches. From the checkout root:
+
+```sh
+npm ci
+npm run dev:personal-workspace -- --port 5191
+```
+
+Open `http://127.0.0.1:5191/workspace` in that environment's browser. This command
+builds the actual personal workspace UI with injected synthetic Alex/Sam auth
+and a loopback fake-Firestore API. No Firebase/Cloudflare account, environment
+secret, provider consent or seed step is needed. It is an environment-local
+demo, with no hosted sharing link. The existing saved workspace fixture file is
+untouched. Stop with Ctrl+C; its temporary build is removed and API state ends.
+Use a fresh browser context/origin after restarting, since synthetic server
+owner IDs are process-local and old browser bindings intentionally fail closed.
+
+1. Choose **Saved Tasks and Calendar**, then **Refresh from server** once. Choose
+   **Prepare offline page** and wait for confirmation. This caches public app
+   code only; it does not cache authenticated API responses or incoming Mail.
+2. Disconnect using browser network controls. Create a Task, schedule it with UTC
+   times, mark it complete and create a manual Calendar block. **Pending · saved
+   in browser** acknowledges a completed IndexedDB transaction. Reload offline:
+   the same restored local identity reopens saved work. A new/null identity
+   cannot select another owner's cache. Inspect at desktop and phone widths.
+3. Reconnect and explicitly **Sync saved changes**. Concurrent server changes
+   show local/current-server versions and require a confirmed choice. A second
+   tab's stale editor is rejected while preserving its input. No automatic merge
+   or background replay occurs. Signout/switching users removes pending work and
+   locks other tabs; remote revocation cannot be detected until reconnect.
+4. In online **Mail**, choose **Add invented examples**, opt into **Keep unfinished
+   drafts in this browser**, and type a new composition or reply. Only authored
+   fields are retained in a separate recovery buffer. Offline reload preserves
+   them; reconnect/reload and return to Mail to recover them. The inbox and saved
+   server draft bodies are not available after an offline reload. Nothing is
+   submitted or sent automatically; review mailbox/recipient before explicit save.
+
+The required browser lane runs this built demo against actual Chromium,
+IndexedDB, Web Locks and the service worker, including offline cold reload,
+reconnect, conflict review, two-tab stale edits/purge and authored recovery.
+It proves the isolated build, not production Vinext/Firebase offline bootstrap,
+browser encryption/eviction guarantees, native devices or live provider access.
+Browsers without IndexedDB/Web Locks retain the online workspace; saved mode is
+unavailable. Browser data is origin-local and is not application-encrypted.

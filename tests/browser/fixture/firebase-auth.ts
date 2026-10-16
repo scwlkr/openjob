@@ -20,6 +20,7 @@ type TestProvider = {
   providerId: "apple.com" | "google.com";
 };
 type TestUser = {
+  uid: string;
   tenantId: string | null;
   providerData: Array<{ providerId: TestProvider["providerId"] }>;
   getIdToken(): Promise<string>;
@@ -42,6 +43,7 @@ function userFor(method: AuthenticationMethod, fresh: boolean): TestUser {
       ? "apple.com"
       : "google.com";
   return {
+    uid: "browser_fixture_user",
     tenantId: method === "qa-password" ? "OpenJob-QA-Two-mvz9m" : null,
     providerData: multiProvider
       ? [{ providerId: "apple.com" }, { providerId: "google.com" }]

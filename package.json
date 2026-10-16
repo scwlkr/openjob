@@ -52,7 +52,8 @@
     "typecheck": "npm run cf:typegen && tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "dev:workspace": "node scripts/dev-workspace.mjs",
-    "workspace:cli": "node cli/workspace.mjs"
+    "workspace:cli": "node cli/workspace.mjs",
+    "dev:personal-workspace": "node scripts/dev-personal-workspace.mjs"
   },
   "dependencies": {
     "@napi-rs/keyring": "1.3.0",
