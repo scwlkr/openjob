@@ -803,7 +803,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved User; distinct personal agent credentials use their current stored owner, scopes and named resources with immediate revocation. No human credential fallback. Mail and Agents arrays remain empty. Fixture headers and Group credentials never authorize this API. */
+        /** @description Authenticated personal Tasks, Calendar and explicitly invented Mail examples. Human Firebase sessions use the resolved User; personal agent credentials require current stored scopes and named example-mailbox resources with immediate revocation. No human credential fallback. Only humans may add idempotent mail examples. Invented drafts and Simulated Sent never reach a provider; mail.send always403sending_disabled. Real provider-preview messages and credential data cannot be imported. Fixture headers and Group credentials never authorize this API. */
         get: operations["getPersonalWorkspace"];
         put?: never;
         post?: never;
@@ -822,7 +822,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Authenticated personal Tasks and Calendar. Human Firebase sessions use their resolved User; distinct personal agent credentials use their current stored owner, scopes and named resources with immediate revocation. No human credential fallback. Mail and Agents arrays remain empty. Fixture headers and Group credentials never authorize this API. */
+        /** @description Authenticated personal Tasks, Calendar and explicitly invented Mail examples. Human Firebase sessions use the resolved User; personal agent credentials require current stored scopes and named example-mailbox resources with immediate revocation. No human credential fallback. Only humans may add idempotent mail examples. Invented drafts and Simulated Sent never reach a provider; mail.send always403sending_disabled. Real provider-preview messages and credential data cannot be imported. Fixture headers and Group credentials never authorize this API. */
         post: operations["commandPersonalWorkspace"];
         delete?: never;
         options?: never;
@@ -837,10 +837,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
         get: operations["listPersonalAgentGrants"];
         put?: never;
-        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
         post: operations["createPersonalAgentGrant"];
         delete?: never;
         options?: never;
@@ -861,7 +861,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
+        /** @description Human Firebase identity only. Manage revocable 24-hour personal Task/Calendar/invented-Mail agent grants. Public metadata never contains token hashes. The token is returned once on creation. Existing Group agent credentials cannot manage or use these grants. */
         delete: operations["revokePersonalAgentGrant"];
         options?: never;
         head?: never;
@@ -993,15 +993,15 @@ export interface components {
         };
         PersonalAgentGrantInput: {
             name: string;
-            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
-            resourceIds: ("tasks:personal" | "calendar:personal")[];
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write" | "mail:read" | "mail:draft" | "mail:simulate-send")[];
+            resourceIds: ("tasks:personal" | "calendar:personal" | "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook")[];
         };
         PersonalAgentGrant: {
             id: string;
             ownerUserId: string;
             name: string;
-            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
-            resourceIds: ("tasks:personal" | "calendar:personal")[];
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write" | "mail:read" | "mail:draft" | "mail:simulate-send")[];
+            resourceIds: ("tasks:personal" | "calendar:personal" | "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook")[];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1025,6 +1025,10 @@ export interface components {
                 end: string;
             };
             calendarEventId?: string;
+            /** @enum {string} */
+            sourceMessageId?: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
+            /** @enum {string} */
+            sourceAccountId?: "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook";
         };
         PersonalWorkspaceCalendar: {
             id: string;
@@ -1047,18 +1051,18 @@ export interface components {
             ownerId: string;
             actor: string;
             /** @enum {string} */
-            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete";
+            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
             /** Format: date-time */
             createdAt: string;
         };
         PersonalWorkspaceView: {
-            accounts: unknown[];
-            messages: unknown[];
+            accounts: components["schemas"]["PersonalWorkspaceExampleAccount"][];
+            messages: components["schemas"]["PersonalWorkspaceExampleMessage"][];
             tasks: components["schemas"]["PersonalWorkspaceTask"][];
             calendars: components["schemas"]["PersonalWorkspaceCalendar"][];
             events: components["schemas"]["PersonalWorkspaceEvent"][];
-            drafts: unknown[];
-            sent: unknown[];
+            drafts: components["schemas"]["PersonalWorkspaceDraft"][];
+            sent: components["schemas"]["PersonalWorkspaceSent"][];
             agents: unknown[];
             activity: components["schemas"]["PersonalWorkspaceActivity"][];
         };
@@ -1066,6 +1070,8 @@ export interface components {
             /** @constant */
             type: "task.create";
             title: string;
+            /** @enum {string} */
+            messageId?: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
         } | {
             /** @constant */
             type: "task.update";
@@ -1115,13 +1121,224 @@ export interface components {
             /** @constant */
             type: "calendar.delete";
             eventId: string;
+        } | {
+            /** @constant */
+            type: "mail.examples.add";
+        } | {
+            /** @constant */
+            type: "mail.read";
+            /** @enum {string} */
+            messageId: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
+            read: boolean;
+        } | {
+            /** @constant */
+            type: "mail.draft";
+            /** @enum {string} */
+            messageId: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
+            body: string;
+        } | {
+            /** @constant */
+            type: "mail.compose";
+            /** @enum {string} */
+            accountId: "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook";
+            /** Format: email */
+            to: string;
+            subject: string;
+            body: string;
+        } | {
+            /** @constant */
+            type: "mail.draft.update";
+            draftId: string;
+            /** Format: email */
+            to: string;
+            subject: string;
+            body: string;
+        } | {
+            /** @constant */
+            type: "mail.simulate-send";
+            draftId: string;
+        } | {
+            /** @constant */
+            type: "mail.send";
+            draftId: string;
         };
         PersonalWorkspaceDeleted: {
             id: string;
             /** @constant */
             deleted: true;
         };
-        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceUpdated"] | components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"];
+        PersonalWorkspaceCommandResult: components["schemas"]["PersonalWorkspaceUpdated"] | components["schemas"]["PersonalWorkspaceTask"] | components["schemas"]["PersonalWorkspaceEvent"] | components["schemas"]["PersonalWorkspaceDeleted"] | components["schemas"]["PersonalWorkspaceExampleMessage"] | components["schemas"]["PersonalWorkspaceDraft"] | components["schemas"]["PersonalWorkspaceSent"] | components["schemas"]["PersonalMailExamplesResult"];
+        PersonalWorkspaceExampleAccount: {
+            /** @constant */
+            id: "mail:example-gmail-personal";
+            /** @constant */
+            provider: "gmail";
+            /** @constant */
+            label: "Personal Gmail example";
+            /** @constant */
+            address: "alex.personal@example.invalid";
+            /** @constant */
+            mode: "fixture";
+            ownerId: string;
+        } | {
+            /** @constant */
+            id: "mail:example-gmail-work";
+            /** @constant */
+            provider: "gmail";
+            /** @constant */
+            label: "Work Gmail example";
+            /** @constant */
+            address: "alex.work@example.invalid";
+            /** @constant */
+            mode: "fixture";
+            ownerId: string;
+        } | {
+            /** @constant */
+            id: "mail:example-outlook";
+            /** @constant */
+            provider: "outlook";
+            /** @constant */
+            label: "Outlook example";
+            /** @constant */
+            address: "alex.outlook@example.invalid";
+            /** @constant */
+            mode: "fixture";
+            ownerId: string;
+        };
+        PersonalWorkspaceExampleMessage: {
+            /** @constant */
+            id: "example-message-1";
+            /** @constant */
+            accountId: "mail:example-gmail-personal";
+            /** @constant */
+            subject: "Launch checklist for Friday";
+            /** @constant */
+            from: "colleague1@example.invalid";
+            /** @constant */
+            to: "alex.personal@example.invalid";
+            /** @constant */
+            body: "Please review the invented launch checklist before Friday. The accessibility pass is ready.";
+            /** @constant */
+            receivedAt: "2026-10-17T09:00:00.000Z";
+            read: boolean;
+        } | {
+            /** @constant */
+            id: "example-message-2";
+            /** @constant */
+            accountId: "mail:example-gmail-personal";
+            /** @constant */
+            subject: "Weekend trail plan";
+            /** @constant */
+            from: "colleague2@example.invalid";
+            /** @constant */
+            to: "alex.personal@example.invalid";
+            /** @constant */
+            body: "Shall we meet at the imaginary trailhead on Saturday morning?";
+            /** @constant */
+            receivedAt: "2026-10-16T09:00:00.000Z";
+            read: boolean;
+        } | {
+            /** @constant */
+            id: "example-message-3";
+            /** @constant */
+            accountId: "mail:example-gmail-work";
+            /** @constant */
+            subject: "Design review notes";
+            /** @constant */
+            from: "colleague3@example.invalid";
+            /** @constant */
+            to: "alex.work@example.invalid";
+            /** @constant */
+            body: "Here are the fictional review notes. Please confirm the revised navigation.";
+            /** @constant */
+            receivedAt: "2026-10-15T09:00:00.000Z";
+            read: boolean;
+        } | {
+            /** @constant */
+            id: "example-message-4";
+            /** @constant */
+            accountId: "mail:example-gmail-work";
+            /** @constant */
+            subject: "Quarterly planning agenda";
+            /** @constant */
+            from: "colleague4@example.invalid";
+            /** @constant */
+            to: "alex.work@example.invalid";
+            /** @constant */
+            body: "Please prepare three priorities for our example planning session.";
+            /** @constant */
+            receivedAt: "2026-10-14T09:00:00.000Z";
+            read: boolean;
+        } | {
+            /** @constant */
+            id: "example-message-5";
+            /** @constant */
+            accountId: "mail:example-outlook";
+            /** @constant */
+            subject: "Community garden rota";
+            /** @constant */
+            from: "colleague5@example.invalid";
+            /** @constant */
+            to: "alex.outlook@example.invalid";
+            /** @constant */
+            body: "Can you take the fictional watering slot next Tuesday?";
+            /** @constant */
+            receivedAt: "2026-10-13T09:00:00.000Z";
+            read: boolean;
+        } | {
+            /** @constant */
+            id: "example-message-6";
+            /** @constant */
+            accountId: "mail:example-outlook";
+            /** @constant */
+            subject: "Workshop materials";
+            /** @constant */
+            from: "colleague6@example.invalid";
+            /** @constant */
+            to: "alex.outlook@example.invalid";
+            /** @constant */
+            body: "The invented workshop handouts are ready for your review.";
+            /** @constant */
+            receivedAt: "2026-10-12T09:00:00.000Z";
+            read: boolean;
+        };
+        PersonalWorkspaceDraft: {
+            id: string;
+            /** @enum {string} */
+            accountId: "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook";
+            /** @enum {string} */
+            messageId?: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
+            /** Format: email */
+            to: string;
+            subject: string;
+            body: string;
+            /** @constant */
+            status: "draft";
+        };
+        PersonalWorkspaceSent: {
+            id: string;
+            /** @enum {string} */
+            accountId: "mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook";
+            /** @enum {string} */
+            messageId?: "example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6";
+            /** @enum {string} */
+            from: "alex.personal@example.invalid" | "alex.work@example.invalid" | "alex.outlook@example.invalid";
+            /** Format: email */
+            to: string;
+            subject: string;
+            body: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** @constant */
+            mode: "fixture";
+        };
+        PersonalMailExamplesResult: {
+            /** @constant */
+            mode: "fixture";
+            added: boolean;
+            accountIds: ("mail:example-gmail-personal" | "mail:example-gmail-work" | "mail:example-outlook")[];
+            messageIds: ("example-message-1" | "example-message-2" | "example-message-3" | "example-message-4" | "example-message-5" | "example-message-6")[];
+        };
         /** @description Opaque installation identifier with no User information. */
         InstallationId: string;
         /** @description Canonical opaque OpenJob User ID independent of provider subjects. */
@@ -1412,7 +1629,7 @@ export interface components {
          *     stable snake-case values and never on human-readable messages.
          * @enum {string}
          */
-        ErrorCode: "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
+        ErrorCode: "sending_disabled" | "provider_unavailable" | "forbidden" | "invalid_input" | "invalid_content_type" | "body_too_large" | "origin_denied" | "workspace_capacity" | "conflict" | "agent_access_denied" | "not_found" | "invalid_request" | "authentication_required" | "fresh_authentication_required" | "account_deletion_pending" | "account_deletion_unavailable" | "sign_in_method_unrecognized" | "sign_in_method_conflict" | "link_target_changed" | "admin_required" | "membership_denied" | "group_not_found" | "member_not_found" | "user_not_found" | "ban_not_found" | "task_not_found" | "invite_not_found" | "notification_subscription_not_found" | "username_taken" | "username_immutable" | "username_required" | "last_admin" | "open_tasks_assigned" | "members_remain" | "self_removal" | "ban_not_allowed" | "member_role_conflict" | "task_done" | "assignee_not_member" | "confirmation_mismatch" | "rate_limited" | "internal_error";
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description Human-readable, non-sensitive explanation. */

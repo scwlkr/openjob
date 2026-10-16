@@ -154,3 +154,43 @@ test('uncertain personal issuance is never replayed and private delivery races g
   }
   assert.deepEqual(f.failures, []);
 });
+
+test('personal mail grants isolate invented mailboxes, redact task provenance and revoke simulated-mail access', async t => {
+  const f = await harness(t);
+  const human = async input => { const result = await f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify(input)); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const seeded = await human({ type: 'mail.examples.add' });
+  const issue = async (name, scopes, resources) => {
+    const path = join(f.directory, name); const args = f.grantArgs(path);
+    args[args.indexOf('--scopes') + 1] = scopes.join(','); args[args.indexOf('--resources') + 1] = resources.join(',');
+    const result = await f.run(args); assert.equal(result.status, 0, result.stderr); return { path, agent: JSON.parse(result.stdout).data };
+  };
+  const planner = await issue('mail-planner', ['mail:read', 'mail:draft', 'mail:simulate-send', 'tasks:read', 'tasks:write', 'calendar:read', 'calendar:write'], [seeded.accountIds[0], 'tasks:personal', 'calendar:personal']);
+  const reader = await issue('mail-reader', ['mail:read'], [seeded.accountIds[0]]);
+  const tasks = await issue('tasks-reader', ['tasks:read'], ['tasks:personal']);
+  const call = (grant, input) => f.run(['workspace', input ? 'command' : 'snapshot', '--agent-token-file', grant.path, '--format', 'json', ...(input ? ['--input', '-'] : [])], input ? JSON.stringify(input) : undefined);
+  const ok = async (grant, input) => { const result = await call(grant, input); assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout).data; };
+  const deny = async (grant, input, code = /forbidden/) => { const result = await call(grant, input); assert.notEqual(result.status, 0); assert.match(result.stderr, code); assert.equal(result.stdout, ''); };
+  assert.deepEqual((await ok(planner)).accounts.map(account => account.id), [seeded.accountIds[0]]);
+  await deny(planner, { type: 'mail.examples.add' });
+  await deny(planner, { type: 'mail.read', messageId: seeded.messageIds[2], read: true });
+  const task = await ok(planner, { type: 'task.create', title: 'Scoped invented mail task', messageId: seeded.messageIds[0] });
+  const taskView = await ok(tasks);
+  assert.equal(taskView.tasks.find(item => item.id === task.id).sourceMessageId, undefined);
+  assert.equal(taskView.tasks.find(item => item.id === task.id).sourceAccountId, undefined);
+  assert.deepEqual(taskView.messages, []); assert.deepEqual(taskView.accounts, []);
+  const draft = await ok(planner, { type: 'mail.draft', messageId: seeded.messageIds[0], body: 'Invented reply. '.repeat(80) });
+  await deny(reader, { type: 'mail.draft.update', draftId: draft.id, to: 'reader@example.com', subject: 'No edit scope', body: 'Denied.' });
+  await deny(reader, { type: 'mail.simulate-send', draftId: draft.id });
+  const before = f.firestore.commitAttempts();
+  await deny(planner, { type: 'mail.send', draftId: draft.id }, /sending_disabled/);
+  assert.equal(f.firestore.commitAttempts(), before, 'real send never reaches a write');
+  const sent = await ok(planner, { type: 'mail.simulate-send', draftId: draft.id });
+  assert.equal(sent.mode, 'fixture'); assert.equal(sent.accountId, seeded.accountIds[0]);
+  assert.equal((await ok(tasks)).sent.length, 0);
+  assert.equal((await ok(reader)).sent[0].id, sent.id);
+  const revoked = await f.run(['workspace', 'agent', 'revoke', planner.agent.id, '--yes', '--format', 'json']); assert.equal(revoked.status, 0, revoked.stderr);
+  f.reload(); await rm(f.credential);
+  await deny(planner, undefined, /authentication_required/);
+  await deny(planner, { type: 'mail.compose', accountId: seeded.accountIds[0], to: 'reader@example.invalid', subject: 'Revoked', body: 'Denied' }, /authentication_required/);
+  assert.deepEqual(f.failures, []);
+});

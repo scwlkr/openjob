@@ -113,9 +113,9 @@ test('personal CLI fails closed on fixture/agent inputs and does not retry uncer
   ]) { const result = await f.run(args); assert.equal(result.status, 2, result.stderr); }
   for (const input of [
     { type: 'task.create', title: 'No owner override', ownerId: 'usr_b' },
-    { type: 'task.create', title: 'No mail source', messageId: 'alex_msg_launch' },
+    { type: 'task.create', title: 'No arbitrary source field', sourceMessageId: 'alex_msg_launch' },
     { type: 'task.complete', taskId: 'x', completed: 'true' }, { type: 'task.create', title: '' },
-    { type: 'mail.send', draftId: 'x' }, { type: 'agent.grant', name: 'No secret' },
+    { type: 'mail.compose', accountId: 'x', to: 'x@example.invalid', subject: 'No credential field', body: 'Local only', credential: 'private' }, { type: 'agent.grant', name: 'No secret' },
   ]) {
     const result = await f.run(['workspace', 'command', '--input', '-'], JSON.stringify(input));
     assert.equal(result.status, 2, result.stderr);
@@ -125,5 +125,35 @@ test('personal CLI fails closed on fixture/agent inputs and does not retry uncer
   const failed = await f.run(['workspace', 'command', '--input', '-'], JSON.stringify({ type: 'task.create', title: 'Uncertain fixture task' }));
   assert.notEqual(failed.status, 0); assert.equal(failed.stdout, ''); assert.match(failed.stderr, /fixture_outage/);
   assert.equal(f.calls.filter(call => call.method === 'POST').length, 1);
+  assert.deepEqual(f.failures, []);
+});
+
+test('existing CLI performs the invented Mail to Task to Calendar and Simulated Sent workflow', async t => {
+  const f = await harness(t);
+  const call = input => f.run(['workspace', 'command', '--input', '-', '--format', 'json'], JSON.stringify(input));
+  const ok = async input => { const response = await call(input); assert.equal(response.status, 0, response.stderr); return JSON.parse(response.stdout).data; };
+  const seeded = await ok({ type: 'mail.examples.add' }); assert.equal(seeded.added, true);
+  const messageId = seeded.messageIds[0];
+  await ok({ type: 'mail.read', messageId, read: true });
+  const task = await ok({ type: 'task.create', title: 'CLI invented mail follow-up', messageId });
+  await ok({ type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2026-07-15T15:00:00Z', end: '2026-07-15T15:30:00Z' });
+  await ok({ type: 'task.complete', taskId: task.id, completed: true });
+  const reply = await ok({ type: 'mail.draft', messageId, body: 'Reply through existing CLI, local only.' });
+  const edited = await ok({ type: 'mail.draft.update', draftId: reply.id, to: 'reader@example.com', subject: 'CLI edited reply', body: 'Updated draft.' });
+  assert.equal(edited.id, reply.id); assert.equal(edited.accountId, seeded.accountIds[0]);
+  assert.equal((await ok({ type: 'mail.examples.add' })).added, false);
+  const persistedBefore = f.records.get('usr_a');
+  const denied = await call({ type: 'mail.send', draftId: reply.id }); assert.notEqual(denied.status, 0); assert.match(denied.stderr, /sending_disabled/);
+  assert.equal(f.records.get('usr_a'), persistedBefore);
+  const sent = await ok({ type: 'mail.simulate-send', draftId: reply.id });
+  assert.equal(sent.mode, 'fixture'); assert.equal(sent.from, 'alex.personal@example.invalid'); assert.equal(sent.to, edited.to);
+  const composed = await ok({ type: 'mail.compose', accountId: seeded.accountIds[2], to: 'review@example.invalid', subject: 'CLI compose', body: 'Invented only.' });
+  assert.equal(composed.accountId, seeded.accountIds[2]);
+  f.reload();
+  const read = await f.run(['workspace', 'snapshot', '--format', 'json']); assert.equal(read.status, 0, read.stderr);
+  const view = JSON.parse(read.stdout).data;
+  assert.equal(view.tasks.find(item => item.id === task.id).completed, true); assert.equal(view.events.some(item => item.taskId === task.id), true);
+  assert.equal(view.messages.find(item => item.id === messageId).read, true); assert.equal(view.sent[0].id, sent.id); assert.equal(view.drafts[0].id, composed.id);
+  await f.owner('b'); const foreign = await call({ type: 'mail.simulate-send', draftId: composed.id }); assert.notEqual(foreign.status, 0); assert.match(foreign.stderr, /forbidden/);
   assert.deepEqual(f.failures, []);
 });

@@ -89,10 +89,10 @@ test('a deletion beginning during snapshot is checked before returning private s
   pause.release(); await assert.rejects(reading, InactiveUserError);
 });
 
-test('unsupported mail/agents, invalid owners, foreign state and inconsistent links fail without persistence', async () => {
+test('invalid mail/administration, invalid owners, foreign state and inconsistent links fail without persistence', async () => {
   const f = await fixture();
   for (const owner of ['', '../user_alex', 'a/b', 'x'.repeat(129)]) await assert.rejects(f.store.snapshot(owner), error => error.code === 'invalid_input');
-  for (const input of [{ type: 'mail.compose' }, { type: 'mail.send', draftId: 'a' }, { type: 'agent.grant' }, { type: 'task.create', title: 'No private links', messageId: 'mail_id' }]) await assert.rejects(f.store.command('user_alex', input), error => error.code === 'forbidden');
+  for (const [input, code] of [[{ type: 'mail.compose' }, 'invalid_input'], [{ type: 'mail.send', draftId: 'a' }, 'sending_disabled'], [{ type: 'agent.grant' }, 'forbidden'], [{ type: 'task.create', title: 'No private links', messageId: 'mail_id' }, 'forbidden']]) await assert.rejects(f.store.command('user_alex', input), error => error.code === code);
   assert.equal(f.firestore.documents.has(workspaceName('user_alex')), false);
   await f.store.command('user_alex', create('Valid'));
   const document = f.firestore.documents.get(workspaceName('user_alex')); const original = structuredClone(document);

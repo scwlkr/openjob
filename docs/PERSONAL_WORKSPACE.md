@@ -1,4 +1,4 @@
-# Owner private Tasks and Calendar
+# Owner private Mail, Tasks and Calendar
 
 The normal `/workspace` entrypoint uses the existing Firebase session and the
 application API. The existing Group app links to it from its User menu; it stays
@@ -6,7 +6,7 @@ available separately. A recognized OpenJob account is required. This path does
 not create accounts implicitly or accept demo owner headers as authentication.
 
 - `GET /api/v1/workspace/snapshot` reads only the resolved owner's workspace.
-- `POST /api/v1/workspace/commands` applies a strict Task or Calendar command.
+- `POST /api/v1/workspace/commands` applies a strict personal workspace command.
 - Firebase Bearer identity resolves through the existing user directory. Missing,
   unknown, deleting or removed identities cannot read or write private state.
 - Create/edit/complete/schedule/unschedule/delete use the shared workspace engine.
@@ -14,10 +14,33 @@ not create accounts implicitly or accept demo owner headers as authentication.
   enter a Group Task list.
 
 The Personal Calendar is OpenJob-owned; it is not a Google, Outlook or CalDAV
-calendar. Mail is an explicitly synthetic read-only preview, not connected mail.
-Creating a Task from that preview saves only the example title, with no mailbox
-reference. No sending is implemented. Existing Group read-only agent credentials do not
-grant this workspace access.
+calendar. The **Mail** tab offers explicit **Add invented examples** activation:
+three fictional mailboxes and six fixed messages, saved in the same private
+workspace. Activation is idempotent and preserves existing Tasks, Calendars,
+drafts, read flags, simulated Sent and grants. It cannot import provider mail.
+Existing Group read-only agent credentials do not grant this workspace access.
+
+## Saved invented Mail
+
+Read/search messages across or within mailboxes, mark read/unread, create a
+private linked Task, schedule it on the Personal Calendar and complete it. Save
+or edit a reply draft; its original mailbox stays fixed. Drafts and simulated
+Sent survive refresh and store reconstruction. Compose accepts ordinary email
+addresses, but **Simulate send** only moves the draft to a local fixture record.
+Actual `mail.send` always returns `sending_disabled`; no transport sends mail.
+Source message/account references exist only on private Tasks, never Group Tasks.
+
+The existing CLI uses exactly the same authenticated API:
+
+```sh
+printf '%s' '{"type":"mail.examples.add"}' | openjob workspace command --input - --format json
+openjob workspace snapshot --format json
+printf '%s' '{"type":"mail.draft","messageId":"example-message-1","body":"An invented reply"}' | openjob workspace command --input - --format json
+```
+
+Mail command variants include `mail.read`, `mail.draft`, `mail.compose`,
+`mail.draft.update` and `mail.simulate-send`; exact fields are in OpenAPI. Example
+activation is human-only. Existing Task and Calendar commands are unchanged.
 
 ## Provider preview
 
@@ -68,9 +91,15 @@ commit-clock deadline. Account deletion removes state and grants together.
 
 Agent credentials cannot administer grants, access Group Tasks or fall back to
 human login. Write-only grants receive minimal acknowledgements rather than
-Task/Calendar content. Linked Task scheduling requires both relevant write
-scopes and resources. Mail access and sending remain unavailable. No actual
-credentials were issued during development; isolated tests use synthetic tokens.
+Task, Calendar or Mail content. Linked Task scheduling requires both relevant write
+scopes and resources. Mail scopes are `mail:read`, `mail:draft` and the separate
+`mail:simulate-send`; select explicit resources `mail:example-gmail-personal`,
+`mail:example-gmail-work` or `mail:example-outlook`. Reply drafting needs read and
+draft scopes; compose/edit needs draft; simulation also needs simulate-send.
+Reading drafts/Sent requires mail:read. Tasks-only readers receive no mailbox
+provenance. Agents cannot activate examples or send actual mail. The Agents
+screen lists effective named resources and stable activity IDs without secrets.
+No actual credentials were issued during development; tests use synthetic tokens.
 
 ## Persistence and deletion
 
@@ -93,7 +122,7 @@ fake Firestore transport. No test contacts a live provider/database or creates
 an actual user/grant. Run the required `npm test` gate; its personal workspace
 browser lane uses the real HTTP API factory, existing JWT verifier, user store
 and Firestore adapter, with a test-only auth harness and fake REST backend.
-The normal app route is build-checked; live OAuth/database behavior is untested.
+Phone and desktop browser journeys exercise the authenticated app, shared Mail controls, real HTTP API factories and fake Firestore transport. Live OAuth/database behavior is untested.
 
 The existing one-command synthetic Mail/Calendar/Tasks/agent demo remains:
 

@@ -1,7 +1,8 @@
 import type { ProviderPreview } from "../../shared/provider-contracts";
 import type { PersonalAgentGrant } from "../../shared/personal-agent-grants";
 import type { AuthSession } from "../openjob-contracts";
-import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
+import type { WorkspaceView } from "../../shared/workspace-contracts";
+import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
 
 export class PersonalWorkspaceError extends Error {
   constructor(public readonly code: string) {
@@ -11,14 +12,14 @@ export class PersonalWorkspaceError extends Error {
 
 export type PersonalWorkspaceClient = {
   snapshot(session: AuthSession, signal: AbortSignal): Promise<WorkspaceView>;
-  command(session: AuthSession, input: WorkspaceCommand, signal: AbortSignal): Promise<unknown>;
+  command(session: AuthSession, input: PersonalWorkspaceCommand, signal: AbortSignal): Promise<unknown>;
   listAgents(session: AuthSession, signal: AbortSignal): Promise<PersonalAgentGrant[]>;
   revokeAgent(session: AuthSession, id: string, signal: AbortSignal): Promise<void>;
   providerPreview(session: AuthSession, signal: AbortSignal, query?: { accountId?: string; cursor?: string }): Promise<ProviderPreview>;
 };
 
 export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
-  async function request(session: AuthSession, signal: AbortSignal, input?: WorkspaceCommand, path = input ? "commands" : "snapshot", method = input ? "POST" : "GET") {
+  async function request(session: AuthSession, signal: AbortSignal, input?: PersonalWorkspaceCommand, path = input ? "commands" : "snapshot", method = input ? "POST" : "GET") {
     signal.throwIfAborted();
     const token = await session.getIdToken();
     // A deferred token must never start a request after this identity's lease ends.

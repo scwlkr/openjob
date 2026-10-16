@@ -125,7 +125,7 @@ Usage:
   openjob [global options] <resource> <command> [arguments]
 
 Resources:
-  workspace  Personal Tasks and Calendar through the shared authenticated API
+  workspace  Personal Tasks, Calendar and invented Mail through the shared API
   auth       Sign in, inspect authentication, or sign out
   user       Show the current User
   username   Claim the current User's immutable Username
@@ -157,9 +157,11 @@ const RESOURCE_HELP = {
   openjob workspace agent list
   openjob workspace agent revoke <agent-id> [--yes]
 
-Uses the selected human profile's personal Tasks and Calendar API.
+Uses the selected profile's personal Tasks, Calendar and invented Mail API.
 Commands are strict JSON task.create/update/complete/schedule/unschedule/delete
-or calendar.create/update/delete objects. No Mail or fixture identities.
+or calendar.create/update/delete objects. Invented Mail supports mail.examples.add,
+mail.read/draft/compose/draft.update/simulate-send. Real mail.send is always denied.
+No real provider messages or fixture identity headers are accepted.
 snapshot/command accept --agent-token-file <path|-> for personal scoped credentials,
 with no credential refresh or human fallback. command input and token cannot both use stdin.
 Mutations are not automatically retried after network or service failures.`,
@@ -578,18 +580,23 @@ async function main(raw) {
     const input = readInputObject(path);
     /** @type {Record<string, string[]>} */
     const fields = {
-      "task.create": ["type", "title"], "task.update": ["type", "taskId", "title"],
+      "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
       "task.complete": ["type", "taskId", "completed"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
       "task.unschedule": ["type", "taskId"], "task.delete": ["type", "taskId"],
       "calendar.create": ["type", "calendarId", "title", "start", "end"],
       "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
+      "mail.examples.add": ["type"], "mail.read": ["type", "messageId", "read"],
+      "mail.draft": ["type", "messageId", "body"], "mail.compose": ["type", "accountId", "to", "subject", "body"],
+      "mail.draft.update": ["type", "draftId", "to", "subject", "body"], "mail.simulate-send": ["type", "draftId"],
+      "mail.send": ["type", "draftId"],
     };
     const type = input.type;
-    if (typeof type !== "string" || !Object.hasOwn(fields, type) || Object.keys(input).length !== fields[type].length || Object.keys(input).some(key => !fields[type].includes(key)) || Buffer.byteLength(JSON.stringify(input)) > 32768) {
-      throw new CliError("input_invalid", "Use one bounded personal Task or Calendar command with exactly its documented fields.", 2);
+    if (typeof type !== "string" || !Object.hasOwn(fields, type) || fields[type].some(key => !(type === "task.create" && key === "messageId") && !Object.hasOwn(input, key)) || Object.keys(input).some(key => !fields[type].includes(key)) || Buffer.byteLength(JSON.stringify(input)) > 32768) {
+      throw new CliError("input_invalid", "Use one bounded personal workspace command with exactly its documented fields.", 2);
     }
     for (const field of fields[type]) {
-      if (field === "completed" ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > 500) {
+      if (type === "task.create" && field === "messageId" && input[field] === undefined) continue;
+      if (["completed", "read"].includes(field) ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > (field === "body" ? 20000 : 500)) {
         throw new CliError("input_invalid", "One or more personal workspace command fields are invalid.", 2);
       }
     }

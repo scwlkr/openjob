@@ -113,3 +113,15 @@ not owner-accessible preview links. A portable capture walkthrough is delivered
 through ChatGPT Library; it shows actual fixture-app behavior, not a deployed
 service. The one-command launcher remains the reproducible interactive demo
 inside this environment. No public tunnel or hosting configuration was created.
+
+## Authenticated personal journey
+
+The normal Firebase-authenticated `/workspace` now has a separate **Mail** tab.
+Choose **Add invented examples** to save three fictional mailboxes and six
+messages without resetting existing Tasks, Calendars or grants. The shared Mail
+controls above also work here: create a private linked Task, schedule/complete
+it, save/edit a reply and inspect local Simulated Sent. The **Mail preview** tab
+remains an independent, read-only provider example with title-only Task creation.
+Named personal agents can be scoped to each invented mailbox. See the
+[authenticated workspace guide](PERSONAL_WORKSPACE.md) for API/CLI commands and
+scope rules. This does not configure live Mail or change Firebase sign-in.

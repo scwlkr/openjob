@@ -1,0 +1,144 @@
+import { expect, test, type APIRequestContext } from "@playwright/test";
+
+async function ownerToken(request: APIRequestContext, owner = "alex") {
+  return (await (await request.get(`/__test/session/${owner}`)).json() as { token: string }).token;
+}
+async function call(request: APIRequestContext, token: string, input: unknown, status = 200) {
+  const response = await request.post("/api/v1/workspace/commands", { headers: { authorization: `Bearer ${token}` }, data: input });
+  expect(response.status()).toBe(status);
+  return await response.json() as { data: { id: string } };
+}
+
+test("authenticated invented Mail connects saved tasks, schedules and replies on desktop and phone", async ({ page }, testInfo) => {
+  const marker = `Invented workflow ${Date.now()}`;
+  await page.goto("/");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByLabel("New task", { exact: true }).fill(`${marker} existing task`);
+  await page.getByRole("button", { name: "Add task", exact: true }).click();
+  await expect(page.getByTestId("task-row").filter({ hasText: `${marker} existing task` })).toBeVisible();
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await page.getByRole("button", { name: /^Add invented examples/ }).click();
+  await expect(page.getByTestId("mail-row")).toHaveCount(6);
+  for (const width of [1280, 390]) {
+    const current = `${marker} ${width}`;
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByLabel("Mailbox", { exact: true }).selectOption("mail:example-outlook");
+    await page.getByLabel("Search mail", { exact: true }).fill("COMMUNITY");
+    await expect(page.getByTestId("mail-row")).toHaveCount(1);
+    await page.getByLabel("Mailbox", { exact: true }).selectOption("mail:example-gmail-work");
+    await page.getByLabel("Search mail", { exact: true }).fill("DESIGN");
+    await expect(page.getByTestId("mail-row")).toContainText("Design review notes");
+    await page.getByLabel("Mailbox", { exact: true }).selectOption("mail:example-gmail-personal");
+    await page.getByLabel("Search mail", { exact: true }).fill("LAUNCH");
+    await page.getByTestId("mail-row").click();
+    const markRead = page.getByRole("button", { name: "Mark read", exact: true });
+    if (await markRead.isVisible()) await markRead.click();
+    await expect(page.getByRole("button", { name: "Mark unread", exact: true })).toBeVisible();
+    await page.getByLabel("Reply draft", { exact: true }).fill(`${current} unsaved reply`);
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await expect(page.getByTestId("task-row").filter({ hasText: `${marker} existing task` })).toBeVisible();
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${current} unsaved reply`);
+    await page.getByRole("button", { name: "Create task from mail", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Private task created");
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    const createdTask = page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).filter({ hasText: "From private mail" }).last();
+    await createdTask.getByRole("button", { name: "Edit title", exact: true }).click();
+    await page.getByLabel("Task title", { exact: true }).fill(`${current} linked task`);
+    await page.getByRole("button", { name: "Save title", exact: true }).click();
+    const task = page.getByTestId("task-row").filter({ hasText: `${current} linked task` });
+    await task.getByRole("button", { name: "Schedule", exact: true }).click();
+    await page.getByLabel("Start (UTC)", { exact: true }).fill("2027-04-06T09:00");
+    await page.getByLabel("End (UTC)", { exact: true }).fill("2027-04-06T09:30");
+    await page.getByRole("button", { name: "Save schedule", exact: true }).click();
+    await task.getByRole("checkbox").click();
+    await expect(task.getByRole("checkbox")).toBeChecked();
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await expect(page.getByTestId("calendar-event").filter({ hasText: `${current} linked task` })).toContainText("linked task");
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await expect(page.getByLabel("Reply draft", { exact: true })).toHaveValue(`${current} unsaved reply`);
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("No message sent");
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    const draft = page.getByTestId("saved-draft").filter({ hasText: current });
+    await draft.getByRole("button", { name: "Edit draft", exact: true }).click();
+    await expect(page.getByLabel("From mailbox")).toBeDisabled();
+    await page.getByLabel("To", { exact: true }).fill("recipient@example.com");
+    await page.getByLabel("Message", { exact: true }).fill(`${current} saved edited reply`);
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await expect(page.getByLabel("Message", { exact: true })).toHaveValue(`${current} saved edited reply`);
+    await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+    await page.reload();
+    await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+    await expect(task.getByRole("checkbox")).toBeChecked();
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await page.getByRole("button", { name: "Drafts", exact: true }).click();
+    await expect(draft).toContainText(`${current} saved edited reply`);
+    await draft.getByRole("button", { name: "Simulate send", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("No actual delivery occurred");
+    await expect(draft).toHaveCount(0);
+    await page.getByRole("button", { name: "Simulated Sent", exact: true }).click();
+    const sent = page.getByTestId("sent-message").filter({ hasText: current });
+    await expect(sent).toContainText("alex.personal@example.invalid");
+    await expect(sent).toContainText("recipient@example.com");
+    await page.getByRole("button", { name: /^Add invented examples/ }).click();
+    await expect(sent).toContainText(`${current} saved edited reply`);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`personal-invented-mail-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Inbox", exact: true }).click();
+    await page.getByRole("button", { name: "Compose draft", exact: true }).click();
+    await page.getByLabel("Subject", { exact: true }).fill(`${current} unsaved composition`);
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await page.getByRole("button", { name: "Mail", exact: true }).click();
+    await expect(page.getByLabel("Subject", { exact: true })).toHaveValue(`${current} unsaved composition`);
+    await page.getByRole("button", { name: "Cancel draft editor", exact: true }).click();
+  }
+  await page.getByLabel("Test identity", { exact: true }).selectOption("sam");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("task-row").filter({ hasText: marker })).toHaveCount(0);
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add invented examples", exact: true })).toBeVisible();
+  await expect(page.getByTestId("sent-message")).toHaveCount(0);
+  await expect(page.getByLabel("Subject", { exact: true })).toHaveCount(0);
+});
+
+test("agents access only named invented mailboxes and lose access after human revocation", async ({ page, request }, testInfo) => {
+  const token = await ownerToken(request);
+  await call(request, token, { type: "mail.examples.add" });
+  const name = `Invented Mail helper ${Date.now()}`;
+  async function issue(scopes: string[]) {
+    const response = await request.post("/api/v1/workspace/agent-grants", { headers: { authorization: `Bearer ${token}` }, data: { name, scopes, resourceIds: ["mail:example-gmail-personal"] } });
+    expect(response.status()).toBe(201);
+    return (await response.json() as { data: { token: string; agent: { id: string } } }).data;
+  }
+  const reader = await issue(["mail:read"]);
+  await call(request, reader.token, { type: "mail.draft", messageId: "example-message-1", body: "Denied draft" }, 403);
+  const issued = await issue(["mail:read", "mail:draft", "mail:simulate-send"]);
+  const snapshot = await request.get("/api/v1/workspace/snapshot", { headers: { authorization: `Bearer ${issued.token}` } });
+  expect(snapshot.status()).toBe(200);
+  const scoped = await snapshot.json() as { data: { accounts: { id: string }[]; messages: { id: string }[]; tasks: unknown[] } };
+  expect(scoped.data.accounts.map((item) => item.id)).toEqual(["mail:example-gmail-personal"]);
+  expect(scoped.data.messages.map((item) => item.id)).toEqual(["example-message-1", "example-message-2"]);
+  expect(scoped.data.tasks).toEqual([]);
+  await call(request, issued.token, { type: "mail.draft", messageId: "example-message-3", body: "Foreign mailbox denied" }, 403);
+  await call(request, issued.token, { type: "mail.examples.add" }, 403);
+  const draft = (await call(request, issued.token, { type: "mail.draft", messageId: "example-message-1", body: `${name} simulated reply` })).data;
+  await call(request, issued.token, { type: "mail.send", draftId: draft.id }, 403);
+  await call(request, issued.token, { type: "mail.simulate-send", draftId: draft.id });
+  await page.goto("/");
+  await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  const row = page.getByTestId("personal-agent-row").filter({ hasText: issued.agent.id });
+  await expect(row).toContainText("mail:read, mail:draft, mail:simulate-send");
+  await expect(row).toContainText("Personal Gmail example");
+  expect((await page.content()).includes(issued.token)).toBe(false);
+  page.once("dialog", (dialog) => dialog.accept());
+  await row.getByRole("button", { name: "Revoke access", exact: true }).click();
+  await expect(row).toContainText("Revoked");
+  expect((await request.get("/api/v1/workspace/snapshot", { headers: { authorization: `Bearer ${issued.token}` } })).status()).toBe(401);
+  await page.getByRole("button", { name: "Mail", exact: true }).click();
+  await page.getByRole("button", { name: "Simulated Sent", exact: true }).click();
+  await expect(page.getByTestId("sent-message").filter({ hasText: name })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("personal-invented-mail-agent.png"), fullPage: true });
+});

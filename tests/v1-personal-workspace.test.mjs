@@ -95,8 +95,7 @@ test('personal API rejects forged auth, agent credentials and invalid or provide
     ['{}', 415, { 'content-type': 'text/plain' }],
     [JSON.stringify({ type: 'task.create', title: 'No impersonation', ownerId: 'usr_b' }), 400],
     [JSON.stringify({ type: 'task.create' }), 400],
-    [JSON.stringify({ type: 'task.create', title: 'No source mailbox', messageId: 'alex_msg_launch' }), 400],
-    [JSON.stringify({ type: 'mail.compose', accountId: 'x', to: 'x@example.invalid', subject: 'No mail', body: 'No provider calls' }), 403],
+    [JSON.stringify({ type: 'mail.compose', accountId: 'x', to: 'x@example.invalid', subject: 'No owner override', body: 'No provider calls', ownerId: 'usr_b' }), 400],
     [JSON.stringify({ type: 'mail.send', draftId: 'fixture' }), 403],
     [JSON.stringify({ type: 'agent.grant', name: 'No agents', scopes: ['tasks:write'], resourceIds: ['tasks:personal'] }), 403],
   ]) {
@@ -148,4 +147,44 @@ test('personal API preserves standard inactive/rate-limit and generic internal e
   const response = await handler(new Request('https://openjob.example.invalid/api/v1/workspace/snapshot'));
   assert.equal(response.status, 500);
   assert.equal((await response.json()).error.requestId, 'req_startup');
+});
+
+test('authenticated invented Mail connects private Tasks and Calendar without real sending or cross-owner access', async () => {
+  const f = await fixture();
+  const ok = async command => { const response = await f.request(command); assert.equal(response.status, 200, await response.clone().text()); return (await response.json()).data; };
+  const existing = await ok({ type: 'task.create', title: 'Preserve existing work' });
+  const schedule = taskId => ({ type: 'task.schedule', taskId, calendarId: 'personal', start: '2026-07-15T15:00:00Z', end: '2026-07-15T15:30:00Z' });
+  await ok(schedule(existing.id));
+  const seeded = await ok({ type: 'mail.examples.add' });
+  assert.equal(seeded.added, true); assert.equal(seeded.mode, 'fixture'); assert.equal(seeded.accountIds.length, 3); assert.equal(seeded.messageIds.length, 6);
+  const messageId = seeded.messageIds[0];
+  await ok({ type: 'mail.read', messageId, read: true });
+  const task = await ok({ type: 'task.create', title: 'Follow up invented launch', messageId });
+  assert.equal(task.sourceMessageId, messageId); assert.equal(task.sourceAccountId, seeded.accountIds[0]);
+  await ok(schedule(task.id)); await ok({ type: 'task.complete', taskId: task.id, completed: true });
+  const draft = await ok({ type: 'mail.draft', messageId, body: 'Invented reply only.' });
+  const edited = await ok({ type: 'mail.draft.update', draftId: draft.id, to: 'local-recipient@example.com', subject: 'Edited local reply', body: 'Updated locally; nothing delivered.' });
+  assert.equal(edited.id, draft.id); assert.equal(edited.accountId, seeded.accountIds[0]);
+  assert.equal((await ok({ type: 'mail.examples.add' })).added, false);
+  let snapshot = await ok();
+  assert.equal(snapshot.tasks.find(item => item.id === existing.id).calendarEventId !== undefined, true);
+  assert.equal(snapshot.tasks.find(item => item.id === task.id).completed, true);
+  assert.equal(snapshot.messages.find(item => item.id === messageId).read, true);
+  assert.equal(snapshot.drafts[0].id, draft.id); assert.equal(snapshot.drafts[0].body, edited.body);
+  const before = f.persisted.get('usr_a');
+  const send = await f.request({ type: 'mail.send', draftId: draft.id }); assert.equal(send.status, 403); assert.equal((await send.json()).error.code, 'sending_disabled');
+  assert.equal(f.persisted.get('usr_a'), before, 'real-send denial has no persisted side effect');
+  const sent = await ok({ type: 'mail.simulate-send', draftId: draft.id });
+  assert.equal(sent.mode, 'fixture'); assert.equal(sent.accountId, draft.accountId); assert.equal(sent.to, edited.to); assert.equal(sent.from, 'alex.personal@example.invalid');
+  assert.equal((await f.request({ type: 'mail.simulate-send', draftId: draft.id })).status, 403);
+  const composed = await ok({ type: 'mail.compose', accountId: seeded.accountIds[1], to: 'review@example.invalid', subject: 'Invented compose', body: 'Local draft only.' });
+  assert.equal((await f.request({ type: 'mail.draft.update', draftId: composed.id, accountId: seeded.accountIds[0], to: composed.to, subject: composed.subject, body: composed.body })).status, 400);
+  for (const command of [
+    { type: 'mail.read', messageId, read: false }, { type: 'mail.draft.update', draftId: composed.id, to: composed.to, subject: composed.subject, body: composed.body },
+    { type: 'mail.simulate-send', draftId: composed.id }, { type: 'task.delete', taskId: task.id },
+  ]) assert.equal((await f.request(command, { token: 'b' })).status, 403);
+  assert.equal((await f.request({ type: 'task.create', title: 'No provider import', messageId: 'mock_gmail_private:message:upstream' })).status, 403);
+  const other = (await (await f.request(undefined, { token: 'b' })).json()).data;
+  assert.deepEqual(other.accounts, []); assert.deepEqual(other.messages, []); assert.deepEqual(other.sent, []);
+  snapshot = await ok(); f.reload(); assert.deepEqual(await ok(), snapshot);
 });
