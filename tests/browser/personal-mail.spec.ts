@@ -69,6 +69,7 @@ test("authenticated invented Mail connects saved tasks, schedules and replies on
     await page.getByRole("button", { name: "Mail", exact: true }).click();
     await expect(page.getByLabel("Message", { exact: true })).toHaveValue(`${current} saved edited reply`);
     await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Draft editor" })).toHaveCount(0);
     await page.reload();
     await expect(page.getByLabel("New task", { exact: true })).toBeVisible();
     await expect(task.getByRole("checkbox")).toBeChecked();

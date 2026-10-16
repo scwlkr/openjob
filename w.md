@@ -1,3 +1,9 @@
+Exact integrated checks: new delayed-save Mail regression PASS. Existing connected
+Mail test exposed its reload-before-save-completion race (saved original rather
+than revised bytes on phone); fixed test to await editor closing before reload.
+This observes actual saved completion rather than aborting its request. No app
+behavior changed for this test correction. Rerun affected flow before merge.
+
 # WLK-308 Mail editor ready / WLK-307 local workflow merged
 
 PR84 merged14b9699: local npm preparation + separately approved publication;
