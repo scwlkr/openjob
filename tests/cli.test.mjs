@@ -142,7 +142,8 @@ test("production CLI exposes the executable contract separately from the simulat
   const help = runCli(["--help"]);
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /^OpenJob\n\nUsage:/);
-  assert.doesNotMatch(help.stdout, /prototype|simulator|no network/i);
+  assert.match(help.stdout, /openjob app \[--port 5191\].*packaged workspace prototype/);
+  assert.doesNotMatch(help.stdout.replace(/^  openjob app .*$/m, ""), /prototype|simulator|no network/i);
   for (const resource of ["member", "ban", "invite"]) {
     assert.match(help.stdout, new RegExp(`^  ${resource}\\s`, "m"));
   }

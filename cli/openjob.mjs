@@ -31,6 +31,8 @@ import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
 import { outputFormat, preflightOutput, writeEnvelope, writeRawPrivateFile } from "./lib/output.mjs";
 import { resolveCliProfile } from "./lib/profiles.mjs";
+import { runApp } from "./lib/app.mjs";
+import { automaticUpdateNotice, checkForUpdates } from "./lib/updates.mjs";
 import packageJson from "./package.json" with { type: "json" };
 
 /** @typedef {Map<string, string>} CommandOptions */
@@ -123,12 +125,17 @@ const COMMAND_OPTIONS = new Map([
   ["invite join", new Set(OUTPUT_OPTIONS)],
 ]);
 
-process.once("SIGINT", () => process.exit(130));
+if (process.argv[2] !== "app") process.once("SIGINT", () => process.exit(130));
 
 const HELP = `OpenJob
 
 Usage:
   openjob [global options] <resource> <command> [arguments]
+
+Local app and updates:
+  openjob app [--port 5191]   Run the packaged workspace prototype
+  openjob updates             Check the installed latest/dev channel (JSON)
+  OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 
 Resources:
   workspace  Personal Tasks, Calendar and invented Mail through the shared API
@@ -447,6 +454,12 @@ function inviteToken(raw) {
 
 /** @param {string[]} raw */
 async function main(raw) {
+  if (raw[0] === "app" && !raw.includes("--help")) return runApp(raw.slice(1), packageJson);
+  if (raw[0] === "updates" && !raw.includes("--help")) {
+    if (raw.length !== 1) throw new CliError("usage_error", "Use openjob updates.", 2);
+    process.stdout.write(JSON.stringify(await checkForUpdates(packageJson)) + "\n");
+    return;
+  }
   if (raw.length === 0 || raw.includes("--help")) {
     process.stdout.write(`${HELP}\n`);
     return;
@@ -1092,6 +1105,7 @@ async function main(raw) {
 
 const raw = process.argv.slice(2);
 try {
+  if (raw[0] !== "app" && raw[0] !== "updates" && process.stderr.isTTY) await automaticUpdateNotice(packageJson);
   await main(raw);
 } catch (error) {
   let format = "table";

@@ -141,3 +141,7 @@ openjob task edit <task-id> --clear-schedule
 ```
 
 The web Task editor also provides planned start/end controls in explicit UTC and an independent clear action. Task cards show the stored interval in UTC. This stores a planned interval in OpenJob; external calendar sync and native scheduling controls remain future work.
+
+## Packaged local workspace
+
+Build and install the full workspace with `npm run app:pack`, then run the installed `openjob app`. See [npm installation and update channels](docs/NPM_INSTALL.md) for the clean-prefix path and pending registry publication setup. All local provider examples remain synthetic.
