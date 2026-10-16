@@ -36,3 +36,13 @@ export const oauthId = (value: unknown): value is string => typeof value === "st
 export const oauthOpaque = (value: unknown, max = 256): value is string => typeof value === "string" && !!value.trim() && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value);
 export function oauthRandom() { return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, ""); }
 export async function oauthHash(value: string) { const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)); return btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, ""); }
+
+export const PROVIDER_OAUTH_TRANSACTION_TTL_MS = 10 * 60 * 1000;
+/** Structural server-storage validation; the lifecycle separately binds its configured client/callback. */
+export function validateProviderOAuthTransaction(value: unknown, ownerId?: string, stateHash?: string): ProviderOAuthTransaction {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).sort().join(",") !== "accountId,callbackUri,clientId,createdAt,expectedSubject,expiresAt,label,mode,nonce,ownerId,scopes,stateHash,verifier") oauthFail("invalid_transaction");
+  const row = value as ProviderOAuthTransaction;
+  let callback: URL; try { callback = new URL(row.callbackUri); } catch { return oauthFail("invalid_transaction"); }
+  if (!oauthId(row.ownerId) || ownerId !== undefined && row.ownerId !== ownerId || !oauthId(row.accountId) || typeof row.stateHash !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(row.stateHash) || stateHash !== undefined && row.stateHash !== stateHash || typeof row.expectedSubject !== "string" || !/^[\x21-\x7e]{1,255}$/.test(row.expectedSubject) || !oauthOpaque(row.label, 80) || !oauthOpaque(row.clientId, 256) || !oauthOpaque(row.callbackUri, 2048) || callback.protocol !== "https:" || callback.username || callback.password || callback.search || callback.hash || callback.href !== row.callbackUri || !Array.isArray(row.scopes) || row.scopes.length !== MOCK_OAUTH_SCOPES.length || new Set(row.scopes).size !== row.scopes.length || row.scopes.some(scope => !MOCK_OAUTH_SCOPES.includes(scope)) || typeof row.nonce !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(row.nonce) || typeof row.verifier !== "string" || !/^[A-Za-z0-9_-]{43,128}$/.test(row.verifier) || !Number.isSafeInteger(row.createdAt) || row.createdAt < 0 || !Number.isSafeInteger(row.expiresAt) || row.expiresAt - row.createdAt !== PROVIDER_OAUTH_TRANSACTION_TTL_MS || row.mode !== "mock") oauthFail("invalid_transaction");
+  return structuredClone(row);
+}

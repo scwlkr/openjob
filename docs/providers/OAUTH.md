@@ -49,9 +49,23 @@ failure. It does not silently delete records to make a retry appear successful.
 
 ## Evidence and remaining setup
 
-The supplied transaction helper and cleanup queue use bounded process memory
-for mocks. Neither is durable or coordinated across processes; a restart loses
-pending cleanup work. Production needs durable retry ownership and orphan
+The original transaction helper and the cleanup queue use process memory for
+mocks. An optional `db/provider-oauth-transactions.ts` adapter now persists
+transactions in one private `v1ProviderOAuthTransactions/{owner}` document through
+the existing Firestore REST client. It is bounded to 100 pending/spent hashes and
+200 KB. Conditional writes and active-User fences let independent instances
+consume a state once. Consumption erases the stored verifier/nonce and retains
+only a spent hash and timestamps until the original ten-minute expiry, preventing
+state recreation during that window. Reads validate every owner-bound field.
+
+Create/consume prune expired entries only for the selected owner. Explicit
+`cleanupExpiredForOwner` and deletion cleanup use the same direct document path;
+no collection scan or deployed TTL setting is required. Tests reconstruct the
+adapter over fake Firestore and race separate instances. Production does not
+configure this adapter, and live database durability is unverified.
+
+The cleanup queue is still not durable or coordinated across processes; a restart
+loses pending cleanup work. Production needs durable retry ownership and orphan
 reconciliation. The vault interface is not a provisioned secure store.
 Synthetic tests prove ordering, replay/owner denial and revision fences;
 they do not prove live Google consent, token validation, database runtime or
@@ -59,7 +73,7 @@ external cleanup. Expiry checks cannot compare against Firestore's server commit
 clock or recall an already-started external request. Native/device behavior is
 unchanged and unverified.
 
-Production needs a durable atomic transaction store, reviewed signature verifier,
+Production needs a configured atomic transaction store, reviewed signature verifier,
 secure access/refresh-token storage, deletion/cleanup integration and runtime
 bindings before any separately approved test account can connect. Reconnect,
 refresh and provider writes are outside this new-account read-only flow.
