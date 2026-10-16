@@ -9,6 +9,7 @@ import { PersonalWorkspaceError, type PersonalWorkspaceClient } from "./personal
 import WorkspaceTasks, { type WorkspaceTasksHandle } from "./workspace-tasks";
 import type { CalendarTaskSource } from "./workspace-links";
 import WorkspaceCalendar from "./workspace-calendar";
+import WorkspaceCalendarFiles from "./workspace-calendar-files";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import PersonalWorkspaceMail from "./personal-workspace-mail";
 import styles from "./workspace.module.css";
@@ -64,7 +65,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
       const next = await client.snapshot(session, signal);
       if (!current()) return false;
       setView(next); setNotice(success); return true;
-    } catch { if (current()) setError("The change could not be completed. Refresh to check your saved workspace before retrying."); return false; }
+    } catch (failure) { if (current()) setError(input.type === "calendar.import" && failure instanceof PersonalWorkspaceError && failure.code === "calendar_import_conflict" ? "An event UID already exists with different title or times. Nothing was imported. Review the existing event separately." : "The change could not be completed. Refresh to check your saved workspace before retrying."); return false; }
     finally { if (current()) setBusy(false); }
   }
 
@@ -74,6 +75,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
         {view && <WorkspaceTasks ref={tasks} active={tab === "Tasks"} view={view} busy={busy} command={command} onOpenSource={openSource} />}
         {view && <WorkspaceCalendar active={tab === "Calendar"} view={view} busy={busy} command={command} onOpenTask={openLinkedTask} />}
+        {view && <div hidden={tab !== "Calendar"}><WorkspaceCalendarFiles view={view} signal={signal} busy={busy} command={command} /></div>}
         {view && <section hidden={tab !== "Mail"} aria-label="Invented personal Mail">
           <p className={styles.banner}>Invented Mail · examples and drafts saved privately to your OpenJob account. All mailbox identities and incoming messages are fictional. Simulate send records a local example; no provider or recipient receives mail.</p>
           <button disabled={busy} onClick={() => command({ type: "mail.examples.add" }, "Invented examples are ready. Existing tasks, calendar and drafts were kept.")}>{view.accounts.length ? "Add invented examples again" : "Add invented examples"}</button>

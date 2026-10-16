@@ -200,3 +200,26 @@ It proves the isolated build, not production Vinext/Firebase offline bootstrap,
 browser encryption/eviction guarantees, native devices or live provider access.
 Browsers without IndexedDB/Web Locks retain the online workspace; saved mode is
 unavailable. Browser data is origin-local and is not application-encrypted.
+
+## Calendar file walkthrough
+
+Use the built personal demo above (`npm run dev:personal-workspace -- --port 5191`).
+In online Calendar, the **Calendar files** section downloads the selected
+Calendar’s current blocks and scheduled Tasks as `openjob-calendar.ics`.
+Select that file to inspect its titles/UTC intervals, then explicitly confirm
+import. Unchanged events are skipped; a changed duplicate UID conflicts without
+overwriting Tasks or blocks. Import a supported file with a new UID to add a
+standalone block, then reload to verify it persisted. Another server edit after
+preview requires refreshed review. The same capabilities are available through
+the installed CLI and authenticated API, including named Calendar agent scopes;
+see [file exchange](PERSONAL_WORKSPACE.md#calendar-file-exchange).
+
+This is real local file/API behavior with synthetic identities and fake Firestore
+in the demo, not provider synchronization. Imports accept only the documented
+50-event/16-KiB timed-UTC subset; complex provider files with recurrence,
+time zones, invitations or unsupported properties are rejected explicitly.
+External calendar application imports and native file pickers are unverified.
+The original saved fixture launcher is preserved separately and has no new file
+controls. Incoming Mail remains invented; actual sends and OAuth grants remain
+disabled. Native device/live provider/database acceptance and production Firebase
+offline bootstrap remain outstanding. No hosted/share preview is available.

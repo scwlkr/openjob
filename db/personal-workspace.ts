@@ -1,3 +1,4 @@
+import { applyCalendarIcalImport, isCalendarIcalImport } from "./calendar-ical.ts";
 import { projectTaskCalendar, validateTaskCalendarSyncInput, TASK_CALENDAR_MAX_AGE_MS, taskCalendarFail, type TaskCalendarSyncAck } from "../shared/task-calendar-sync.ts";
 import { mergeTaskCalendar, parseTaskCalendarReceipts, taskCalendarPayloadHash, taskCalendarRevision, type TaskCalendarReceipt } from "./task-calendar-sync.ts";
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from "./firestore-rest.ts";
@@ -52,7 +53,7 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
       const existing = await read(owner); const current = envelope(owner, existing);
       if (auth) authorized(current.grants, auth);
       const next = await apply(current);
-      if (next.skip) { await assertActiveUser(firestore, owner); return next.result; }
+      if (next.skip) { if (auth) authorized((await activeEnvelope(owner)).grants, auth); else await assertActiveUser(firestore, owner); return next.result; }
       const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) }, syncJson: { stringValue: JSON.stringify(next.receipts ?? current.receipts) } } };
       if (new TextEncoder().encode(JSON.stringify(update)).length > MAX_ENCODED_BYTES - 1024) fail("workspace_capacity", "Personal workspace storage limit reached");
       try {
@@ -96,7 +97,13 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
       }) as TaskCalendarSyncAck;
     },
 
-    async command(owner, input) { return mutate(owner, current => applyPersonalWorkspaceCommand(owner, current.state, input)); },
+    async command(owner, input) {
+      return mutate(owner, async current => {
+        if (!isCalendarIcalImport(input)) return applyPersonalWorkspaceCommand(owner, current.state, input);
+        const next = await applyCalendarIcalImport(owner, current.state, input, undefined, now());
+        return { ...next, ...(next.state ? { state: validatePersonalWorkspace(owner, next.state) } : {}) };
+      });
+    },
     async createAgent(owner, input) {
       assertPersonalWorkspaceOwner(owner); const validated = validatePersonalAgentInput(input);
       const id = agentId(); const token = `oj_personal_${owner}.${id}.${secret()}`;
@@ -125,7 +132,12 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
     },
     async commandForAgent(token, input) {
       const auth = await credential(token);
-      return mutate(auth.owner, current => applyPersonalAgentCommand(auth.owner, current.state, publicPersonalAgent(authorized(current.grants, auth)), input), auth);
+      return mutate(auth.owner, async current => {
+        const grant = publicPersonalAgent(authorized(current.grants, auth));
+        if (!isCalendarIcalImport(input)) return applyPersonalAgentCommand(auth.owner, current.state, grant, input);
+        const next = await applyCalendarIcalImport(auth.owner, current.state, input, grant, now());
+        return { ...next, ...(next.state ? { state: validatePersonalWorkspace(auth.owner, next.state) } : {}) };
+      }, auth);
     },
     async removeAllForUser(owner) {
       assertPersonalWorkspaceOwner(owner);

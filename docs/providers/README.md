@@ -59,8 +59,10 @@ with synthetic tests; they are not production runtime bindings or a provisioned
 secure credential store. See the connection guide for revision/deletion fences
 and partial-failure ordering. A server-only [mock OAuth lifecycle](OAUTH.md)
 implements state/PKCE/nonce, fake exchange/verified-identity seams and vault-first
-reservation approval. It has no production callback route, signature verifier,
-durable transaction store, token refresh or provisioned vault.
+reservation approval. A bounded Firestore transaction adapter is implemented and
+tested over fake transport; production does not bind it. There is no production
+callback route, signature verifier, token refresh or provisioned vault. The
+cleanup queue remains process-local and needs durable retry ownership before live use.
 
 ## Smallest real integration to authorize next
 
@@ -68,16 +70,17 @@ Choose one owner-approved test account and one read-only provider first. No
 account has been selected or connected in this cycle. For a Google test account,
 the next implementation would need:
 
-1. An authorized development Google Cloud project with the Gmail and Calendar
-   APIs enabled, an OAuth client and an exact approved callback URI, plus a
+1. An authorized development Google Cloud project with the Gmail API enabled,
+   an OAuth client and an exact approved callback URI, plus a
    consent/test-user configuration. Creating or changing these is a separate
    owner-authorized setup action.
-2. Explicit mailbox read consent using `gmail.readonly` and only the Calendar
-   read scopes required for the chosen workflow. Existing OpenJob/Firebase
+2. Explicit mailbox read consent using `gmail.readonly`. Google Calendar is not
+   implemented by this adapter and needs no consent for the Mail-only test. Existing OpenJob/Firebase
    sign-in proves identity; it does not constitute mailbox consent. Google lists
    `gmail.readonly` as restricted; broader public use has separate verification
    requirements. See [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
-   and [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth).
+   for the Mail-read scope. Calendar scope selection belongs to a future
+   implemented and separately reviewed Calendar connector.
 3. A server-owned authorization callback with state/owner binding and a secure
    credential store for access/refresh tokens, represented by persistent secret
    references rather than values in project files. Agents receive OpenJob scopes,
@@ -102,4 +105,8 @@ synthetic Mail, draft and calendar mutations through the shared local service.
 The normal authenticated app has real private Task/Calendar APIs and scoped
 personal agent controls, tested with signed synthetic identities and the actual
 Firestore REST adapter over an isolated fake transport. Live OAuth, Firestore
-runtime, provider sync and native workspace/device behavior remain unverified.
+runtime and provider sync remain unverified. Native personal Mail/Tasks/Calendar
+and offline Tasks/Calendar now have cloud interaction/storage/HTTP tests; actual
+device durability, encryption, rendering and release acceptance remain unverified.
+Provider-neutral [Calendar files](../PERSONAL_WORKSPACE.md#calendar-file-exchange)
+exchange a bounded timed-UTC subset without OAuth or a live provider connection.

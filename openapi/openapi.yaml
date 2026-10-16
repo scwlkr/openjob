@@ -1557,6 +1557,7 @@ paths:
                             enum:
                               - sign_in_method_unrecognized
                               - conflict
+                              - calendar_import_conflict
               example:
                 error:
                   code: conflict
@@ -1589,6 +1590,81 @@ paths:
             example:
               type: task.create
               title: Prepare the demo
+      security:
+        - firebaseBearer: []
+        - personalWorkspaceAgentBearer: []
+  /api/v1/workspace/calendar-export:
+    get:
+      tags: [Workspace]
+      operationId: exportPersonalCalendar
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Export one owned Calendar as bounded timed UTC iCalendar JSON. Requires calendar read access; contains no Mail links or private task provenance. Human and personal agent authorization is checked again before returning. No provider requests occur.
+      parameters:
+        - in: query
+          name: calendarId
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[A-Za-z0-9:_-]+$'
+      responses:
+        "200":
+          description: Private Calendar file content; clients save exact UTF-8 bytes explicitly.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CalendarIcalExport"
+              example:
+                data:
+                  calendarId: personal
+                  filename: openjob-calendar.ics
+                  contentType: text/calendar; charset=utf-8
+                  ical: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//OpenJob//Calendar//EN\r\nEND:VCALENDAR\r\n"
+        "400":
+          description: Exactly one bounded calendarId is required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          description: Calendar, agent scope or request origin denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Sign-in Method unrecognized or workspace changed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+                  - properties:
+                      error:
+                        properties:
+                          code:
+                            enum: [sign_in_method_unrecognized, conflict]
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "413":
+          description: Calendar exceeds the bounded export capacity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
       security:
         - firebaseBearer: []
         - personalWorkspaceAgentBearer: []
@@ -3745,6 +3821,8 @@ components:
             - calendar.create
             - calendar.update
             - calendar.delete
+            - calendar.import
+            - task-calendar.sync
             - mail.examples.add
             - mail.read
             - mail.draft
@@ -3804,8 +3882,69 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PersonalWorkspaceActivity"
+    CalendarIcalExport:
+      type: object
+      additionalProperties: false
+      required: [calendarId, filename, contentType, ical]
+      properties:
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        filename:
+          type: string
+          const: openjob-calendar.ics
+        contentType:
+          type: string
+          const: text/calendar; charset=utf-8
+        ical:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: At most 16 KiB UTF-8, 50 timed UTC VEVENT records, no Mail/source metadata.
+    CalendarIcalImportCommand:
+      type: object
+      additionalProperties: false
+      required: [type, calendarId, ical, expectedRevision]
+      properties:
+        type:
+          type: string
+          const: calendar.import
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ical:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: Strict timed UTC subset; maximum 16 KiB UTF-8 and 50 VEVENT records. No recurrence, timezone, attachments, attendees or provider access.
+        expectedRevision:
+          type: string
+          pattern: '^ci1_[a-f0-9]{64}$'
+    CalendarIcalImportResult:
+      type: object
+      additionalProperties: false
+      required: [calendarId, imported, skipped, revision]
+      properties:
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        imported:
+          type: integer
+          minimum: 0
+          maximum: 50
+        skipped:
+          type: integer
+          minimum: 0
+          maximum: 50
+        revision:
+          type: string
+          pattern: '^ci1_[a-f0-9]{64}$'
     PersonalWorkspaceCommand:
       oneOf:
+        - $ref: "#/components/schemas/CalendarIcalImportCommand"
         - type: object
           additionalProperties: false
           required:
@@ -4132,6 +4271,7 @@ components:
           const: true
     PersonalWorkspaceCommandResult:
       oneOf:
+        - $ref: "#/components/schemas/CalendarIcalImportResult"
         - $ref: "#/components/schemas/PersonalWorkspaceUpdated"
         - $ref: "#/components/schemas/PersonalWorkspaceTask"
         - $ref: "#/components/schemas/PersonalWorkspaceEvent"
@@ -5166,6 +5306,8 @@ components:
     ErrorCode:
       type: string
       enum:
+        - calendar_import_conflict
+        - calendar_ical_unsupported
         - sending_disabled
         - provider_unavailable
         - forbidden

@@ -444,6 +444,22 @@ test("the complete hosted backend preserves existing Groups during its two-ident
     assert.equal(persistedMail.tasks.find(item => item.id === mailTask.id).completed, true);
     assert.equal((await (await privateCall("memberUser")).json()).data.messages.length, 0);
     assert.equal((await (await privateCall("initialAdmin", { type: "mail.examples.add" })).json()).data.added, false);
+    const calendarExportPath = "/api/v1/workspace/calendar-export";
+    const exportedCalendar = await request({ actor: "initialAdmin", method: "GET", path: `${calendarExportPath}?calendarId=personal` });
+    assert.equal(exportedCalendar.status, 200);
+    await validate(exportedCalendar, calendarExportPath, "get");
+    const calendarFile = (await exportedCalendar.json()).data;
+    assert.equal(calendarFile.calendarId, "personal");
+    assert.equal(calendarFile.filename, "openjob-calendar.ics");
+    assert.equal(calendarFile.contentType, "text/calendar; charset=utf-8");
+    assert.ok(calendarFile.ical.includes("SUMMARY:Persisted personal plan\r\n"));
+    assert.ok(calendarFile.ical.includes("SUMMARY:Act on invented mail\r\n"));
+    for (const privateReference of [privateTask.id, mailTask.id, mailTask.sourceAccountId, message.id, privateTask.ownerId, "sourceMessageId", "sourceAccountId", "taskId", "DESCRIPTION:", "URL:"]) {
+      assert.equal(calendarFile.ical.includes(privateReference), false, `Calendar export exposed ${privateReference}`);
+    }
+    const foreignCalendar = await request({ actor: "memberUser", method: "GET", path: `${calendarExportPath}?calendarId=foreign` });
+    assert.equal(foreignCalendar.status, 403);
+    await validate(foreignCalendar, calendarExportPath, "get");
     const previewPath = "/api/v1/workspace/provider-preview";
     const deniedPreview = await request({ actor: "invalid", method: "GET", path: previewPath });
     assert.equal(deniedPreview.status, 401); await validate(deniedPreview, previewPath, "get");

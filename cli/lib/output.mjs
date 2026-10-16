@@ -41,6 +41,15 @@ export function preflightOutput(options) {
 
 export function writeEnvelope(envelope, format, options) {
   const rendered = renderEnvelope(envelope, format);
+  writeRendered(rendered, options);
+}
+
+/** Write exact private bytes with the existing atomic, no-overwrite delivery. */
+export function writeRawPrivateFile(text, path) {
+  writeRendered(text, new Map([["--out", path]]));
+}
+
+function writeRendered(rendered, options) {
   const path = options.get("--out");
   if (!path || path === "-") {
     process.stdout.write(rendered);

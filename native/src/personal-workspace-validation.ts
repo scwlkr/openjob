@@ -4,7 +4,7 @@ import { OpenJobApiError } from './auth/coordinator';
 const mailboxIds = ['mail:example-gmail-personal', 'mail:example-gmail-work', 'mail:example-outlook'];
 const scopes = ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write', 'mail:read', 'mail:draft', 'mail:simulate-send'];
 const resources = ['tasks:personal', 'calendar:personal', ...mailboxIds];
-const actions = ['task.create', 'task.complete', 'task.update', 'task.delete', 'task.schedule', 'task.unschedule', 'calendar.create', 'calendar.update', 'calendar.delete', 'mail.read', 'mail.draft', 'mail.compose', 'mail.draft.update', 'mail.simulate-send', 'mail.examples.add', 'task-calendar.sync'];
+const actions = ['task.create', 'task.complete', 'task.update', 'task.delete', 'task.schedule', 'task.unschedule', 'calendar.create', 'calendar.update', 'calendar.delete', 'calendar.import', 'mail.read', 'mail.draft', 'mail.compose', 'mail.draft.update', 'mail.simulate-send', 'mail.examples.add', 'task-calendar.sync'];
 type Row = Record<string, unknown>;
 function invalid(): never { throw new OpenJobApiError(502, 'invalid_response', 'OpenJob returned invalid personal workspace data.'); }
 function row(value: unknown, allowed: string[], required = allowed): Row {

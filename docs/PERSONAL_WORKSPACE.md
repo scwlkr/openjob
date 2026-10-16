@@ -246,3 +246,48 @@ provided. Explicit save clears that authored buffer without clearing newer
 typing. Competing tabs cannot overwrite or clear a newer recovery buffer: the
 stale tab keeps its editor text and asks you to copy it before reloading to review
 the saved version. Review the restored mailbox, recipient and content before saving.
+
+## Calendar file exchange
+
+In online **Calendar → Calendar files**, select a Calendar and choose **Download
+calendar file** to save its currently loaded blocks and scheduled Tasks as
+`openjob-calendar.ics`. Refresh first to include newer server work. Export contains
+only opaque stable UIDs, UTC intervals and titles; it excludes Mail/source links,
+account/owner IDs, descriptions, agents and credentials. A calendar application
+can read the file without OpenJob provider credentials; importing into an external
+service is a separate user action and is not exercised by cloud tests.
+
+Choose a local `.ics` file to preview its events and target Calendar. Nothing is
+uploaded until **Import reviewed events → Confirm calendar import**. Imported
+events become standalone OpenJob blocks. They never create/update Tasks, copy
+Mail links, send invitations or write an external calendar. The server atomically
+checks the reviewed Calendar revision. Newer server work requires another preview;
+an existing UID with different title/times conflicts with no partial import.
+Unchanged reimports and retries are skipped durably, including after restart.
+Copies into a different Calendar have separate identities.
+
+The first subset is limited to 50 events and 16 KiB of valid UTF-8, with whole-second
+timestamps (nonzero fractional seconds are rejected). It accepts
+VCALENDAR VERSION2.0/PRODID and VEVENT UID/SUMMARY/DTSTAMP/DTSTART/DTEND with explicit
+UTC times. Unsupported recurrence, floating/local/TZID/all-day time, invitations,
+alarms, URLs, attachments, properties or components are rejected. It does not
+silently flatten a complex provider export. OpenJob exports use CRLF, escaped
+TEXT and UTF-8-safe folding under [RFC5545](https://www.rfc-editor.org/rfc/rfc5545.html).
+Files stay local during browser preview.
+
+The existing CLI provides the same authenticated workflow:
+
+```sh
+openjob workspace calendar export --calendar personal --file calendar.ics
+openjob workspace calendar import --calendar personal --file calendar.ics --dry-run
+openjob workspace calendar import --calendar personal --file calendar.ics
+```
+
+Import displays the target/events and asks for confirmation; `--yes` explicitly
+authorizes an unattended import. Export writes the raw file atomically and refuses
+to replace an existing path. Personal agents need `calendar:read` on the named
+Calendar for export and both `calendar:read`/`calendar:write` for import. Revoked,
+expired, foreign or wrong-resource grants deny. No human-session fallback occurs.
+The API exposes authenticated `GET /api/v1/workspace/calendar-export?calendarId=personal`
+and `calendar.import` through the existing command endpoint. Native/offline file
+controls are outside this slice; imported blocks enter normal Task/Calendar sync.

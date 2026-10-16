@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { prepareAgentGrant, deliverAgentGrant } from "./lib/agent-grant.mjs";
+import { prepareAgentGrant, deliverAgentGrant, preparePrivateTokenOutput } from "./lib/agent-grant.mjs";
+import { parseCalendarIcal, previewCalendarIcalImport } from "./lib/calendar-ical.mjs";
+import { openSync, fstatSync, closeSync, readSync } from "node:fs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
@@ -27,7 +29,7 @@ import {
 } from "./lib/credential-store.mjs";
 import { CliError, reportError } from "./lib/errors.mjs";
 import { readInputObject, readTextSource } from "./lib/input.mjs";
-import { outputFormat, preflightOutput, writeEnvelope } from "./lib/output.mjs";
+import { outputFormat, preflightOutput, writeEnvelope, writeRawPrivateFile } from "./lib/output.mjs";
 import { resolveCliProfile } from "./lib/profiles.mjs";
 import packageJson from "./package.json" with { type: "json" };
 
@@ -87,6 +89,8 @@ const COMMAND_OPTIONS = new Map([
   ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
   ["workspace providers", new Set([...OUTPUT_OPTIONS, "--account", "--cursor"])],
   ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
+  ["workspace calendar export", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--calendar", "--file", "--agent-token-file"])],
+  ["workspace calendar import", new Set([...OUTPUT_OPTIONS, "--calendar", "--file", "--agent-token-file", "--dry-run", "--yes"])],
   ["workspace agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
   ["workspace agent list", new Set(OUTPUT_OPTIONS)],
   ["workspace agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
@@ -156,6 +160,8 @@ const RESOURCE_HELP = {
   openjob workspace tasks [--status <all|open|completed>] [--search <literal-title>] [--scheduled-on <YYYY-MM-DD>]
   openjob workspace providers [--account <account-id>] [--cursor <cursor>]
   openjob workspace command --input <path|->
+  openjob workspace calendar export --calendar <id> --file <new-path>
+  openjob workspace calendar import --calendar <id> --file <path> [--dry-run] [--yes]
   openjob workspace agent grant --name <name> --scopes <comma-list> --resources <comma-list> --token-out <new-path>
   openjob workspace agent list
   openjob workspace agent revoke <agent-id> [--yes]
@@ -464,7 +470,7 @@ async function main(raw) {
 
   const parsed = parseArguments(raw);
   const [resource, command, ...rest] = parsed.positionals;
-  validateCommandOptions(resource, resource === "workspace" && command === "agent" ? `agent ${rest[0]}` : command, parsed.options);
+  validateCommandOptions(resource, resource === "workspace" && ["agent", "calendar"].includes(command) ? `${command} ${rest[0]}` : command, parsed.options);
   const profile = resolveCliProfile(
     parsed.options.get(PROFILE_OPTION),
     process.env,
@@ -537,6 +543,37 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "calendar" && rest.length === 1 && ["export", "import"].includes(rest[0])) {
+    const calendarId = parsed.options.get("--calendar"), file = parsed.options.get("--file");
+    if (!calendarId || !/^[A-Za-z0-9:_-]{1,128}$/.test(calendarId) || !file || file === "-") throw new CliError("usage_error", "Calendar import/export requires --calendar <id> and --file <path> (not stdin/stdout).", 2);
+    if (rest[0] === "export") {
+      preparePrivateTokenOutput(new Map([...parsed.options, ["--token-out", file]]));
+      const response = /** @type {import("./openapi-types.ts").CalendarIcalExportResponse} */ (await apiRequest(`/workspace/calendar-export?calendarId=${encodeURIComponent(calendarId)}`, {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+      const data = response?.data;
+      if (!data || data.calendarId !== calendarId || data.filename !== "openjob-calendar.ics" || data.contentType !== "text/calendar; charset=utf-8" || typeof data.ical !== "string" || Buffer.byteLength(data.ical) > 16384) throw new CliError("invalid_response", "OpenJob returned an invalid calendar export.", 8);
+      try { parseCalendarIcal(data.ical); } catch { throw new CliError("invalid_response", "OpenJob returned an invalid calendar export.", 8); }
+      writeRawPrivateFile(data.ical, file); writeResult({ data: { calendarId, file } }); return;
+    }
+    let ical; let descriptor;
+    try {
+      descriptor = openSync(file, "r");
+      if (!fstatSync(descriptor).isFile()) throw new Error();
+      const bytes = Buffer.alloc(16385); let length = 0;
+      while (length < bytes.length) { const count = readSync(descriptor, bytes, length, bytes.length - length, null); if (!count) break; length += count; }
+      if (length > 16384) throw new Error();
+      ical = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, length)); parseCalendarIcal(ical);
+    } catch { throw new CliError("input_invalid", "Use a supported UTF-8 iCalendar file up to 16 KiB and 50 timed UTC events.", 2); }
+    finally { if (descriptor !== undefined) closeSync(descriptor); }
+    const snapshot = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
+    let preview;
+    try { preview = await previewCalendarIcalImport(snapshot.data, calendarId, ical); }
+    catch { throw new CliError("input_invalid", "The calendar import cannot be previewed for this target.", 2); }
+    if (parsed.options.has("--dry-run")) { writeResult({ data: preview }); return; }
+    process.stderr.write(`Calendar import preview: ${JSON.stringify(preview)}\n`);
+    await confirmDestructiveAction(`Import ${preview.events.length} event(s) into Calendar ${calendarId}?`, "Calendar import requires --yes or interactive confirmation after preview. Use --dry-run to review without writing.", parsed.options);
+    const response = await apiRequest("/workspace/commands", { method: "POST", body: JSON.stringify({ type: "calendar.import", calendarId, ical, expectedRevision: preview.expectedRevision }) });
+    writeResult(response); return;
+  }
   if (resource === "workspace" && command === "tasks" && rest.length === 0) {
     let query;
     try { query = normalizeWorkspaceTaskQuery({ status: parsed.options.get("--status"), search: parsed.options.get("--search"), scheduledOn: parsed.options.get("--scheduled-on") }); }
@@ -596,6 +633,7 @@ async function main(raw) {
       "task.unschedule": ["type", "taskId"], "task.delete": ["type", "taskId"],
       "calendar.create": ["type", "calendarId", "title", "start", "end"],
       "calendar.update": ["type", "eventId", "title", "start", "end"], "calendar.delete": ["type", "eventId"],
+      "calendar.import": ["type", "calendarId", "ical", "expectedRevision"],
       "mail.examples.add": ["type"], "mail.read": ["type", "messageId", "read"],
       "mail.draft": ["type", "messageId", "body"], "mail.compose": ["type", "accountId", "to", "subject", "body"],
       "mail.draft.update": ["type", "draftId", "to", "subject", "body"], "mail.simulate-send": ["type", "draftId"],
@@ -607,9 +645,13 @@ async function main(raw) {
     }
     for (const field of fields[type]) {
       if (type === "task.create" && field === "messageId" && input[field] === undefined) continue;
-      if (["completed", "read"].includes(field) ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > (field === "body" ? 20000 : 500)) {
+      if (["completed", "read"].includes(field) ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > (field === "body" ? 20000 : field === "ical" ? 16384 : 500)) {
         throw new CliError("input_invalid", "One or more personal workspace command fields are invalid.", 2);
       }
+    }
+    if (type === "calendar.import") {
+      try { if (!/^ci1_[a-f0-9]{64}$/.test(input.expectedRevision)) throw new Error(); parseCalendarIcal(input.ical); }
+      catch { throw new CliError("input_invalid", "Use a supported bounded iCalendar file and its reviewed calendar revision.", 2); }
     }
     const body = /** @type {PersonalWorkspaceCommandRequest} */ (input);
     const response = /** @type {PersonalWorkspaceCommandResponse} */ (await apiRequest("/workspace/commands", { method: "POST", body: JSON.stringify(body) }));

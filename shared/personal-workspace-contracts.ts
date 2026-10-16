@@ -1,6 +1,6 @@
 import type { WorkspaceCommand, WorkspaceScope } from './workspace-contracts';
 
-export type PersonalWorkspaceCommand = WorkspaceCommand | { type: 'mail.examples.add' };
+export type PersonalWorkspaceCommand = WorkspaceCommand | { type: 'mail.examples.add' } | { type: 'calendar.import'; calendarId: string; ical: string; expectedRevision: string };
 export type PersonalAgentScope = WorkspaceScope;
 export type PersonalAgentResource = 'tasks:personal' | 'calendar:personal' | 'mail:example-gmail-personal' | 'mail:example-gmail-work' | 'mail:example-outlook';
 export type PersonalAgentInput = { name: string; scopes: PersonalAgentScope[]; resourceIds: PersonalAgentResource[] };

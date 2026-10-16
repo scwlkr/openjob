@@ -1,0 +1,12 @@
+import type { WorkspaceView } from './workspace-contracts';
+import * as implementation from '../cli/lib/calendar-ical.mjs';
+export type IcalEvent = { uid: string; title: string; start: string; end: string };
+export type CalendarIcalPreview = { calendarId: string; expectedRevision: string; events: IcalEvent[] };
+export type CalendarIcalExport = { calendarId: string; filename: 'openjob-calendar.ics'; contentType: 'text/calendar; charset=utf-8'; ical: string };
+export type CalendarIcalImportResult = { calendarId: string; imported: number; skipped: number; revision: string };
+export const parseCalendarIcal = implementation.parseCalendarIcal as (ical: string) => IcalEvent[];
+export const calendarIcalRevision = implementation.calendarIcalRevision as (view: WorkspaceView, calendarId: string) => Promise<string>;
+export const previewCalendarIcalImport = implementation.previewCalendarIcalImport as (view: WorkspaceView, calendarId: string, ical: string) => Promise<CalendarIcalPreview>;
+export const createCalendarIcalExport = implementation.createCalendarIcalExport as (view: WorkspaceView, calendarId: string, now?: Date) => Promise<CalendarIcalExport>;
+export const calendarIcalOpaqueUid = implementation.calendarIcalOpaqueUid as (owner: string, calendarId: string, eventId: string) => Promise<string>;
+export const calendarIcalImportId = implementation.calendarIcalImportId as (owner: string, calendarId: string, uid: string) => Promise<string>;

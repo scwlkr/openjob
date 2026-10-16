@@ -4,6 +4,8 @@ const VALUE_OPTIONS = new Set([
   "--agent-token-file",
   "--account",
   "--cursor",
+  "--calendar",
+  "--file",
   "--assignee",
   "--confirm-name",
   "--due",
@@ -31,6 +33,7 @@ const VALUE_OPTIONS = new Set([
 
 const BOOLEAN_OPTIONS = new Set([
   "--clear-schedule",
+  "--dry-run",
   "--force",
   "--help",
   "--no-open",

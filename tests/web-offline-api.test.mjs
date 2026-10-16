@@ -18,9 +18,11 @@ test('web sync client verifies current owner, enforces strict private DTOs and p
   const calls = []; let meOwner = owner, reply = { revision, projection }, status = 200;
   globalThis.fetch = async (path, options) => {
     calls.push({ path, options });
-    return new Response(JSON.stringify(path === '/api/v1/me' ? { data: { userId: meOwner, username: null, usernameRequired: true } } : status === 200 ? { data: reply } : { error: { code: reply.code, message: 'PRIVATE UPSTREAM ERROR' } }), { status: path === '/api/v1/me' ? 200 : status });
+    return new Response(JSON.stringify(path === '/api/v1/me' ? { data: { userId: meOwner, username: null, usernameRequired: true, groups: [{ groupId: 'grp_owned', name: 'Private group metadata', role: 'member', createdAt: '2026-10-17T00:00:00.000Z' }] } } : status === 200 ? { data: reply } : { error: { code: reply.code, message: 'PRIVATE UPSTREAM ERROR' } }), { status: path === '/api/v1/me' ? 200 : status });
   };
   const client = createPersonalWorkspaceClient(), session = { signInMethod: 'google', getIdToken: async () => 'synthetic-token' }, signal = new AbortController().signal;
+  assert.deepEqual(await client.me(session, signal), { userId: owner, username: null, usernameRequired: true });
+  calls.length = 0;
   assert.deepEqual(await client.readTaskCalendarSync(session, owner, signal), { revision, projection });
   assert.deepEqual(calls.map(call => call.path), ['/api/v1/me', '/api/v1/workspace/task-calendar-sync']);
   reply = { operationId: input.operationId, revision };
@@ -44,6 +46,10 @@ test('web sync client verifies current owner, enforces strict private DTOs and p
   const deferredSession = { signInMethod: 'google', async getIdToken() { tokenRequests++; if (tokenRequests === 2) abort.abort(); return 'synthetic'; } };
   const prior = calls.length; await assert.rejects(client.syncTaskCalendar(deferredSession, owner, input, abort.signal), { name: 'AbortError' });
   assert.equal(calls.length, prior + 1, 'aborted identity lease never posts after /me');
+  for (const groups of [undefined, {}, [{ groupId: 'grp_private', name: 'Private', role: 'invalid', createdAt: '2026-10-17T00:00:00.000Z' }], Array(1001).fill({})]) {
+    globalThis.fetch = async () => new Response(JSON.stringify({ data: { userId: owner, username: null, usernameRequired: true, groups } }));
+    await assert.rejects(client.me(session, signal), error => error.status === 502 && error.code === 'invalid_response');
+  }
   for (const status of [401, 410]) {
     globalThis.fetch = async () => new Response('not a JSON envelope', { status });
     await assert.rejects(client.me(session, signal), error => error.status === status && error.code === (status === 401 ? 'authentication_required' : 'account_deletion_pending'));
