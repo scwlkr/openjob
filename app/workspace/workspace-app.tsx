@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { WorkspaceCommand, WorkspaceScope, WorkspaceView } from "../../shared/workspace-contracts";
+import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-contracts";
 import { OpenJobBrand } from "../openjob-brand";
 import styles from "./workspace.module.css";
+import WorkspaceCalendar from "./workspace-calendar";
+import WorkspaceAgents from "./workspace-agents";
 
 type Tab = "Mail" | "Calendar" | "Tasks" | "Agents";
-const scopes: WorkspaceScope[] = ["mail:read", "mail:draft", "mail:simulate-send", "tasks:read", "tasks:write", "calendar:read", "calendar:write"];
+type MailFolder = "Inbox" | "Drafts" | "Simulated Sent";
 const date = (value: string) => new Date(value).toLocaleString(undefined, { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " UTC";
 const utc = (value: string) => new Date(value + ":00Z").toISOString();
 
@@ -34,6 +36,8 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   const [busy, setBusy] = useState(false);
   const [accountId, setAccountId] = useState("");
   const [messageId, setMessageId] = useState("");
+  const [mailFolder, setMailFolder] = useState<MailFolder>("Inbox");
+  const [mailSearch, setMailSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [composing, setComposing] = useState(false);
   const [editingDraft, setEditingDraft] = useState("");
@@ -41,19 +45,11 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
   const [composeTo, setComposeTo] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
-  const [editingEvent, setEditingEvent] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [scheduleTask, setScheduleTask] = useState("");
   const [calendarId, setCalendarId] = useState("");
-  const [eventTitle, setEventTitle] = useState("");
   const [start, setStart] = useState("2026-10-16T14:00");
   const [end, setEnd] = useState("2026-10-16T14:30");
-  const [agentName, setAgentName] = useState("");
-  const [agentScopes, setAgentScopes] = useState<WorkspaceScope[]>(["tasks:read"]);
-  const [resources, setResources] = useState<string[]>([]);
-  const [inspectedAgent, setInspectedAgent] = useState("");
-  const [agentView, setAgentView] = useState<WorkspaceView | null>(null);
-  const [agentError, setAgentError] = useState("");
 
   const refresh = useCallback(async () => {
     const next: WorkspaceView = await api("snapshot", owner);
@@ -74,16 +70,19 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
     finally { setBusy(false); }
   }
 
-  async function inspect(id: string) {
-    setInspectedAgent(id); setAgentView(null); setAgentError("");
-    try { setAgentView(await api("snapshot", owner, undefined, id)); }
-    catch (e) { setAgentError(e instanceof Error ? e.message : "Access denied"); }
-  }
-
-  const selectedMessage = view?.messages.find((item) => item.id === messageId);
+  const mailboxMessages = view?.messages.filter((item) => !accountId || item.accountId === accountId) || [];
+  const mailboxDrafts = view?.drafts.filter((item) => !accountId || item.accountId === accountId) || [];
+  const mailboxSent = view?.sent.filter((item) => !accountId || item.accountId === accountId) || [];
+  const search = mailSearch.trim().toLocaleLowerCase();
+  const matches = (...values: (string | undefined)[]) => !search || values.some((value) => value?.toLocaleLowerCase().includes(search));
+  const visibleMessages = mailboxMessages.filter((item) => matches(item.subject, item.from, item.to, item.body));
+  const visibleDrafts = mailboxDrafts.filter((item) => matches(item.subject, item.to, item.body, view?.accounts.find((account) => account.id === item.accountId)?.address));
+  const visibleSent = mailboxSent.filter((item) => matches(item.subject, item.from, item.to, item.body));
+  const selectedMessage = visibleMessages.find((item) => item.id === messageId);
+  const folderCounts = { Inbox: mailboxMessages.length, Drafts: mailboxDrafts.length, "Simulated Sent": mailboxSent.length };
+  const resultCount = mailFolder === "Inbox" ? visibleMessages.length : mailFolder === "Drafts" ? visibleDrafts.length : visibleSent.length;
   const calendars = view?.calendars || [];
   const selectedCalendar = calendarId || calendars[0]?.id || "";
-  const resourceOptions = view ? [...view.accounts.map((item) => ({ id: item.id, label: `${item.label} mailbox` })), ...view.calendars.map((item) => ({ id: item.id, label: `${item.name} calendar` })), { id: "tasks:personal", label: "Personal tasks" }] : [];
   const submit = (fn: () => void) => (event: FormEvent) => { event.preventDefault(); fn(); };
 
   return <div className={styles.workspace}>
@@ -96,7 +95,7 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
         <p className={styles.eyebrow}>WORKSPACE</p>
-        <nav aria-label="Workspace"><div className={styles.tabs}>{(["Mail", "Calendar", "Tasks", "Agents"] as Tab[]).map((item) => <button key={item} aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)}>{item}<span>{item === "Mail" ? view?.messages.length : item === "Calendar" ? view?.events.length : item === "Tasks" ? view?.tasks.filter((task) => !task.completed).length : view?.agents.filter((agent) => !agent.revoked).length}</span></button>)}</div></nav>
+        <nav aria-label="Workspace"><div className={styles.tabs}>{(["Mail", "Calendar", "Tasks", "Agents"] as Tab[]).map((item) => <button key={item} disabled={!view} aria-current={tab === item ? "page" : undefined} onClick={() => setTab(item)}>{item}<span>{item === "Mail" ? view?.messages.length : item === "Calendar" ? view?.events.length : item === "Tasks" ? view?.tasks.filter((task) => !task.completed).length : view?.agents.filter((agent) => !agent.revoked).length}</span></button>)}</div></nav>
         <div className={styles.connection}><strong>Connected fixtures</strong>{view?.accounts.map((account) => <div key={account.id}><span className={styles.dot} />{account.label}<small>{account.provider} · simulated</small></div>)}</div>
         <p className={styles.small}>Shared API • server-owned state<br />No live credentials or delivery</p>
       </aside>
@@ -108,6 +107,9 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
         {!view && error && <p>This prototype needs the isolated fixture API enabled on its server.</p>}
         {view && tab === "Mail" && <>
           <button className={styles.compose} onClick={() => { setComposing(!composing); setEditingDraft(""); setComposeAccount(""); setComposeTo(""); setComposeSubject(""); setComposeBody(""); }}>Compose draft</button><label className={styles.filter}>Mailbox<select aria-label="Mailbox" value={accountId} onChange={(e) => { setAccountId(e.target.value); setMessageId(""); setDraft(""); }}><option value="">All mailboxes</option>{view.accounts.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.address}</option>)}</select></label>
+          <nav className={styles.folders} aria-label="Mail folders">{(["Inbox", "Drafts", "Simulated Sent"] as MailFolder[]).map((folder) => <button key={folder} aria-label={folder} aria-current={mailFolder === folder ? "page" : undefined} onClick={() => setMailFolder(folder)}>{folder}<span aria-hidden="true">{folderCounts[folder]}</span></button>)}</nav>
+          <div className={styles.searchBar}><label className={styles.grow}>Search mail<input type="search" aria-label="Search mail" value={mailSearch} placeholder="Subject, people or message text…" onChange={(e) => setMailSearch(e.target.value)} /></label>{mailSearch && <button onClick={() => setMailSearch("")}>Clear search</button>}</div>
+          <p className={styles.small} aria-live="polite">{resultCount} {resultCount === 1 ? "result" : "results"} in {mailFolder}{accountId ? ` · ${view.accounts.find((account) => account.id === accountId)?.label}` : " · all mailboxes"}</p>
           {composing && <section className={styles.panel} aria-label="Draft editor">
             <h2 className={styles.sectionHeading}>{editingDraft ? "Edit saved draft" : "New draft"}</h2>
             <form className={styles.form} onSubmit={submit(async () => {
@@ -125,8 +127,8 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
               <small>Fixture draft only. Live sending is unavailable.</small>
             </form>
           </section>}
-          {view.drafts.length > 0 && <details className={styles.activity} open><summary>Saved drafts ({view.drafts.length})</summary>
-            {view.drafts.map((item) => <article className={styles.agent} key={item.id} data-testid="saved-draft">
+          {mailFolder === "Drafts" && <section className={styles.panel} aria-label="Saved drafts"><h2 className={styles.sectionHeading}>Saved drafts</h2>
+            {visibleDrafts.map((item) => <article className={styles.agent} key={item.id} data-testid="saved-draft">
               <strong>{item.subject || view.messages.find((message) => message.id === item.messageId)?.subject || "Reply draft"}</strong>
               <small>From: {view.accounts.find((account) => account.id === item.accountId)?.address}</small>
               <small>To: {item.to || "Reply to selected message"} · Draft only</small><p className={styles.body}>{item.body}</p>
@@ -135,21 +137,23 @@ function WorkspaceSession({ owner, setOwner }: { owner: string; setOwner: (value
                 <button disabled={busy} onClick={async () => { if (await command({ type: "mail.simulate-send", draftId: item.id }, "Fixture message moved to Simulated Sent. No actual delivery occurred.")) { if (editingDraft === item.id) { setComposing(false); setEditingDraft(""); } } }}>Simulate send</button>
               </div><small>Simulation only · no actual delivery</small>
             </article>)}
-          </details>}
-          {(view.sent || []).length > 0 && <section className={styles.panel} aria-label="Simulated Sent"><h2 className={styles.sectionHeading}>Simulated Sent</h2><p className={styles.inset}>Fixture records only. These messages were never delivered to any provider or recipient.</p>
-            {view.sent.map((item) => <article className={styles.agent} key={item.id} data-testid="sent-message"><strong>{item.subject}</strong><small>From: {item.from}<br />To: {item.to}<br />{date(item.sentAt)} · Simulated delivery</small><p className={styles.body}>{item.body}</p></article>)}
+            {!visibleDrafts.length && <p className={styles.empty}>{search ? "No drafts match this search in the selected mailbox." : "No saved drafts in this mailbox. Compose a draft or save a reply from your inbox."}</p>}
           </section>}
-          <div className={styles.mailGrid}><section className={styles.panel} aria-label="Messages">{view.messages.filter((item) => !accountId || item.accountId === accountId).map((message) => <button className={`${styles.message} ${messageId === message.id ? styles.selected : ""}`} key={message.id} data-testid="mail-row" onClick={() => { setMessageId(message.id); setDraft(view.drafts.find((item) => item.messageId === message.id)?.body || ""); }}><small>{view.accounts.find((account) => account.id === message.accountId)?.label} · {message.read ? "Read" : "Unread"}</small><strong>{message.subject}</strong><span>{message.from}</span></button>)}</section>
+          {mailFolder === "Simulated Sent" && <section className={styles.panel} aria-label="Simulated Sent"><h2 className={styles.sectionHeading}>Simulated Sent</h2><p className={styles.inset}>Fixture records only. These messages were never delivered to any provider or recipient.</p>
+            {visibleSent.map((item) => <article className={styles.agent} key={item.id} data-testid="sent-message"><strong>{item.subject}</strong><small>From: {item.from}<br />To: {item.to}<br />{date(item.sentAt)} · Simulated delivery</small><p className={styles.body}>{item.body}</p></article>)}
+            {!visibleSent.length && <p className={styles.empty}>{search ? "No simulated messages match this search in the selected mailbox." : "No simulated sent messages in this mailbox. Use Simulate send on a saved draft to try the fixture workflow."}</p>}
+          </section>}
+          {mailFolder === "Inbox" && <div className={styles.mailGrid}><section className={styles.panel} aria-label="Messages">{visibleMessages.map((message) => <button className={`${styles.message} ${messageId === message.id ? styles.selected : ""}`} key={message.id} data-testid="mail-row" onClick={() => { setMessageId(message.id); setDraft(view.drafts.find((item) => item.messageId === message.id)?.body || ""); }}><small>{view.accounts.find((account) => account.id === message.accountId)?.label} · {message.read ? "Read" : "Unread"}</small><strong>{message.subject}</strong><span>{message.from}</span></button>)}{!visibleMessages.length && <p className={styles.empty}>{search ? "No messages match this search in the selected mailbox." : "No inbox messages in this mailbox."}</p>}</section>
             <section className={styles.panel} aria-label="Message reader">{selectedMessage ? <div className={styles.reader}><p className={styles.eyebrow}>PRIVATE MAIL</p><h2>{selectedMessage.subject}</h2><p className={styles.small}>From: {selectedMessage.from}<br />To: {selectedMessage.to}<br />{date(selectedMessage.receivedAt)}</p><pre className={styles.body}>{selectedMessage.body}</pre><div className={styles.actions}><button disabled={busy} onClick={() => command({ type: "mail.read", messageId: selectedMessage.id, read: !selectedMessage.read }, "Message updated")}>Mark {selectedMessage.read ? "unread" : "read"}</button><button className={styles.primary} disabled={busy} onClick={() => command({ type: "task.create", title: selectedMessage.subject, messageId: selectedMessage.id }, "Private task created from this message")}>Create task from mail</button></div><form onSubmit={submit(async () => { const existing = view.drafts.find((item) => item.messageId === selectedMessage.id);
-              await command(existing ? { type: "mail.draft.update", draftId: existing.id, to: existing.to || selectedMessage.from, subject: existing.subject || `Re: ${selectedMessage.subject}`, body: draft } : { type: "mail.draft", messageId: selectedMessage.id, body: draft }, "Reply saved as a local fixture draft. No message sent."); })}><label>Reply draft<textarea aria-label="Reply draft" required value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} placeholder="Write a reply to save for later…" /></label><button disabled={busy || !draft.trim()}>Save draft</button><p className={styles.small}>Draft only · live sending is disabled</p></form></div> : <div className={styles.empty}>Select a message to read, draft a reply or create a private task.</div>}</section></div>
+              await command(existing ? { type: "mail.draft.update", draftId: existing.id, to: existing.to || selectedMessage.from, subject: existing.subject || `Re: ${selectedMessage.subject}`, body: draft } : { type: "mail.draft", messageId: selectedMessage.id, body: draft }, "Reply saved as a local fixture draft. No message sent."); })}><label>Reply draft<textarea aria-label="Reply draft" required value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} placeholder="Write a reply to save for later…" /></label><button disabled={busy || !draft.trim()}>Save draft</button><p className={styles.small}>Draft only · live sending is disabled</p></form></div> : <div className={styles.empty}>Select a message to read, draft a reply or create a private task.</div>}</section></div>}
         </>}
         {view && tab === "Tasks" && <>
           <form className={styles.inlineForm} onSubmit={submit(async () => { if (await command({ type: "task.create", title: taskTitle }, "Task created")) setTaskTitle(""); })}><label className={styles.grow}>New task<input aria-label="New task" required value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="What needs your attention?" /></label><button className={styles.primary} disabled={busy}>Add task</button></form>
-          <section className={styles.panel} aria-label="Task list">{view.tasks.map((task) => <article className={styles.task} data-testid="task-row" key={task.id}><label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(e) => command({ type: "task.complete", taskId: task.id, completed: e.target.checked }, "Task updated")} /><span className={task.completed ? styles.completed : ""}>{task.title}</span></label><div>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{date(task.scheduledSlot.start)} – {date(task.scheduledSlot.end)}</small> : <small>Unscheduled</small>}<button disabled={busy} onClick={() => { setScheduleTask(task.id); setEventTitle(task.title); }}>Schedule</button></div></article>)}{!view.tasks.length && <p className={styles.empty}>No tasks yet. Add one or turn a message into a task.</p>}</section>
+          <section className={styles.panel} aria-label="Task list">{view.tasks.map((task) => <article className={styles.task} data-testid="task-row" key={task.id}><label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(e) => command({ type: "task.complete", taskId: task.id, completed: e.target.checked }, "Task updated")} /><span className={task.completed ? styles.completed : ""}>{task.title}</span></label><div>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{date(task.scheduledSlot.start)} – {date(task.scheduledSlot.end)}</small> : <small>Unscheduled</small>}<button disabled={busy} onClick={() => { setScheduleTask(task.id); }}>Schedule</button></div></article>)}{!view.tasks.length && <p className={styles.empty}>No tasks yet. Add one or turn a message into a task.</p>}</section>
           {scheduleTask && <section className={styles.panel}><h2 className={styles.sectionHeading}>Schedule task</h2><form className={styles.form} onSubmit={submit(async () => { if (await command({ type: "task.schedule", taskId: scheduleTask, calendarId: selectedCalendar, start: utc(start), end: utc(end) }, "Task scheduled on your calendar")) setScheduleTask(""); })}><p>{view.tasks.find((task) => task.id === scheduleTask)?.title}</p><TimeFields calendars={calendars} calendarId={selectedCalendar} setCalendarId={setCalendarId} start={start} setStart={setStart} end={end} setEnd={setEnd} /><div className={styles.actions}><button className={styles.primary} disabled={busy}>Save schedule</button><button type="button" onClick={() => setScheduleTask("")}>Cancel</button></div></form></section>}
         </>}
-        {view && tab === "Calendar" && <div className={styles.calendarGrid}><section className={styles.panel}><h2 className={styles.sectionHeading}>Upcoming agenda</h2>{[...view.events].sort((a, b) => a.start.localeCompare(b.start)).map((event) => <article className={styles.event} key={event.id} data-testid="calendar-event"><small>{date(event.start)} – {date(event.end)}</small><strong>{event.title}</strong><span>{calendars.find((item) => item.id === event.calendarId)?.name}{event.taskId ? " · linked task" : ""}</span><div className={styles.actions}><button onClick={() => { setEditingEvent(event.id); setEventTitle(event.title); setStart(event.start.slice(0, 16)); setEnd(event.end.slice(0, 16)); setCalendarId(event.calendarId); }}>Edit block</button><button disabled={busy} onClick={() => { if (window.confirm(`Delete fixture block “${event.title}”?`)) command({ type: "calendar.delete", eventId: event.id }, "Time block deleted"); }}>Delete block</button></div></article>)}{!view.events.length && <p className={styles.empty}>Your agenda is clear.</p>}</section><section className={styles.panel}><h2 className={styles.sectionHeading}>{editingEvent ? "Edit time block" : "Create time block"}</h2><form className={styles.form} onSubmit={submit(async () => { if (await command(editingEvent ? { type: "calendar.update", eventId: editingEvent, title: eventTitle, start: utc(start), end: utc(end) } : { type: "calendar.create", calendarId: selectedCalendar, title: eventTitle, start: utc(start), end: utc(end) }, editingEvent ? "Time block updated" : "Time block created")) { setEventTitle(""); setEditingEvent(""); } })}><label>Block title<input aria-label="Block title" required value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} /></label><TimeFields lockedCalendar={Boolean(editingEvent)} calendars={calendars} calendarId={selectedCalendar} setCalendarId={setCalendarId} start={start} setStart={setStart} end={end} setEnd={setEnd} /><button className={styles.primary} disabled={busy}>{editingEvent ? "Save block" : "Create block"}</button>{editingEvent && <button type="button" onClick={() => { setEditingEvent(""); setEventTitle(""); }}>Cancel edit</button>}</form></section></div>}
-        {view && tab === "Agents" && <div className={styles.calendarGrid}><section className={styles.panel}><h2 className={styles.sectionHeading}>Personal agents</h2><p className={styles.inset}>Simulated identities with explicit scopes and resources. No API secrets are created.</p>{view.agents.map((agent) => <article key={agent.id} className={styles.agent} data-testid="agent-row"><strong>{agent.name}</strong><small>{agent.revoked ? "Revoked" : "Active"} · {agent.scopes.join(", ")}</small><small>{agent.resourceIds.length} selected resources</small><div className={styles.actions}><button disabled={busy} onClick={() => inspect(agent.id)}>Inspect access</button><button disabled={busy || agent.revoked} onClick={async () => { if (await command({ type: "agent.revoke", agentId: agent.id }, "Agent access revoked")) { if (inspectedAgent === agent.id) await inspect(agent.id); } }}>Revoke</button></div></article>)}{inspectedAgent && <section aria-label="Agent access result" className={styles.inspection}><h3>Agent access result</h3>{agentError && <p role="alert">{agentError}</p>}{agentView && <><p data-testid="agent-counts">{agentView.messages.length} messages · {agentView.tasks.length} tasks · {agentView.events.length} events</p><ul>{agentView.messages.map((item) => <li key={item.id}>Mail: {item.subject}</li>)}{agentView.tasks.map((item) => <li key={item.id}>Task: {item.title}</li>)}{agentView.events.map((item) => <li key={item.id}>Event: {item.title}</li>)}</ul></>}</section>}</section><section className={styles.panel}><h2 className={styles.sectionHeading}>Grant scoped access</h2><form className={styles.form} onSubmit={submit(async () => { if (await command({ type: "agent.grant", name: agentName, scopes: agentScopes, resourceIds: resources }, "Scoped agent created")) { setAgentName(""); setResources([]); } })}><label>Agent name<input aria-label="Agent name" required value={agentName} onChange={(e) => setAgentName(e.target.value)} /></label><fieldset><legend>Capabilities</legend>{scopes.map((scope) => <label className={styles.check} key={scope}><input type="checkbox" checked={agentScopes.includes(scope)} onChange={(e) => setAgentScopes(e.target.checked ? [...agentScopes, scope] : agentScopes.filter((item) => item !== scope))} />{scope}</label>)}</fieldset><fieldset><legend>Allowed resources</legend>{resourceOptions.map((resource) => <label className={styles.check} key={resource.id}><input type="checkbox" checked={resources.includes(resource.id)} onChange={(e) => setResources(e.target.checked ? [...resources, resource.id] : resources.filter((item) => item !== resource.id))} />{resource.label}</label>)}</fieldset><p className={styles.small}>Select only the mailboxes, calendars and personal task collection this agent needs. Unselected resources stay private.</p><button className={styles.primary} disabled={busy || !agentScopes.length || !resources.length}>Create agent</button></form></section></div>}
+        {view && tab === "Calendar" && <WorkspaceCalendar view={view} busy={busy} command={command} />}
+        {view && tab === "Agents" && <WorkspaceAgents view={view} owner={owner} busy={busy} command={command} refresh={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id}><small>{date(entry.createdAt)}</small> {entry.action} <small>· {entry.actor}</small></p>)}</details>}
       </main>
     </div>

@@ -41,6 +41,7 @@ test("fixture workspace connects mail, drafts, tasks, calendar and revocable age
   await task.getByRole("checkbox").click();
   await expect(task.getByRole("checkbox")).toBeChecked();
   await page.reload();
+  await expect(page.getByTestId("mail-row").first()).toBeVisible();
   await page.getByRole("button", { name: /^Tasks/ }).click();
   await expect(page.getByTestId("task-row").filter({ hasText: "Launch checklist for Friday" }).first().getByRole("checkbox")).toBeChecked();
   await page.getByRole("button", { name: /^Calendar/ }).click();
