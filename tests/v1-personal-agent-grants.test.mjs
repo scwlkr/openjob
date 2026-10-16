@@ -80,7 +80,7 @@ test('grant JSON validation bounds streamed body, names, scopes and resources be
     ['{', 400], [new Uint8Array([0xff]), 400], ['x'.repeat(32769), 413],
     [input, 415, { 'content-type': 'text/plain' }],
     [{ ...input, ownerUserId: 'usr_b' }, 400], [{ ...input, name: 'x'.repeat(81) }, 400], [{ ...input, name: 'bad\nname' }, 400],
-    [{ ...input, scopes: [] }, 400], [{ ...input, scopes: ['mail:read'] }, 400], [{ ...input, scopes: ['tasks:read', 'tasks:read'] }, 400],
+    [{ ...input, scopes: [] }, 400], [{ ...input, scopes: ['mail:send'] }, 400], [{ ...input, scopes: ['tasks:read', 'tasks:read'] }, 400],
     [{ ...input, resourceIds: [] }, 400], [{ ...input, resourceIds: ['foreign_calendar'] }, 400], [{ ...input, resourceIds: ['tasks:personal', 'tasks:personal'] }, 400],
   ];
   for (const [body, status, headers] of invalid) {
