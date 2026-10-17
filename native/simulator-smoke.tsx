@@ -22,10 +22,11 @@ function Fixture() {
     Inter_700Bold: require('./assets/fonts/Inter-Bold.ttf'),
   });
   const [session, setSession] = useState<{ owner: string; controller: NativePersonalWorkspaceController }>();
-  const [error, setError] = useState('');
+  const permitted = simulatorFixtureAllowed(Device.isDevice, Constants.expoConfig?.ios?.bundleIdentifier);
+  const [error, setError] = useState(permitted ? '' : 'Fixture unavailable outside the development simulator identity.');
   useEffect(() => {
     let active = true;
-    if (!simulatorFixtureAllowed(Device.isDevice, Constants.expoConfig?.ios?.bundleIdentifier)) { setError('Fixture unavailable outside the development simulator identity.'); return; }
+    if (!permitted) return;
     void (async () => {
       try {
         const response = await fetch(`${origin}/__test/session/alex`);
@@ -45,7 +46,7 @@ function Fixture() {
       } catch { if (active) setError('Start the isolated --test-only API on loopback port 5213, then reopen this fixture app.'); }
     })();
     return () => { active = false; };
-  }, []);
+  }, [permitted]);
   return <OpenJobThemeProvider preference="light" setPreference={() => undefined}><SafeAreaProvider><SafeAreaView style={{ flex: 1 }}>
     <Copy heading>SIMULATOR FIXTURE</Copy><Copy>Invented data · local test API. No real sign-in, cloud writes, mailbox connection or delivery. This is not the normal authentication entry.</Copy>
     {error || fontError ? <Copy>{error || 'Local fonts could not load.'}</Copy> : !session || !fonts ? <Copy>Loading isolated fixture…</Copy> : <NativePersonalWorkspace controller={session.controller} ownerUserId={session.owner} sessionReady onRestoreSession={() => undefined} onSessionRevoked={() => { setSession(undefined); setError('Fixture access ended.'); }} />}
