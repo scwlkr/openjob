@@ -179,7 +179,7 @@ const RESOURCE_HELP = {
   openjob workspace agent revoke <agent-id> [--yes]
 
 Uses the selected profile's personal Tasks, Calendar and invented Mail API.
-Commands are strict JSON task.create/update/complete/schedule/unschedule/delete
+Commands are strict JSON task.create/update/notes/complete/schedule/unschedule/delete
 or calendar.create/update/delete objects. Invented Mail supports mail.examples.add,
 mail.read/draft/compose/draft.update/simulate-send. Real mail.send is always denied.
 No real provider messages or fixture identity headers are accepted.
@@ -656,7 +656,7 @@ async function main(raw) {
     const input = readInputObject(path);
     /** @type {Record<string, string[]>} */
     const fields = {
-      "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
+      "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"], "task.notes": ["type", "taskId", "notes"],
       "task.complete": ["type", "taskId", "completed"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
       "task.schedule-available": ["type", "taskId", "calendarId", "start", "end"],
       "task.unschedule": ["type", "taskId"], "task.delete": ["type", "taskId"],
@@ -669,12 +669,12 @@ async function main(raw) {
       "mail.send": ["type", "draftId"],
     };
     const type = input.type;
-    if (typeof type !== "string" || !Object.hasOwn(fields, type) || fields[type].some(key => !(type === "task.create" && key === "messageId") && !Object.hasOwn(input, key)) || Object.keys(input).some(key => !fields[type].includes(key)) || Buffer.byteLength(JSON.stringify(input)) > 32768) {
+    if (typeof type !== "string" || !Object.hasOwn(fields, type) || fields[type].some(key => !(type === "task.create" && key === "messageId") && !Object.hasOwn(input, key)) || Object.keys(input).some(key => !fields[type].includes(key)) || Buffer.byteLength(JSON.stringify(input)) > 262144) {
       throw new CliError("input_invalid", "Use one bounded personal workspace command with exactly its documented fields.", 2);
     }
     for (const field of fields[type]) {
       if (type === "task.create" && field === "messageId" && input[field] === undefined) continue;
-      if (["completed", "read"].includes(field) ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || !input[field].trim() || input[field].length > (field === "body" ? 20000 : field === "ical" ? 16384 : 500)) {
+      if (["completed", "read"].includes(field) ? typeof input[field] !== "boolean" : typeof input[field] !== "string" || field !== "notes" && !input[field].trim() || (field === "notes" ? [...input[field]].length : input[field].length) > (["body", "notes"].includes(field) ? 20000 : field === "ical" ? 16384 : 500)) {
         throw new CliError("input_invalid", "One or more personal workspace command fields are invalid.", 2);
       }
     }

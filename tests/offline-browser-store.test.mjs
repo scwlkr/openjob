@@ -36,3 +36,15 @@ test('stale authored saves and clears preserve newer text until explicit reload 
  assert.deepEqual(await two.loadAuthored(),first);await two.saveAuthored(stale);await assert.rejects(one.clearAuthored(),error=>error.code==='changed_in_another_tab');
  assert.deepEqual(await one.loadAuthored(),stale);await one.clearAuthored();assert.equal(await one.loadAuthored(),null);
 });
+
+test('authored Task notes survive offline reconstruction and sync without Mail source fields', async () => {
+ const f=fixture(), one=f.make(); await one.bindOwner(f.owner); await one.offline.refresh(f.owner);
+ f.offline(true);
+ const created=await one.offline.edit(f.owner,{type:'task.create',title:'Keep context'});
+ const id=created.projection.tasks[0].id, notes='  Offline context\n📝 plain text';
+ await one.offline.edit(f.owner,{type:'task.notes',taskId:id,notes});
+ const two=f.make(); await two.loadBinding(); const restored=await two.offline.load(f.owner);
+ assert.equal(restored.projection.tasks[0].notes,notes); assert.equal(JSON.stringify(f.peek()).includes('sourceMessageId'),false);
+ f.offline(false); assert.equal((await two.offline.sync(f.owner)).status,'synced');
+ const three=f.make(); await three.loadBinding(); assert.equal((await three.offline.refresh(f.owner)).projection.tasks[0].notes,notes);
+});

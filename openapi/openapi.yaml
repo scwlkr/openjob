@@ -3812,6 +3812,10 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+        notes:
+          type: string
+          maxLength: 20000
+          description: Optional authored plain text. No automatic Mail body or source metadata copy.
         completed:
           type: boolean
         scheduledSlot:
@@ -3933,6 +3937,7 @@ components:
           enum:
             - task.create
             - task.update
+            - task.notes
             - task.complete
             - task.schedule
             - task.schedule-available
@@ -4065,6 +4070,21 @@ components:
     PersonalWorkspaceCommand:
       oneOf:
         - $ref: "#/components/schemas/CalendarIcalImportCommand"
+        - type: object
+          additionalProperties: false
+          required: [type, taskId, notes]
+          properties:
+            type:
+              type: string
+              const: task.notes
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            notes:
+              type: string
+              maxLength: 20000
+              description: Plain authored text; empty or whitespace-only clears notes. Title and Calendar are unchanged.
         - type: object
           additionalProperties: false
           required:

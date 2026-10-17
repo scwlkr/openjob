@@ -38,7 +38,8 @@ async function harness(t) {
   let outage = false;
   const server = createServer(async (req, res) => {
     try {
-      let body = ''; for await (const chunk of req) body += chunk;
+      const chunks = []; for await (const chunk of req) chunks.push(chunk);
+      const body = Buffer.concat(chunks).toString('utf8');
       if (req.url === '/firebase/token?key=fixture') {
         const account = new URLSearchParams(body).get('refresh_token') === 'fixture-refresh-b' ? 'b' : 'a';
         res.setHeader('content-type', 'application/json');
@@ -59,6 +60,7 @@ async function harness(t) {
   const base = `http://127.0.0.1:${server.address().port}`;
   const run = (args, input, entrypoint = 'cli/openjob.mjs') => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entrypoint, ...args], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['pipe', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let stdout = '', stderr = ''; child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; }); child.on('error', reject); child.on('close', status => resolve({ status, stdout, stderr })); child.stdin.end(input);
   });
   return { directory, run, calls, failures, records, reload() { api = createV1PersonalWorkspaceApi(options); }, outage(value) { outage = value; }, async owner(account) { await writeFile(credential, `fixture-refresh-${account}`, { mode: 0o600 }); } };
@@ -72,6 +74,9 @@ test('existing human CLI shares authenticated personal Task/Calendar workflow an
   };
   const task = await command({ type: 'task.create', title: 'Existing CLI personal task' });
   assert.equal(task.ownerId, 'usr_a');
+  const notes = '  CLI notes\n' + '📝'.repeat(19988);
+  const noted = await command({ type: 'task.notes', taskId: task.id, notes });
+  assert.equal(noted.notes, notes);
   const scheduled = await command({ type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2026-07-15T15:00:00Z', end: '2026-07-15T15:30:00Z' });
   const input = join(f.directory, 'edit.json');
   await writeFile(input, JSON.stringify({ type: 'task.update', taskId: task.id, title: 'Shared edited title' }));
@@ -86,6 +91,7 @@ test('existing human CLI shares authenticated personal Task/Calendar workflow an
   const snapshot = await f.run(['workspace', 'snapshot', '--format', 'json', '--out', output]);
   assert.equal(snapshot.status, 0, snapshot.stderr); assert.equal(snapshot.stdout, '');
   const saved = JSON.parse(await readFile(output, 'utf8')).data;
+  assert.equal(saved.tasks[0].notes, notes);
   assert.equal(saved.tasks[0].title, 'Shared edited title'); assert.equal(saved.tasks[0].completed, true);
   assert.equal(saved.events[0].id, scheduled.calendarEventId); assert.equal(saved.events[0].title, 'Shared edited title');
   assert.deepEqual(saved.messages, []); assert.deepEqual(saved.agents, []);

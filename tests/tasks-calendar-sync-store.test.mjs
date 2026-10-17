@@ -19,14 +19,17 @@ const doc = f => f.db.documents.get(`${ROOT}v1PersonalWorkspaces/${owner}`);
 
 test('durable sync preserves mail/grants/private provenance, stable revision and idempotent lost acknowledgement',async()=>{
  const f=await fixture(); await f.store.command(owner,{type:'mail.examples.add'}); const task=await f.store.command(owner,{type:'task.create',title:'From invented mail',messageId:'example-message-1'});
+ await f.store.command(owner,{type:'task.notes',taskId:task.id,notes:'  Original notes\n'});
  const grant=await f.store.createAgent(owner,{name:'Planner',scopes:['tasks:read'],resourceIds:['tasks:personal']}); const initial=await f.store.readTaskCalendarSync(owner);
  assert.equal(JSON.stringify(initial).includes('sourceMessageId'),false); assert.equal(JSON.stringify(initial).includes('colleague'),false);
  await f.store.command(owner,{type:'mail.read',messageId:'example-message-1',read:true}); assert.equal((await f.store.readTaskCalendarSync(owner)).revision,initial.revision);
  let projection=applyTaskCalendarCommand(initial.projection,{type:'task.update',taskId:task.id,title:'Offline rename'},owner,offline);
+ assert.equal(projection.tasks[0].notes,'  Original notes\n');
+ projection=applyTaskCalendarCommand(projection,{type:'task.notes',taskId:task.id,notes:'  Offline authored context\n📝'},owner,offline);
  projection=applyTaskCalendarCommand(projection,{type:'task.schedule',taskId:task.id,calendarId:'personal',start:'2026-10-17T10:00:00Z',end:'2026-10-17T11:00:00Z'},owner,offline); projection=add(projection);
  const batch=await f.batch(projection); const ack=await f.store.syncTaskCalendar(owner,batch); assert.notEqual(ack.revision,initial.revision);
  const before=structuredClone(doc(f)); assert.deepEqual(await f.reopen().syncTaskCalendar(owner,batch),ack); assert.deepEqual(doc(f),before);
- const view=await f.reopen().snapshot(owner); assert.equal(view.tasks[0].sourceMessageId,'example-message-1'); assert.equal(view.messages[0].read,true); assert.equal(view.events[0].taskId,task.id); assert.equal(view.activity.filter(item=>item.action==='task-calendar.sync').length,1); assert.equal((await f.store.listAgents(owner))[0].id,grant.agent.id);
+ const view=await f.reopen().snapshot(owner); assert.equal(view.tasks[0].notes,'  Offline authored context\n📝'); assert.equal(view.tasks[0].sourceMessageId,'example-message-1'); assert.equal(view.messages[0].read,true); assert.equal(view.events[0].taskId,task.id); assert.equal(view.activity.filter(item=>item.action==='task-calendar.sync').length,1); assert.equal((await f.store.listAgents(owner))[0].id,grant.agent.id);
  await f.store.command(owner,{type:'task.complete',taskId:task.id,completed:true}); assert.deepEqual(await f.store.syncTaskCalendar(owner,batch),ack);
  await assert.rejects(f.store.syncTaskCalendar(owner,{...batch,projection:add(batch.projection,'Different payload')}),error=>error.code==='conflict');
 });
@@ -75,4 +78,22 @@ test('independent instances accept one concurrent operation exactly once and del
  const [one,two]=await Promise.all([f.store.syncTaskCalendar(owner,batch),f.reopen().syncTaskCalendar(owner,batch)]); assert.deepEqual(one,two);assert.equal((await f.store.snapshot(owner)).activity.filter(item=>item.action==='task-calendar.sync').length,1);assert.equal(JSON.parse(doc(f).fields.syncJson.stringValue).length,1);
  f.db.documents.get(`${ROOT}v1UserDirectory/${owner}`).fields.deletionState={stringValue:'pending'};
  await assert.rejects(f.store.syncTaskCalendar(owner,batch),InactiveUserError);assert.equal(await f.store.removeAllForUser(owner),1);assert.equal(doc(f),undefined);assert.equal(await f.store.removeAllForUser(owner),0);
+});
+
+
+test('online notes stop before breaking offline capacity and preserve the prior saved state', async () => {
+ const f = await fixture();
+ for (let i = 0; i < 8; i++) await f.store.command(owner, { type: 'task.create', title: `Owner context ${i}` });
+ const tasks = (await f.store.snapshot(owner)).tasks;
+ const notes = '📝'.repeat(20000);
+ for (const task of tasks.slice(0, 6)) await f.store.command(owner, { type: 'task.notes', taskId: task.id, notes });
+ const before = structuredClone(doc(f));
+ await assert.rejects(f.store.command(owner, { type: 'task.notes', taskId: tasks[6].id, notes }), error => error.code === 'workspace_capacity');
+ assert.deepEqual(doc(f), before);
+ const read = await f.reopen().readTaskCalendarSync(owner); assert.equal(read.projection.tasks[0].notes, notes);
+ const batch = await f.batch(read.projection); assert.ok(Buffer.byteLength(JSON.stringify(batch)) < 512 * 1024);
+ await f.store.syncTaskCalendar(owner, batch);
+ await f.store.command(owner, { type: 'task.notes', taskId: tasks[0].id, notes: '' });
+ await f.store.command(owner, { type: 'task.notes', taskId: tasks[6].id, notes });
+ assert.equal((await f.reopen().readTaskCalendarSync(owner)).projection.tasks[6].notes, notes);
 });

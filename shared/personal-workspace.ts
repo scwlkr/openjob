@@ -20,7 +20,7 @@ export type PersonalWorkspaceStore = {
   snapshotForAgent(token: string): Promise<WorkspaceView>;
   commandForAgent(token: string, input: unknown): Promise<unknown>;
 };
-const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.schedule", "task.schedule-available", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete", "calendar.import", "mail.read", "mail.draft", "mail.compose", "mail.draft.update", "mail.simulate-send", "mail.send", "mail.examples.add"]);
+const COMMANDS = new Set(["task.create", "task.complete", "task.update", "task.notes", "task.schedule", "task.schedule-available", "task.unschedule", "task.delete", "calendar.create", "calendar.update", "calendar.delete", "calendar.import", "mail.read", "mail.draft", "mail.compose", "mail.draft.update", "mail.simulate-send", "mail.send", "mail.examples.add"]);
 const KEYS = ["accounts", "messages", "tasks", "calendars", "events", "drafts", "sent", "agents", "activity"];
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code }); }
 export function assertPersonalWorkspaceOwner(ownerId: string) {
@@ -66,7 +66,8 @@ export function validatePersonalWorkspace(ownerId: string, value: unknown): Work
   if (!state.calendars.length) return invalid();
   for (const calendar of state.calendars) if (!record(calendar) || !keys(calendar, ["id", "ownerId", "name", "color"]) || !unique(calendar.id) || calendar.ownerId !== ownerId || !string(calendar.name) || !/^#[0-9a-f]{6}$/i.test(calendar.color)) return invalid();
   for (const task of state.tasks) {
-    if (!record(task) || !keys(task, ["id", "ownerId", "title", "completed", "scheduledSlot", "calendarEventId", "sourceMessageId", "sourceAccountId"]) || !unique(task.id) || task.ownerId !== ownerId || !string(task.title) || typeof task.completed !== "boolean") return invalid();
+    if (!record(task) || !keys(task, ["id", "ownerId", "title", "notes", "completed", "scheduledSlot", "calendarEventId", "sourceMessageId", "sourceAccountId"]) || !unique(task.id) || task.ownerId !== ownerId || !string(task.title) || typeof task.completed !== "boolean") return invalid();
+    if (task.notes !== undefined && (typeof task.notes !== "string" || [...task.notes].length > 20000)) return invalid();
     if ((task.sourceMessageId === undefined) !== (task.sourceAccountId === undefined) || (task.sourceMessageId !== undefined && !state.messages.some(message => message.id === task.sourceMessageId && message.accountId === task.sourceAccountId))) return invalid();
     if (task.scheduledSlot !== undefined && (!record(task.scheduledSlot) || !keys(task.scheduledSlot, ["start", "end"]) || !date(task.scheduledSlot.start) || !date(task.scheduledSlot.end) || task.scheduledSlot.start >= task.scheduledSlot.end)) return invalid();
     if ((task.calendarEventId === undefined) !== (task.scheduledSlot === undefined) || (task.calendarEventId !== undefined && !string(task.calendarEventId, 128))) return invalid();

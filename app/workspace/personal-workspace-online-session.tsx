@@ -80,7 +80,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
       const next = await client.snapshot(session, signal);
       if (!current()) return false;
       setView(next); setNotice(success); return true;
-    } catch (failure) { if (current()) setError(input.type === "task.schedule-available" && failure instanceof PersonalWorkspaceError && failure.code === "schedule_conflict" ? "That time is now occupied. Refresh to find another open slot; your Task was not moved." : input.type === "calendar.import" && failure instanceof PersonalWorkspaceError && failure.code === "calendar_import_conflict" ? "An event UID already exists with different title or times. Nothing was imported. Review the existing event separately." : "The change could not be completed. Refresh to check your saved workspace before retrying."); return false; }
+    } catch (failure) { if (current()) setError(failure instanceof PersonalWorkspaceError && failure.code === "workspace_capacity" ? "Your saved workspace is full. Shorten notes or remove unneeded work; your editor text is kept." : input.type === "task.schedule-available" && failure instanceof PersonalWorkspaceError && failure.code === "schedule_conflict" ? "That time is now occupied. Refresh to find another open slot; your Task was not moved." : input.type === "calendar.import" && failure instanceof PersonalWorkspaceError && failure.code === "calendar_import_conflict" ? "An event UID already exists with different title or times. Nothing was imported. Review the existing event separately." : "The change could not be completed. Refresh to check your saved workspace before retrying."); return false; }
     finally { if (current()) setBusy(false); }
   }
 

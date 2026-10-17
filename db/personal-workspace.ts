@@ -54,6 +54,8 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
       if (auth) authorized(current.grants, auth);
       const next = await apply(current);
       if (next.skip) { if (auth) authorized((await activeEnvelope(owner)).grants, auth); else await assertActiveUser(firestore, owner); return next.result; }
+      // Every newly saved Task/Calendar state must still fit the existing offline contract.
+      if (next.state) projectTaskCalendar(owner, next.state);
       const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) }, syncJson: { stringValue: JSON.stringify(next.receipts ?? current.receipts) } } };
       if (new TextEncoder().encode(JSON.stringify(update)).length > MAX_ENCODED_BYTES - 1024) fail("workspace_capacity", "Personal workspace storage limit reached");
       try {

@@ -13,7 +13,7 @@ function parse(input: unknown): WorkspaceCommand {
   const obj = input as Record<string, unknown>;
   const fields: Record<string, string[]> = {
     "task.create": ["title", "messageId"], "task.complete": ["taskId", "completed"],
-    "task.update": ["taskId", "title"], "task.unschedule": ["taskId"], "task.delete": ["taskId"],
+    "task.update": ["taskId", "title"], "task.notes": ["taskId", "notes"], "task.unschedule": ["taskId"], "task.delete": ["taskId"],
     "task.schedule-available": ["taskId", "calendarId", "start", "end"], "task.schedule": ["taskId", "calendarId", "start", "end"], "calendar.create": ["calendarId", "title", "start", "end"],
     "calendar.update": ["eventId", "title", "start", "end"], "calendar.delete": ["eventId"],
     "mail.compose": ["accountId", "to", "subject", "body"],
@@ -27,7 +27,10 @@ function parse(input: unknown): WorkspaceCommand {
   const parsed: Record<string, unknown> = { type };
   for (const field of fields[type]) {
     if (field === "messageId" && type === "task.create" && obj[field] === undefined) continue;
-    if (field === "completed" || field === "read") {
+    if (field === "notes") {
+      if (typeof obj.notes !== "string" || [...obj.notes].length > 20000) fail("invalid_input", "Notes must be plain text up to 20,000 characters");
+      parsed.notes = obj.notes;
+    } else if (field === "completed" || field === "read") {
       if (typeof obj[field] !== "boolean") fail("invalid_input", `Invalid ${field}`);
       parsed[field] = obj[field];
     } else if (field === "scopes" || field === "resourceIds") {
@@ -118,6 +121,11 @@ export function createWorkspaceEngine(initial: WorkspaceState = createFixtureWor
       case "task.update": {
         need("tasks:write", "tasks:personal"); const found = task(cmd.taskId); const event = linkedEvent(found);
         found.title = cmd.title; if (event) event.title = cmd.title; result = found; break;
+      }
+      case "task.notes": {
+        need("tasks:write", "tasks:personal"); const found = task(cmd.taskId);
+        if (cmd.notes.trim()) found.notes = cmd.notes; else delete found.notes;
+        result = found; break;
       }
       case "task.unschedule":
       case "task.delete": {

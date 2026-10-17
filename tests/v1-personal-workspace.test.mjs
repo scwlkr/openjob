@@ -91,7 +91,7 @@ test('personal API rejects forged auth, agent credentials and invalid or provide
   for (const [body, status, headers] of [
     ['{', 400],
     [new Uint8Array([0xff, 0xfe]), 400],
-    ['x'.repeat(32769), 413],
+    ['x'.repeat(262145), 413],
     ['{}', 415, { 'content-type': 'text/plain' }],
     [JSON.stringify({ type: 'task.create', title: 'No impersonation', ownerId: 'usr_b' }), 400],
     [JSON.stringify({ type: 'task.create' }), 400],
@@ -187,4 +187,27 @@ test('authenticated invented Mail connects private Tasks and Calendar without re
   const other = (await (await f.request(undefined, { token: 'b' })).json()).data;
   assert.deepEqual(other.accounts, []); assert.deepEqual(other.messages, []); assert.deepEqual(other.sent, []);
   snapshot = await ok(); f.reload(); assert.deepEqual(await ok(), snapshot);
+});
+
+test('signed Task notes retain exact Unicode/whitespace, clear explicitly and stay private through planning', async () => {
+  const f = await fixture();
+  const call = async (input, status = 200, options) => { const response = await f.request(input, options); assert.equal(response.status, status); return (await response.json()).data; };
+  const task = await call({ type: 'task.create', title: 'Authored context' });
+  const prefix = '  Line one\n<em>plain text</em>\n';
+  const notes = prefix + '📝'.repeat(20000 - [...prefix].length);
+  assert.ok([...notes].length <= 20000);
+  await call({ type: 'task.notes', taskId: task.id, notes });
+  await call({ type: 'task.update', taskId: task.id, title: 'Renamed without replacing notes' });
+  await call({ type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2026-10-17T09:00:00Z', end: '2026-10-17T09:30:00Z' });
+  await call({ type: 'task.complete', taskId: task.id, completed: true });
+  f.reload();
+  const saved = await call(); assert.equal(saved.tasks[0].notes, notes);
+  assert.equal(saved.events[0].title, 'Renamed without replacing notes'); assert.equal(JSON.stringify(saved.events).includes('plain text'), false);
+  await call({ type: 'task.notes', taskId: task.id, notes: 'Foreign' }, 403, { token: 'b' });
+  await call({ type: 'task.notes', taskId: task.id, notes: 'x'.repeat(20001) }, 400);
+  assert.equal((await call()).tasks[0].notes, notes);
+  await call({ type: 'task.notes', taskId: task.id, notes: '\u0000'.repeat(20000) });
+  await call({ type: 'task.notes', taskId: task.id, notes: '' });
+  assert.equal((await call()).tasks[0].notes, undefined);
+  assert.equal((await f.request(null, { body: ' '.repeat(262145) })).status, 413);
 });
