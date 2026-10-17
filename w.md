@@ -1,5 +1,13 @@
 # Source integration checkpoint — 17 October 2026
 
+Reconciled source2dca2acf13e2ad08f7f035522c840eb6ac68ae9f passed51/51 focused
+notes/Home/isolation/grants and Connections/OAuth/signedCLI tests, TypeScript,
+affected ESLint, OpenAPI34paths49operations, generatedtypes, brand32, secret653
+and diffcheck. Exact-source read-only reconciliation review found no consequential
+issues. This final documentation checkpoint changes no source. PR101 is submitted
+for the already-authorized source-only merge; actual landed hash/readback is recorded
+in Linear WLK331 and PR101. No full-suite or deployment readiness claim.
+
 PR100 merged at b0fed00cc93de69fd4a92d0b1cc5dc64b9b7f401 after exact-head review,
 focused16/16 tests, TypeScript, affected lint, brand32/secret642 and actual notes UI
 proof. Initial compile lacked ignored Cloudflare declarations; restored existing
