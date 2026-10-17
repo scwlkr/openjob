@@ -1,5 +1,7 @@
 # WLK-329 — bounded authorized Workspace Home
 
+PR99 https://github.com/scwlkr/openjob/pull/99; reviewed implementation05e9bb3.
+
 Branch codex/wlk-329-workspace-home from PR98/main93711ac. Parent explicitly selected
 next coherent accepted-roadmap progress; C08/R20 Home dependencies now ready for
 owner-only Tasks/Calendar. Read current AGENTS/mission/WStack0.2/Linear/livePR state.
@@ -31,9 +33,14 @@ Earlier overlapping Home source/tests appeared with older timestamps; preserved
 /tmp/openjob-329-home.json and IABtab10 left untouched; unrelated untracked
 `native/node_modules 2` symlink preserved. Stalled ownedPIDs50682/51017 force-closed
 after graceful timeout; own locks retained .closed-PID. Outsidepreview51282 closed
-normally. No native/heavy phase. Fifteen focusedchecks+TS/lint pass; initialreview
-found catalogRetry readiness bug, fixed. Final tracked-source checks/review and PR
-integration follow; exact identity/proof in Linear/PR. Browserproof output/wlk-329/.
+normally; finalexactcandidatepreview52071 also absent/lockreleased and successful
+IABtab12closed. No native/heavy phase. Fifteenfocusedchecks/TS/lint/brand32 pass
+on05e9bb3; exactheadreview no remainingfindings aftercatalogRetryfix. Finalbrowser
+blockreload/focus, per-contexteditorretention afterfresh-readgate, Samdenial and
+failedrefreshclearing passed. Sourcehashreceipt275matchingfiles and savedreadback
+output/wlk-329/. RootsecretcheckEISDIR on preserveduntrackeddependencylink; unchanged
+canonicalscanner passes641files in clean exactgitarchive export. This is not a pass
+of the originalroot invocation. Final integration identity/state in PR99/Linear329.
 PR95 downloads, WLK318 approvals, WLK302 and approvednpm/publication untouched.
 
 # WLK-328 — normal Workspace pilot composition, actual admission unset
