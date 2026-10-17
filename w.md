@@ -1,3 +1,26 @@
+# WLK332 — disabled Google adapter source prerequisite
+
+Branch codex/wlk-332-google-oauth in /tmp/openjob-google-oauth, base/mainbc5d6f3.
+Linear WLK332; parent explicitly authorizes isolated draft/source only. Existing
+signed-in pilot stays on /tmp/openjob-connections-slice bf5ae46, PID16066/session50291,
+tab939996978 and private verification Task/block unchanged. No heavy/native/browser
+phase. Existing shared dependencies unchanged; official Google library installed
+in isolated /tmp/openjob-332-google-deps, scriptless, root npm lock pinned11.3.1.
+
+Adapter uses official Google OAuth2Client for PKCE, auth URL, code exchange, token
+refresh and signature/issuer/audience verification; tokeninfo checks actual granted
+scopes/subject/audience/expiry. Snapshot bindings, current authorization fences,
+fixed endpoints, timeout/response bounds, no auto token POST retry or raw errors.
+Private result's access-token entry fits existing broker, refresh token separate.
+No live routes/state orchestration/store or real composition changes; mock lifecycle
+stays mock. Provider revocation absent and project-wide consequence explicit.
+See docs/providers/GOOGLE_OAUTH_ADAPTER.md for bounded proof and exact remaining
+configuration/runtime decisions. Selected future mailbox shane.caleb.walker@gmail.com,
+no actual consent/API activation/secret retrieval/client/callback settings or deploy.
+No domain invented; all infra solely scwlkr/0o10. Final checks/review/PR in Linear.
+
+---
+
 # Source integration checkpoint — 17 October 2026
 
 Reconciled source2dca2acf13e2ad08f7f035522c840eb6ac68ae9f passed51/51 focused
