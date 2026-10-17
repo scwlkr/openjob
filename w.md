@@ -1,3 +1,19 @@
+# WLK334 landed receipt — 17 October 2026
+
+PR103 https://github.com/scwlkr/openjob/pull/103 merged source-only at
+b1130f18e85307371677c39507b8f1d3ef704f26, checked/reviewed source head
+9d8a8b68eab9895afdd9b9dcf2df9986b6d16141, branch codex/wlk-334-google-flow,
+base b73487c3c49180ce360e66a396cb60c996942648. Landed tree exactly matched candidate.
+56 focused checks + signed CLI1 passed; landed6 flow checks and compile passed.
+Current main integration is clean; this receipt changes only handoff documentation.
+Real roots remain unconfigured; existing signed-in pilot source/process/tab/private
+Task+block preserved. Interactive UI/live provider proof remains unverified; no
+settings, credentials, private backend, Google consent, deploy or release activated.
+Remaining dependency-ordered setup and Proposed token policy are below and in
+Linear WLK334/WLK318. Stop here; no next feature or infrastructure writer.
+
+---
+
 # WLK334 — disabled Google callback/state/private persistence orchestration
 
 Branch codex/wlk-334-google-flow, /tmp/openjob-google-flow, base/mainb73487c.
