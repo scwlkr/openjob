@@ -1,3 +1,40 @@
+# WLK334 — disabled Google callback/state/private persistence orchestration
+
+Branch codex/wlk-334-google-flow, /tmp/openjob-google-flow, base/mainb73487c.
+Linear WLK334 (actual allocated issue; no WLK333 work claimed). Parent authorizes
+source-only implementation/review/nondeploying integration, no live setup. Current
+AGENTS/mission/w.md/WStack0.2/Linear/PR refreshed. Existing onlyopenPR95 preserved.
+
+Chose dedicated Google engine with existing public lifecycle/API/UI over widening
+the preselected-subject simulated engine: proposer/critic agreed mock/live mode
+confusion was material. No accepted architecture/token-policy decision invented.
+First verified subject binds after signed address check; sticky home/subject on
+reconnect. Atomic injected private repository holds one-use state + private grant,
+without a cross-store promotion gap. No production backend/store/key/secret loader
+or activation. Configurable HTTPS origin, source callbackpath
+/connections/google/callback -> signed POST/api/v1/connections/google/callback.
+Private state/callback, refresh claim/CAS, disconnect/localcleanup, fakeMail read,
+public status/consent/reconnect controls; no send/Calendar/provider revocation.
+See docs/providers/GOOGLE_CONNECTION_FLOW.md for exact actual vs simulated proof,
+Proposed token policy, crashes/uncertain completion and remaining live inputs.
+
+Actual signed-in pilot unchanged on /tmp/openjob-connections-slice bf5ae46,
+PID16066/session50291/tab939996978, private testTask+block retained. No ordinary
+Chrome/native/heavy phase or new browser-scope request. New UI interactive proof
+not claimed; API/core fixture proof is distinct from real Mail. Existing official
+library dependencies reused via isolated332tree; no install or shareddeps changes.
+WLK302 source remains unrecovered/stopped; no duplication/restart.
+
+Hosting update: OVH VPS purchased, allserverinfra private scwlkr/0o10, sole owner
+01a14a00-ce06-7721-a75a-9939f141802d, PR9 merged. First live inventory approval
+pending: no HTTPS target assumed, no server/config/deploy/credential changes here.
+OpenJob+PatriSearch primarilyVPS; Minecraftprimarilyhome. Pending approvals stay
+pending; no repeat notification/checklist. Final exacthead/check/review/landed
+results in Linear/PR. No newGoogle calls/grants/API enablement/client/secret/key/
+callbackregistration/storageactivation/publication/TestFlight/release.
+
+---
+
 # WLK332 — disabled Google adapter source prerequisite
 
 Branch codex/wlk-332-google-oauth in /tmp/openjob-google-oauth, base/mainbc5d6f3.

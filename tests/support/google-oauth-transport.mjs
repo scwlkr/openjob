@@ -33,5 +33,5 @@ export function fixture(options = {}) {
     return Response.json({ access_token: ACCESS, token_type: 'Bearer', expires_in: 3600, scope: GOOGLE_MAIL_SCOPES.join(' '), ...(form.get('grant_type') === 'authorization_code' ? { id_token: idToken(hooks.claims, hooks.badSignature), refresh_token: REFRESH } : {}), ...hooks.tokens });
   };
   const adapter = createGoogleOAuthAdapter({ clientId: CLIENT, clientSecret: 'invented_client_secret', callbackUri: CALLBACK, executionMode: 'configured', transport, isAuthorized: async (binding, operation) => { guards.push({ binding, operation }); if (hooks.guard) return hooks.guard(binding, operation); return allowed; }, ...options });
-  return { adapter, hooks, calls, guards, deny() { allowed = false; }, exchange: (input = {}) => adapter.exchange({ binding: BINDING, code: 'invented_single_use_code', codeVerifier: VERIFIER, nonce: NONCE, ...input }) };
+  return { adapter, transport, hooks, calls, guards, deny() { allowed = false; }, exchange: (input = {}) => adapter.exchange({ binding: BINDING, code: 'invented_single_use_code', codeVerifier: VERIFIER, nonce: NONCE, ...input }) };
 }

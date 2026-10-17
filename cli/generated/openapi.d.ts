@@ -914,13 +914,13 @@ export interface paths {
         };
         /**
          * listConnections
-         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         * @description Human-only Connections contract. Normal runtime remains unconfigured503. Explicit injected Google orchestration or simulated fixture only; no provider Calendar, sending or credential DTOs.
          */
         get: operations["listConnections"];
         put?: never;
         /**
          * beginConnectionConsent
-         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         * @description Human-only Connections contract. Normal runtime remains unconfigured503. Explicit injected Google orchestration or simulated fixture only; no provider Calendar, sending or credential DTOs.
          */
         post: operations["beginConnectionConsent"];
         delete?: never;
@@ -942,7 +942,7 @@ export interface paths {
         put?: never;
         /**
          * updateConnectionConsent
-         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         * @description Human-only Connections contract. Normal runtime remains unconfigured503. Explicit injected Google orchestration or simulated fixture only; no provider Calendar, sending or credential DTOs.
          */
         post: operations["updateConnectionConsent"];
         delete?: never;
@@ -962,7 +962,7 @@ export interface paths {
         };
         /**
          * readConnectionMail
-         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         * @description Human-only Connections contract. Normal runtime remains unconfigured503. Explicit injected Google orchestration or simulated fixture only; no provider Calendar, sending or credential DTOs.
          */
         get: operations["readConnectionMail"];
         put?: never;
@@ -973,11 +973,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connections/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a signed human Google callback
+         * @description Requires explicit private Google orchestration. State is atomically consumed before one exchange; normal service503. No token DTOs.
+         */
+        post: operations["completeGoogleConnectionConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ConnectionCatalog: {
+        ConnectionCatalog: components["schemas"]["SimulatedConnectionCatalog"] | components["schemas"]["GoogleConnectionCatalog"];
+        SimulatedConnectionCatalog: {
             /** @constant */
             mode: "simulated";
             providers: {
@@ -1006,13 +1027,47 @@ export interface components {
                 address?: string;
             }[];
         };
-        ConnectionBegin: {
+        ConnectionBegin: components["schemas"]["SimulatedConnectionBegin"] | components["schemas"]["GoogleConnectionBegin"];
+        SimulatedConnectionBegin: {
             choiceId: string;
             workspaceId: string;
         };
         ConnectionAction: {
             /** @enum {unknown} */
-            action: "approve" | "cancel" | "disconnect" | "retry-cleanup";
+            action: "approve" | "cancel" | "disconnect" | "retry-cleanup" | "refresh";
+        };
+        GoogleConnectionCatalog: {
+            /** @enum {unknown} */
+            mode: "google" | "google-fixture";
+            homes: components["schemas"]["SimulatedConnectionCatalog"]["homes"];
+            mailAvailable: boolean;
+            bindings: {
+                id: string;
+                workspaceId: string;
+                /** Format: email */
+                address: string;
+                status: components["schemas"]["SimulatedConnectionCatalog"]["bindings"]["items"]["status"];
+                expired: boolean;
+                /** @enum {unknown} */
+                operation?: "exchange" | "refresh";
+            }[];
+        };
+        GoogleConnectionBegin: {
+            /** Format: email */
+            address: string;
+            workspaceId: string;
+        };
+        GoogleConnectionCallback: {
+            state: string;
+            /** Format: uri */
+            callbackUri: string;
+            code: string;
+        } | {
+            state: string;
+            /** Format: uri */
+            callbackUri: string;
+            /** @constant */
+            error: "access_denied";
         };
         ProviderConnectorStatus: components["schemas"]["GmailConnectorStatus"] | components["schemas"]["OutlookConnectorStatus"] | components["schemas"]["ImapConnectorStatus"];
         GmailConnectorStatus: {
@@ -5250,7 +5305,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Simulated application result; never live consent or provider traffic. */
+            /** @description Configured lifecycle result; normal runtime remains unconfigured. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5306,7 +5361,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Simulated application result; never live consent or provider traffic. */
+            /** @description Configured lifecycle result; normal runtime remains unconfigured. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5321,6 +5376,8 @@ export interface operations {
                      */
                     "application/json": {
                         data: {
+                            /** Format: uri */
+                            authorizationUrl?: string;
                             connectionId: string;
                         };
                     };
@@ -5361,7 +5418,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Simulated application result; never live consent or provider traffic. */
+            /** @description Configured lifecycle result; normal runtime remains unconfigured. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5408,7 +5465,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Simulated application result; never live consent or provider traffic. */
+            /** @description Configured lifecycle result; normal runtime remains unconfigured. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5432,8 +5489,8 @@ export interface operations {
                      */
                     "application/json": {
                         data: {
-                            /** @constant */
-                            mode: "simulated";
+                            /** @enum {unknown} */
+                            mode: "simulated" | "google" | "google-fixture";
                             workspaceId: string;
                             page: {
                                 messages: components["schemas"]["ProviderPreviewMessage"][];
@@ -5452,6 +5509,62 @@ export interface operations {
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
             /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    completeGoogleConnectionConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "state": "sssssssssssssssssssssssssssssssssssssssssss",
+                 *       "callbackUri": "https://chosen-host.example.invalid/connections/google/callback",
+                 *       "code": "invented_single_use_code"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GoogleConnectionCallback"];
+            };
+        };
+        responses: {
+            /** @description Persisted lifecycle status only. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "status": "connected"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            /** @enum {unknown} */
+                            status: "connected" | "cancelled" | "reconnect_required";
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            /** @description Redacted failure; disabled503, denied403, conflict409 or invalid400. */
             default: {
                 headers: {
                     [name: string]: unknown;

@@ -1,3 +1,7 @@
+WLK334 now adds [disabled orchestration](GOOGLE_CONNECTION_FLOW.md), including first
+verified-subject binding and signed callback UI/API. The private backend remains an
+unactivated interface; historical adapter-only scope below describes PR102.
+
 # Google protocol adapter — WLK332 draft
 
 This is a source prerequisite for the first Gmail read connection, not an enabled

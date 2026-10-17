@@ -1,3 +1,12 @@
+## Disabled Google connection lifecycle (WLK334)
+
+Address + explicit home, authenticated callback/state consumption, private atomic
+promotion, refresh, Mail read and same-home/subject reconnect now compose through
+existing Connections API/UI and the official adapter. All provider effects are
+invented in HTTP tests; normal roots remain unconfigured503. Private persistence
+is an injected contract, not activated storage. No send/provider Calendar/revoke
+operation. [Actual evidence and remaining setup](docs/providers/GOOGLE_CONNECTION_FLOW.md).
+
 ## Disabled Google protocol adapter (WLK332 draft)
 
 Private server-only authorization URL, official-library code exchange/signature

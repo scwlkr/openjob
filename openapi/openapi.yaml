@@ -2222,13 +2222,12 @@ paths:
       summary: listConnections
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
-      description: Human-only simulated Connections contract. Normal runtime remains
-        unconfigured (503). Explicit resource homes and read-only Mail; no real
-        grant, provider Calendar, sending or credentials. Fixture must inject the
-        application.
+      description: Human-only Connections contract. Normal runtime remains unconfigured503.
+        Explicit injected Google orchestration or simulated fixture only; no
+        provider Calendar, sending or credential DTOs.
       responses:
         "200":
-          description: Simulated application result; never live consent or provider traffic.
+          description: Configured lifecycle result; normal runtime remains unconfigured.
           content:
             application/json:
               schema:
@@ -2268,10 +2267,9 @@ paths:
       summary: beginConnectionConsent
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
-      description: Human-only simulated Connections contract. Normal runtime remains
-        unconfigured (503). Explicit resource homes and read-only Mail; no real
-        grant, provider Calendar, sending or credentials. Fixture must inject the
-        application.
+      description: Human-only Connections contract. Normal runtime remains unconfigured503.
+        Explicit injected Google orchestration or simulated fixture only; no
+        provider Calendar, sending or credential DTOs.
       requestBody:
         required: true
         content:
@@ -2283,7 +2281,7 @@ paths:
               workspaceId: wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       responses:
         "200":
-          description: Simulated application result; never live consent or provider traffic.
+          description: Configured lifecycle result; normal runtime remains unconfigured.
           content:
             application/json:
               schema:
@@ -2298,6 +2296,9 @@ paths:
                     required:
                       - connectionId
                     properties:
+                      authorizationUrl:
+                        type: string
+                        format: uri
                       connectionId: &a1
                         type: string
                         pattern: ^con_[a-f0-9]{32}$
@@ -2332,10 +2333,9 @@ paths:
       summary: updateConnectionConsent
       x-openjob-authorization: authenticated
       x-openjob-retryable: false
-      description: Human-only simulated Connections contract. Normal runtime remains
-        unconfigured (503). Explicit resource homes and read-only Mail; no real
-        grant, provider Calendar, sending or credentials. Fixture must inject the
-        application.
+      description: Human-only Connections contract. Normal runtime remains unconfigured503.
+        Explicit injected Google orchestration or simulated fixture only; no
+        provider Calendar, sending or credential DTOs.
       requestBody:
         required: true
         content:
@@ -2346,7 +2346,7 @@ paths:
               action: approve
       responses:
         "200":
-          description: Simulated application result; never live consent or provider traffic.
+          description: Configured lifecycle result; normal runtime remains unconfigured.
           content:
             application/json:
               schema:
@@ -2394,13 +2394,12 @@ paths:
       summary: readConnectionMail
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
-      description: Human-only simulated Connections contract. Normal runtime remains
-        unconfigured (503). Explicit resource homes and read-only Mail; no real
-        grant, provider Calendar, sending or credentials. Fixture must inject the
-        application.
+      description: Human-only Connections contract. Normal runtime remains unconfigured503.
+        Explicit injected Google orchestration or simulated fixture only; no
+        provider Calendar, sending or credential DTOs.
       responses:
         "200":
-          description: Simulated application result; never live consent or provider traffic.
+          description: Configured lifecycle result; normal runtime remains unconfigured.
           content:
             application/json:
               schema:
@@ -2418,7 +2417,7 @@ paths:
                       - page
                     properties:
                       mode:
-                        const: simulated
+                        enum: [simulated, google, google-fixture]
                       workspaceId:
                         type: string
                         pattern: ^wsp_[a-f0-9]{32}$
@@ -2481,6 +2480,65 @@ paths:
         default:
           description: Redacted failure, including unconfigured503, denied403, conflict409
             or invalid400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/google/callback:
+    post:
+      tags:
+        - Providers
+      operationId: completeGoogleConnectionConsent
+      summary: Complete a signed human Google callback
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      description: Requires explicit private Google orchestration. State is atomically
+        consumed before one exchange; normal service503. No token DTOs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleConnectionCallback"
+            example:
+              state: sssssssssssssssssssssssssssssssssssssssssss
+              callbackUri: https://chosen-host.example.invalid/connections/google/callback
+              code: invented_single_use_code
+      responses:
+        "200":
+          description: Persisted lifecycle status only.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - status
+                    properties:
+                      status:
+                        enum:
+                          - connected
+                          - cancelled
+                          - reconnect_required
+              example:
+                data:
+                  status: connected
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        default:
+          description: Redacted failure; disabled503, denied403, conflict409 or invalid400.
           content:
             application/json:
               schema:
@@ -3468,6 +3526,10 @@ components:
 
   schemas:
     ConnectionCatalog:
+      oneOf:
+        - $ref: "#/components/schemas/SimulatedConnectionCatalog"
+        - $ref: "#/components/schemas/GoogleConnectionCatalog"
+    SimulatedConnectionCatalog:
       type: object
       additionalProperties: false
       required:
@@ -3551,6 +3613,10 @@ components:
                   - disconnected
               address: *a1
     ConnectionBegin:
+      oneOf:
+        - $ref: "#/components/schemas/SimulatedConnectionBegin"
+        - $ref: "#/components/schemas/GoogleConnectionBegin"
+    SimulatedConnectionBegin:
       type: object
       additionalProperties: false
       required:
@@ -3573,6 +3639,101 @@ components:
             - cancel
             - disconnect
             - retry-cleanup
+            - refresh
+    GoogleConnectionCatalog:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - homes
+        - mailAvailable
+        - bindings
+      properties:
+        mode:
+          enum:
+            - google
+            - google-fixture
+        homes:
+          $ref: "#/components/schemas/SimulatedConnectionCatalog/properties/homes"
+        mailAvailable:
+          type: boolean
+        bindings:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - workspaceId
+              - address
+              - status
+              - expired
+            properties:
+              id:
+                type: string
+                pattern: ^con_[a-f0-9]{32}$
+              workspaceId: &a1
+                type: string
+                pattern: ^wsp_[a-f0-9]{32}$
+              address:
+                type: string
+                format: email
+              status:
+                $ref: "#/components/schemas/SimulatedConnectionCatalog/properties/bindings/item\
+                  s/properties/status"
+              expired:
+                type: boolean
+              operation:
+                enum:
+                  - exchange
+                  - refresh
+    GoogleConnectionBegin:
+      type: object
+      additionalProperties: false
+      required:
+        - address
+        - workspaceId
+      properties:
+        address:
+          type: string
+          format: email
+          maxLength: 254
+        workspaceId: *a1
+    GoogleConnectionCallback:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - state
+            - callbackUri
+            - code
+          properties:
+            state:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{43}$
+            callbackUri:
+              type: string
+              format: uri
+            code:
+              type: string
+              minLength: 1
+              maxLength: 4096
+        - type: object
+          additionalProperties: false
+          required:
+            - state
+            - callbackUri
+            - error
+          properties:
+            state:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{43}$
+            callbackUri:
+              type: string
+              format: uri
+            error:
+              const: access_denied
     ProviderConnectorStatus:
       oneOf:
         - $ref: "#/components/schemas/GmailConnectorStatus"
