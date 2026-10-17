@@ -92,7 +92,9 @@ and Gmail wire responses. Schema-validated main-flow readback covers first bind,
 reconstruction, refresh, Mail, disconnect and same-home reconnect. Denial cases
 cover foreign users/agents/homes, wrong URI/address/subject, state replay/race,
 cancellation, expiry, competing refresh, private-store failure, unsafe actions
-and in-flight result suppression. Global fetch throws in these tests. No browser
+and in-flight result suppression. A static React render checks labels/controls
+and explicit revocation wording; a failed status refresh clears the prior catalog
+instead of showing a stale connected state. Global fetch throws in these tests. No browser
 or real provider proof follows from those fixtures. New UI controls are source/
 typechecked; interactive browser proof is not claimed because the signed-in pilot
 and its established browser surface remain untouched.

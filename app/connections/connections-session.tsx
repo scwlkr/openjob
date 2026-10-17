@@ -19,7 +19,7 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
     if (!response.ok) throw new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.');
     return (await response.json() as { data: ConnectionCatalog | GoogleConnectionCatalog | Mail }).data;
   }, [session, signal]);
-  const refresh = useCallback(async () => { setMail(undefined); const value = await request(); if (!signal.aborted) setCatalog(value as ConnectionCatalog | GoogleConnectionCatalog); }, [request, signal]);
+  const refresh = useCallback(async () => { setMail(undefined); try { const value = await request(); if (!signal.aborted) setCatalog(value as ConnectionCatalog | GoogleConnectionCatalog); } catch (error) { if (!signal.aborted) setCatalog(undefined); throw error; } }, [request, signal]);
   const completion = useRef<Promise<unknown> | null>(null);
   useEffect(() => {
     let current = true;

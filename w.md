@@ -18,6 +18,22 @@ public status/consent/reconnect controls; no send/Calendar/provider revocation.
 See docs/providers/GOOGLE_CONNECTION_FLOW.md for exact actual vs simulated proof,
 Proposed token policy, crashes/uncertain completion and remaining live inputs.
 
+Verification:56/56 focused Googleflow/officialadapter/Connections/OAuth/vault/store
+tests PASS; existing signed CLI loopback regression1/1 PASS. TypeScript, affected
+ESLint, OpenAPI35paths50operations + generatedtypes, brand32, secret666, diff pass.
+Broader combined contractrun17/18 retains known Personal commandoneOf19vs18 baseline;
+caused path/count/example expectations updated, unrelatedbaseline not changed.
+Static React render confirms fixture labels/consent/refresh/read/disconnect and
+project-revocation qualification, with Node-only explicitNext .js resolution;
+no browser/layout/interaction proof claimed. Local output/wlk-334 and /tmp logs.
+
+Independent Spec/security review on ef54711 found no consequential issues.
+Integration review found stale connected catalog after failed statusrefresh; fixed
+by preserving catalog only whilepending and clearing/rethrowing on rejection.
+No broad mode/refactor/provider policy changes. Final exact head/review/checks/PR
+and landedtree readback are recorded in Linear. New UI remains unverified in a
+browser; signedpilot surface was preserved, no alternatebrowser/port workaround.
+
 Actual signed-in pilot unchanged on /tmp/openjob-connections-slice bf5ae46,
 PID16066/session50291/tab939996978, private testTask+block retained. No ordinary
 Chrome/native/heavy phase or new browser-scope request. New UI interactive proof
