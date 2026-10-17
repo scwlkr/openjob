@@ -1,7 +1,7 @@
 # WLK332 — disabled Google adapter source prerequisite
 
 Branch codex/wlk-332-google-oauth in /tmp/openjob-google-oauth, base/mainbc5d6f3.
-Linear WLK332; parent explicitly authorizes isolated draft/source only. Existing
+Linear WLK332 / PR102; parent now explicitly authorizes source-only integration. Existing
 signed-in pilot stays on /tmp/openjob-connections-slice bf5ae46, PID16066/session50291,
 tab939996978 and private verification Task/block unchanged. No heavy/native/browser
 phase. Existing shared dependencies unchanged; official Google library installed
@@ -28,7 +28,25 @@ Reviewers explicitly retain missing live routes, one-use state/initial subject
 binding, private token persistence/refresh coordination and live composition.
 Final docs-only checkpoint/PR and exact rerun are recorded in Linear. No full-suite,
 liveGoogle, installedapp/build or native proof claimed; broader baseline failures
-from previous integration remain unchanged. Stop at reviewed draft, no merge.
+from previous integration remain unchanged. PR102 source-only integration candidate
+is verified against unchanged mainbc5d6f3; authoritative landed hash/readback is
+recorded in Linear WLK332 and PR102. No push-triggered deployment workflow/hooks
+or required branch rules/checks found. Stop after integration; no next feature.
+
+Remaining Gmail handoff, in dependency order:
+1. Establish current Data Access/Verification facts; External/In production is not
+   Gmail verification. scwlkr/0o10 owner supplies exact approved HTTPS target;
+   owner reviews concrete private token mechanism and shared-project revoke impact.
+2. Separately authorize source orchestration: actual start/callback, durable
+   one-use owner/state/home and initial subject binding, private CAS persistence,
+   refresh coordination and metadata-first disconnect. Keep real mode disabled
+   until those pieces and the concrete activation setup are reviewed.
+3. With exact callback/runtime reviewable, obtain specific approval for existing
+   client callback registration, Gmail API enablement, existing-secret delivery
+   and credential repository activation. No new client/key implicitly required.
+4. Only then human read-only consent for shane.caleb.walker@gmail.com, verify actual
+   scopes/subject/address and explicit home, then one bounded authorized read.
+   No send/modify/provider Calendar or deployment follows from this integration.
 
 ---
 
