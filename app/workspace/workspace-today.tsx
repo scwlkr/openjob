@@ -4,8 +4,8 @@ import type { WorkspaceView } from '../../shared/workspace-contracts';
 import { personalToday } from '../../shared/workspace-today';
 import styles from './workspace.module.css';
 
-type Props = { view: WorkspaceView; busy: boolean; onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void; onTasks: () => void; onCalendar: () => void };
-export default function WorkspaceToday({ view, busy, onOpenTask, onOpenEvent, onTasks, onCalendar }: Props) {
+type Props = { contextName?: string; view: WorkspaceView; busy: boolean; onOpenTask: (id: string) => void; onOpenEvent: (id: string) => void; onTasks: () => void; onCalendar: () => void };
+export default function WorkspaceToday({ contextName, view, busy, onOpenTask, onOpenEvent, onTasks, onCalendar }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const update = () => setNow(new Date());
@@ -16,11 +16,11 @@ export default function WorkspaceToday({ view, busy, onOpenTask, onOpenEvent, on
   const today = personalToday(view, now);
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const when = (value: string) => new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  return <section aria-label="Personal Today">
+  return <section aria-label={contextName ? `${contextName} Today` : "Personal Today"}>
     <p>{now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · {zone} (this browser)</p>
-    <p className={styles.small}>Your personal work from the last loaded workspace. Refresh for saved changes. Calendar editors use UTC.</p>
+    <p className={styles.small}>{contextName ? "Work from the last loaded Workspace." : "Your personal work from the last loaded workspace."} Refresh for saved changes. Calendar editors use UTC.</p>
     <div className={styles.calendarGrid}>
-      <section className={styles.panel} aria-label="Today's plan"><h2 className={styles.sectionHeading}>Today's plan</h2>
+      <section className={styles.panel} aria-label="Today's plan"><h2 className={styles.sectionHeading}>Today&apos;s plan</h2>
         {!today.events.length && <p className={styles.empty}>No saved blocks today. Plan time in Calendar.</p>}
         {today.events.map(event => <article className={styles.event} key={event.id}>
           <small>{when(event.start)} – {when(event.end)}</small><strong>{event.title}</strong><span>{view.calendars.find(calendar => calendar.id === event.calendarId)?.name}</span>

@@ -1,3 +1,44 @@
+# WLK-325 — first independent owner-only Workspace product slice
+
+Branch codex/wlk-325-owned-workspaces from verified main3355805. PR95 remains
+separate draft829a3cd, browser file delivery unverified, no download attempts.
+WLK325 implements a bounded R10/R11/R20 fixture milestone: one signed human owns
+Work and Family with opaque Workspace IDs distinct from User IDs, separate Task
+space/Calendar resource IDs, and per-Workspace stored Task/Calendar projections.
+Existing Personal Mail aggregate/offline/Groups data and approved artifact remain
+unchanged. No Mail/invitations/grants/transfer or real-account onboarding enabled.
+
+Real repository/API/UI source is composed only by the loopback fixture launcher:
+`npm run dev:owned-workspaces -- --port 5202 --state-file /tmp/openjob-owned-pilot.json`.
+Use an explicit fresh owned file; existing fixture325 evidence is retained at
+/tmp/openjob-325-owned-state.json. State is private0600 but not encrypted. Fake
+signed Alex/Sam + fake Firestore only. No deployed/public API route was enabled;
+normal identity eligibility/Personal mapping/access/lifecycle composition remains
+next foundation gate before real Workspace onboarding. See
+ docs/OWNED_WORKSPACE_PILOT.md. Full R10/R11/R12/R20 remain partial.
+
+Evidence:2 focused broad repository/API checks cover concurrent creation, independent
+resources, A/B item/calendar and Alex/Sam isolation, signed-human/agent denial,
+no-Mail/source/grant commands, active-owner fences, Task/block consistency and
+persisted repository reload. TypeScript and focused lint pass. Brand32/secret/diff
+checks pass. Actual browser created Work/Family, created distinct Tasks, retained
+unfinished Work notes through switch, saved notes/schedule, opened exact Task from
+Calendar and completed it; Sam's catalog stayed empty. Actual server stop/restart
+reopened the same file and retained Work completion/notes/block and Family Task.
+Readback confirmed separate IDs and contents. Review identified stale work refresh;
+fixed with selected-context Refresh work, observed another client's new Family Task
+while keeping unfinished New task text. Browser evidence output/wlk-325/*.png.
+No browser downloads, credentials, provider actions, native build or heavy phase.
+
+Observed first shutdown left only this launcher's lock because Vite exits directly
+on SIGTERM. Preserved owned stale lock as /tmp/openjob-325-closed-27925.lock, fixed
+exit cleanup to remove only matching lock inode/dev, reopened unchanged state.
+No old/shared files or simulators touched. PR94 simulator proof reused; WLK318
+TWO approvals, unrecovered WLK302 and npm publication remain untouched.
+
+Next: finish exact-head review/nondeploying PR integration, record landed identity
+in Linear; keep useful fixture state and preserve PR95's explicit no-retry boundary.
+
 # WLK-323 — recovered compile and actual native fixture flow passed
 
 PR94 builds exact source61e9789852557a9fae72b97a9a50a3f8432e4eea in a fresh
