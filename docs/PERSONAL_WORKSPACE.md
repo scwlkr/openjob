@@ -368,3 +368,43 @@ UI/device behavior is not qualified by the source HTTP check.
 Native work loop: an invented message lists only Tasks linked to that exact owned mailbox/message, including completed Tasks. Open a Task, edit or clear its plain-text notes, schedule it and return through Calendar or source Mail. Unfinished notes remain in memory through module switches and failed saves; replacing another Task’s edits requires confirmation. Explicitly saved offline notes use the existing Task/Calendar cache and sync path; Mail/source metadata stays outside that cache. React Native component and source/API checks are feature evidence, not simulator/device or TestFlight proof.
 
 Native Personal Today is the initial daily view for online and saved-on-device work. It reuses the web local-day/DST projection, labels this device’s date/timezone and shows today’s blocks, planned open Tasks and unscheduled open work. Open an exact Task or block without replacing unfinished module editors. Saved Today includes pending local changes and no source Mail metadata; online Today reflects the last loaded workspace. Refresh/sync remain explicit. Calendar editors still use UTC. The date updates while open and on foreground return. Component checks cover navigation and rollover; device layout/bridge behavior is unverified.
+
+## Personal JSON export
+
+Open **Export** in the online Personal workspace. Tasks and Calendar are selected
+initially; saved authored drafts require a separate opt-in. **Download personal
+JSON** reads one fresh authorized server snapshot and saves a versioned UTF-8 file.
+Unsaved editors, pending offline changes and browser Mail recovery text are not
+included. The action does not change saved work or contact a provider.
+
+The existing CLI provides the same file through the selected human profile:
+
+```sh
+openjob workspace export --sections tasks,calendar --file ./personal-work.json
+openjob workspace export --sections drafts --file ./authored-drafts.json
+```
+
+Each path must be new. CLI files are private (mode0600), cannot overwrite, and
+file contents do not enter stdout. API clients use
+`GET /api/v1/workspace/export?section=tasks&section=calendar` with human Firebase
+authentication; repeated `section` selects one or more of `tasks`, `calendar`,
+`drafts`. Agent credentials cannot export. The signed identity selects the Personal
+owner; request parameters and fixture headers cannot select another owner.
+
+Version1 has format `openjob-personal-export`, export timestamp, explicit Personal
+owner context, selected sections and `tasks`, `calendars`, `events`, `drafts` arrays.
+Unselected arrays are empty. IDs, authored notes/text and planned intervals remain;
+Task/block links appear only when both sections are selected. Authored drafts keep
+their sending account ID, recipients, subject and body, with `mode: fixture` for the
+current invented Mail. These are private file contents. The file excludes incoming
+messages, Task/reply source Mail references, account addresses/connection records,
+Sent, activity, agents, grants, credentials and sync receipts. User-authored text is
+preserved exactly; it may itself contain sensitive details the user wrote.
+
+Limits:1MiB including pretty formatting and newline, up to1000 records per array.
+An oversized export fails without a partial download. Select fewer sections or use
+the existing selected-Calendar iCalendar exchange when appropriate. This is a
+portable current-Personal data copy, not a complete Mail archive or a backup/restore
+promise. JSON import, shared Workspace export and native download UI are not
+implemented by this slice. Live account/provider and device acceptance remain
+separate from isolated fixture proof.

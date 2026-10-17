@@ -1594,6 +1594,104 @@ paths:
       security:
         - firebaseBearer: []
         - personalWorkspaceAgentBearer: []
+  /api/v1/workspace/export:
+    get:
+      tags:
+        - Workspace
+      operationId: exportPersonalWorkspace
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Human-only export of selected saved Personal Tasks, Calendar and
+        authored drafts as version1 JSON, at most1MiB formatted UTF-8. Explicit
+        sections; drafts opt-in. Excludes incoming Mail, source references,
+        provider credentials, grants and activity. One authoritative snapshot;
+        identity checked again before return. No provider requests or writes. Not
+        an import/restore format.
+      parameters:
+        - in: query
+          name: section
+          required: true
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 3
+            uniqueItems: true
+            items:
+              enum:
+                - tasks
+                - calendar
+                - drafts
+      responses:
+        "200":
+          description: Versioned private Personal data; explicitly save as a UTF-8 JSON file.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PersonalWorkspaceExport"
+              example:
+                data:
+                  format: openjob-personal-export
+                  version: 1
+                  exportedAt: 2026-10-17T02:00:00.000Z
+                  context:
+                    kind: personal
+                    ownerUserId: usr_example
+                  sections:
+                    - tasks
+                  tasks: []
+                  calendars: []
+                  events: []
+                  drafts: []
+        "400":
+          description: Select one or more unique section parameters only.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "403":
+          description: Human session required or origin denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Sign-in Method unrecognized or workspace changed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+                  - properties:
+                      error:
+                        properties:
+                          code:
+                            enum:
+                              - sign_in_method_unrecognized
+                              - conflict
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "413":
+          description: Selected export exceeds its bounded size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+      security:
+        - firebaseBearer: []
   /api/v1/workspace/calendar-export:
     get:
       tags: [Workspace]
@@ -4007,6 +4105,145 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PersonalWorkspaceActivity"
+    WorkspaceExportTask:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - ownerId
+        - title
+        - completed
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ownerId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 20000
+          description: Optional authored plain text. No automatic Mail body or source
+            metadata copy.
+        completed:
+          type: boolean
+        scheduledSlot:
+          type: object
+          additionalProperties: false
+          required:
+            - start
+            - end
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        calendarEventId:
+          type: string
+          minLength: 1
+          maxLength: 128
+    WorkspaceExportDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - body
+        - status
+        - mode
+      properties:
+        id: &a1
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9:_-]+$
+        accountId: *a1
+        body:
+          type: string
+          maxLength: 20000
+        status:
+          const: draft
+        mode:
+          const: fixture
+        to:
+          type: string
+          minLength: 1
+          maxLength: 500
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 500
+    PersonalWorkspaceExport:
+      type: object
+      additionalProperties: false
+      required:
+        - format
+        - version
+        - exportedAt
+        - context
+        - sections
+        - tasks
+        - calendars
+        - events
+        - drafts
+      properties:
+        format:
+          const: openjob-personal-export
+        version:
+          const: 1
+        exportedAt:
+          type: string
+          format: date-time
+        context:
+          type: object
+          additionalProperties: false
+          required:
+            - kind
+            - ownerUserId
+          properties:
+            kind:
+              const: personal
+            ownerUserId:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+        sections:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            enum:
+              - tasks
+              - calendar
+              - drafts
+        tasks:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/WorkspaceExportTask"
+        calendars:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceCalendar"
+        events:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceEvent"
+        drafts:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/WorkspaceExportDraft"
     CalendarIcalExport:
       type: object
       additionalProperties: false

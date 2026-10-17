@@ -4,6 +4,7 @@
 import { prepareAgentGrant, deliverAgentGrant, preparePrivateTokenOutput } from "./lib/agent-grant.mjs";
 import { findAvailableTaskSlots } from "./lib/workspace-availability.mjs";
 import { parseCalendarIcal, previewCalendarIcalImport } from "./lib/calendar-ical.mjs";
+import { validateWorkspaceExport, WORKSPACE_EXPORT_MAX_BYTES } from "./lib/workspace-export.mjs";
 import { openSync, fstatSync, closeSync, readSync } from "node:fs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
@@ -89,6 +90,7 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["workspace export", new Set(["--sections", "--file", "--format", "--quiet"])],
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
   ["workspace availability", new Set([...OUTPUT_OPTIONS, "--task", "--schedule-start", "--schedule-end", "--minutes"])],
   ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
@@ -173,6 +175,7 @@ const RESOURCE_HELP = {
   openjob workspace providers [--account <account-id>] [--cursor <cursor>]
   openjob workspace command --input <path|->
   openjob workspace calendar export --calendar <id> --file <new-path>
+  openjob workspace export --sections tasks,calendar[,drafts] --file <new-path>
   openjob workspace calendar import --calendar <id> --file <path> [--dry-run] [--yes]
   openjob workspace agent grant --name <name> --scopes <comma-list> --resources <comma-list> --token-out <new-path>
   openjob workspace agent list
@@ -562,6 +565,29 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && command === "export" && rest.length === 0) {
+    const file = parsed.options.get("--file"), rawSections = parsed.options.get("--sections");
+    const supplied = typeof rawSections === "string" ? rawSections.split(",") : [];
+    const sections = ["tasks", "calendar", "drafts"].filter(section => supplied.includes(section));
+    if (!file || file === "-" || !supplied.length || supplied.length !== sections.length) {
+      throw new CliError("usage_error", "Use workspace export --sections <tasks,calendar,drafts selection> --file <new-path>; select each section at most once. Stdout exports and overwrites are unavailable.", 2);
+    }
+    preparePrivateTokenOutput(new Map([["--token-out", file]]));
+    const query = new URLSearchParams();
+    for (const section of sections) query.append("section", section);
+    const response = await apiRequest(`/workspace/export?${query}`, {}, { retryable: true, quiet: parsed.options.has("--quiet") });
+    let exported;
+    let rendered;
+    try {
+      exported = validateWorkspaceExport(/** @type {{ data?: unknown }} */ (response)?.data);
+      if (JSON.stringify(exported.sections) !== JSON.stringify(sections)) throw new Error("Unexpected sections");
+      rendered = JSON.stringify(exported, null, 2) + "\n";
+      if (Buffer.byteLength(rendered) > WORKSPACE_EXPORT_MAX_BYTES) throw new Error("Export too large");
+    } catch { throw new CliError("invalid_response", "OpenJob returned an invalid personal export.", 8); }
+    writeRawPrivateFile(rendered, file);
+    writeResult({ data: { file, sections } });
+    return;
+  }
   if (resource === "workspace" && command === "calendar" && rest.length === 1 && ["export", "import"].includes(rest[0])) {
     const calendarId = parsed.options.get("--calendar"), file = parsed.options.get("--file");
     if (!calendarId || !/^[A-Za-z0-9:_-]{1,128}$/.test(calendarId) || !file || file === "-") throw new CliError("usage_error", "Calendar import/export requires --calendar <id> and --file <path> (not stdin/stdout).", 2);

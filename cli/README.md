@@ -1,5 +1,19 @@
 # OpenJob CLI
 
+Export selected **saved Personal data** to a new private JSON file:
+
+```sh
+openjob workspace export --sections tasks,calendar --file ./personal-export.json
+```
+
+Select one or more unique comma-separated sections: `tasks`, `calendar`, `drafts`.
+Drafts are included only when explicitly selected and can contain sensitive authored
+text and recipients. This human-only command writes versioned JSON (up to 1 MiB)
+with mode0600 and refuses overwrites, stdout destinations, and agent credentials.
+Stdout contains only the destination/section summary. It excludes source Mail,
+credentials and pending offline/unsaved editor changes; it is not a restore format
+or full Mail archive. Existing iCalendar export remains available separately.
+
 The new [packaged workspace instructions](https://github.com/scwlkr/openjob/blob/main/docs/NPM_INSTALL.md) cover `openjob app`, local tarball installation and notice-only latest/dev updates. Initial scoped registry packages are published; the historical GitHub CLI-only artifact below does not contain workspace app assets.
 
 Requires macOS and Node.js 22.13 or newer. Install OpenJob v0.3.7 from GitHub:

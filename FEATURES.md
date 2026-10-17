@@ -90,3 +90,11 @@ Personal Task notes retain authored context through title edits, planning, compl
 and explicit offline sync. The web editor supports save/clear and preserves failed
 or unfinished edits during module navigation. Existing scoped Task authorization
 and plain-text rendering apply; notes never enter Calendar titles or activity text.
+
+Personal data export downloads a versioned JSON copy of selected saved Tasks,
+Calendar and opt-in authored invented-Mail drafts through the human-authenticated
+web/API/CLI. Explicit allowlists retain notes and selected Task/block links while
+excluding incoming Mail, source references, credentials, grants and activity.
+The CLI saves a new private file without overwrite or content in stdout. This is
+saved online Personal data only; pending offline work, unsaved text, import/restore,
+shared Workspace and native export UI remain outside this slice.

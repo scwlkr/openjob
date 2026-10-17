@@ -830,6 +830,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspace/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Human-only export of selected saved Personal Tasks, Calendar and authored drafts as version1 JSON, at most1MiB formatted UTF-8. Explicit sections; drafts opt-in. Excludes incoming Mail, source references, provider credentials, grants and activity. One authoritative snapshot; identity checked again before return. No provider requests or writes. Not an import/restore format. */
+        get: operations["exportPersonalWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspace/calendar-export": {
         parameters: {
             query?: never;
@@ -1115,6 +1132,50 @@ export interface components {
             sent: components["schemas"]["PersonalWorkspaceSent"][];
             agents: unknown[];
             activity: components["schemas"]["PersonalWorkspaceActivity"][];
+        };
+        WorkspaceExportTask: {
+            id: string;
+            ownerId: string;
+            title: string;
+            /** @description Optional authored plain text. No automatic Mail body or source metadata copy. */
+            notes?: string;
+            completed: boolean;
+            scheduledSlot?: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            };
+            calendarEventId?: string;
+        };
+        WorkspaceExportDraft: {
+            id: string;
+            accountId: string;
+            body: string;
+            /** @constant */
+            status: "draft";
+            /** @constant */
+            mode: "fixture";
+            to?: string;
+            subject?: string;
+        };
+        PersonalWorkspaceExport: {
+            /** @constant */
+            format: "openjob-personal-export";
+            /** @constant */
+            version: 1;
+            /** Format: date-time */
+            exportedAt: string;
+            context: {
+                /** @constant */
+                kind: "personal";
+                ownerUserId: string;
+            };
+            sections: ("tasks" | "calendar" | "drafts")[];
+            tasks: components["schemas"]["WorkspaceExportTask"][];
+            calendars: components["schemas"]["PersonalWorkspaceCalendar"][];
+            events: components["schemas"]["PersonalWorkspaceEvent"][];
+            drafts: components["schemas"]["WorkspaceExportDraft"][];
         };
         CalendarIcalExport: {
             calendarId: string;
@@ -4627,6 +4688,95 @@ export interface operations {
             };
             /** @description Content type must be application/json. */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    exportPersonalWorkspace: {
+        parameters: {
+            query: {
+                section: ("tasks" | "calendar" | "drafts")[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versioned private Personal data; explicitly save as a UTF-8 JSON file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "format": "openjob-personal-export",
+                     *         "version": 1,
+                     *         "exportedAt": "2026-10-17T02:00:00.000Z",
+                     *         "context": {
+                     *           "kind": "personal",
+                     *           "ownerUserId": "usr_example"
+                     *         },
+                     *         "sections": [
+                     *           "tasks"
+                     *         ],
+                     *         "tasks": [],
+                     *         "calendars": [],
+                     *         "events": [],
+                     *         "drafts": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["PersonalWorkspaceExport"];
+                    };
+                };
+            };
+            /** @description Select one or more unique section parameters only. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            /** @description Human session required or origin denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Sign-in Method unrecognized or workspace changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"] & {
+                        error?: {
+                            /** @enum {unknown} */
+                            code?: "sign_in_method_unrecognized" | "conflict";
+                        };
+                    };
+                };
+            };
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            /** @description Selected export exceeds its bounded size. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
