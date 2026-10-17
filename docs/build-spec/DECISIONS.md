@@ -60,3 +60,15 @@ Choose bounded implementation defaults; return only material changes or missing
 specific authority. Backup drills/failover/enterprise/exhaustive fixture work do not
 block the pilot. Basic permissions, no accidental sending, secrets, honest results
 and repository protections remain required.
+
+
+### Limited owner-pilot implementation recommendation (WLK328)
+
+Under C12/C13, normal Tasks/Calendar Workspace composition uses the existing signed
+Firebase session and stable User with an exact trusted-server selection of one
+existing provider/UID binding during later owner-assisted onboarding. Actual runtime
+admission remains unset. This bounded engineering default does not adopt D06,
+classify independent control or promise employer isolation. WLK327 remains the
+future employer-isolation/general onboarding policy gate. A known company-controlled
+binding or current independent-recovery requirement still needs a consequential
+owner choice. WLK318 execution permissions remain separate and pending.

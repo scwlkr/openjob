@@ -4,7 +4,7 @@ import type { FirebaseTokenIdentity } from './firebase-id-token.ts';
 import type { OpenJobUser } from './v1-identity.ts';
 import { isInactiveUserError } from '../db/user-history.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse } from './v1-http.ts';
-/** Explicit fixture composition only. No production route or identity eligibility bypass. */
+/** Context operations; callers own runtime admission in addition to these User/resource checks. */
 export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { store: OwnedWorkspaceStore & { personalContext?: (owner: string) => Promise<unknown> }; users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> }; verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null> }) {
   const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: 'Workspace unavailable. Check the selected context and sign-in.' });
   return { async fetch(request: Request): Promise<Response> {
@@ -22,6 +22,7 @@ export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { stor
         const reader = request.body?.getReader(); if (!reader) return fail('invalid_input', 400);
         const bytes: number[] = []; for (;;) { const { value, done } = await reader.read(); if (done) break; if (bytes.length + value.length > 2) { await reader.cancel(); return fail('invalid_input', 400); } bytes.push(...value); }
         if (new TextDecoder().decode(new Uint8Array(bytes)) !== '{}') return fail('invalid_input', 400);
+        const admitted = await users.resolve(identity); if (!admitted || admitted.userId !== user.userId || admitted.deletionPending) return fail('account_unavailable', 410);
         const data = await store.personalContext(user.userId); const current = await users.resolve(identity);
         if (!current || current.userId !== user.userId || current.deletionPending) return fail('account_unavailable', 410);
         return jsonResponse({ data });
@@ -37,6 +38,7 @@ export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { stor
         for (;;) { const { value, done } = await reader.read(); if (done) break; length += value.length; if (length > 100000) { await reader.cancel(); return fail('body_too_large', 413); } chunks.push(value); }
         const bytes = new Uint8Array(length); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
         let input: unknown; try { input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return fail('invalid_input', 400); }
+        const admitted = await users.resolve(identity); if (!admitted || admitted.userId !== user.userId || admitted.deletionPending) return fail('account_unavailable', 410);
         if (match[1]) data = await store.command(user.userId, match[1], input);
         else {
           if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).join(',') !== 'name') return fail('invalid_input', 400);

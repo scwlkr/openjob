@@ -3,6 +3,7 @@ import { createFirestoreUserStore } from '../db/users.ts';
 import { createFirestoreGroupStore } from '../db/groups.ts';
 import { createFirebaseIdTokenVerifier } from './firebase-id-token.ts';
 import { createV1IdentityApi } from './v1-identity.ts';
+import { createWorkspacePilotRuntime } from './workspace-pilot-runtime.ts';
 import { createPersonalApplication } from './personal-application.ts';
 
 type Config = { projectId: string; apiKey: string; clientEmail: string; privateKey: string };
@@ -13,10 +14,12 @@ export function createPortableRuntime(config: Config) {
   const workspace = createFirestorePersonalWorkspaceStore(config);
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectId });
   const identity = createV1IdentityApi({ groups, users, verifyIdToken, verifyCredentialToken: verifyIdToken.verifyToken });
+  const workspacePilot = createWorkspacePilotRuntime({ config, personal: workspace, users, verifyIdToken });
   const application = createPersonalApplication({ workspace, users, verifyIdToken });
   return {
     fetch(request: Request) {
       const path = new URL(request.url).pathname;
+      if (path === '/api/v1/workspaces' || path.startsWith('/api/v1/workspaces/')) return workspacePilot.fetch(request);
       if (path === '/api/v1/me' || path.startsWith('/api/v1/me/')) return identity.fetch(request);
       if (path.startsWith('/api/v1/workspace/agent-grants')) return application.personalAgentGrantsApi.fetch(request);
       if (path === '/api/v1/workspace/provider-preview') return application.providerPreviewApi.fetch(request);
