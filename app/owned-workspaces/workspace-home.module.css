@@ -1,0 +1,3 @@
+.home button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 1050px) { .columns { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
