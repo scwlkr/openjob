@@ -66,3 +66,45 @@ Workspace sync and native UI are unavailable. Owner-only Tasks/Calendar do not
 imply authority over restricted Mail or provider credentials. No fake controls
 suggest those features work. PR94 simulator evidence remains the native checkpoint;
 this browser/repository slice adds no native runtime or release proof.
+
+## Retained Personal context and identity policy
+
+WLK326 adds **Open existing Personal context** to the same fixture shell. This
+explicit action creates one durable `v1PersonalWorkspaceContexts/{userId}` reference,
+with opaque Workspace/Task-space/Calendar resource IDs. The existing User ID and
+`v1PersonalWorkspaces/{userId}` remain authoritative. It does not create another
+User, link a Sign-in Method, copy/rekey Tasks or Mail, rewrite offline caches or
+create grants. Concurrent/repeated mapping requests return the same reference.
+
+The context adapter reads a Task/Calendar projection from the retained Personal
+store. Calendar resource IDs are translated at the API boundary; Task/event IDs,
+notes and canonical planning links remain unchanged. The same saved work is visible
+through the old Personal API and this mapped context. Updates use the old Personal
+command handler and preserve Mail, authored drafts, grants and sync receipts.
+Source Mail references are excluded from this Tasks/Calendar surface. Wrong
+Workspace/Calendar/item IDs, Mail/source/grant commands and agent credentials fail.
+The current adapter supports the existing single canonical Personal Calendar; an
+unfamiliar retained shape fails without replacing or dropping any data.
+
+This reference is listed next to independent Work/Family Workspaces; it is not
+copied into their records or catalogs. The existing independent-context repository
+stays unchanged. The fixture also composes the existing `/api/v1/workspace` handler
+locally so both API paths can verify continuity; no production composition changes.
+
+**Eligibility is unresolved, not inferred.** DECISIONS D06 explicitly leaves the
+independent-anchor protocol Proposed. Existing Google/Apple sign-in links identify
+the existing User; they do not carry adopted proof of personally independent
+control. The consequential remaining choice is which trusted server-verified
+provider/account evidence can establish that control, including unknown and known
+company-managed bindings. Provider name, email/domain matching or browser/user
+attestation cannot silently supply that missing evidence. No new identity system,
+control classification, evidence record or real account access is introduced here.
+
+The authenticated fixture status `GET /api/owned-workspaces/eligibility` returns
+`policy_pending`, `realOnboardingEnabled: false`, and
+`independent_anchor_policy_not_adopted`. The UI shows this limitation. The mapping
+endpoint accepts only `{}`; clients cannot choose source owner/Workspace or submit
+an eligibility claim. Existing real Personal access remains unchanged and normal
+multi-Workspace onboarding remains disabled. Approving the evidence policy and
+reviewing normal composition remain prerequisites to actual activation; no pending
+WLK318 permission is retried by this work.
