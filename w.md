@@ -1,5 +1,6 @@
 # WLK-326 — retained Personal context mapping; eligibility policy unresolved
 
+PR97 https://github.com/scwlkr/openjob/pull/97; reviewed source96b05d4.
 Branch codex/wlk-326-personal-context from PR96/main02cd0f6. Current mission,
 AGENTS/WStackc3e3ac6, D04/D06/DOMAIN/ADR0007, Linear/livePR state reread. PR95
 remains parked draft829a3cd, browser delivery unverified; no download actions.
@@ -41,10 +42,13 @@ Fixture state /tmp/openjob-326-personal-context.json retained separately from325
 No real data/access/settings/providers/credentials, native build or heavy phase.
 PR94 native proof reused; approved npm artifact/WLK302/publication untouched.
 
-Next: final exact-head review and nondeploying source integration for this bounded
-mapping portion; record final identity in PR/Linear. Real onboarding cannot be
-claimed complete until the D06 trusted-evidence policy is decided and implemented,
-then normal composition is reviewed. Company remains a Workspace; no new hierarchy,
+Independent exact-source review96b05d4 found no consequential findings. Owned
+fixture server/tab closed; saved state retained and lock released. Final source
+merge identity is recorded in PR97/Linear.
+
+Next gate WLK327: decide the D06 trusted-evidence policy before implementing real
+identity classification and reviewed normal composition. Real onboarding cannot
+be claimed complete while this policy is unresolved. Company remains a Workspace; no new hierarchy,
 membership grants, transfer or agent delegation is enabled by this mapping.
 
 # WLK-325 — first independent owner-only Workspace product slice
