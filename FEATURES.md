@@ -101,3 +101,11 @@ context and maintain linked scheduling; foreign owner/item/resource requests fai
 Mail, invitations, grants and owner transfer remain unavailable. This is a bounded
 fixture-verified foundation, not enabled real-account Workspace onboarding or
 native/offline parity. [Pilot guide](docs/OWNED_WORKSPACE_PILOT.md).
+
+The Workspace fixture can explicitly map retained Personal work to a stable opaque
+Workspace reference under the same existing User. Task/event IDs and authored work
+remain in the existing Personal authority; context adapters translate Calendar IDs
+and exclude source Mail metadata. Mapping is idempotent and neither copies data nor
+rewrites Sign-in Methods, grants or offline caches. Identity eligibility remains
+explicitly policy-pending under D06; this source/fixture milestone does not enable
+real-account Workspace onboarding.

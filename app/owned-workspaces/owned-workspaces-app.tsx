@@ -13,6 +13,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken }: { ownerUse
   const [catalog, setCatalog] = useState<OwnedWorkspace[]>([]);
   const [opened, setOpened] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
+  const [eligibility, setEligibility] = useState('Real onboarding unavailable. Identity eligibility policy is pending.');
   const [name, setName] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const lease = useRef(new AbortController());
   const request: Request = useCallback(async (path = '', input) => {
@@ -23,7 +24,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken }: { ownerUse
     const body = JSON.parse(raw); if (!body || !('data' in body)) throw new Error('Workspace unavailable.'); return body.data;
   }, [getToken]);
   const readCatalog = useCallback(async () => {
-    const value = await request(); if (!Array.isArray(value) || value.length > 50) throw new Error('Workspace list unavailable.');
+    const value = await request(); if (!Array.isArray(value) || value.length > 51) throw new Error('Workspace list unavailable.');
     const items = value.map(validateWorkspace); if (items.some(item => item.ownerUserId !== ownerUserId)) throw new Error('Workspace list unavailable.');
     return items;
   }, [request, ownerUserId]);
@@ -31,6 +32,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken }: { ownerUse
   function choose(id: string) { setSelected(id); setOpened(previous => previous.includes(id) ? previous : [...previous, id]); window.history.pushState(null, '', id ? `#${id}` : window.location.pathname); setError(''); }
   useEffect(() => {
     const controller = new AbortController(); lease.current = controller;
+    void request('/eligibility').then(value => { const status = value as { state?: string; realOnboardingEnabled?: boolean }; if (controller.signal.aborted) return; setEligibility(status.state === 'policy_pending' && status.realOnboardingEnabled === false ? 'Real onboarding unavailable. Independent sign-in eligibility policy has not been adopted.' : 'Real onboarding unavailable. Eligibility status could not be verified.'); }).catch(() => {});
     void readCatalog().then(items => {
       if (controller.signal.aborted) return;
       setCatalog(items);
@@ -39,7 +41,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken }: { ownerUse
       else if (id) setError('That Workspace is unavailable for this identity.');
     }).catch(() => { if (!controller.signal.aborted) setError('Workspace list unavailable. Try Refresh.'); });
     return () => controller.abort();
-  }, [readCatalog]);
+  }, [readCatalog, request]);
   useEffect(() => {
     const navigate = () => { const id = window.location.hash.slice(1); if (catalog.some(item => item.workspaceId === id)) { setSelected(id); setOpened(previous => previous.includes(id) ? previous : [...previous, id]); setError(''); } else { setSelected(''); if (id) setError('That Workspace is unavailable for this identity.'); } };
     window.addEventListener('hashchange', navigate); window.addEventListener('popstate', navigate); return () => { window.removeEventListener('hashchange', navigate); window.removeEventListener('popstate', navigate); };
@@ -50,10 +52,18 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken }: { ownerUse
     catch { if (!lease.current.signal.aborted) setError('Workspace could not be created. Refresh to inspect saved work before retrying.'); }
     finally { if (!lease.current.signal.aborted) setBusy(false); }
   }
+  async function openPersonal() {
+    if (busy) return; setBusy(true); setError('');
+    try { const value = validateOwnedSnapshot(await request('/personal-context', {})); if (value.workspace.ownerUserId !== ownerUserId) throw new Error(); await refresh(); choose(value.workspace.workspaceId); }
+    catch { if (!lease.current.signal.aborted) setError('Personal context unavailable. Existing saved work was kept.'); }
+    finally { if (!lease.current.signal.aborted) setBusy(false); }
+  }
   return <div className={styles.workspace}>
     <header className={styles.header}><OpenJobBrand /><strong>Independent Workspaces · fixture pilot</strong></header>
     <p className={styles.banner}>Synthetic identity and local test database. Each Workspace has one human owner and its own Tasks and Calendar. No real accounts, Mail, invitations, grants or providers are connected. Existing Personal work is separate.</p>
+    <p className={styles.banner} role="status">{eligibility} This fixture cannot grant real-account access.</p>
     <div className={styles.layout}><aside className={styles.sidebar}>
+      <button disabled={busy} onClick={openPersonal}>Open existing Personal context</button>
       <label className={styles.form}>Workspace<select aria-label="Workspace" disabled={busy} value={selected} onChange={event => choose(event.target.value)}><option value="">Choose a Workspace</option>{catalog.map(item => <option key={item.workspaceId} value={item.workspaceId}>{item.name}</option>)}</select></label>
       <form className={styles.form} onSubmit={create}><label>New Workspace name<input aria-label="New Workspace name" value={name} maxLength={80} disabled={busy} onChange={event => setName(event.target.value)} /></label><button disabled={busy || !name.trim()}>Create Workspace</button></form>
       <button disabled={busy} onClick={() => refresh().then(() => setError('')).catch(() => setError('Workspace list unavailable.'))}>Refresh Workspaces</button>

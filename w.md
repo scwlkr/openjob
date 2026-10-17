@@ -1,3 +1,52 @@
+# WLK-326 — retained Personal context mapping; eligibility policy unresolved
+
+Branch codex/wlk-326-personal-context from PR96/main02cd0f6. Current mission,
+AGENTS/WStackc3e3ac6, D04/D06/DOMAIN/ADR0007, Linear/livePR state reread. PR95
+remains parked draft829a3cd, browser delivery unverified; no download actions.
+
+Consequential unresolved choice: D06 explicitly leaves the independent-anchor
+protocol Proposed. Owner must settle which trusted server-verified provider/account
+evidence establishes independent personal control of an existing Google/Apple
+binding, including unknown and known company-managed cases. Provider name, email/
+domain matching or user/browser attestation does not resolve this. No classifier,
+control evidence, second identity system or real access has been invented. The
+fixture eligibility endpoint/UI reports policy_pending/realOnboardingEnabledfalse.
+Normal real-account Workspace onboarding remains disabled; do not configure or
+retry pending WLK318 permissions to resolve this source-policy gate.
+
+Unambiguous portion implemented: explicit idempotent Personal-context reference
+with opaque stable Workspace/Task-space/Calendar resource IDs under the SAME
+existing User. No data copy/rekey/reset, sign-in relinking, grants or offline-cache
+rewrite. A context adapter reads source-free Task/Calendar projections from the
+existing Personal authority, translates its Calendar ID only at the boundary and
+routes writes through the original commands. Original Task/event IDs, Mail/drafts,
+grants and sync receipts remain in the existing store. Single canonical Personal
+Calendar supported; unknown retained shape fails without dropping data. Independent
+Work/Family store remains separate. UI explicitly opens retained Personal next to
+independent Workspaces. Mapping body accepts only{}; owner/context/eligibility
+claims and agent access cannot select or expand authority. Production composition
+is unchanged; only the labeled loopback fixture wires the new source.
+
+Evidence:4 focused mapping/Workspace checks pass (signed fake identity + real repo/
+API), including concurrent/repeated mapping, stableUser/Task/event IDs, unchanged
+Personal record/sign-in methods at mapping, two-way existing/mapped API continuity,
+wrong-context/resource/owner/agent/no-Mail denial and active-user fences. RootTS,
+focused lint, brand32/secrets/diff checks pass. Actual browser reopened preexisting
+Personal Task/notes/schedule, completed SAME Task through mapped context, created
+empty independent Work and reopened Personal without duplicate mapping. Actual
+server restart/readback retained sameUser/mapping/Task/event IDs/completion/original
+Calendar ID and saved draft; source refs omitted from mapped projection; eligibility
+stillpending. Evidence output/wlk-326/personal-context.png and restart-readback.json.
+Fixture state /tmp/openjob-326-personal-context.json retained separately from325.
+No real data/access/settings/providers/credentials, native build or heavy phase.
+PR94 native proof reused; approved npm artifact/WLK302/publication untouched.
+
+Next: final exact-head review and nondeploying source integration for this bounded
+mapping portion; record final identity in PR/Linear. Real onboarding cannot be
+claimed complete until the D06 trusted-evidence policy is decided and implemented,
+then normal composition is reviewed. Company remains a Workspace; no new hierarchy,
+membership grants, transfer or agent delegation is enabled by this mapping.
+
 # WLK-325 — first independent owner-only Workspace product slice
 
 PR96 https://github.com/scwlkr/openjob/pull/96; reviewed implementation
