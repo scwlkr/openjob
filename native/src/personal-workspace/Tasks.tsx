@@ -12,6 +12,15 @@ export function Tasks({ view, busy, selectedId, command, onSource }: Props) {
   const [start, setStart] = useState(() => nowSlot().start);
   const [end, setEnd] = useState(() => nowSlot().end);
   const [deleting, setDeleting] = useState('');
+  const [notesId, setNotesId] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
+  const [notesOriginal, setNotesOriginal] = useState('');
+  const [replaceNotes, setReplaceNotes] = useState('');
+  const openNotes = (id: string) => {
+    const task = view.tasks.find(item => item.id === id);
+    if (!task) return;
+    setNotesId(id); setNotesDraft(task.notes || ''); setNotesOriginal(task.notes || ''); setReplaceNotes('');
+  };
   const [error, setError] = useState('');
   const selectedCalendar = calendarId || view.calendars[0]?.id || '';
   return <><Block><Copy heading>Personal Tasks</Copy><Field label="New task" value={title} onChange={setTitle} /><Action label="Add task" disabled={busy || !title.trim()} onPress={async () => { if (await command({ type: 'task.create', title })) setTitle(''); }} /></Block>
@@ -19,13 +28,16 @@ export function Tasks({ view, busy, selectedId, command, onSource }: Props) {
       {task.notes && <Copy>{task.notes}</Copy>}
       <Row><Action label={`${task.completed ? 'Reopen' : 'Complete'} ${task.title}`} disabled={busy} onPress={() => command({ type: 'task.complete', taskId: task.id, completed: !task.completed })} />
         <Action label={`Edit ${task.title}`} disabled={busy} onPress={() => { setEdit(task.id); setEditedTitle(task.title); }} />
+        <Action label={`Edit notes for ${task.title}`} disabled={busy} onPress={() => { if (notesId === task.id) return; if (notesId && notesDraft !== notesOriginal) setReplaceNotes(task.id); else openNotes(task.id); }} />
         <Action label={`Schedule ${task.title}`} disabled={busy} onPress={() => { const slot = task.scheduledSlot || nowSlot(); setStart(slot.start); setEnd(slot.end); setCalendarId(view.events.find(event => event.id === task.calendarEventId)?.calendarId || view.calendars[0]?.id || ''); setSchedule(task.id); setError(''); }} />
         {task.scheduledSlot && <Action label={`Unschedule ${task.title}`} disabled={busy} onPress={() => command({ type: 'task.unschedule', taskId: task.id })} />}
         <Action label={`Delete ${task.title}`} disabled={busy} onPress={() => setDeleting(task.id)} /></Row>
       {task.sourceMessageId && task.sourceAccountId && view.messages.some(message => message.id === task.sourceMessageId && message.accountId === task.sourceAccountId) && <Action label={`Open source mail for ${task.title}`} onPress={() => onSource(task.sourceMessageId!, task.sourceAccountId!)} />}
+      {notesId === task.id && <><Field label="Task notes" multiline value={notesDraft} onChange={setNotesDraft} editable={!busy} maxLength={40000} /><Copy>{[...notesDraft].length} / 20,000 characters · Plain text; empty clears notes.</Copy><Row><Action label="Save task notes" disabled={busy || [...notesDraft].length > 20000} onPress={async () => { if (await command({ type: 'task.notes', taskId: task.id, notes: notesDraft })) { setNotesId(''); setNotesDraft(''); setNotesOriginal(''); } }} /><Action label="Discard note edits" disabled={busy} onPress={() => { setNotesId(''); setReplaceNotes(''); }} /></Row></>}
       {edit === task.id && <><Field label="Task title" value={editedTitle} onChange={setEditedTitle} /><Row><Action label="Save task title" disabled={busy || !editedTitle.trim()} onPress={async () => { if (await command({ type: 'task.update', taskId: task.id, title: editedTitle })) setEdit(''); }} /><Action label="Cancel task edit" onPress={() => setEdit('')} /></Row></>}
       {deleting === task.id && <Confirm busy={busy} label="Confirm delete task" message="Delete this task and its linked calendar block? Source Mail is kept." onCancel={() => setDeleting('')} onConfirm={async () => { if (await command({ type: 'task.delete', taskId: task.id })) setDeleting(''); }} />}
     </Block>)}
+    {replaceNotes && <Confirm busy={busy} label="Discard unfinished notes and open Task" message="Discard unfinished notes for the other Task?" onCancel={() => setReplaceNotes('')} onConfirm={() => openNotes(replaceNotes)} />}
     {!view.tasks.length && <Copy>No personal tasks yet.</Copy>}
     {schedule && view.tasks.some(task => task.id === schedule) && <Block><Copy heading>Schedule task</Copy><Copy>{view.tasks.find(task => task.id === schedule)?.title}</Copy><Row>{view.calendars.map(calendar => <Action key={calendar.id} label={`Use calendar ${calendar.name}`} selected={selectedCalendar === calendar.id} onPress={() => setCalendarId(calendar.id)} />)}</Row><Field label="Task start UTC ISO" value={start} onChange={setStart} /><Field label="Task end UTC ISO" value={end} onChange={setEnd} />{error ? <Copy>{error}</Copy> : null}<Action label="Save task schedule" disabled={busy} onPress={async () => { if (!validSlot(start, end)) { setError('Use valid UTC ISO times with the end after the start.'); return; } if (await command({ type: 'task.schedule', taskId: schedule, calendarId: selectedCalendar, start: new Date(start).toISOString(), end: new Date(end).toISOString() })) setSchedule(''); }} /><Action label="Cancel task schedule" onPress={() => setSchedule('')} /></Block>}
   </>;

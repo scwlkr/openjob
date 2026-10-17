@@ -364,3 +364,5 @@ room inside512KiB sync requests); capacity failure retains the prior saved state
 and editor input. Web/native conflict summaries expose notes for version review.
 Native source validates/displays notes and shares the sync contract; native editing
 UI/device behavior is not qualified by the source HTTP check.
+
+Native work loop: an invented message lists only Tasks linked to that exact owned mailbox/message, including completed Tasks. Open a Task, edit or clear its plain-text notes, schedule it and return through Calendar or source Mail. Unfinished notes remain in memory through module switches and failed saves; replacing another Task’s edits requires confirmation. Explicitly saved offline notes use the existing Task/Calendar cache and sync path; Mail/source metadata stays outside that cache. React Native component and source/API checks are feature evidence, not simulator/device or TestFlight proof.

@@ -24,6 +24,7 @@ function fixture() {
         case 'calendar.delete': view.events = view.events.filter(item => item.id !== input.eventId); break;
         case 'mail.read': view.messages[0]!.read = input.read; break;
         case 'task.create': view.tasks.push({ id: 'task', ownerId: owner, title: input.title, completed: false, ...(input.messageId ? { sourceMessageId: input.messageId, sourceAccountId: 'example' } : {}) }); break;
+        case 'task.notes': { const task = view.tasks.find(item => item.id === input.taskId)!; if (input.notes.trim()) task.notes = input.notes; else delete task.notes; break; }
         case 'task.update': view.tasks[0]!.title = input.title; break;
         case 'task.complete': view.tasks[0]!.completed = input.completed; break;
         case 'task.schedule': view.tasks[0]!.scheduledSlot = { start: input.start, end: input.end }; view.tasks[0]!.calendarEventId = 'block'; view.events = [{ id: 'block', calendarId: input.calendarId, taskId: 'task', title: view.tasks[0]!.title, start: input.start, end: input.end }]; break;
@@ -133,4 +134,39 @@ it.each([
 it('requires strictly increasing UTC slots', () => {
   expect(validSlot('2026-10-16T09:00:00Z', '2026-10-16T09:00:00.000Z')).toBe(false);
   expect(validSlot('2026-10-16T10:00:00Z', '2026-10-16T09:00:00Z')).toBe(false);
+});
+
+
+it('opens exact Mail-linked Tasks and keeps notes through module navigation, failed saves and replacement review', async () => {
+  const { controller, state } = fixture(); const input = props(controller); const tree = await render(ui(input)); await settled();
+  await press('Add invented examples'); await settled(); await press('Read Launch checklist');
+  await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Unfinished source reply');
+  await press('Create private task from mail'); await settled();
+  state.alex!.tasks.push({ ...state.alex!.tasks[0]!, id: 'second', title: 'Second linked work', completed: true });
+  await press('Refresh workspace'); await settled();
+  await press('Open linked task Launch checklist');
+  await press('Edit notes for Launch checklist');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), '  Owner planning context 📝\n<em>plain text</em>');
+  await press('Calendar'); await press('Tasks');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('  Owner planning context 📝\n<em>plain text</em>');
+  await press('Edit notes for Second linked work'); await press('Cancel confirmation');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('  Owner planning context 📝\n<em>plain text</em>');
+  jest.mocked(controller.commandPersonalWorkspace).mockRejectedValueOnce(new Error('Invented offline transport'));
+  await press('Save task notes'); await settled();
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('  Owner planning context 📝\n<em>plain text</em>');
+  await press('Save task notes'); await settled();
+  expect(state.alex!.tasks[0]!.notes).toBe('  Owner planning context 📝\n<em>plain text</em>');
+  await press('Schedule Launch checklist'); await press('Save task schedule'); await settled();
+  await press('Calendar'); await press('Open linked task Launch checklist'); await press('Open source mail for Launch checklist');
+  expect(screen.getByLabelText('Reply body')).toHaveDisplayValue('Unfinished source reply');
+  await press('Open linked task Second linked work · completed');
+  expect(screen.getByText('Second linked work · opened linked task')).toBeTruthy();
+  await press('Edit notes for Launch checklist'); await fireEvent.changeText(screen.getByLabelText('Task notes'), ''); await press('Save task notes'); await settled();
+  expect(state.alex!.tasks[0]!.notes).toBeUndefined();
+  await press('Edit notes for Launch checklist'); await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Unfinished private note');
+  await press('Edit notes for Second linked work'); await press('Discard unfinished notes and open Task');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Old owner private input');
+  await tree.rerender(ui(props(controller, 'sam'))); await settled();
+  expect(screen.queryByDisplayValue('Old owner private input')).toBeNull();
 });
