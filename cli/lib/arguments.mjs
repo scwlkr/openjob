@@ -22,6 +22,7 @@ const VALUE_OPTIONS = new Set([
   "--priority",
   "--profile",
   "--scopes",
+  "--sections",
   "--resources",
   "--status",
   "--search",

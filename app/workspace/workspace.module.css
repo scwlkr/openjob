@@ -29,6 +29,9 @@
 .main { padding: 30px; max-width: 1600px; width: 100%; }
 .title { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 24px; }
 .panel { border: 1px solid var(--oj-line); background: var(--oj-panel); border-radius: var(--oj-radius-panel); overflow: hidden; margin-bottom: 20px; min-width: 0; }
+.exportPanel { padding: 22px; }
+.exportPanel fieldset { display: grid; gap: 4px; border: 1px solid var(--oj-line); border-radius: 8px; }
+.exportPanel label { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .mailGrid { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.5fr); gap: 20px; }
 .calendarGrid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
 .filter { max-width: 420px; margin-bottom: 20px; }

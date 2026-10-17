@@ -13,6 +13,7 @@ import WorkspaceToday from "./workspace-today";
 import WorkspaceCalendarFiles from "./workspace-calendar-files";
 import PersonalWorkspaceAgents from "./personal-workspace-agents";
 import PersonalWorkspaceMail from "./personal-workspace-mail";
+import PersonalWorkspaceExport from "./personal-workspace-export";
 import styles from "./workspace.module.css";
 import WorkspaceMail, { type MailSource, type WorkspaceMailHandle } from "./workspace-mail";
 import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
@@ -85,7 +86,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
   }
 
   return <div className={styles.workspace}><header className={styles.header}><OpenJobBrand /><span>Personal workspace · signed in</span><button onClick={onSignOut}>Sign out</button></header>
-    <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Today", "Tasks", "Calendar", "Mail", "Mail preview", "Agents"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div><button disabled={!savedAvailable} onClick={onShowSaved}>Saved Tasks and Calendar</button></nav><p className={styles.small}>Tasks, Calendar and invented Mail use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
+    <div className={styles.layout}><aside className={styles.sidebar}><nav aria-label="Personal workspace"><div className={styles.tabs}>{["Today", "Tasks", "Calendar", "Mail", "Mail preview", "Agents", "Export"].map((name) => <button key={name} disabled={!view} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}>{name}</button>)}</div><button disabled={!savedAvailable} onClick={onShowSaved}>Saved Tasks and Calendar</button></nav><p className={styles.small}>Tasks, Calendar and invented Mail use your authenticated OpenJob account.</p><Link href="/">Existing Groups and account</Link></aside>
       <main className={styles.main}><div className={styles.title}><h1>{tab}</h1><button disabled={busy} onClick={refresh}>Refresh</button></div>
         {!view && !error && <p role="status">Loading your personal workspace…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{unrecognized && <p>Finish setting up your existing sign-in at <Link href="/">OpenJob account setup</Link>. No account has been created automatically.</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
         {view && tab === "Today" && <WorkspaceToday view={view} busy={busy} onOpenTask={id => openTodayItem("Task", id)} onOpenEvent={id => openTodayItem("Calendar block", id)} onTasks={() => setTab("Tasks")} onCalendar={() => setTab("Calendar")} />}
@@ -99,6 +100,7 @@ export default function PersonalSession({ session, signal, client, onSignOut, on
           {view.accounts.length > 0 && <WorkspaceMail onOpenTask={openMailTask} ref={mail} view={view} busy={busy} command={command} recovery={recovery} />}
         </section>}
         {view && tab === "Mail preview" && <PersonalWorkspaceMail session={session} signal={signal} client={client} busy={busy} command={command} />}
+        {view && <div hidden={tab !== "Export"}><PersonalWorkspaceExport session={session} signal={signal} client={client} busy={busy} /></div>}
         {view && tab === "Agents" && <PersonalWorkspaceAgents session={session} signal={signal} client={client} onChanged={refresh} />}
         {view && <details className={styles.activity}><summary>Recent activity</summary>{view.activity.slice(-12).reverse().map((entry) => <p key={entry.id} data-testid="personal-activity"><strong>{entry.actor}</strong> · {entry.action} <small>{new Date(entry.createdAt).toLocaleString()}</small></p>)}</details>}
       </main></div></div>;

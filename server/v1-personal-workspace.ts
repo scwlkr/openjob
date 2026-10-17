@@ -3,6 +3,7 @@ import type { OpenJobUser } from "./v1-identity.ts";
 import type { PersonalWorkspaceStore } from "../shared/personal-workspace.ts";
 import { isInactiveUserError } from "../db/user-history.ts";
 import { createCalendarIcalExport } from "../shared/calendar-ical.ts";
+import { createWorkspaceExport, normalizeExportSections } from "../shared/workspace-export.ts";
 import {
   defaultRequestId, errorResponse, jsonResponse, internalErrorResponse,
   accountDeletionPendingResponse, signInMethodUnrecognizedResponse,
@@ -46,6 +47,8 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         if (!personalToken && !user) return signInMethodUnrecognizedResponse(requestId);
         if (user?.deletionPending) return accountDeletionPendingResponse(requestId);
         const url = new URL(request.url);
+        const exporting = url.pathname === "/api/v1/workspace/export";
+        if (exporting && personalToken) return fail("forbidden", "Personal data export requires a human session.", 403);
         const sync = url.pathname === "/api/v1/workspace/task-calendar-sync";
         if (sync && personalToken) return fail("forbidden", "Offline synchronization requires a human session.", 403);
         if (sync && url.search) return fail("invalid_input", "Sync does not accept query parameters.", 400);
@@ -53,7 +56,11 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
         const origin = request.headers.get("origin");
         if (origin && origin !== url.origin) return fail("origin_denied", "Cross-origin workspace requests are denied.", 403);
         let data: unknown;
-        if (url.pathname === "/api/v1/workspace/calendar-export" && request.method === "GET") {
+        if (exporting && request.method === "GET") {
+          if ([...url.searchParams.keys()].some(key => key !== "section")) return fail("invalid_input", "Select only export sections.", 400);
+          const sections = normalizeExportSections(url.searchParams.getAll("section"));
+          data = createWorkspaceExport(user!.userId, await workspace.snapshot(user!.userId), sections);
+        } else if (url.pathname === "/api/v1/workspace/calendar-export" && request.method === "GET") {
           const calendarIds = url.searchParams.getAll("calendarId");
           if ([...url.searchParams.keys()].some(key => key !== "calendarId") || calendarIds.length !== 1 || !/^[A-Za-z0-9:_-]{1,128}$/.test(calendarIds[0])) return fail("invalid_input", "One calendarId is required.", 400);
           data = await createCalendarIcalExport(personalToken ? agentSnapshot! : await workspace.snapshot(user!.userId), calendarIds[0]);

@@ -6,6 +6,7 @@ import type { TaskCalendarSyncSnapshot, TaskCalendarSyncInput, TaskCalendarSyncA
 import type { WorkspaceView } from "../../shared/workspace-contracts";
 import type { PersonalWorkspaceCommand } from "../../shared/personal-workspace";
 import { isOpenJobTimestamp } from "../openjob-timestamp";
+import { normalizeExportSections, validateWorkspaceExport, type WorkspaceExport, type WorkspaceExportSection } from "../../shared/workspace-export";
 
 export class PersonalWorkspaceError extends Error {
   constructor(public readonly code: string, public readonly status = 0) {
@@ -18,6 +19,7 @@ export type PersonalWorkspaceClient = {
   readTaskCalendarSync(session: AuthSession, owner: string, signal: AbortSignal): Promise<TaskCalendarSyncSnapshot>;
   syncTaskCalendar(session: AuthSession, owner: string, input: TaskCalendarSyncInput, signal: AbortSignal): Promise<TaskCalendarSyncAck>;
   snapshot(session: AuthSession, signal: AbortSignal): Promise<WorkspaceView>;
+  exportSaved(session: AuthSession, sections: WorkspaceExportSection[], signal: AbortSignal): Promise<WorkspaceExport>;
   command(session: AuthSession, input: PersonalWorkspaceCommand, signal: AbortSignal): Promise<unknown>;
   listAgents(session: AuthSession, signal: AbortSignal): Promise<PersonalAgentGrant[]>;
   revokeAgent(session: AuthSession, id: string, signal: AbortSignal): Promise<void>;
@@ -72,6 +74,15 @@ export function createPersonalWorkspaceClient(): PersonalWorkspaceClient {
   }
   return {
     me,
+    exportSaved: async (session, sections, signal) => {
+      const selected = normalizeExportSections(sections);
+      const owner = (await me(session, signal)).userId;
+      const query = new URLSearchParams(selected.map(section => ["section", section]));
+      const result = validateWorkspaceExport(await request(session, signal, undefined, `export?${query}`));
+      signal.throwIfAborted();
+      if (result.context.ownerUserId !== owner || JSON.stringify(result.sections) !== JSON.stringify(selected)) throw new PersonalWorkspaceError("invalid_response", 502);
+      return result;
+    },
     readTaskCalendarSync: async (session, owner, signal) => {
       await verifyOwner(session, owner, signal);
       const value = exact(await request(session, signal, undefined, "task-calendar-sync"), ["revision", "projection"]);
