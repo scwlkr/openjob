@@ -1,3 +1,45 @@
+# Approved local setup — 17 October 2026, 12:57 UTC
+
+Shane answered the exact checklist, relayed by parent01a0f838:
+- First read-only mailbox: `shane.caleb.walker@gmail.com` (selection, not a completed grant).
+- Approved the pending DevTools access for `127.0.0.1:5202`, through its supported
+  approval path only. No blanket browser access or retroactive PR99 qualification.
+- Approved adding only `127.0.0.1` to existing `openjob-nonprod` Auth authorized
+  domains and reusing its existing service-account credential for this local pilot.
+
+These decisions supersede the historical “approval pending” wording below; actual
+execution/readback is still pending. No new project/key/client, role, other origin,
+production deployment, npm or TestFlight authority follows. Send and Calendar
+writes remain disabled. Mail sign-in and Gmail consent stay separate.
+
+Resume blocker in this session: callable browser/DevTools tools and their approval
+operation are absent from the tool catalog; installed plugin files do not expose
+that capability. No alternate browser/port/controller was used. `op` CLI and the
+existing document title are available, but no document/key was retrieved or entered
+while browser proof cannot proceed. Reuse the documented short-lived in-memory
+operator launcher; hand off securely before any sensitive entry/transmission,
+never put credentials into chat, logs or committed files.
+
+Smallest handoff: restore the supported DevTools tool for the approved5202 request
+in this task, then perform the two already-approved setup actions and read them
+back; real sign-in and useful PR95/100/101 UI proof take priority. Do not ask Shane
+to approve the same checklist again. If sensitive user entry is required, pause
+for the secure entry surface. Domain change, operator suitability, real sign-in
+and all changed UI remain UNVERIFIED; no launcher/settings action occurred here.
+
+Gmail consent preparation, once existing client/callback and approved credential
+runtime are verified: select the exact mailbox above, request Mail read-only
+`gmail.readonly` with the existing identity-validation scopes, verify upstream
+subject/address and bind its chosen resource home. No consent URL is ready yet:
+actual suitable existing client/callback/runtime is unverified, and selection does
+not authorize creating one or broadening scopes. No send or Calendar-write scope.
+
+PatriBible coordinator acknowledged no resource conflict: Search is a bounded
+read-only SSH diagnosis; neither task has browser control/heavy builds in flight.
+Existing sessions/state and all three draft PRs remain preserved.
+
+---
+
 # Local account onboarding: exact remaining gates
 
 Metadata inspected16October2026 after PR88. No Firebase private key or provider

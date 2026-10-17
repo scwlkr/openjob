@@ -1,3 +1,26 @@
+# Approved setup resume — capability handoff, no execution claim
+
+Shane17Oct12:57UTC approved pending DevTools127.0.0.1:5202 supported access and
+WLK318's exact two actions: only127.0.0.1 Auth-domain addition in existing nonprod
+and existing operator-credential reuse. Selected mailbox shane.caleb.walker@gmail.com.
+Details/current handoff in docs/LOCAL_ACCOUNT_ONBOARDING.md. Those owner approvals
+are no longer pending; actual setup/UI verification remains pending. Historical
+PR99 authorization-scope qualification remains, not retroactively cleared.
+
+This resumed session has no callable browser/DevTools approval tool. No alternate
+browser/controller/port attempted. Existing op CLI/document-reference path known;
+no credential retrieved/entered, no service launcher, domain/settings change or
+real sign-in/provider grant performed while UI capability is unavailable. Restore
+supported DevTools capability for the approved5202 request, then continue already
+authorized setup and UI proof; secure user-entry handoff if needed, no repeat
+consent checklist. No new OAuth client/key, send/Calendar-write or release scope.
+
+Resource coordination acknowledged: PatriBible sole owner has bounded read-only
+Search SSH work; no heavy/browser conflict, all sessions preserved. PR95/100/101
+remain draft; implementation source cf618e2 unchanged, only this approval handoff.
+
+---
+
 # WLK331 — Connections application, isolated draft
 
 Branch codex/wlk-331-connections in /tmp/openjob-connections-slice, main9a5c0c5.
