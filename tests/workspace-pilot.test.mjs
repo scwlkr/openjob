@@ -39,12 +39,12 @@ test('normal shared runtime admits only exact existing binding and composes real
   assert.notEqual(retained.workspace.workspaceId, work.workspace.workspaceId);
   const commands = `/${work.workspace.workspaceId}/commands`;
   let snapshot = await f.call(commands, { type: 'task.create', title: 'Normal pilot task' }); const taskId = snapshot.work.tasks[0].id;
-  await f.call(commands, { type: 'task.notes', taskId, notes: 'Synthetic composition proof' });
+  await f.call(commands, { type: 'task.notes', taskId, notes: 'Synthetic composition proof', expectedNotes: '' });
   snapshot = await f.call(commands, { type: 'task.schedule', taskId, calendarId: work.workspace.calendarId, start: '2026-10-18T14:00:00Z', end: '2026-10-18T14:30:00Z' });
   assert.equal(snapshot.work.events[0].taskId, taskId);
   snapshot = await f.call(commands, { type: 'task.complete', taskId, completed: true }); assert.equal(snapshot.work.tasks[0].completed, true);
   assert.equal(snapshot.work.tasks[0].notes, 'Synthetic composition proof');
-  await f.call(`/${retained.workspace.workspaceId}/commands`, { type: 'task.notes', taskId: retainedTask.id, notes: 'Same Personal authority' });
+  await f.call(`/${retained.workspace.workspaceId}/commands`, { type: 'task.notes', taskId: retainedTask.id, notes: 'Same Personal authority', expectedNotes: retainedTask.notes ?? '' });
   assert.equal((await f.personal.snapshot(owner)).tasks[0].notes, 'Same Personal authority');
   assert.deepEqual(signIns(), bindings);
   for (const name of ['sam', 'apple']) assert.equal((await f.request(`/${work.workspace.workspaceId}`, undefined, name)).status, 403);
@@ -96,4 +96,58 @@ test('actual portable router stays unconfigured for a verified existing User wit
     assert.equal(response.status, 503); assert.equal((await response.json()).error.code, 'workspace_pilot_unconfigured');
     assert.equal(workspaceCalls, 0); assert.deepEqual(f.db.exportState(), before);
   } finally { globalThis.fetch = savedFetch; }
+});
+
+for (const retained of [false, true]) test(`normal notes base protects ${retained ? 'retained Personal' : 'independent Workspace'} including CAS retries`, async () => {
+  const f = await fixture(), owner = f.sessions.alex.user.userId;
+  const context = retained ? await f.call('/personal-context', {}) : await f.call('', { name: 'Work' });
+  const path = `/${context.workspace.workspaceId}`, commands = `${path}/commands`;
+  const added = await f.call(commands, { type: 'task.create', title: 'Concurrent notes' }), taskId = added.work.tasks[0].id;
+  const save = (notes, expectedNotes) => f.request(commands, { type: 'task.notes', taskId, notes, expectedNotes });
+  for (const expectedNotes of [undefined, null, 1, {}, 'x'.repeat(20001)]) assert.equal((await save('invalid base', expectedNotes)).status, 400);
+  const before = f.db.preconditionFailures();
+  f.db.synchronizeNextCommits(2);
+  const race = await Promise.all([save('first editor', ''), save('second editor', '')]);
+  assert.deepEqual(race.map(r => r.status).sort(), [200, 409]);
+  assert.ok(f.db.preconditionFailures() > before, 'loser retried an actual failed CAS');
+  let saved = (await f.call(path)).work.tasks[0].notes;
+  assert.ok(['first editor', 'second editor'].includes(saved));
+  assert.equal((await save('stale overwrite', '')).status, 409);
+  assert.equal((await f.call(path)).work.tasks[0].notes, saved);
+  // An unrelated write retries safely without rejecting an unchanged notes value.
+  f.db.synchronizeNextCommits(2);
+  const unrelated = await Promise.all([save('  exact whitespace\n', saved), f.request(commands, { type: 'task.complete', taskId, completed: true })]);
+  assert.deepEqual(unrelated.map(r => r.status), [200, 200]);
+  assert.equal((await save('bad trim', 'exact whitespace')).status, 409);
+  assert.equal((await save('', '  exact whitespace\n')).status, 200);
+  // Valid maximum notes plus base can exceed the old 100 KB JSON limit.
+  const large = '\u0001'.repeat(20000);
+  assert.equal((await save(large, '')).status, 200);
+  assert.equal((await save(large, large)).status, 200);
+  assert.equal((await save('cleared', large)).status, 200);
+  assert.equal((await save('foreign', 'cleared')).status, 200);
+  for (const name of ['sam', 'apple', 'oj_fake_agent']) assert.ok([401, 403].includes((await f.request(commands, { type: 'task.notes', taskId, notes: 'denied', expectedNotes: 'foreign' }, name)).status));
+  if (retained) {
+    // Legacy Personal API keeps its existing command contract and remains authoritative.
+    await f.personal.command(owner, { type: 'task.notes', taskId, notes: 'Personal edit' });
+    assert.equal((await save('stale normal editor', 'foreign')).status, 409);
+    assert.equal((await f.personal.snapshot(owner)).tasks[0].notes, 'Personal edit');
+    f.db.synchronizeNextCommits(2);
+    const mixed = await Promise.allSettled([save('guarded edit', 'Personal edit'), f.personal.command(owner, { type: 'task.notes', taskId, notes: 'legacy edit' })]);
+    assert.equal(mixed[0].status, 'fulfilled');
+    assert.ok([200, 409].includes(mixed[0].value.status));
+    assert.equal(mixed[1].status, 'fulfilled');
+    assert.equal((await f.personal.snapshot(owner)).tasks[0].notes, 'legacy edit');
+  }
+});
+
+test('mapped notes save fails closed if authoritative Personal guard is unavailable', async () => {
+  const f = await fixture(), context = await f.call('/personal-context', {});
+  const commands = `/${context.workspace.workspaceId}/commands`;
+  const added = await f.call(commands, { type: 'task.create', title: 'Guard required' });
+  const input = { type: 'task.notes', taskId: added.work.tasks[0].id, notes: 'must not save', expectedNotes: '' };
+  const unavailable = f.compose(f.admission, { personal: { ...f.personal, saveTaskNotes: undefined } });
+  assert.equal((await f.request(commands, input, 'alex', unavailable)).status, 503);
+  assert.equal((await f.call(`/${context.workspace.workspaceId}`)).work.tasks[0].notes ?? '', '');
+  assert.equal((await f.request(commands, { ...input, grant: 'unexpected' })).status, 400);
 });

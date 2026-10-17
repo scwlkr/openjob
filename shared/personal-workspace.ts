@@ -13,6 +13,7 @@ export type PersonalWorkspaceStore = {
   readTaskCalendarSync?(ownerUserId: string): Promise<TaskCalendarSyncSnapshot>;
   syncTaskCalendar?(ownerUserId: string, input: unknown): Promise<TaskCalendarSyncAck>;
   command(ownerUserId: string, input: unknown): Promise<unknown>;
+  saveTaskNotes?(ownerUserId: string, input: unknown, expectedNotes: unknown): Promise<unknown>;
   removeAllForUser(ownerUserId: string): Promise<number>;
   createAgent(ownerUserId: string, input: PersonalAgentInput): Promise<{ agent: PersonalAgentGrant; token: string }>;
   listAgents(ownerUserId: string): Promise<PersonalAgentGrant[]>;

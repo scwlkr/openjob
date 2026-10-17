@@ -1,3 +1,37 @@
+# WLK-330 — guarded Workspace Task notes (draft)
+
+Branch `codex/wlk-330-notes-conflict`, clean source checkout
+`/tmp/openjob-329-source-check-tqJ2GW`, base/main9a5c0c5f.
+Reproduced two empty-base editors both200 with stale overwrite before repair.
+Notes-specific exact expectedNotes chosen over whole-Workspace revision to avoid
+unrelated-write conflicts. Read-only critic accepted design and implementation.
+
+Normal Workspace notes require original base; exact comparison happens within
+every owned/retained Personal authoritative CAS retry. Same-base race one200/one409;
+missing/malformed400; unavailable Personal guard503; strict command fields retained.
+Refresh keeps original editor text/base; explicit discard/reopen adopts latest.
+250KB bounded payload fits two maximum JSON-escaped notes. Legacy Personal/offline/
+CLI commands unchanged; value guard permits same-value ABA, not full revision lock.
+Actual runtime admission remains UNSET, D06 Proposed; no real provider/config/access.
+
+Verification: TS and focused ESLint pass; 30 affected repository/API/Home/grants
+checks pass; brand32 and canonical secret642 pass in clean checkout. UI behavior UNVERIFIED: draft
+must remain unmerged pending authorized browser proof. No browser/DevTools/native/
+heavy phase or new permission request performed. PatriBible sessions preserved.
+
+Browser qualification for previous WLK329: observations came from existing Codex
+IAB ID3/tab12 at127.0.0.1:5203/pilot. They did not complete the unanswered localhost5202
+DevTools permission; its exact scope was not established, so observations are NOT
+proof of granted authorization. No retry/alternate browser/port workaround now.
+PR99 clarification https://github.com/scwlkr/openjob/pull/99#issuecomment-6233342505.
+
+Original synced checkout preserved: malformed origin/main 2 ref and untracked
+native/node_modules 2 link untouched; root secret invocation there EISDIR remains.
+Clean checkout reuses matching existing Desktop dependencies without installation.
+WLK318/PR95 parked; cloud WLK302 unrecovered; no publication/deploy/admission.
+
+---
+
 # WLK-329 — bounded authorized Workspace Home
 
 PR99 https://github.com/scwlkr/openjob/pull/99; reviewed implementation05e9bb3.

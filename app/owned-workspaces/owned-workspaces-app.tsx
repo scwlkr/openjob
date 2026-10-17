@@ -106,9 +106,9 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     if (!exists) return;
     if (target.kind === 'task') tasks.current?.openTask(target.id); else calendar.current?.openEvent(target.id);
   }, [active, ready, target, snapshot]);
-  async function command(input: WorkspaceCommand, success: string) {
+  async function command(input: WorkspaceCommand, success: string, expectedNotes?: string) {
     if (busy) return false; busyState(true); setBusy(true); setError(''); setNotice('');
-    try { const result = accept(await request(`/${workspace.workspaceId}/commands`, input)); if (!mounted.current) return false; setSnapshot(result); setNotice(success); return true; }
+    try { const result = accept(await request(`/${workspace.workspaceId}/commands`, expectedNotes === undefined ? input : { ...input, expectedNotes })); if (!mounted.current) return false; setSnapshot(result); setNotice(success); return true; }
     catch { if (mounted.current) setError('Change unavailable in this Workspace. Your editor text is kept; refresh before retrying.'); return false; }
     finally { if (mounted.current) { busyState(false); setBusy(false); } }
   }
@@ -127,7 +127,7 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     {active && !ready && !error && <p role="status">Loading Workspace…</p>}{missingTarget && <p role="alert" className={styles.error}>Unavailable in this context.</p>}
 {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {view && <><div hidden={!active || !ready || currentTab !== 'Today'}><WorkspaceToday contextName={workspace.name} view={view} busy={busy} onOpenTask={openTask} onOpenEvent={id => { if (calendar.current?.openEvent(id)) onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'block', id } }); }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></div>
-    <WorkspaceTasks view={view} busy={busy} command={command} active={active && ready && currentTab === 'Tasks'} ref={tasks} />
+    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} />
     <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} /></>}
   </section>;
 }

@@ -6,7 +6,7 @@ import type { OpenJobUser } from './v1-identity.ts';
 import { isInactiveUserError } from '../db/user-history.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse } from './v1-http.ts';
 /** Context operations; callers own runtime admission in addition to these User/resource checks. */
-export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { store: OwnedWorkspaceStore & { personalContext?: (owner: string) => Promise<unknown> }; users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> }; verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null> }) {
+export function createOwnedWorkspacesApi({ store, users, verifyIdToken, requireNotesPrecondition = false }: { requireNotesPrecondition?: boolean; store: OwnedWorkspaceStore & { personalContext?: (owner: string) => Promise<unknown> }; users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> }; verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null> }) {
   const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: 'Workspace unavailable. Check the selected context and sign-in.' });
   return { async fetch(request: Request): Promise<Response> {
     try {
@@ -41,11 +41,20 @@ export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { stor
         if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') return fail('invalid_input', 415);
         const reader = request.body?.getReader(); if (!reader) return fail('invalid_input', 400);
         const chunks: Uint8Array[] = []; let length = 0;
-        for (;;) { const { value, done } = await reader.read(); if (done) break; length += value.length; if (length > 100000) { await reader.cancel(); return fail('body_too_large', 413); } chunks.push(value); }
+        for (;;) { const { value, done } = await reader.read(); if (done) break; length += value.length; if (length > 250000) { await reader.cancel(); return fail('body_too_large', 413); } chunks.push(value); }
         const bytes = new Uint8Array(length); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
         let input: unknown; try { input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { return fail('invalid_input', 400); }
         const admitted = await users.resolve(identity); if (!admitted || admitted.userId !== user.userId || admitted.deletionPending) return fail('account_unavailable', 410);
-        if (match[1]) data = await store.command(user.userId, match[1], input);
+        if (match[1]) {
+          if (input && typeof input === 'object' && !Array.isArray(input) && (input as { type?: unknown }).type === 'task.notes') {
+            const guarded = Object.hasOwn(input, 'expectedNotes');
+            if (requireNotesPrecondition && !guarded) return fail('invalid_input', 400);
+            if (guarded) {
+              const { expectedNotes, ...command } = input as Record<string, unknown>;
+              data = await store.saveTaskNotes(user.userId, match[1], command, expectedNotes);
+            } else data = await store.command(user.userId, match[1], input);
+          } else data = await store.command(user.userId, match[1], input);
+        }
         else {
           if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).join(',') !== 'name') return fail('invalid_input', 400);
           data = await store.create(user.userId, (input as { name: unknown }).name);
@@ -57,7 +66,7 @@ export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { stor
     } catch (error) {
       if (isInactiveUserError(error)) return fail('account_unavailable', 410);
       const code = (error as { code?: string })?.code;
-      if (code && ['forbidden', 'invalid_input', 'conflict', 'schedule_conflict', 'workspace_capacity'].includes(code)) return fail(code, code === 'forbidden' ? 403 : ['conflict', 'schedule_conflict'].includes(code) ? 409 : code === 'workspace_capacity' ? 413 : 400);
+      if (code && ['forbidden', 'invalid_input', 'conflict', 'schedule_conflict', 'workspace_capacity', 'unavailable'].includes(code)) return fail(code, code === 'unavailable' ? 503 : code === 'forbidden' ? 403 : ['conflict', 'schedule_conflict'].includes(code) ? 409 : code === 'workspace_capacity' ? 413 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };

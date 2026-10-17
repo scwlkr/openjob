@@ -35,7 +35,7 @@ export function createWorkspacePilotApplication({ store, users, verifyIdToken, a
       }
       if (url.pathname === '/api/v1/workspaces/eligibility') return fail('not_found', 404);
       // Existing context API owns all Workspace/resource checks and rechecks current User/binding.
-      const api = createOwnedWorkspacesApi({ store, verifyIdToken: async () => identity, users: { resolve: async current => { const value = await users.resolve(current); return admitted(value, current) ? value : null; } } });
+      const api = createOwnedWorkspacesApi({ requireNotesPrecondition: true, store, verifyIdToken: async () => identity, users: { resolve: async current => { const value = await users.resolve(current); return admitted(value, current) ? value : null; } } });
       url.pathname = url.pathname.replace('/api/v1/workspaces', '/api/owned-workspaces');
       return api.fetch(new Request(url, request));
     } catch { return internalErrorResponse(defaultRequestId); }

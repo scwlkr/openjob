@@ -202,3 +202,26 @@ Fifteen focused Home/admission/context/mapping/availability checks, plus normal
 browser item/Calendar navigation, editor retention, completion refresh, failed
 refresh clearing and responsive views form this slice's proof. Native/full shared
 membership/provider Home remains outside this bounded owner-only implementation.
+
+
+### Guarded Task notes (WLK-330 draft)
+
+Normal Workspace `task.notes` commands require `expectedNotes`: the exact saved
+notes captured when opening the editor (`""` when absent), alongside `taskId` and
+new `notes`. Missing or malformed bases return 400; changed saved text returns 409.
+Independent and mapped Personal repositories compare the base inside every CAS
+retry. An unavailable Personal guard returns 503 without an unguarded fallback.
+The transport field is removed before strict domain command parsing. Request bytes
+remain bounded at 250,000 to fit two 20,000-character strings even when JSON escapes
+control characters. Existing notes/domain limits still apply.
+
+The Workspace editor keeps draft and captured base after failure and Refresh.
+When refreshed saved text differs, Save is disabled; review the saved notes,
+explicitly discard and reopen to adopt that version. This compares text values,
+not a history revision: an intervening edit restored to the same value is allowed.
+Existing legacy Personal/offline/CLI commands retain their contracts and may write
+without this guard. This draft does not claim universal multi-editor protection.
+
+Source/API proof passes; **changed UI behavior has not been browser verified**.
+Pending localhost5202 DevTools authorization remains unresolved. No new browser
+access or permission request is authorized for this continuation; keep PR draft.
