@@ -1,3 +1,46 @@
+# WLK331 — Connections application, isolated draft
+
+Branch codex/wlk-331-connections in /tmp/openjob-connections-slice, main9a5c0c5.
+Independent of PR100 notes263321c/docs1235ae1; no cherry-pick/merge dependency.
+Linear WLK331: https://linear.app/wlkr-labs/issue/WLK-331.
+Parent authorizes bounded R30/R31 implementation after existing review; stop at
+source review/draft. Read current AGENTS/mission/WStack0.2 and existing connector
+ADRs/specs. One integration writer; existing critic read-only, no browser.
+
+Connections UI/API/CLI now share owner-scoped onboarding: choose invented Gmail
+account and explicit owned home, review/simulate read consent, cancel, read actual
+mock mapper output, disconnect, retry cleanup and reconnect same subject/home/ID.
+Firestore CAS persists bounded application metadata/cleanup intent, no tokens.
+Normal hosted/portable roots leave onboarding UNSET503. Simulated factory only in
+owned-Workspace fixture. OAuth/broker reused with per-attempt fake metadata/credential
+state; fixture credentials are ephemeral, restart read yields reconnect-required.
+No real refresh/scheduler/vault/crypto implementation; proposed defaults unaccepted.
+Mail remains simulated; Calendar link names OpenJob blocks, not provider Calendar.
+Live source-linked Task integration remains next R33 work, not completed here.
+
+Read-only review caught portable /connections route/mode omission, fixed in both
+service-server and web entry. Strict API schema caught overbroad home metadata,
+now ID/name only. CLI/API signed fixture proof passes, including response schemas.
+Affected broad run exposed existing stale Personal command-count18 vs19 and an
+expired-date provider fixture expectation; unchanged baseline assertions reproduced
+in output/wlk-331. Do not claim whole suite green or expand into notes/provider churn.
+Final core37/37 plus signed CLI/schema journey pass; TS/focused lint, OpenAPI
+34paths/49operations, generated types, brand32 and secret652 pass. Broader run54/56
+with the two reproduced baseline failures above; no full-suite green claim.
+Alternative frontend-only chooser rejected: it would not prove policy, persistence
+or CLI behavior. Read-only reviewers found no remaining material defects after
+portable wiring fix. Exact head/PR recorded in Linear/PR.
+
+WLK302 latest blocked handoff recovered via Linear1bbe36a4/owner final history:
+uncommitted codex/wlk-302-imap-tls-runtime from5358f6c, no PR/full gate; historical
+focused checks only. Source NOT recovered, cloud NOT restarted, TLS/login untouched.
+PR95/PR100 remain draft. PR99 IAB3/tab12/port5203 observations retain unresolved
+approval scope; preserve evidence, no clean authorization claim. Pending browser,
+WLK318 setup and live-account consent all unchanged. No browser/launcher/heavy phase,
+secret retrieval, real account/provider call/grant, configuration, deploy or release.
+
+---
+
 # WLK-329 — bounded authorized Workspace Home
 
 PR99 https://github.com/scwlkr/openjob/pull/99; reviewed implementation05e9bb3.

@@ -1,3 +1,7 @@
+import { createConnectionsApi } from '../server/connections/api.ts';
+import { createConnectionsApplication } from '../server/connections/application.ts';
+import { createConnectionOnboardingStore } from '../db/connection-onboarding.ts';
+import { createConsentFixture, fixtureChoices } from '../tests/support/connection-onboarding-fixture.mjs';
 // Local-only fixture composition of real owner-Workspace repository/API/UI; no deployed route.
 import { createServer as createViteServer } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -35,7 +39,7 @@ try {
   try {
     const raw = await readFile(statePath); if (raw.length > 32 * 1024 * 1024) throw new Error('Oversized fixture.');
     const value = JSON.parse(raw.toString('utf8'));
-    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 150 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
+    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 150 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces|v1ConnectionOnboarding)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
     db.restoreState(value.state);
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   async function persist() { const raw = JSON.stringify({ kind: 'openjob-owned-workspace-fixture', version: 1, state: db.exportState() }); if (Buffer.byteLength(raw) > 32 * 1024 * 1024) throw new Error('Fixture capacity.'); const temporary = statePath + `.tmp-${process.pid}`; await writeFile(temporary, raw, { mode: 0o600, flag: 'wx' }); await rename(temporary, statePath); }
@@ -46,17 +50,20 @@ try {
   for (const name of ['alex', 'sam']) { const token = await authority.issue({ uid: `owned_fixture_${name}` }); const identity = await verifyIdToken(new Request('http://fixture.invalid', { headers: { authorization: `Bearer ${token}` } })); const { user } = await users.create(identity); sessions.set(name, { token, userId: user.userId }); const items = await store.list(user.userId); for (const item of items) await store.snapshot(user.userId, item.workspaceId); }
   await persist(); const api = createOwnedWorkspacesApi({ store, users, verifyIdToken });
   const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
+  const consentFixture = createConsentFixture({ config, isOwnerActive: async owner => { await store.list(owner); return true; } });
+  const onboarding = createConnectionsApplication({ store: createConnectionOnboardingStore(config, db.fetch), homes: store, consent: consentFixture.adapter, choices: fixtureChoices });
+  const connectionsApi = createConnectionsApi({ onboarding, users, verifyIdToken });
   const personalApi = createV1PersonalWorkspaceApi({ workspace: personal, users, verifyIdToken });
   const plugin = { name: 'owned-workspaces-fixture', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {
-    if (!incoming.url?.startsWith('/api/owned-workspaces') && !incoming.url?.startsWith('/api/v1/workspaces') && !incoming.url?.startsWith('/api/v1/workspace/') && !incoming.url?.startsWith('/__fixture/session/')) return next();
+    if (!incoming.url?.startsWith('/api/v1/connections') && !incoming.url?.startsWith('/api/owned-workspaces') && !incoming.url?.startsWith('/api/v1/workspaces') && !incoming.url?.startsWith('/api/v1/workspace/') && !incoming.url?.startsWith('/__fixture/session/')) return next();
     const run = async () => {
       try {
         const url = new URL(incoming.url, `http://127.0.0.1:${port}`);
         if (url.pathname.startsWith('/__fixture/session/')) { const session = sessions.get(url.pathname.slice('/__fixture/session/'.length)); outgoing.writeHead(session ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify(session ?? {})); return; }
         const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 100000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
         const before = db.exportState(); const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
-        const response = await (url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
-        if (response.ok && incoming.method === 'POST') { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
+        const response = await (url.pathname.startsWith('/api/v1/connections') ? connectionsApi : url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
+        if (incoming.method === 'POST' && (response.ok || url.pathname.startsWith('/api/v1/connections'))) { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
         outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()));
       } catch { outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: { code: 'fixture_unavailable' } })); }
     };

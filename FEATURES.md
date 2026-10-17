@@ -1,3 +1,14 @@
+## Connections onboarding contract (WLK331 draft)
+
+Account-level Connections chooses an invented Gmail account and explicit owned
+Workspace resource home, reviews simulated read-only consent, cancels, reads Mail,
+disconnects and reconnects the same subject/home. UI/API/CLI share the application;
+normal runtime remains unconfigured503. Durable lifecycle metadata and cleanup
+intent exclude tokens; fixture OAuth/credentials remain ephemeral. Provider Calendar,
+real OAuth/refresh/vault setup and live source-linked Tasks are not supplied by this
+slice. UI behavior is unverified; draft remains unmerged. See
+[Connections evidence and limits](docs/providers/CONNECTIONS.md#wlk331--simulated-connections-application-draft).
+
 ## Find saved Calendar time for a Task
 
 Calendar offers open slots across all saved owner calendars for an open Task,

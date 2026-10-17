@@ -8,11 +8,12 @@ import { OpenJobBrand } from "../openjob-brand";
 import { createPersonalWorkspaceClient, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import styles from "./workspace.module.css";
 import WorkspacePilotSession from '../owned-workspaces/workspace-pilot-session';
+import ConnectionsSession from '../connections/connections-session';
 import BrowserSession from "./web-offline-session";
 import { clearBrowserPrivateState } from "../openjob-private-state";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
-type Props = { workspaceMode?: "pilot"; auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
+type Props = { workspaceMode?: "pilot" | "connections"; auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
 
 export default function PersonalWorkspaceApp({ auth, client, workspaceMode }: Props) {
   const activeAuth = useMemo(() => auth || createFirebaseAuth({ allowOfflineRestore: true }), [auth]);
@@ -68,6 +69,7 @@ export default function PersonalWorkspaceApp({ auth, client, workspaceMode }: Pr
     try { await clearBrowserPrivateState(); await activeAuth.signOut(); } catch { setAuthError("Sign-out could not be completed. Reload before continuing."); }
   }
 
+  if (lease.session && workspaceMode === "connections") return <ConnectionsSession key={lease.epoch} session={lease.session} signal={lease.controller.signal} onSignOut={signOut} />;
   if (lease.session && workspaceMode === "pilot") return <WorkspacePilotSession key={lease.epoch} session={lease.session} signal={lease.controller.signal} onSignOut={signOut} />;
   if (lease.session) return <BrowserSession key={lease.epoch} session={lease.session} signal={lease.controller.signal} client={activeClient} onSignOut={signOut} onPrivatePurge={lock} />;
   return <div className={styles.workspace}><header className={styles.header}><OpenJobBrand /><span>Personal workspace</span></header><main className={styles.main}>

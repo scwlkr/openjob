@@ -89,6 +89,10 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["connections list", new Set(OUTPUT_OPTIONS)],
+  ["connections begin", new Set([...OUTPUT_OPTIONS, "--input"])],
+  ["connections action", new Set([...OUTPUT_OPTIONS, "--input"])],
+  ["connections mail", new Set(OUTPUT_OPTIONS)],
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
   ["workspace availability", new Set([...OUTPUT_OPTIONS, "--task", "--schedule-start", "--schedule-end", "--minutes"])],
   ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
@@ -142,6 +146,7 @@ Local app and updates:
   OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 
 Resources:
+  connections  List, begin, action or read simulated Mail; normal runtime closed
   workspace  Personal Tasks, Calendar and invented Mail through the shared API
   auth       Sign in, inspect authentication, or sign out
   user       Show the current User
@@ -166,6 +171,14 @@ Global options:
 
 /** @type {Record<string, string>} */
 const RESOURCE_HELP = {
+  connections: `Usage:
+  openjob connections list
+  openjob connections begin --input <json-file>
+  openjob connections action <connection-id> --input <json-file>
+  openjob connections mail <connection-id>
+
+Begin input: choiceId and workspaceId. Action input: action=approve|cancel|disconnect|retry-cleanup.
+Simulated approval only; no real provider authorization.`,
   workspace: `Usage:
   openjob workspace snapshot
   openjob workspace availability --task <id> --schedule-start <ISO> --schedule-end <ISO> --minutes <5-480>
@@ -609,6 +622,18 @@ async function main(raw) {
     const response = /** @type {PersonalWorkspaceSnapshotResponse} */ (await apiRequest("/workspace/snapshot", {}, { retryable: true, quiet: parsed.options.has("--quiet") }));
     if (!Array.isArray(response?.data?.tasks)) throw new CliError("invalid_response", "OpenJob returned an invalid task snapshot.", 8);
     writeResult({ data: filterWorkspaceTasks(response.data.tasks, query) }); return;
+  }
+  if (resource === "connections") {
+    if (command === "list" && rest.length === 0) { writeResult(await apiRequest("/connections", {}, { retryable: true })); return; }
+    if (command === "begin" && rest.length === 0) {
+      const input = readInputObject(parsed.options.get("--input"));
+      writeResult(await apiRequest("/connections", { method: "POST", body: JSON.stringify(input) })); return;
+    }
+    if ((command === "action" || command === "mail") && rest.length === 1 && /^con_[a-f0-9]{32}$/.test(rest[0])) {
+      const path = `/connections/${rest[0]}`;
+      writeResult(await apiRequest(command === "mail" ? `${path}/mail` : path, command === "mail" ? {} : { method: "POST", body: JSON.stringify(readInputObject(parsed.options.get("--input"))) })); return;
+    }
+    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id>. Approval is simulated only; normal Connections remain unconfigured.", 2);
   }
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();

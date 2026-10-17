@@ -22,5 +22,5 @@ export default function WorkspacePilotSession({ session, signal, onSignOut }: { 
     })();
     return () => { active = false; };
   }, [getToken, signal]);
-  return <><div className={styles.actions}><Link href="/workspace">Existing Personal work</Link><button onClick={onSignOut}>Sign out</button></div>{owner ? <OwnedWorkspacesApp key={owner} ownerUserId={owner} getToken={getToken} apiBase="/api/v1/workspaces" mode="pilot" /> : <main className={styles.main}><h1>Workspace pilot</h1><p role="status">{message}</p></main>}</>;
+  return <><div className={styles.actions}><Link href="/connections">Connections</Link><Link href="/workspace">Existing Personal work</Link><button onClick={onSignOut}>Sign out</button></div>{owner ? <OwnedWorkspacesApp key={owner} ownerUserId={owner} getToken={getToken} apiBase="/api/v1/workspaces" mode="pilot" /> : <main className={styles.main}><h1>Workspace pilot</h1><p role="status">{message}</p></main>}</>;
 }

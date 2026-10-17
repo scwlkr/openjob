@@ -2214,6 +2214,277 @@ paths:
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
 
+  /api/v1/connections:
+    get:
+      tags:
+        - Providers
+      operationId: listConnections
+      summary: listConnections
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Human-only simulated Connections contract. Normal runtime remains
+        unconfigured (503). Explicit resource homes and read-only Mail; no real
+        grant, provider Calendar, sending or credentials. Fixture must inject the
+        application.
+      responses:
+        "200":
+          description: Simulated application result; never live consent or provider traffic.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ConnectionCatalog"
+              example:
+                data:
+                  mode: simulated
+                  providers: []
+                  choices: []
+                  homes: []
+                  bindings: []
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        default:
+          description: Redacted failure, including unconfigured503, denied403, conflict409
+            or invalid400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Providers
+      operationId: beginConnectionConsent
+      summary: beginConnectionConsent
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      description: Human-only simulated Connections contract. Normal runtime remains
+        unconfigured (503). Explicit resource homes and read-only Mail; no real
+        grant, provider Calendar, sending or credentials. Fixture must inject the
+        application.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionBegin"
+            example:
+              choiceId: invented_gmail
+              workspaceId: wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      responses:
+        "200":
+          description: Simulated application result; never live consent or provider traffic.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - connectionId
+                    properties:
+                      connectionId: &a1
+                        type: string
+                        pattern: ^con_[a-f0-9]{32}$
+              example:
+                data:
+                  connectionId: con_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        default:
+          description: Redacted failure, including unconfigured503, denied403, conflict409
+            or invalid400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/{connectionId}:
+    parameters:
+      - in: path
+        name: connectionId
+        required: true
+        schema: *a1
+    post:
+      tags:
+        - Providers
+      operationId: updateConnectionConsent
+      summary: updateConnectionConsent
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: false
+      description: Human-only simulated Connections contract. Normal runtime remains
+        unconfigured (503). Explicit resource homes and read-only Mail; no real
+        grant, provider Calendar, sending or credentials. Fixture must inject the
+        application.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionAction"
+            example:
+              action: approve
+      responses:
+        "200":
+          description: Simulated application result; never live consent or provider traffic.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - status
+                    properties:
+                      status:
+                        const: status_updated
+              example:
+                data:
+                  status: status_updated
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        default:
+          description: Redacted failure, including unconfigured503, denied403, conflict409
+            or invalid400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/{connectionId}/mail:
+    parameters:
+      - in: path
+        name: connectionId
+        required: true
+        schema: *a1
+    get:
+      tags:
+        - Providers
+      operationId: readConnectionMail
+      summary: readConnectionMail
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Human-only simulated Connections contract. Normal runtime remains
+        unconfigured (503). Explicit resource homes and read-only Mail; no real
+        grant, provider Calendar, sending or credentials. Fixture must inject the
+        application.
+      responses:
+        "200":
+          description: Simulated application result; never live consent or provider traffic.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - mode
+                      - workspaceId
+                      - page
+                    properties:
+                      mode:
+                        const: simulated
+                      workspaceId:
+                        type: string
+                        pattern: ^wsp_[a-f0-9]{32}$
+                      page:
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - messages
+                          - folders
+                          - calendars
+                          - events
+                          - nextCursor
+                          - syncCursor
+                        properties:
+                          messages:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ProviderPreviewMessage"
+                          folders:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ProviderPreviewFolder"
+                          calendars:
+                            type: array
+                            maxItems: 0
+                            items:
+                              $ref: "#/components/schemas/ProviderPreviewCalendar"
+                          events:
+                            type: array
+                            maxItems: 0
+                            items:
+                              $ref: "#/components/schemas/ProviderPreviewEvent"
+                          nextCursor:
+                            type:
+                              - string
+                              - "null"
+                          syncCursor:
+                            type:
+                              - string
+                              - "null"
+              example:
+                data:
+                  mode: simulated
+                  workspaceId: wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                  page:
+                    messages: []
+                    folders: []
+                    calendars: []
+                    events: []
+                    nextCursor: null
+                    syncCursor: null
+        "401":
+          $ref: "#/components/responses/UnauthorizedResponse"
+        "410":
+          $ref: "#/components/responses/AccountDeletionAlreadyPendingResponse"
+        "429":
+          $ref: "#/components/responses/RateLimitedResponse"
+        "500":
+          $ref: "#/components/responses/InternalErrorResponse"
+        default:
+          description: Redacted failure, including unconfigured503, denied403, conflict409
+            or invalid400.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     personalWorkspaceAgentBearer:
@@ -3196,6 +3467,112 @@ components:
               requestId: req_01J0INTERNAL
 
   schemas:
+    ConnectionCatalog:
+      type: object
+      additionalProperties: false
+      required:
+        - mode
+        - providers
+        - choices
+        - homes
+        - bindings
+      properties:
+        mode:
+          const: simulated
+        providers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - available
+              - reason
+            properties:
+              id: &a1
+                type: string
+              available:
+                type: boolean
+              reason: *a1
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - label
+              - provider
+            properties:
+              id: *a1
+              label: *a1
+              provider:
+                const: gmail
+        homes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - workspaceId
+              - name
+            properties:
+              workspaceId: &a2
+                type: string
+                pattern: ^wsp_[a-f0-9]{32}$
+              name: *a1
+        bindings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - workspaceId
+              - choiceId
+              - provider
+              - status
+            properties:
+              id:
+                type: string
+                pattern: ^con_[a-f0-9]{32}$
+              workspaceId: *a2
+              choiceId: *a1
+              provider:
+                const: gmail
+              status:
+                enum:
+                  - authorizing
+                  - consent_required
+                  - connected
+                  - cancelled
+                  - reconnect_required
+                  - cleanup_pending
+                  - disconnected
+              address: *a1
+    ConnectionBegin:
+      type: object
+      additionalProperties: false
+      required:
+        - choiceId
+        - workspaceId
+      properties:
+        choiceId:
+          type: string
+          maxLength: 80
+        workspaceId: *a2
+    ConnectionAction:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+      properties:
+        action:
+          enum:
+            - approve
+            - cancel
+            - disconnect
+            - retry-cleanup
     ProviderConnectorStatus:
       oneOf:
         - $ref: "#/components/schemas/GmailConnectorStatus"
