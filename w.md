@@ -1,3 +1,154 @@
+# Source integration checkpoint — 17 October 2026
+
+Reconciled source2dca2acf13e2ad08f7f035522c840eb6ac68ae9f passed51/51 focused
+notes/Home/isolation/grants and Connections/OAuth/signedCLI tests, TypeScript,
+affected ESLint, OpenAPI34paths49operations, generatedtypes, brand32, secret653
+and diffcheck. Exact-source read-only reconciliation review found no consequential
+issues. This final documentation checkpoint changes no source. PR101 is submitted
+for the already-authorized source-only merge; actual landed hash/readback is recorded
+in Linear WLK331 and PR101. No full-suite or deployment readiness claim.
+
+PR100 merged at b0fed00cc93de69fd4a92d0b1cc5dc64b9b7f401 after exact-head review,
+focused16/16 tests, TypeScript, affected lint, brand32/secret642 and actual notes UI
+proof. Initial compile lacked ignored Cloudflare declarations; restored existing
+matching declarations then compile passed. PR101 reconciliation retains both source
+changes: fixture250KB bound plus Connections dispatch/persist; only w.md conflicted,
+both histories preserved below. Historical draft/pending wording below is superseded
+by this current checkpoint and actual-service sign-in proof. PR95 remains draft.
+
+Integration is in /tmp/openjob-100-101-integration, separate from running source
+/tmp/openjob-connections-slice at bf5ae46. Preserve PID16066/session50291, tab939996978
+and the verification Task/block. No simulated onboarding injected in real runtime.
+PR101 prior exact-head35/35 lifecycle+Connections+signedCLI checks, TS, affectedlint,
+OpenAPI34/49/types, brand32/secret652 passed. First CLI run hit sandbox loopbackEPERM;
+approved ephemeral listener rerun passed. Broader historical54/56 baseline failures
+(command oneOf18vs19, expired-date provider expectation) remain, not full-suite green.
+No required branch rules/checks or hooks; only manual artifact workflow, no push/deploy.
+All infra remains scwlkr/0o10. No provider access, storage activation or release.
+
+Remaining Gmail-read gate is in docs/LOCAL_ACCOUNT_ONBOARDING.md: existing public
+nonprod Firebase identity client/handler is not a verified Mail OAuth registration
+or runnable callback. Real lifecycle is disabled/mock-only with no production vault,
+exchange/verifier/read bindings. No actionable consent URL yet; selected mailbox
+remains shane.caleb.walker@gmail.com. Do not solve this by enabling fixture mode.
+
+---
+
+# Local setup / existing drafts UI checkpoint — 17 October 2026
+
+PR101 Connections UI PASS at sourceHEAD6eacb66/implementationcf618e2 on exact5202:
+create UI331 Work, simulated Gmail/home consent/cancel/reconnect/readMail/disconnect,
+correct Calendar home link and explicit OpenJob-block label; 390px nooverflow.
+Sam switch hid Alex data but showed sign-in, so signed-in Sam UI isolation remains
+unproven; signed API denial tests are separate. PR100 notes UI PASS atHEAD1235ae1/
+implementation263321c: two editors, stale-save denial retains B; Refresh shows saved
+A + B draft + alert/disabledSave; discard/reopen adopts A; saveB-new and clear pass.
+Ownersupplied Git heads independently checked by root, source clean during eachrun.
+
+Screenshots inline only in verifier01a149f4-5c50-7146-aa7b-a7dbfd2d1010 tool transcript:
+PR101 'Capture desktop evidence and inspect responsive viewport API' and
+'Verify narrow Connections layout and capture evidence'; PR100 best screenshot
+'Capture visible conflict warning, retained draft, and disabled Save'. No artifact
+URL/file/stableimageID exposed; no screenshots claimed exported. All syntheticQA
+tabs closed/viewportreset. Preserve fixturestates /tmp/openjob-331-ui.LtpatP/state.json
+and /tmp/openjob-330-ui.HvXGiJ/state.json (private files, not encrypted). Owned
+fixturePIDs11870/14232 stopped; locks released. No port workaround; exact5202 throughout.
+
+WLK318 approved domainaddition DONE/readback: only127.0.0.1 added to openjob-nonprod,
+other domains preserved. Operator reference metadata found; approved Document loaded
+only in short-lived real-pilot process, no key values/logs/files/newcredentials.
+Whole-item lookup auto-rejected before execution; safer metadata+Document-only
+actual-use route succeeded, no retry/bypass of rejected lookup. See current
+LOCAL_ACCOUNT_ONBOARDING.md for exact scopes, receipt, history and remainingproof.
+
+Real UI at5202/workspace now renders in helper's owned handofftab939996978 with
+ContinueGoogle, no restoredsession. Initiallyblank preview fixed only in private
+launcher publicdefines; productsourceunchanged. Process16066/session50291 owns
+/tmp/openjob-318-real-launcher.mjs, operator onlyRAM, kept for immediatehumanhandoff.
+Shane completed human Google sign-in and returned. Actual-service UI PASS: loaded
+Personal workspace signed in, Task created “Local pilot verification 17 October”,
+one linked OpenJob block persisted 18Oct2026 15:00–15:30UTC /10:00–10:30Central.
+Initial date input did not take; same block corrected, final one-block agenda and
+linked Task verified after Refresh. Task/block intact; tab939996978 preserved on
+Calendar. No visible identity label/auth inspection; no live mailbox connected.
+Screenshot inline in verifier01a149f4 call “Capture persisted actual Calendar block
+and preserve Shane handoff”; no exported artifact URL/path. See onboarding doc.
+No helpercredentials, provider scopes, real sending, providerCalendarwrite or releases.
+
+Hosting update: OVH VPS purchased per Shane; all infrastructure in scwlkr/0o10,
+owner01a14a00-ce06-7721-a75a-9939f141802d. OpenJob+PatriSearch primarilyVPS,
+Minecraftlocal/Octal8home+VPS. ActualVPSspecs/IP/OS unverified. Preserve app portable
+artifacts here; no competing infra/config/deploy. PR95/100/101 remain separatedrafts;
+PR99 historical approvalqualification preserved, not retroactively cleared.
+
+---
+
+# Approved setup resume — capability handoff, no execution claim
+
+Shane17Oct12:57UTC approved pending DevTools127.0.0.1:5202 supported access and
+WLK318's exact two actions: only127.0.0.1 Auth-domain addition in existing nonprod
+and existing operator-credential reuse. Selected mailbox shane.caleb.walker@gmail.com.
+Details/current handoff in docs/LOCAL_ACCOUNT_ONBOARDING.md. Those owner approvals
+are no longer pending; actual setup/UI verification remains pending. Historical
+PR99 authorization-scope qualification remains, not retroactively cleared.
+
+This resumed session has no callable browser/DevTools approval tool. No alternate
+browser/controller/port attempted. Existing op CLI/document-reference path known;
+no credential retrieved/entered, no service launcher, domain/settings change or
+real sign-in/provider grant performed while UI capability is unavailable. Restore
+supported DevTools capability for the approved5202 request, then continue already
+authorized setup and UI proof; secure user-entry handoff if needed, no repeat
+consent checklist. No new OAuth client/key, send/Calendar-write or release scope.
+
+Resource coordination acknowledged: PatriBible sole owner has bounded read-only
+Search SSH work; no heavy/browser conflict, all sessions preserved. PR95/100/101
+remain draft; implementation source cf618e2 unchanged, only this approval handoff.
+
+---
+
+# WLK331 — Connections application, isolated draft
+
+Branch codex/wlk-331-connections in /tmp/openjob-connections-slice, main9a5c0c5.
+Independent of PR100 notes263321c/docs1235ae1; no cherry-pick/merge dependency.
+Linear WLK331: https://linear.app/wlkr-labs/issue/WLK-331.
+Parent authorizes bounded R30/R31 implementation after existing review; stop at
+source review/draft. Read current AGENTS/mission/WStack0.2 and existing connector
+ADRs/specs. One integration writer; existing critic read-only, no browser.
+
+Connections UI/API/CLI now share owner-scoped onboarding: choose invented Gmail
+account and explicit owned home, review/simulate read consent, cancel, read actual
+mock mapper output, disconnect, retry cleanup and reconnect same subject/home/ID.
+Firestore CAS persists bounded application metadata/cleanup intent, no tokens.
+Normal hosted/portable roots leave onboarding UNSET503. Simulated factory only in
+owned-Workspace fixture. OAuth/broker reused with per-attempt fake metadata/credential
+state; fixture credentials are ephemeral, restart read yields reconnect-required.
+No real refresh/scheduler/vault/crypto implementation; proposed defaults unaccepted.
+Mail remains simulated; Calendar link names OpenJob blocks, not provider Calendar.
+Live source-linked Task integration remains next R33 work, not completed here.
+
+Read-only review caught portable /connections route/mode omission, fixed in both
+service-server and web entry. Strict API schema caught overbroad home metadata,
+now ID/name only. CLI/API signed fixture proof passes, including response schemas.
+Affected broad run exposed existing stale Personal command-count18 vs19 and an
+expired-date provider fixture expectation; unchanged baseline assertions reproduced
+in output/wlk-331. Do not claim whole suite green or expand into notes/provider churn.
+Final core37/37 plus signed CLI/schema journey pass; TS/focused lint, OpenAPI
+34paths/49operations, generated types, brand32 and secret652 pass. Broader run54/56
+with the two reproduced baseline failures above; no full-suite green claim.
+Alternative frontend-only chooser rejected: it would not prove policy, persistence
+or CLI behavior. Read-only reviewers found no remaining material defects after
+portable wiring fix. Exact head/PR recorded in Linear/PR.
+
+WLK302 latest blocked handoff recovered via Linear1bbe36a4/owner final history:
+uncommitted codex/wlk-302-imap-tls-runtime from5358f6c, no PR/full gate; historical
+focused checks only. Source NOT recovered, cloud NOT restarted, TLS/login untouched.
+PR95/PR100 remain draft. PR99 IAB3/tab12/port5203 observations retain unresolved
+approval scope; preserve evidence, no clean authorization claim. Pending browser,
+WLK318 setup and live-account consent all unchanged. No browser/launcher/heavy phase,
+secret retrieval, real account/provider call/grant, configuration, deploy or release.
+
+---
+
 # Connection prerequisite review — documentation only
 
 Existing provider guide now contains a short Proposed first-connection review:

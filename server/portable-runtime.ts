@@ -22,6 +22,7 @@ export function createPortableRuntime(config: Config) {
       if (path === '/api/v1/workspaces' || path.startsWith('/api/v1/workspaces/')) return workspacePilot.fetch(request);
       if (path === '/api/v1/me' || path.startsWith('/api/v1/me/')) return identity.fetch(request);
       if (path.startsWith('/api/v1/workspace/agent-grants')) return application.personalAgentGrantsApi.fetch(request);
+      if (path === '/api/v1/connections' || path.startsWith('/api/v1/connections/')) return application.connectionsApi.fetch(request);
       if (path === '/api/v1/workspace/provider-preview') return application.providerPreviewApi.fetch(request);
       if (path.startsWith('/api/v1/workspace/')) return application.personalWorkspaceApi.fetch(request);
       return Promise.resolve(new Response(JSON.stringify({ error: { code: 'not_found' } }), { status: 404, headers: { 'content-type': 'application/json' } }));

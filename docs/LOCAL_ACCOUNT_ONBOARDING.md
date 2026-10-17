@@ -1,3 +1,139 @@
+# Remaining Gmail-read gate after local sign-in proof
+
+Selected mailbox: **shane.caleb.walker@gmail.com**, existing project
+**openjob-nonprod (550998178053)**. The completed Google login grants OpenJob
+identity only. Mail remains unconnected; no consent URL is ready.
+
+Smallest next setup check is a nonsecret readback of the EXISTING Google web OAuth
+registration `550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com`:
+confirm its intended Mail-use suitability, exact registered callback, consent/testing
+account restrictions and Gmail API availability. The checked-in Firebase handler
+`https://openjob-nonprod.firebaseapp.com/__/auth/handler` is an identity callback;
+it is not proof of an OpenJob Mail callback or extra Gmail scopes. Registration
+metadata above is known locally; its current provider-console Mail configuration
+has NOT been independently verified. No new client, key, origin or grant is implied.
+
+Before asking Shane to consent, a separately reviewed bounded source slice must
+supply the actual read-only authorization/callback/exchange/signature verification
+and owner/subject/home-bound credential-runtime path. Current lifecycle accepts only
+`disabled | mock`, requires an exact HTTPS callback, and real composition omits both
+onboarding and provider broker. Existing operator credentials serve Firestore; they
+are not mailbox OAuth tokens. Secure token storage/cleanup/refresh choice and its
+activation remain separate approval gates; none was enabled here. Infrastructure
+configuration/deployment belongs solely to scwlkr/0o10.
+
+Once that reviewed path and approved runtime exist, the smallest human consent is
+this selected account and exactly `openid`, `email`,
+`https://www.googleapis.com/auth/gmail.readonly`, followed by verified upstream
+subject/address and explicit resource-home binding before one bounded read.
+No send, Gmail modify or external Calendar scope. Do not enable simulated Connections
+in the signed-in real runtime as a shortcut. No additional feature was started.
+
+---
+
+# Current local setup and actual-service verification — 17 October 2026
+
+The exact approved nonproduction domain change is DONE and independently read back:
+`openjob-nonprod` / project550998178053 retains its three previous authorized domains
+and adds only `127.0.0.1`. Identity Platform PATCH used only `authorizedDomains` in
+its update mask; no provider/client/role/other project setting changed. Existing
+CLI identity was used with the intended project's request consumer, leaving the
+unrelated deleted default quota-project configuration untouched. Nonsecret receipt:
+`output/wlk-331/domain-receipt.json` (local ignored evidence). The
+[official field-mask API](https://cloud.google.com/identity-platform/docs/reference/rest/v2/projects/updateConfig)
+was checked before the change.
+
+The approved existing `OpenJob Preview QA Fixture Operator` document was resolved
+via metadata-only listing and then loaded ONLY for the prepared short-lived local
+process. Project/type/client-email/key shape matched nonprod. No values in chat,
+logs, arguments or files; no new keys, roles or credential storage. An earlier
+whole-item lookup was automatically rejected before execution; it was not retried.
+The narrower reference lookup and document-only actual-use launcher succeeded.
+This proves local configuration loading, not key validity against Firestore.
+
+Real local UI now renders at `http://127.0.0.1:5202/workspace`, in connected Chrome
+helper's owned handoff tab939996978: authenticated prototype / external providers
+unconfigured / real sending disabled, Personal workspace and Continue with Google.
+A temporary preview-only eager Vite public-define error initially caused a blank
+page; literal public defines in the private launcher fixed it. The helper then
+confirmed visible UI and no fresh warnings/errors. Product source was unchanged.
+Shane completed Google sign-in himself and reported return to OpenJob. The helper
+then observed “Personal workspace · signed in”, loaded Tasks 0/0, and no setup/error.
+It created exactly one Task, `Local pilot verification 17 October`, and one linked
+Personal OpenJob Calendar block. Final persisted time: **2026-10-18 15:00–15:30 UTC
+(10:00–10:30 America/Chicago)**. An initial date input did not take; the SAME block
+was corrected through normal Schedule UI, with final inputs and agenda verified.
+Calendar showed exactly one new block. Open linked task and Refresh preserved the
+exact title/time. Task/block remain intact, and handoff tab939996978 shows Calendar.
+No visible identity label was available; no credentials, cookies, tokens, storage
+or auth API were inspected. This is actual-service UI persistence evidence, not a
+claim of mailbox authorization or a separate low-level credential audit.
+
+Screenshot is inline in verifier task01a149f4-5c50-7146-aa7b-a7dbfd2d1010, call
+“Capture persisted actual Calendar block and preserve Shane handoff”; no exported
+artifact path/URL was exposed. Root independently checked the supplied source head;
+the UI helper did not inspect Git. The selected mailbox remains
+shane.caleb.walker@gmail.com, **not connected**. No provider Calendar write occurred.
+
+Owned real-pilot process16066/session50291 runs private
+`/tmp/openjob-318-real-launcher.mjs`; its operator lives only in that process.
+Preserve it for this immediate handoff; stop only that PID when review is finished.
+`/healthz`200 says configured, credentialsVerified=false; no live readiness claim.
+The launcher is not deployed, committed or a persistent service. Actual credential,
+identity and Task/Calendar UI persistence are now evidenced above; health remains
+presence-only and must not be presented as a credential validation probe.
+
+PR101 simulated Connections and PR100 notes UI were separately verified on the
+same exact origin before switching to this real profile; do not conflate evidence.
+No broad CDP/DevTools grant was inferred or tested. No helper handled credentials.
+PR95 downloads remain parked. Infrastructure now belongs to scwlkr/0o10: owner says
+OVH VPS purchased, OpenJob/PatriSearch primarily VPS, Minecraft local. VPS actual
+specs/IP/OS remain unverified; no live access/deploy is authorized here.
+
+---
+
+# Approved local setup — 17 October 2026, 12:57 UTC
+
+Shane answered the exact checklist, relayed by parent01a0f838:
+- First read-only mailbox: `shane.caleb.walker@gmail.com` (selection, not a completed grant).
+- Approved the pending DevTools access for `127.0.0.1:5202`, through its supported
+  approval path only. No blanket browser access or retroactive PR99 qualification.
+- Approved adding only `127.0.0.1` to existing `openjob-nonprod` Auth authorized
+  domains and reusing its existing service-account credential for this local pilot.
+
+These decisions supersede the historical “approval pending” wording below; actual
+execution/readback is still pending. No new project/key/client, role, other origin,
+production deployment, npm or TestFlight authority follows. Send and Calendar
+writes remain disabled. Mail sign-in and Gmail consent stay separate.
+
+Resume blocker in this session: callable browser/DevTools tools and their approval
+operation are absent from the tool catalog; installed plugin files do not expose
+that capability. No alternate browser/port/controller was used. `op` CLI and the
+existing document title are available, but no document/key was retrieved or entered
+while browser proof cannot proceed. Reuse the documented short-lived in-memory
+operator launcher; hand off securely before any sensitive entry/transmission,
+never put credentials into chat, logs or committed files.
+
+Smallest handoff: restore the supported DevTools tool for the approved5202 request
+in this task, then perform the two already-approved setup actions and read them
+back; real sign-in and useful PR95/100/101 UI proof take priority. Do not ask Shane
+to approve the same checklist again. If sensitive user entry is required, pause
+for the secure entry surface. Domain change, operator suitability, real sign-in
+and all changed UI remain UNVERIFIED; no launcher/settings action occurred here.
+
+Gmail consent preparation, once existing client/callback and approved credential
+runtime are verified: select the exact mailbox above, request Mail read-only
+`gmail.readonly` with the existing identity-validation scopes, verify upstream
+subject/address and bind its chosen resource home. No consent URL is ready yet:
+actual suitable existing client/callback/runtime is unverified, and selection does
+not authorize creating one or broadening scopes. No send or Calendar-write scope.
+
+PatriBible coordinator acknowledged no resource conflict: Search is a bounded
+read-only SSH diagnosis; neither task has browser control/heavy builds in flight.
+Existing sessions/state and all three draft PRs remain preserved.
+
+---
+
 # Local account onboarding: exact remaining gates
 
 Metadata inspected16October2026 after PR88. No Firebase private key or provider

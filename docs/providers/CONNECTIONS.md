@@ -105,3 +105,45 @@ OAuth scope. The injected session factory must attest the exact account/config
 binding. It supplies invented authenticated-session bytes in development and
 does not implement live TLS, login or passwords. Gmail/Outlook cannot fall back
 to global network transport when only an IMAP session factory is configured.
+
+## WLK331 — simulated Connections application (draft)
+
+The new account-level `/connections` UI and `/api/v1/connections` API implement a
+bounded first-account application contract. Normal portable/hosted composition
+leaves onboarding **unset** and returns503 after human authentication; no flag,
+real callback, token provisioning or provider access was added. PR100 notes code
+is not a dependency. UI behavior is **unverified**; browser execution stays paused.
+
+The owned-Workspace fixture injects invented Gmail account choices and the existing
+mock OAuth lifecycle/broker/read mapper. It shows explicit read-only consent,
+cancellation, verified invented address, simulated Mail, disconnect/cleanup retry
+and reconnect. Stable public Connection ID and home Workspace survive reconnect;
+server-selected subject must match. Outlook consent is unsupported and IMAP is
+blocked on WLK302 source recovery. No external authorization URL/provider network
+or Calendar scope exists. Calendar navigation opens that Workspace's OpenJob
+planning blocks. Live source-linked Tasks/provider Calendar remain follow-on work.
+
+`v1ConnectionOnboarding/{owner}` stores only bounded application metadata, status
+and cleanup intent, using existing Firestore REST CAS/active-User fences. It does
+not implement credential storage, wrapping keys or a production scheduler. The
+injected adapter must fence future completion when disabled and retry cleanup
+idempotently. Fixture OAuth/credential state is process-local invented data; a
+restart keeps last-known application metadata, and the next Mail read detects
+missing fixture credentials and moves to reconnect-required. This is not a durable
+live grant, refresh implementation or accepted vault decision. Cleanup failures
+remain visible; new Mail reads are denied before cleanup completes.
+
+CLI commands use the same API: `openjob connections list`, `begin --input FILE`
+with `{ "choiceId": "invented_gmail", "workspaceId": "wsp_..." }`,
+`action CONNECTION_ID --input FILE` with one `action` of `approve`, `cancel`,
+`disconnect` or `retry-cleanup`, and `mail CONNECTION_ID`. Approval is available
+only in the explicitly injected simulated application; normal service stays503.
+The signed fixture CLI test exercises the actual command and validates responses
+against OpenAPI. No browser or real-login setup is needed for that test.
+
+For future authorized UI proof, the existing owned-Workspace fixture entry serves
+`/connections` alongside `/pilot`; create an owned Workspace first. It persists
+application metadata in its explicitly selected private fixture file. No launcher
+or browser was started for WLK331, and pending localhost5202 permission was neither
+retried nor bypassed. Keep existing sessions and data. Actual consent/setup remains
+separate as described in [the onboarding review](README.md).

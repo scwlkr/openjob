@@ -62,6 +62,7 @@ type V1Runtime = {
   tasksApi: ReturnType<typeof createV1TasksApi>;
   personalWorkspaceApi: ReturnType<typeof createPersonalApplication>['personalWorkspaceApi'];
   personalAgentGrantsApi: ReturnType<typeof createPersonalApplication>['personalAgentGrantsApi'];
+  connectionsApi: ReturnType<typeof createPersonalApplication>['connectionsApi'];
   providerPreviewApi: ReturnType<typeof createPersonalApplication>['providerPreviewApi'];
 };
 
@@ -250,5 +251,10 @@ export async function handleV1AgentGrantsRequest(request: Request) {
 
 export async function handleWorkspacePilotRequest(request: Request) {
   try { return await getRuntime().workspacePilotApi.fetch(request); }
+  catch { return internalErrorResponse(defaultRequestId); }
+}
+
+export async function handleConnectionsRequest(request: Request) {
+  try { return await getRuntime().connectionsApi.fetch(request); }
   catch { return internalErrorResponse(defaultRequestId); }
 }

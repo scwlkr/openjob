@@ -905,10 +905,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * listConnections
+         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         */
+        get: operations["listConnections"];
+        put?: never;
+        /**
+         * beginConnectionConsent
+         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         */
+        post: operations["beginConnectionConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connections/{connectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * updateConnectionConsent
+         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         */
+        post: operations["updateConnectionConsent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connections/{connectionId}/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * readConnectionMail
+         * @description Human-only simulated Connections contract. Normal runtime remains unconfigured (503). Explicit resource homes and read-only Mail; no real grant, provider Calendar, sending or credentials. Fixture must inject the application.
+         */
+        get: operations["readConnectionMail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ConnectionCatalog: {
+            /** @constant */
+            mode: "simulated";
+            providers: {
+                id: string;
+                available: boolean;
+                reason: string;
+            }[];
+            choices: {
+                id: string;
+                label: string;
+                /** @constant */
+                provider: "gmail";
+            }[];
+            homes: {
+                workspaceId: string;
+                name: string;
+            }[];
+            bindings: {
+                id: string;
+                workspaceId: string;
+                choiceId: string;
+                /** @constant */
+                provider: "gmail";
+                /** @enum {unknown} */
+                status: "authorizing" | "consent_required" | "connected" | "cancelled" | "reconnect_required" | "cleanup_pending" | "disconnected";
+                address?: string;
+            }[];
+        };
+        ConnectionBegin: {
+            choiceId: string;
+            workspaceId: string;
+        };
+        ConnectionAction: {
+            /** @enum {unknown} */
+            action: "approve" | "cancel" | "disconnect" | "retry-cleanup";
+        };
         ProviderConnectorStatus: components["schemas"]["GmailConnectorStatus"] | components["schemas"]["OutlookConnectorStatus"] | components["schemas"]["ImapConnectorStatus"];
         GmailConnectorStatus: {
             /** @constant */
@@ -5134,6 +5239,227 @@ export interface operations {
             410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Simulated application result; never live consent or provider traffic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "mode": "simulated",
+                     *         "providers": [],
+                     *         "choices": [],
+                     *         "homes": [],
+                     *         "bindings": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ConnectionCatalog"];
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    beginConnectionConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "choiceId": "invented_gmail",
+                 *       "workspaceId": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ConnectionBegin"];
+            };
+        };
+        responses: {
+            /** @description Simulated application result; never live consent or provider traffic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "connectionId": "con_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            connectionId: string;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    updateConnectionConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "action": "approve"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ConnectionAction"];
+            };
+        };
+        responses: {
+            /** @description Simulated application result; never live consent or provider traffic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "status": "status_updated"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            status: "status_updated";
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readConnectionMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Simulated application result; never live consent or provider traffic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "mode": "simulated",
+                     *         "workspaceId": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                     *         "page": {
+                     *           "messages": [],
+                     *           "folders": [],
+                     *           "calendars": [],
+                     *           "events": [],
+                     *           "nextCursor": null,
+                     *           "syncCursor": null
+                     *         }
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            mode: "simulated";
+                            workspaceId: string;
+                            page: {
+                                messages: components["schemas"]["ProviderPreviewMessage"][];
+                                folders: components["schemas"]["ProviderPreviewFolder"][];
+                                calendars: components["schemas"]["ProviderPreviewCalendar"][];
+                                events: components["schemas"]["ProviderPreviewEvent"][];
+                                nextCursor: string | null;
+                                syncCursor: string | null;
+                            };
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedResponse"];
+            410: components["responses"]["AccountDeletionAlreadyPendingResponse"];
+            429: components["responses"]["RateLimitedResponse"];
+            500: components["responses"]["InternalErrorResponse"];
+            /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
 }
