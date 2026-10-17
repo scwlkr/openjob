@@ -1,3 +1,25 @@
+# Connection prerequisite review — documentation only
+
+Existing provider guide now contains a short Proposed first-connection review:
+[docs/providers/README.md](docs/providers/README.md#first-connection-review--17-october-2026-proposed).
+Reuses R30–R33/EXPERIENCE/ADR0021; records actual composition/mock-mode/source-link
+and Workspace resource-home gaps, Node/Compose runtime recommendation, opaque
+server credential-reference boundary and exact setup versus independent source work.
+Next bounded source slice: Connections/onboarding contract using existing injected
+OAuth/broker/repositories, with one read-path durable refresh/cleanup lifecycle.
+No implementation in this review; no new Linear execution queue. WLK310 holds design
+review, WLK302 blocked code, WLK318 parked sign-in approvals. First real view is Mail
+plus OpenJob blocks; provider Calendar is not implemented or consented.
+
+Recovered WLK302 HANDOFF via Linear1bbe36a4/owner final turn: uncommitted cloud branch
+based5358f6c, no PR/full gate, historical focused checks only. Source NOT recovered,
+cloud NOT restarted, no TLS/login duplication. Former /tmp checkout no longer exists;
+read existing PR100 branch into clean /tmp/openjob-connection-review without install.
+Original synced checkout/unrelated link preserved. PR95 and PR100 remain draft;
+PR99 UI qualification unresolved. No browser, secrets, account access, config or release.
+
+---
+
 # Documentation-only stop checkpoint — PR100 / WLK-330
 
 Parent direction: pause browser execution; no further notes/data-edge-case work.
