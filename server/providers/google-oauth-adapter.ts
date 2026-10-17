@@ -8,13 +8,14 @@ export const GOOGLE_MAIL_SCOPES: readonly string[] = Object.freeze(['openid', 'e
 export const GOOGLE_REVOCATION_IMPACT = 'all_google_oauth_grants_in_project' as const;
 export type GoogleOAuthBinding = Pick<ProviderVaultEntry, 'ownerId' | 'accountId' | 'subject' | 'credentialRef' | 'revision'> & { address: string };
 /** PRIVATE server-only result; never return through application API/CLI DTOs. */
+export type GoogleConsentBinding = Omit<GoogleOAuthBinding, 'subject'> & { subject?: string };
 export type PrivateGoogleGrant = { binding: GoogleOAuthBinding; entry: ProviderVaultEntry; refreshToken: string };
 type Options = {
   executionMode?: 'disabled' | 'configured';
   clientId: string; clientSecret: string; callbackUri: string;
   transport?: GoogleOAuthTransport;
   /** Caller must check current owner, consent/home and exact binding/revision. */
-  isAuthorized(binding: GoogleOAuthBinding, operation: 'consent' | 'refresh'): Promise<boolean>;
+  isAuthorized(binding: GoogleConsentBinding, operation: 'consent' | 'refresh'): Promise<boolean>;
 };
 const token = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9._~+\/-]{1,8192}={0,2}$/.test(value);
 const email = (value: unknown): value is string => typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -26,9 +27,13 @@ function scopes(value: unknown): string[] {
   if (new Set(normalized).size !== 3 || normalized.length !== 3 || normalized.some(scope => !GOOGLE_MAIL_SCOPES.includes(scope))) googleOAuthFail('scope_mismatch');
   return [...GOOGLE_MAIL_SCOPES];
 }
-function binding(value: GoogleOAuthBinding): GoogleOAuthBinding {
-  if (!value || Object.keys(value).sort().join(',') !== 'accountId,address,credentialRef,ownerId,revision,subject' || !oauthId(value.ownerId) || !oauthId(value.accountId) || !oauthOpaque(value.subject, 255) || !oauthOpaque(value.credentialRef, 512) || !oauthOpaque(value.revision, 128) || !email(value.address)) googleOAuthFail('invalid_input');
+function consentBinding(value: GoogleConsentBinding): GoogleConsentBinding {
+  if (!value || Object.keys(value).filter(key => key !== 'subject').sort().join(',') !== 'accountId,address,credentialRef,ownerId,revision' || !oauthId(value.ownerId) || !oauthId(value.accountId) || value.subject !== undefined && !oauthOpaque(value.subject, 255) || !oauthOpaque(value.credentialRef, 512) || !oauthOpaque(value.revision, 128) || !email(value.address)) googleOAuthFail('invalid_input');
   return Object.freeze({ ...value });
+}
+function binding(value: GoogleOAuthBinding): GoogleOAuthBinding {
+  const target = consentBinding(value); if (!target.subject) googleOAuthFail('invalid_input');
+  return target as GoogleOAuthBinding;
 }
 function entryBinding(target: GoogleOAuthBinding) {
   const { ownerId, accountId, subject, credentialRef, revision } = target;
@@ -45,7 +50,7 @@ export function createGoogleOAuthAdapter(options: Options) {
   let uri: URL; try { uri = new URL(callbackUri); } catch { return googleOAuthFail('invalid_configuration'); }
   if (!['disabled', 'configured'].includes(executionMode) || !oauthOpaque(clientId, 256) || !oauthOpaque(clientSecret, 8192) || uri.protocol !== 'https:' || uri.username || uri.password || uri.hash || uri.search || uri.href !== callbackUri || typeof isAuthorized !== 'function' || executionMode === 'configured' && typeof transport !== 'function') googleOAuthFail('invalid_configuration');
   const enabled = () => { if (executionMode !== 'configured') googleOAuthFail('execution_disabled'); };
-  async function authorized(value: GoogleOAuthBinding, operation: 'consent' | 'refresh') {
+  async function authorized(value: GoogleConsentBinding, operation: 'consent' | 'refresh') {
     let result = false; try { result = await isAuthorized(value, operation); } catch { /* deny without exposing caller errors */ }
     if (result !== true) googleOAuthFail('authorization_denied');
   }
@@ -76,8 +81,8 @@ export function createGoogleOAuthAdapter(options: Options) {
   return {
     /** Caller persists PKCE privately BEFORE sending the separately returned URL. */
     async proofKey() { enabled(); return client().generateCodeVerifierAsync(); },
-    async authorizationUrl(input: { binding: GoogleOAuthBinding; state: string; nonce: string; codeChallenge: string }) {
-      enabled(); const target = binding(input.binding);
+    async authorizationUrl(input: { binding: GoogleConsentBinding; state: string; nonce: string; codeChallenge: string }) {
+      enabled(); const target = consentBinding(input.binding);
       if (!nonce(input.state) || !nonce(input.nonce) || !nonce(input.codeChallenge)) googleOAuthFail('invalid_input');
       const { state, nonce: expectedNonce, codeChallenge } = input;
       return safe(async () => {
@@ -86,8 +91,8 @@ export function createGoogleOAuthAdapter(options: Options) {
       });
     },
     /** Caller MUST atomically consume owner-bound state/callback before this call. */
-    async exchange(input: { binding: GoogleOAuthBinding; code: string; codeVerifier: string; nonce: string }): Promise<PrivateGoogleGrant> {
-      enabled(); const target = binding(input.binding);
+    async exchange(input: { binding: GoogleConsentBinding; code: string; codeVerifier: string; nonce: string }): Promise<PrivateGoogleGrant> {
+      enabled(); const target = consentBinding(input.binding);
       if (!oauthOpaque(input.code, 4096) || !verifier(input.codeVerifier) || !nonce(input.nonce)) googleOAuthFail('invalid_input');
       const { code, codeVerifier, nonce: expectedNonce } = input;
       return safe(async () => {
@@ -97,10 +102,11 @@ export function createGoogleOAuthAdapter(options: Options) {
         if (!token(tokens.refresh_token) || !oauthOpaque(tokens.id_token, 16384)) googleOAuthFail('invalid_token_response');
         const ticket = await value.verifyIdToken({ idToken: tokens.id_token, audience: clientId, maxExpiry: 3600 });
         const identity = ticket.getPayload();
-        if (!identity || identity.nonce !== expectedNonce || identity.sub !== target.subject || identity.email_verified !== true || !email(identity.email) || identity.email.toLowerCase() !== target.address.toLowerCase() || identity.azp !== undefined && identity.azp !== clientId || identity.exp * 1000 <= Date.now() || identity.iat * 1000 > Date.now() + 30_000) googleOAuthFail('identity_mismatch');
-        const credential = await checkedInfo(value, tokens, target, 'consent');
-        await authorized(target, 'consent'); expiry(credential.expiresAt);
-        return { binding: { ...target }, entry: { ...entryBinding(target), provider: 'gmail', credential }, refreshToken: tokens.refresh_token };
+        if (!identity || identity.nonce !== expectedNonce || target.subject !== undefined && identity.sub !== target.subject || identity.email_verified !== true || !email(identity.email) || identity.email.toLowerCase() !== target.address.toLowerCase() || identity.azp !== undefined && identity.azp !== clientId || identity.exp * 1000 <= Date.now() || identity.iat * 1000 > Date.now() + 30_000) googleOAuthFail('identity_mismatch');
+        const verified = binding({ ...target, subject: identity.sub });
+        const credential = await checkedInfo(value, tokens, verified, 'consent');
+        await authorized(verified, 'consent'); expiry(credential.expiresAt);
+        return { binding: { ...verified }, entry: { ...entryBinding(verified), provider: 'gmail', credential }, refreshToken: tokens.refresh_token };
       });
     },
     /** Private caller owns CAS persistence/serialization; no automatic network retry. */

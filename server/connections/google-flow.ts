@@ -1,0 +1,112 @@
+import { connectionFail } from '../../shared/connection-onboarding.ts';
+import { oauthHash, oauthRandom } from '../providers/provider-oauth-types.ts';
+import { createGoogleOAuthAdapter, type GoogleConsentBinding } from '../providers/google-oauth-adapter.ts';
+import { createGmailReadAdapter } from '../providers/gmail-read-adapter.ts';
+import { googleRows, googleBinding, uuid, validAddress, type GoogleConnection, type GoogleConnectionCatalog, type PrivateGoogleConnections } from './google-state.ts';
+
+type Options = {
+  executionMode?: 'disabled' | 'configured'; evidenceMode?: 'google' | 'google-fixture';
+  repository: PrivateGoogleConnections;
+  homes: { list(owner: string): Promise<{ workspaceId: string; name: string }[]> };
+  isOwnerActive(owner: string): Promise<boolean>;
+  google: Pick<Parameters<typeof createGoogleOAuthAdapter>[0], 'clientId' | 'clientSecret' | 'callbackUri' | 'transport'>;
+  mailTransport?: typeof fetch;
+};
+/** No default backend, transport, activation flags or provider revocation. */
+export function createGoogleConnectionsFlow(options: Options) {
+  const { repository, homes, isOwnerActive, google, mailTransport, evidenceMode = 'google', executionMode = 'disabled' } = options;
+  const configured = { ...google };
+  const callback = new URL(configured.callbackUri);
+  if (callback.pathname !== '/connections/google/callback') connectionFail('invalid_input');
+  function enabled() { if (executionMode !== 'configured') connectionFail('not_configured'); }
+  async function active(owner: string) { if (await isOwnerActive(owner) !== true) connectionFail('forbidden'); }
+  async function read(owner: string) { await active(owner); const rows = googleRows(await repository.read(owner), owner); await active(owner); return rows; }
+  async function change(owner: string, apply: (rows: GoogleConnection[]) => GoogleConnection[]) {
+    await active(owner);
+    const rows = await repository.change(owner, current => googleRows(apply(googleRows(current, owner)), owner));
+    await active(owner); return googleRows(rows, owner);
+  }
+  async function row(owner: string, id: string) { const found = (await read(owner)).find(item => item.id === id); if (!found) connectionFail('forbidden'); return found; }
+  async function home(owner: string, id: string) { await active(owner); if (!(await homes.list(owner)).some(item => item.workspaceId === id)) connectionFail('forbidden'); }
+  async function replace(before: GoogleConnection, next: GoogleConnection) {
+    await change(before.ownerId, rows => { if (JSON.stringify(rows.find(item => item.id === before.id)) !== JSON.stringify(before)) connectionFail('conflict'); return rows.map(item => item.id === before.id ? next : item); });
+  }
+  function denied(before: GoogleConnection, status: GoogleConnection['status']): GoogleConnection {
+    const next = { ...before, status }; delete next.pending; delete next.grant; delete next.operation; delete next.consentExpiresAt; return next;
+  }
+  async function authorized(binding: GoogleConsentBinding, operation: 'consent' | 'refresh') {
+    try {
+      const current = (await read(binding.ownerId)).find(item => item.accountId === binding.accountId);
+      if (operation === 'consent' && (!current?.consentExpiresAt || current.consentExpiresAt <= Date.now())) return false;
+      if (!current || current.status !== 'authorizing' || current.operation !== (operation === 'consent' ? 'exchange' : 'refresh') || Object.entries(googleBinding(current)).some(([key, value]) => binding[key as keyof GoogleConsentBinding] !== value)) return false;
+      await home(current.ownerId, current.workspaceId); return true;
+    } catch { return false; }
+  }
+  const protocol = createGoogleOAuthAdapter({ ...configured, executionMode, isAuthorized: authorized });
+  const consentProtocol = createGoogleOAuthAdapter({ ...configured, executionMode, isAuthorized: async binding => {
+    try { const current = (await read(binding.ownerId)).find(item => item.accountId === binding.accountId); if (!current || current.status !== 'consent_required' || JSON.stringify(googleBinding(current)) !== JSON.stringify(binding)) return false; await home(current.ownerId, current.workspaceId); return true; } catch { return false; }
+  } });
+  async function failed(before: GoogleConnection) {
+    try { await replace(before, denied(before, 'reconnect_required')); } catch { /* Never overwrite cancellation/new attempt. Interrupted claim remains denied. */ }
+  }
+  return {
+    async catalog(owner: string): Promise<GoogleConnectionCatalog> {
+      enabled(); const rows = await read(owner), currentHomes = await homes.list(owner); await active(owner);
+      return { mode: evidenceMode, homes: currentHomes.map(({ workspaceId, name }) => ({ workspaceId, name })), mailAvailable: !!mailTransport, bindings: rows.map(item => ({ id: item.id, workspaceId: item.workspaceId, address: item.address, status: item.status, ...(item.operation ? { operation: item.operation } : {}), expired: !!item.grant && item.grant.entry.credential.expiresAt <= Date.now() })) };
+    },
+    async begin(owner: string, address: string, workspaceId: string) {
+      enabled(); if (!validAddress(address)) connectionFail(); const selected = address.toLowerCase(); await home(owner, workspaceId);
+      const existing = (await read(owner)).find(item => item.address.toLowerCase() === selected);
+      if (existing && (!['cancelled', 'disconnected', 'reconnect_required'].includes(existing.status) || existing.workspaceId !== workspaceId)) connectionFail('conflict');
+      const proof = await protocol.proofKey(); if (!proof.codeChallenge) connectionFail('consent_failed');
+      const state = oauthRandom(), nonce = oauthRandom(), attemptId = uuid();
+      const next: GoogleConnection = { id: existing?.id ?? `con_${uuid()}`, ownerId: owner, workspaceId, address: selected, accountId: existing?.accountId ?? `gmail_${uuid()}`, attemptId, credentialRef: `google_${attemptId}`, status: 'consent_required', ...(existing?.subject ? { subject: existing.subject } : {}), stateHash: await oauthHash(state), pending: { stateHash: await oauthHash(state), verifier: proof.codeVerifier, nonce, clientId: configured.clientId, callbackUri: configured.callbackUri, expiresAt: Date.now() + 600_000 } };
+      if (existing) await replace(existing, next);
+      else await change(owner, rows => { if (rows.some(item => item.address.toLowerCase() === selected)) connectionFail('conflict'); return [...rows, next]; });
+      try {
+        const authorizationUrl = await consentProtocol.authorizationUrl({ binding: googleBinding(next), state, nonce, codeChallenge: proof.codeChallenge });
+        await home(owner, workspaceId); if (JSON.stringify(await row(owner, next.id)) !== JSON.stringify(next)) connectionFail('conflict');
+        return { connectionId: next.id, authorizationUrl };
+      } catch { await failed(next); return connectionFail('consent_failed'); }
+    },
+    async callback(owner: string, input: { state: string; callbackUri: string; code?: string; error?: string }) {
+      enabled(); if (!/^[A-Za-z0-9_-]{43}$/.test(input.state) || input.callbackUri !== configured.callbackUri) connectionFail('invalid_input');
+      const hash = await oauthHash(input.state), before = (await read(owner)).find(item => item.stateHash === hash);
+      if (!before || before.status !== 'consent_required' || !before.pending || before.pending.clientId !== configured.clientId || before.pending.callbackUri !== configured.callbackUri) connectionFail('conflict');
+      await home(owner, before.workspaceId);
+      const pending = before.pending;
+      const claimed = denied(before, 'authorizing'); claimed.operation = 'exchange'; claimed.consentExpiresAt = pending.expiresAt;
+      // The atomic claim erases PKCE/nonce from persistent state BEFORE one exchange.
+      await replace(before, claimed);
+      if (pending.expiresAt <= Date.now() || input.error !== undefined) { await replace(claimed, denied(claimed, input.error === 'access_denied' ? 'cancelled' : 'reconnect_required')); return { status: input.error === 'access_denied' ? 'cancelled' : 'reconnect_required' }; }
+      try {
+        if (!input.code) connectionFail();
+        const grant = await protocol.exchange({ binding: googleBinding(claimed), code: input.code, codeVerifier: pending.verifier, nonce: pending.nonce });
+        await home(owner, before.workspaceId);
+        const connected: GoogleConnection = { ...claimed, status: 'connected', subject: grant.binding.subject, grant }; delete connected.operation; delete connected.consentExpiresAt;
+        await replace(claimed, connected); return { status: 'connected' };
+      } catch { await failed(claimed); return connectionFail('consent_failed'); }
+    },
+    async act(owner: string, id: string, action: string) {
+      enabled(); const before = await row(owner, id);
+      if (action === 'refresh') {
+        if (before.status !== 'connected' || !before.grant) connectionFail('conflict'); await home(owner, before.workspaceId);
+        const claimed: GoogleConnection = { ...before, status: 'authorizing', operation: 'refresh' }; await replace(before, claimed);
+        try { const grant = await protocol.refresh(before.grant); await home(owner, before.workspaceId); await replace(claimed, { ...before, grant }); }
+        catch { await failed(claimed); return connectionFail('reconnect_required'); }
+      } else {
+        if (action === 'cancel' && !['consent_required', 'authorizing'].includes(before.status) || action === 'retry-cleanup' && before.status !== 'cleanup_pending' || !['cancel', 'disconnect', 'retry-cleanup'].includes(action)) connectionFail('conflict');
+        await replace(before, denied(before, before.status === 'authorizing' ? 'cleanup_pending' : action === 'cancel' ? 'cancelled' : 'disconnected'));
+      }
+      return { status: 'status_updated' };
+    },
+    async mail(owner: string, id: string) {
+      enabled(); const before = await row(owner, id); if (!mailTransport || before.status !== 'connected' || !before.grant || !before.subject) connectionFail('reconnect_required');
+      const current = async () => { await home(owner, before.workspaceId); return JSON.stringify(await row(owner, id)) === JSON.stringify(before); };
+      const reader = createGmailReadAdapter({ bindings: [{ ownerId: owner, accountId: before.accountId, subject: before.subject, address: before.address, label: before.address }], approveExecution: current, resolveCredential: async () => await current() ? before.grant!.entry.credential : null, fetchImplementation: mailTransport });
+      const page = await reader.listMessages({ ownerId: owner, accountId: before.accountId });
+      if (!await current()) connectionFail('conflict'); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
+    },
+  };
+}
+export type GoogleConnectionsFlow = ReturnType<typeof createGoogleConnectionsFlow>;

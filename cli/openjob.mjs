@@ -146,7 +146,7 @@ Local app and updates:
   OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 
 Resources:
-  connections  List, begin, action or read simulated Mail; normal runtime closed
+  connections  List, begin, action or read Mail; normal runtime closed
   workspace  Personal Tasks, Calendar and invented Mail through the shared API
   auth       Sign in, inspect authentication, or sign out
   user       Show the current User
@@ -177,8 +177,10 @@ const RESOURCE_HELP = {
   openjob connections action <connection-id> --input <json-file>
   openjob connections mail <connection-id>
 
-Begin input: choiceId and workspaceId. Action input: action=approve|cancel|disconnect|retry-cleanup.
-Simulated approval only; no real provider authorization.`,
+Begin input: simulated choiceId+workspaceId, or configured Google address+workspaceId.
+Action input: action=approve(simulated)|cancel|disconnect|retry-cleanup|refresh(Google).
+Google begin returns a browser consent URL; callback requires the signed human UI.
+Normal runtime remains unconfigured; no CLI token input or automatic consent.`,
   workspace: `Usage:
   openjob workspace snapshot
   openjob workspace availability --task <id> --schedule-start <ISO> --schedule-end <ISO> --minutes <5-480>
@@ -633,7 +635,7 @@ async function main(raw) {
       const path = `/connections/${rest[0]}`;
       writeResult(await apiRequest(command === "mail" ? `${path}/mail` : path, command === "mail" ? {} : { method: "POST", body: JSON.stringify(readInputObject(parsed.options.get("--input"))) })); return;
     }
-    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id>. Approval is simulated only; normal Connections remain unconfigured.", 2);
+    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id>. Approval action is simulated only; configured Google consent uses the browser. Normal Connections remain unconfigured.", 2);
   }
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();

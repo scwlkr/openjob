@@ -1,12 +1,15 @@
+import { googleConnectionsRequest } from './google-http.ts';
+import type { GoogleConnectionsFlow } from './google-flow.ts';
 import type { FirebaseTokenIdentity } from '../firebase-id-token.ts';
 import type { OpenJobUser } from '../v1-identity.ts';
 import { isInactiveUserError } from '../../db/user-history.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse, accountDeletionPendingResponse, signInMethodUnrecognizedResponse } from '../v1-http.ts';
 import type { ConnectionsApplication } from './application.ts';
-export function createConnectionsApi({ users, verifyIdToken, onboarding }: {
+export function createConnectionsApi({ users, verifyIdToken, onboarding, google }: {
   users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> };
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   onboarding?: ConnectionsApplication;
+  google?: GoogleConnectionsFlow;
 }) {
   const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: code === 'not_configured' ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.' });
   return { async fetch(request: Request) {
@@ -16,6 +19,11 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding }: {
       const user = await users.resolve(identity); if (!user) return signInMethodUnrecognizedResponse(defaultRequestId); if (user.deletionPending) return accountDeletionPendingResponse(defaultRequestId);
       const url = new URL(request.url);
       if (url.search || request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
+      if (google || url.pathname === '/api/v1/connections/google/callback') {
+        const isCurrent = async () => { const current = await users.resolve(identity); return !!current && current.userId === user.userId && !current.deletionPending; };
+        const response = await googleConnectionsRequest(request, user.userId, google, isCurrent);
+        return await isCurrent() ? response : accountDeletionPendingResponse(defaultRequestId);
+      }
       const match = /^\/api\/v1\/connections(?:\/(con_[a-f0-9]{32})(?:\/(mail))?)?$/.exec(url.pathname);
       if (!match) return fail('not_found', 404);
       if (!onboarding) return fail('not_configured', 503);
@@ -48,7 +56,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding }: {
     } catch (error) {
       if (isInactiveUserError(error)) return accountDeletionPendingResponse(defaultRequestId);
       const code = (error as { code?: string })?.code;
-      if (code && ['invalid_input', 'forbidden', 'conflict', 'capacity', 'consent_failed', 'reconnect_required'].includes(code)) return fail(code, code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required'].includes(code) ? 409 : 400);
+      if (code && ['not_configured', 'invalid_input', 'forbidden', 'conflict', 'capacity', 'consent_failed', 'reconnect_required'].includes(code)) return fail(code, code === 'not_configured' ? 503 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required'].includes(code) ? 409 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };

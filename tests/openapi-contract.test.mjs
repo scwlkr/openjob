@@ -14,6 +14,7 @@ const EXPECTED_RELEASE_VERSION = JSON.parse(
 ).version;
 
 const expectedOperations = [
+  "post /api/v1/connections/google/callback completeGoogleConnectionConsent",
   "get /api/v1/connections listConnections",
   "post /api/v1/connections beginConnectionConsent",
   "post /api/v1/connections/{connectionId} updateConnectionConsent",
@@ -108,7 +109,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 34);
+  assert.equal(Object.keys(contract.paths).length, 35);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
