@@ -1,3 +1,48 @@
+# Documentation-only stop checkpoint — PR100 / WLK-330
+
+Parent direction: pause browser execution; no further notes/data-edge-case work.
+PR100 https://github.com/scwlkr/openjob/pull/100 stays DRAFT and UNMERGED.
+Reviewed implementation/source head263321c93d8213cc3a4eeed0839313f41d30786d:
+30 focused tests, TS, focused ESLint, brand32 and secret642 passed; exact-head
+read-only review found no actionable findings. This checkpoint changes docs only.
+No historical evidence or claims below have been deleted or rewritten.
+
+PR99 browser observations occurred in existing Codex IAB browser3, tab12,
+http://127.0.0.1:5203/pilot. Approval scope was NOT verified against the unanswered
+localhost5202 DevTools permission. UI qualification therefore remains unresolved,
+not cleanly authorized. Preserve exact screenshots/source receipts/state paths and
+PR99 comment https://github.com/scwlkr/openjob/pull/99#issuecomment-6233342505.
+Source/API results stand independently. No browser retry, alternate route, new
+permission request, security/config change, release or further implementation here.
+
+Next substantive accepted-roadmap milestone: R31 -> R32/R33, one Shane-approved
+real read-only account through account-level Connections, verified upstream
+identity and explicit resource home, then actual Mail -> linked Task -> local
+planning -> authored reply draft. Provider choice is not assumed; WLK302 IMAP
+checkpoint must be recovered before overlapping TLS/login implementation.
+Exact prerequisites: selected runtime/data and credential design reviewed before
+real tokens (C11 portable Linux is a direction, not a selected configured target);
+Shane authorizes the particular account/mailbox/resource and read scopes. R31's
+R30 dependency should be bounded to the selected read/refresh/revoke lifecycle:
+durable execution/revision/lease/cleanup with restart and revoke-before-call proof,
+not an unrelated universal send/platform buildout. Existing fake provider/vault/
+OAuth seams do not establish real credentials or live connection readiness.
+
+Existing local sign-in path WLK318 remains parked: approval to use the existing
+OpenJob Preview QA Fixture Operator reference for this pilot process and to add
+only127.0.0.1 to openjob-nonprod Auth authorized domains remain pending. Google and
+Apple Enabled metadata is already known; no provider-enable change is needed.
+Those approvals would permit the documented sign-in scope, NOT mailbox consent,
+new credentials, production/runtime configuration or real sends. Do not conflate
+the pending DevTools browser permission with either setup approval.
+
+Next owner action is resolve/review this narrowly selected connection prerequisite,
+then queue one coherent connection slice in Linear. Nothing implemented or new
+permission requested in this checkpoint. Existing state, pending permissions,
+original checkout issues and PatriBible sessions preserved. Stop here.
+
+---
+
 # WLK-330 — guarded Workspace Task notes (draft)
 
 Branch `codex/wlk-330-notes-conflict`, clean source checkout
