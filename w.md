@@ -1,3 +1,28 @@
+# WLK-321 — native connected Task context
+
+Branch codex/wlk-321-native-work-loop; baseline f01a56a (merged PR90).
+Linear https://linear.app/wlkr-labs/issue/WLK-321. Native invented Mail now
+opens owner/account/message-qualified linked Tasks, including completed work.
+Shared link resolution serves web and native without a second policy. Native Tasks
+edit/clear authored notes with existing task.notes online and offline; unfinished
+input survives module switches/failures and replacement needs explicit confirmation.
+Calendar → Task → source Mail and retained reply input remain usable.
+
+Evidence:29 React Native component checks cover the connected work loop, failed
+note saves, explicit clear, replacement cancellation/acceptance, identity clearing
+and offline restart. Native/root TypeScript and2 source/link checks pass, including
+real loopback HTTP/JWT/API/store composition with fake identity/Firestore transport.
+Existing cached native dependencies were reused by a temporary local symlink;
+no install or native build. Brand32, source secrets, focused lint and final review
+are recorded in PR/Linear. No simulator/device/layout/bridge/TestFlight claim.
+
+Next action: after source merge, continue bounded owner-useful R21/R53 readiness;
+actual account proof remains WLK318 pending its existing TWO approvals. Do not
+retry pending browser permission, configure credentials/domains, connect providers,
+publish, deploy or distribute. Coordinate an eventual authorized heavy iOS phase
+with PatriBible. Preserve useful local5200 preview, original approved npm artifact,
+unpublished0.3.9, unrecovered WLK302 and unrelated work. No heavy phase this slice.
+
 # WLK-319 — authored Task notes
 
 Active branch: codex/wlk-319-task-notes; baseline5a9faeb (merged PR89/Today).

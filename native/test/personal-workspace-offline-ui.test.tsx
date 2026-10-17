@@ -20,6 +20,7 @@ function fixture() {
       const state = await load(owner); const current = state.projection!;
       switch (input.type) {
         case 'task.create': current.tasks.push({ id: 'task', ownerId: owner, title: input.title, completed: false }); break;
+        case 'task.notes': if (input.notes.trim()) current.tasks[0]!.notes = input.notes; else delete current.tasks[0]!.notes; break;
         case 'task.update': current.tasks[0]!.title = input.title; break;
         case 'task.complete': current.tasks[0]!.completed = input.completed; break;
         case 'task.schedule': current.tasks[0]!.scheduledSlot = { start: input.start, end: input.end }; current.tasks[0]!.calendarEventId = 'block'; current.events = [{ id: 'block', calendarId: input.calendarId, taskId: 'task', title: current.tasks[0]!.title, start: input.start, end: input.end }]; break;
@@ -145,4 +146,24 @@ it('explains definitive sync errors and discards pending work only after explici
   await press('Discard pending changes'); await press('Confirm discard local changes'); await screen.findByRole('button', { name: 'Complete Latest server work' });
   expect(offline.resolve).toHaveBeenCalledWith('alex', 'server'); expect(offline.sync).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Complete Local pending work' })).toBeNull(); expect((await load('alex')).pendingCount).toBe(0);
+});
+
+
+it('edits notes in saved Tasks, keeps failed input and reopens saved notes after restart without Mail data', async () => {
+  const { controller, offline, load } = fixture(); const input = properties(controller); let tree = await render(ui(input));
+  await screen.findByText('Personal Tasks');
+  await fireEvent.changeText(screen.getByLabelText('New task'), 'Offline planning'); await press('Add task');
+  await screen.findByRole('button', { name: 'Edit notes for Offline planning' }); await press('Edit notes for Offline planning');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Keep local notes');
+  await press('Calendar'); await press('Tasks');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Keep local notes');
+  jest.mocked(offline.edit).mockRejectedValueOnce(new Error('Invented storage failure'));
+  await press('Save task notes'); await screen.findByText(/Request could not be completed/);
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Keep local notes');
+  await press('Save task notes'); await screen.findByText('2 pending changes');
+  await tree.unmount(); tree = await render(ui(input)); await screen.findByText('Keep local notes');
+  await press('Edit notes for Offline planning'); expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Keep local notes');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), ''); await press('Save task notes'); await screen.findByText('3 pending changes');
+  expect((await load('alex')).projection!.tasks[0]!.notes).toBeUndefined();
+  expect(JSON.stringify(await load('alex'))).not.toMatch(/messages|sourceMessageId|accounts|token/);
 });
