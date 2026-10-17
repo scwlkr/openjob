@@ -1,4 +1,4 @@
-# Current local setup and secure sign-in handoff — 17 October 2026
+# Current local setup and actual-service verification — 17 October 2026
 
 The exact approved nonproduction domain change is DONE and independently read back:
 `openjob-nonprod` / project550998178053 retains its three previous authorized domains
@@ -24,18 +24,31 @@ unconfigured / real sending disabled, Personal workspace and Continue with Googl
 A temporary preview-only eager Vite public-define error initially caused a blank
 page; literal public defines in the private launcher fixed it. The helper then
 confirmed visible UI and no fresh warnings/errors. Product source was unchanged.
-No actual Google sign-in, User creation, private Task/block write or live provider
-grant has occurred. Smallest next step: Shane takes over that existing OpenJob tab,
-clicks Continue with Google and completes account choice/password only inside
-Google's own secured UI; never chat. Await his return before local verification.
-The selected mailbox remains shane.caleb.walker@gmail.com, not connected yet.
+Shane completed Google sign-in himself and reported return to OpenJob. The helper
+then observed “Personal workspace · signed in”, loaded Tasks 0/0, and no setup/error.
+It created exactly one Task, `Local pilot verification 17 October`, and one linked
+Personal OpenJob Calendar block. Final persisted time: **2026-10-18 15:00–15:30 UTC
+(10:00–10:30 America/Chicago)**. An initial date input did not take; the SAME block
+was corrected through normal Schedule UI, with final inputs and agenda verified.
+Calendar showed exactly one new block. Open linked task and Refresh preserved the
+exact title/time. Task/block remain intact, and handoff tab939996978 shows Calendar.
+No visible identity label was available; no credentials, cookies, tokens, storage
+or auth API were inspected. This is actual-service UI persistence evidence, not a
+claim of mailbox authorization or a separate low-level credential audit.
+
+Screenshot is inline in verifier task01a149f4-5c50-7146-aa7b-a7dbfd2d1010, call
+“Capture persisted actual Calendar block and preserve Shane handoff”; no exported
+artifact path/URL was exposed. Root independently checked the supplied source head;
+the UI helper did not inspect Git. The selected mailbox remains
+shane.caleb.walker@gmail.com, **not connected**. No provider Calendar write occurred.
 
 Owned real-pilot process16066/session50291 runs private
 `/tmp/openjob-318-real-launcher.mjs`; its operator lives only in that process.
 Preserve it for this immediate handoff; stop only that PID when review is finished.
 `/healthz`200 says configured, credentialsVerified=false; no live readiness claim.
 The launcher is not deployed, committed or a persistent service. Actual credential,
-identity, Firestore and Task/Calendar behavior remain pending user sign-in.
+identity and Task/Calendar UI persistence are now evidenced above; health remains
+presence-only and must not be presented as a credential validation probe.
 
 PR101 simulated Connections and PR100 notes UI were separately verified on the
 same exact origin before switching to this real profile; do not conflate evidence.

@@ -29,9 +29,15 @@ Real UI at5202/workspace now renders in helper's owned handofftab939996978 with
 ContinueGoogle, no restoredsession. Initiallyblank preview fixed only in private
 launcher publicdefines; productsourceunchanged. Process16066/session50291 owns
 /tmp/openjob-318-real-launcher.mjs, operator onlyRAM, kept for immediatehumanhandoff.
-User asked to clickContinueGoogle/choose own account inGoogle UI and reportreturn;
-no password/token chat. Actual sign-in/Firestore/privateTask+block remainspending.
-No helpercredentials, provider scopes, real sending, Calendarwrite or releases.
+Shane completed human Google sign-in and returned. Actual-service UI PASS: loaded
+Personal workspace signed in, Task created “Local pilot verification 17 October”,
+one linked OpenJob block persisted 18Oct2026 15:00–15:30UTC /10:00–10:30Central.
+Initial date input did not take; same block corrected, final one-block agenda and
+linked Task verified after Refresh. Task/block intact; tab939996978 preserved on
+Calendar. No visible identity label/auth inspection; no live mailbox connected.
+Screenshot inline in verifier01a149f4 call “Capture persisted actual Calendar block
+and preserve Shane handoff”; no exported artifact URL/path. See onboarding doc.
+No helpercredentials, provider scopes, real sending, providerCalendarwrite or releases.
 
 Hosting update: OVH VPS purchased per Shane; all infrastructure in scwlkr/0o10,
 owner01a14a00-ce06-7721-a75a-9939f141802d. OpenJob+PatriSearch primarilyVPS,
