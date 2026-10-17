@@ -1,3 +1,43 @@
+# WLK-328 — normal Workspace pilot composition, actual admission unset
+
+PR98 https://github.com/scwlkr/openjob/pull/98; implementation b27cccec.
+Branch codex/wlk-328-workspace-pilot from main99dd774 (PR97). Parent architecture
+review explicitly permits this bounded engineering recommendation under C12/C13;
+D06 classifier remains Proposed, not a required limited-pilot prerequisite. WLK327
+reconciled in Linear as future employer-isolation/general onboarding policy gate.
+Known company-controlled binding/current independent-recovery need still requires
+consequential owner choice. This supersedes the prior WLK326 composition blocker.
+
+Normal `/workspaces` reuses existing Firebase auth/session/private cleanup and
+stable User resolution. Both Cloudflare and portable Node runtimes compose real
+owned Workspace + retained Personal mapping stores; portable service page included.
+Trusted server admission is exactly one existing User/provider/FirebaseUID binding;
+all actual callers leave it UNSET. No real selection, new env/config, identity
+creation/link/grant/control classifier, provider setup or credential changes.
+Unconfigured verified session503 before Workspace storage; other User/linked other
+binding403, agents401, changed/revoked/inactive User denied. Recheck after body read
+before write and before disclosure. Current Task/Calendar resource checks retained.
+Existing Personal/offline/Groups and source data authority remain unchanged.
+
+Only loopback synthetic launcher selects Alex's existing synthetic binding. Run
+`npm run dev:owned-workspaces -- --port 5202 --state-file /tmp/openjob-328-normal-pilot.json`
+and open `/pilot` for normal app/session/runtime proof. Original root fixture remains.
+Owned state328 separate from325/326, private0600 but not encrypted. Browser observed
+Personal mapping, independentWork, Task+notes+schedule, Calendar→sameTask completion,
+per-Workspace editor retention and Sam denial with previous UI cleared. Screenshot
+output/wlk-328/normal-pilot.png and not-admitted.png. Twelve focused admission/Workspace/mapping/availability checks, rootTypeScript,
+focused lint, brand32 and secret scan pass on clean b27cccec. Independent
+exact-head read-only review found no consequential findings. Actual process restart
+readback retained identical User/context/Task/event IDs and saved contents; evidence
+output/wlk-328/restart-readback.json and normal-pilot-final.png. Owned preview
+PIDs33093/33847 exited, own IAB tab closed and state lock released. Final source
+integration identity/state is recorded in PR98/Linear328. No real admission activated.
+
+PR95 draft829a3cd remains parked/browserdeliveryUNVERIFIED. No downloads or retries.
+WLK318 TWO unanswered approvals stay pending. WLK302 cloud scope/source unrecovered;
+approved npm artifact/publication untouched. No native build/heavy phase; PR94
+native evidence reused. PatriBible sessions preserved; its webCI lane released.
+
 # WLK-326 — retained Personal context mapping; eligibility policy unresolved
 
 PR97 https://github.com/scwlkr/openjob/pull/97; reviewed source96b05d4.

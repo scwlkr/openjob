@@ -7,13 +7,14 @@ import type { AuthSession, OpenJobAuth, SignInMethod } from "../openjob-contract
 import { OpenJobBrand } from "../openjob-brand";
 import { createPersonalWorkspaceClient, type PersonalWorkspaceClient } from "./personal-workspace-api";
 import styles from "./workspace.module.css";
+import WorkspacePilotSession from '../owned-workspaces/workspace-pilot-session';
 import BrowserSession from "./web-offline-session";
 import { clearBrowserPrivateState } from "../openjob-private-state";
 
 type Lease = { session: AuthSession | null | undefined; epoch: number; controller: AbortController };
-type Props = { auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
+type Props = { workspaceMode?: "pilot"; auth?: OpenJobAuth; client?: PersonalWorkspaceClient };
 
-export default function PersonalWorkspaceApp({ auth, client }: Props) {
+export default function PersonalWorkspaceApp({ auth, client, workspaceMode }: Props) {
   const activeAuth = useMemo(() => auth || createFirebaseAuth({ allowOfflineRestore: true }), [auth]);
   const activeClient = useMemo(() => client || createPersonalWorkspaceClient(), [client]);
   const [lease, setLease] = useState<Lease>(() => ({ session: undefined, epoch: 0, controller: new AbortController() }));
@@ -67,6 +68,7 @@ export default function PersonalWorkspaceApp({ auth, client }: Props) {
     try { await clearBrowserPrivateState(); await activeAuth.signOut(); } catch { setAuthError("Sign-out could not be completed. Reload before continuing."); }
   }
 
+  if (lease.session && workspaceMode === "pilot") return <WorkspacePilotSession key={lease.epoch} session={lease.session} signal={lease.controller.signal} onSignOut={signOut} />;
   if (lease.session) return <BrowserSession key={lease.epoch} session={lease.session} signal={lease.controller.signal} client={activeClient} onSignOut={signOut} onPrivatePurge={lock} />;
   return <div className={styles.workspace}><header className={styles.header}><OpenJobBrand /><span>Personal workspace</span></header><main className={styles.main}>
     <h1>Your tasks and time, together</h1><p>Sign in with your existing OpenJob account to open your saved Tasks and Calendar.</p>

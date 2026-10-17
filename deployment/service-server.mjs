@@ -42,7 +42,7 @@ const server = createServer(async (incoming, outgoing) => {
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer())); return;
     }
     if (!['GET', 'HEAD'].includes(incoming.method)) { outgoing.writeHead(405).end(); return; }
-    const path = ['/', '/workspace', '/workspace/', '/account'].includes(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
+    const path = ['/', '/workspace', '/workspace/', '/workspaces', '/workspaces/', '/account'].includes(url.pathname) ? '/index.html' : decodeURIComponent(url.pathname);
     const file = await realpath(resolve(web, '.' + path));
     if (!file.startsWith(web + sep)) { outgoing.writeHead(404).end(); return; }
     const content = await readFile(file);

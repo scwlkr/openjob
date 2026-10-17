@@ -106,6 +106,8 @@ The Workspace fixture can explicitly map retained Personal work to a stable opaq
 Workspace reference under the same existing User. Task/event IDs and authored work
 remain in the existing Personal authority; context adapters translate Calendar IDs
 and exclude source Mail metadata. Mapping is idempotent and neither copies data nor
-rewrites Sign-in Methods, grants or offline caches. Identity eligibility remains
-explicitly policy-pending under D06; this source/fixture milestone does not enable
-real-account Workspace onboarding.
+rewrites Sign-in Methods, grants or offline caches. WLK328 composes the normal `/workspaces` app and shared server runtime behind an
+unconfigured exact User/provider/UID gate. Only the synthetic `/pilot` harness
+selects an admission binding. Real onboarding remains inactive; D06 classification
+and employer-isolation guarantees remain future WLK327 policy, not a prerequisite
+for this limited pilot engineering default. No linked binding inherits admission.

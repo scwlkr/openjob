@@ -1,3 +1,5 @@
+import { createWorkspacePilotRuntime } from './workspace-pilot-runtime.ts';
+import { internalErrorResponse, defaultRequestId } from './v1-http.ts';
 import { createPersonalApplication } from './personal-application.ts';
 import { createFirestoreAgentGrantStore } from "@/db/agent-grants";
 import { createV1AgentGrantsApi } from "./v1-agent-grants";
@@ -51,6 +53,7 @@ type FirebaseBindings = QaPasswordRuntimeBindings & {
 };
 
 type V1Runtime = {
+  workspacePilotApi: ReturnType<typeof createWorkspacePilotRuntime>;
   agentGrantsApi: ReturnType<typeof createV1AgentGrantsApi>;
   accountDeletionApi: ReturnType<typeof createV1AccountDeletionApi>;
   groupsApi: ReturnType<typeof createV1GroupsApi>;
@@ -160,6 +163,7 @@ function getRuntime() {
       verifyIdToken,
     }),
     ...createPersonalApplication({ workspace: personalWorkspaces, users, verifyIdToken }),
+    workspacePilotApi: createWorkspacePilotRuntime({ config: firebase, personal: personalWorkspaces, users, verifyIdToken }),
     notificationSubscriptionsApi: createV1NotificationSubscriptionsApi({
       subscriptions: notificationSubscriptions,
       users,
@@ -242,4 +246,9 @@ export function retryAccountDeletion(userId: string, requestId: string) {
 
 export async function handleV1AgentGrantsRequest(request: Request) {
   return getRuntime().agentGrantsApi.fetch(request);
+}
+
+export async function handleWorkspacePilotRequest(request: Request) {
+  try { return await getRuntime().workspacePilotApi.fetch(request); }
+  catch { return internalErrorResponse(defaultRequestId); }
 }

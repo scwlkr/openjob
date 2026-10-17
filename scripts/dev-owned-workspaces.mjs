@@ -14,6 +14,9 @@ import { createV1PersonalWorkspaceApi } from '../server/v1-personal-workspace.ts
 import { createFirestorePersonalWorkspaceStore } from '../db/personal-workspace.ts';
 import { createPersonalWorkspaceContextStore } from '../db/personal-workspace-context.ts';
 import { createWorkspaceContextStore } from '../server/workspace-context-store.ts';
+import { createWorkspacePilotRuntime } from '../server/workspace-pilot-runtime.ts';
+import { webFirebaseConfigFor } from '../config/web-firebase-config.mjs';
+import nativeIdentities from '../config/native-identities.json' with { type: 'json' };
 import { createOwnedWorkspacesApi } from '../server/owned-workspaces-api.ts';
 const options = new Map(); const args = process.argv.slice(2);
 while (args.length) { const key = args.shift(); if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH].'); options.set(key, args.shift()); }
@@ -42,22 +45,23 @@ try {
   const users = createFirestoreUserStore(config, db.fetch), owned = createOwnedWorkspaceStore(config, db.fetch), personal = createFirestorePersonalWorkspaceStore(config, db.fetch), contexts = createPersonalWorkspaceContextStore(config, db.fetch), store = createWorkspaceContextStore({ owned, personal, contexts }), sessions = new Map();
   for (const name of ['alex', 'sam']) { const token = await authority.issue({ uid: `owned_fixture_${name}` }); const identity = await verifyIdToken(new Request('http://fixture.invalid', { headers: { authorization: `Bearer ${token}` } })); const { user } = await users.create(identity); sessions.set(name, { token, userId: user.userId }); const items = await store.list(user.userId); for (const item of items) await store.snapshot(user.userId, item.workspaceId); }
   await persist(); const api = createOwnedWorkspacesApi({ store, users, verifyIdToken });
+  const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
   const personalApi = createV1PersonalWorkspaceApi({ workspace: personal, users, verifyIdToken });
   const plugin = { name: 'owned-workspaces-fixture', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {
-    if (!incoming.url?.startsWith('/api/owned-workspaces') && !incoming.url?.startsWith('/api/v1/workspace/') && !incoming.url?.startsWith('/__fixture/session/')) return next();
+    if (!incoming.url?.startsWith('/api/owned-workspaces') && !incoming.url?.startsWith('/api/v1/workspaces') && !incoming.url?.startsWith('/api/v1/workspace/') && !incoming.url?.startsWith('/__fixture/session/')) return next();
     const run = async () => {
       try {
         const url = new URL(incoming.url, `http://127.0.0.1:${port}`);
         if (url.pathname.startsWith('/__fixture/session/')) { const session = sessions.get(url.pathname.slice('/__fixture/session/'.length)); outgoing.writeHead(session ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify(session ?? {})); return; }
         const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 100000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
         const before = db.exportState(); const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
-        const response = await (url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
+        const response = await (url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
         if (response.ok && incoming.method === 'POST') { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
         outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()));
       } catch { outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: { code: 'fixture_unavailable' } })); }
     };
     queue = queue.then(run, run);
   }); } };
-  server = await createViteServer({ configFile: false, root: resolve('tests/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
+  server = await createViteServer({ configFile: false, root: resolve('tests/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], resolve: { alias: { 'next/link': resolve('tests/browser/personal-workspace-fixture/link.tsx') } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfigFor('preview')), __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(nativeIdentities.apple.signInServices.nonproduction.serviceId), __OPENJOB_QA_PASSWORD_AUTH__: 'null' }, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
   await server.listen(); console.log(`Owned Workspace fixture: http://127.0.0.1:${port}/\nSynthetic Alex/Sam; no real sign-in, providers or access changes.\nSaved local fixture (not encrypted): ${statePath}`);
 } catch (error) { await close(); throw error; }
