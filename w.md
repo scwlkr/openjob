@@ -1,4 +1,45 @@
-# WLK-323 — bounded simulator compile failed; lane released
+# WLK-323 — recovered compile and actual native fixture flow passed
+
+PR94 builds exact source61e9789852557a9fae72b97a9a50a3f8432e4eea in a fresh
+/tmp/openjob-323-buildroot snapshot with locked npm dependencies and unchanged201
+Pod versions. Shared duplicate-bearing cache and all previous generated data were
+preserved. The first clean Documents build failed from FinderInfo on a generated
+framework; moving the entire owned build outside synchronized roots resolved it.
+No dependency/stack rewrite or shared metadata repair.
+
+OpenJobDev Release simulator artifact (dev.openjob.app.dev; standalone fixture JS,
+signing/upload disabled; two jobs) compiled successfully. XcodeBuildMCP transport
+timed out at300s; original xcodebuild PID11098 continued, was not restarted, and
+exited with log ending BUILD SUCCEEDED at2026-10-17T01:31:25Z. Readback:
+/tmp/openjob-323-outside-build-readback.json. DerivedData:
+/tmp/openjob-sim-outside-derived. App installed/launched on owned iPhone18Pro/iOS27
+simulator2A74BBE7-2879-4183-BB30-2C1939027BAF.
+
+Actual Device Hub accessibility interaction passed Today → invented Mail → message
+→ private Task → entered/saved notes `note` → scheduled14:00–14:30UTC → Calendar
+→ exact Task → source Mail → entered/saved reply draft `draft`. Native onscreen
+keyboard input worked; normal text automation and mirror HID did not, so those
+attempts are not counted as proof. App stop/relaunch retained Task notes/schedule
+and the reply in Drafts. Loopback snapshot independently confirmed matching Task/
+event IDs, reply account/source, draft status and empty Sent. Saved UI evidence:
+output/wlk-323/native-{calendar,task-after-relaunch,draft-after-relaunch}.jpg.
+
+This is an explicitly labeled simulator-only fixture entry using fake identity/
+Firestore on127.0.0.1:5213, real native components and HTTP validation. It does not
+prove normal sign-in, real providers, SQLCipher saved/offline mode, Android,
+physical devices or release acceptance. No real correspondence or cloud writes.
+Fixture entry guard, focused lint, native typecheck, brand/secret checks and an
+independent exact-source review passed. See docs/NATIVE_SIMULATOR_SMOKE.md.
+
+Heavy leasea51d59dd074dd5216a51a423 released succeeded after compile; coordinator
+explicitly cleared to run PatriBible web CI while light smoke finished. Own app/
+simulator, mirror and fixture API stopped afterward; state file retained. Both
+PatriBible simulators remained booted, shared browser/live sessions untouched.
+No additional heavy phase pending. WLK318 still needs its existing TWO approvals;
+no retry or security/credential change. Final landed identity is recorded in PR/
+Linear. Historical failure checkpoint below is retained for provenance.
+
+# WLK-323 — first failed attempt (historical; superseded below)
 
 Source ee419305a698135596a97bc9141e3530ec531d20 (merged PR92), unchanged
 through the single build. Linear https://linear.app/wlkr-labs/issue/WLK-323.

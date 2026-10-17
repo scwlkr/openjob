@@ -9,6 +9,7 @@
   "include": [
     "App.tsx",
     "index.ts",
+    "simulator-smoke.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
     "test/**/*.ts",
