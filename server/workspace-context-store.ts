@@ -25,6 +25,15 @@ export function createWorkspaceContextStore({ owned, personal, contexts }: { own
       return snapshot(owner, await contexts.ensure(owner));
     },
     async snapshot(owner: string, id: string) { const context = await contexts.find(owner); return context?.workspaceId === id ? snapshot(owner, context) : owned.snapshot(owner, id); },
+    async saveTaskNotes(owner: string, id: string, input: unknown, expectedNotes: unknown) {
+      const context = await contexts.find(owner);
+      if (context?.workspaceId !== id) return owned.saveTaskNotes(owner, id, input, expectedNotes);
+      if (!personal.saveTaskNotes) workspaceFail('unavailable');
+      const current = await snapshot(owner, context);
+      applyTaskCalendarCommand(current.work, input as TaskCalendarCommand, owner, () => `offline_${crypto.randomUUID()}`);
+      await personal.saveTaskNotes(owner, input, expectedNotes);
+      return snapshot(owner, context);
+    },
     async command(owner: string, id: string, input: unknown) {
       const context = await contexts.find(owner); if (context?.workspaceId !== id) return owned.command(owner, id, input);
       const current = await snapshot(owner, context);

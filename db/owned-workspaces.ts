@@ -1,3 +1,4 @@
+import { assertTaskNotesBase } from '../shared/task-notes-precondition.ts';
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from './firestore-rest.ts';
 import { activeUserHistoryWrite, assertActiveUser } from './user-history.ts';
 import { assertTaskSlotAvailable } from '../shared/workspace-availability.ts';
@@ -36,6 +37,22 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
   const retryable = (error: unknown) => error instanceof FirestoreRequestError && ['ABORTED', 'ALREADY_EXISTS', 'FAILED_PRECONDITION', 'NOT_FOUND'].includes(error.code ?? '');
   const update = (path: string, fields: FirestoreDocument['fields'], previous: FirestoreDocument | null) => ({ update: { name: db.documentName(path), fields }, currentDocument: previous ? { updateTime: previous.updateTime } : { exists: false } });
   async function commit(owner: string, writes: unknown[]) { await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [await activeUserHistoryWrite(db, owner), ...writes] }) }); }
+  async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }) {
+    ownerId(owner);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assertActiveUser(db, owner); const previous = await read(workPath(id)); const snapshot = decode(previous, owner);
+      if (guard) assertTaskNotesBase(snapshot.work.tasks, input, guard.expectedNotes);
+      // The existing pure Task/Calendar engine rejects all Mail, source-link and agent commands.
+      const available = !!input && typeof input === 'object' && (input as { type?: string }).type === 'task.schedule-available';
+      const normalized = available ? { ...input as object, type: 'task.schedule' } : input;
+      const work = applyTaskCalendarCommand(snapshot.work, normalized as TaskCalendarCommand, owner, () => `offline_${crypto.randomUUID()}`);
+      if (available) { const task = work.tasks.find(item => item.id === (input as { taskId: string }).taskId)!; assertTaskSlotAvailable({ ...snapshot.work, accounts: [], messages: [], drafts: [], sent: [], agents: [], activity: [] }, { taskId: task.id, ...task.scheduledSlot! }); }
+      const result = validateOwnedSnapshot({ workspace: snapshot.workspace, work });
+      try { await commit(owner, [update(workPath(id), { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) } }, previous)]); return result; }
+      catch (error) { if (!retryable(error)) throw error; }
+    }
+    return workspaceFail('conflict');
+  }
   return {
     async list(owner: string) { await assertActiveUser(db, owner); const result = catalog(await read(catalogPath(owner)), owner); await assertActiveUser(db, owner); return result; },
     async create(owner: string, name: unknown) {
@@ -51,21 +68,8 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
       return workspaceFail('conflict');
     },
     async snapshot(owner: string, id: string) { ownerId(owner); await assertActiveUser(db, owner); const result = decode(await read(workPath(id)), owner); await assertActiveUser(db, owner); return result; },
-    async command(owner: string, id: string, input: unknown) {
-      ownerId(owner);
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await assertActiveUser(db, owner); const previous = await read(workPath(id)); const snapshot = decode(previous, owner);
-        // The existing pure Task/Calendar engine rejects all Mail, source-link and agent commands.
-        const available = !!input && typeof input === 'object' && (input as { type?: string }).type === 'task.schedule-available';
-        const normalized = available ? { ...input as object, type: 'task.schedule' } : input;
-        const work = applyTaskCalendarCommand(snapshot.work, normalized as TaskCalendarCommand, owner, () => `offline_${crypto.randomUUID()}`);
-        if (available) { const task = work.tasks.find(item => item.id === (input as { taskId: string }).taskId)!; assertTaskSlotAvailable({ ...snapshot.work, accounts: [], messages: [], drafts: [], sent: [], agents: [], activity: [] }, { taskId: task.id, ...task.scheduledSlot! }); }
-        const result = validateOwnedSnapshot({ workspace: snapshot.workspace, work });
-        try { await commit(owner, [update(workPath(id), { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) } }, previous)]); return result; }
-        catch (error) { if (!retryable(error)) throw error; }
-      }
-      return workspaceFail('conflict');
-    },
+    command: (owner: string, id: string, input: unknown) => change(owner, id, input),
+    saveTaskNotes: (owner: string, id: string, input: unknown, expectedNotes: unknown) => change(owner, id, input, { expectedNotes }),
   };
 }
 export type OwnedWorkspaceStore = ReturnType<typeof createOwnedWorkspaceStore>;
