@@ -1,3 +1,51 @@
+# Current local setup and secure sign-in handoff — 17 October 2026
+
+The exact approved nonproduction domain change is DONE and independently read back:
+`openjob-nonprod` / project550998178053 retains its three previous authorized domains
+and adds only `127.0.0.1`. Identity Platform PATCH used only `authorizedDomains` in
+its update mask; no provider/client/role/other project setting changed. Existing
+CLI identity was used with the intended project's request consumer, leaving the
+unrelated deleted default quota-project configuration untouched. Nonsecret receipt:
+`output/wlk-331/domain-receipt.json` (local ignored evidence). The
+[official field-mask API](https://cloud.google.com/identity-platform/docs/reference/rest/v2/projects/updateConfig)
+was checked before the change.
+
+The approved existing `OpenJob Preview QA Fixture Operator` document was resolved
+via metadata-only listing and then loaded ONLY for the prepared short-lived local
+process. Project/type/client-email/key shape matched nonprod. No values in chat,
+logs, arguments or files; no new keys, roles or credential storage. An earlier
+whole-item lookup was automatically rejected before execution; it was not retried.
+The narrower reference lookup and document-only actual-use launcher succeeded.
+This proves local configuration loading, not key validity against Firestore.
+
+Real local UI now renders at `http://127.0.0.1:5202/workspace`, in connected Chrome
+helper's owned handoff tab939996978: authenticated prototype / external providers
+unconfigured / real sending disabled, Personal workspace and Continue with Google.
+A temporary preview-only eager Vite public-define error initially caused a blank
+page; literal public defines in the private launcher fixed it. The helper then
+confirmed visible UI and no fresh warnings/errors. Product source was unchanged.
+No actual Google sign-in, User creation, private Task/block write or live provider
+grant has occurred. Smallest next step: Shane takes over that existing OpenJob tab,
+clicks Continue with Google and completes account choice/password only inside
+Google's own secured UI; never chat. Await his return before local verification.
+The selected mailbox remains shane.caleb.walker@gmail.com, not connected yet.
+
+Owned real-pilot process16066/session50291 runs private
+`/tmp/openjob-318-real-launcher.mjs`; its operator lives only in that process.
+Preserve it for this immediate handoff; stop only that PID when review is finished.
+`/healthz`200 says configured, credentialsVerified=false; no live readiness claim.
+The launcher is not deployed, committed or a persistent service. Actual credential,
+identity, Firestore and Task/Calendar behavior remain pending user sign-in.
+
+PR101 simulated Connections and PR100 notes UI were separately verified on the
+same exact origin before switching to this real profile; do not conflate evidence.
+No broad CDP/DevTools grant was inferred or tested. No helper handled credentials.
+PR95 downloads remain parked. Infrastructure now belongs to scwlkr/0o10: owner says
+OVH VPS purchased, OpenJob/PatriSearch primarily VPS, Minecraft local. VPS actual
+specs/IP/OS remain unverified; no live access/deploy is authorized here.
+
+---
+
 # Approved local setup — 17 October 2026, 12:57 UTC
 
 Shane answered the exact checklist, relayed by parent01a0f838:

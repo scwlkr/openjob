@@ -1,3 +1,46 @@
+# Local setup / existing drafts UI checkpoint — 17 October 2026
+
+PR101 Connections UI PASS at sourceHEAD6eacb66/implementationcf618e2 on exact5202:
+create UI331 Work, simulated Gmail/home consent/cancel/reconnect/readMail/disconnect,
+correct Calendar home link and explicit OpenJob-block label; 390px nooverflow.
+Sam switch hid Alex data but showed sign-in, so signed-in Sam UI isolation remains
+unproven; signed API denial tests are separate. PR100 notes UI PASS atHEAD1235ae1/
+implementation263321c: two editors, stale-save denial retains B; Refresh shows saved
+A + B draft + alert/disabledSave; discard/reopen adopts A; saveB-new and clear pass.
+Ownersupplied Git heads independently checked by root, source clean during eachrun.
+
+Screenshots inline only in verifier01a149f4-5c50-7146-aa7b-a7dbfd2d1010 tool transcript:
+PR101 'Capture desktop evidence and inspect responsive viewport API' and
+'Verify narrow Connections layout and capture evidence'; PR100 best screenshot
+'Capture visible conflict warning, retained draft, and disabled Save'. No artifact
+URL/file/stableimageID exposed; no screenshots claimed exported. All syntheticQA
+tabs closed/viewportreset. Preserve fixturestates /tmp/openjob-331-ui.LtpatP/state.json
+and /tmp/openjob-330-ui.HvXGiJ/state.json (private files, not encrypted). Owned
+fixturePIDs11870/14232 stopped; locks released. No port workaround; exact5202 throughout.
+
+WLK318 approved domainaddition DONE/readback: only127.0.0.1 added to openjob-nonprod,
+other domains preserved. Operator reference metadata found; approved Document loaded
+only in short-lived real-pilot process, no key values/logs/files/newcredentials.
+Whole-item lookup auto-rejected before execution; safer metadata+Document-only
+actual-use route succeeded, no retry/bypass of rejected lookup. See current
+LOCAL_ACCOUNT_ONBOARDING.md for exact scopes, receipt, history and remainingproof.
+
+Real UI at5202/workspace now renders in helper's owned handofftab939996978 with
+ContinueGoogle, no restoredsession. Initiallyblank preview fixed only in private
+launcher publicdefines; productsourceunchanged. Process16066/session50291 owns
+/tmp/openjob-318-real-launcher.mjs, operator onlyRAM, kept for immediatehumanhandoff.
+User asked to clickContinueGoogle/choose own account inGoogle UI and reportreturn;
+no password/token chat. Actual sign-in/Firestore/privateTask+block remainspending.
+No helpercredentials, provider scopes, real sending, Calendarwrite or releases.
+
+Hosting update: OVH VPS purchased per Shane; all infrastructure in scwlkr/0o10,
+owner01a14a00-ce06-7721-a75a-9939f141802d. OpenJob+PatriSearch primarilyVPS,
+Minecraftlocal/Octal8home+VPS. ActualVPSspecs/IP/OS unverified. Preserve app portable
+artifacts here; no competing infra/config/deploy. PR95/100/101 remain separatedrafts;
+PR99 historical approvalqualification preserved, not retroactively cleared.
+
+---
+
 # Approved setup resume — capability handoff, no execution claim
 
 Shane17Oct12:57UTC approved pending DevTools127.0.0.1:5202 supported access and
