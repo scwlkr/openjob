@@ -1,5 +1,6 @@
 # WLK-328 — normal Workspace pilot composition, actual admission unset
 
+PR98 https://github.com/scwlkr/openjob/pull/98; implementation b27cccec.
 Branch codex/wlk-328-workspace-pilot from main99dd774 (PR97). Parent architecture
 review explicitly permits this bounded engineering recommendation under C12/C13;
 D06 classifier remains Proposed, not a required limited-pilot prerequisite. WLK327
@@ -25,9 +26,12 @@ Owned state328 separate from325/326, private0600 but not encrypted. Browser obse
 Personal mapping, independentWork, Task+notes+schedule, Calendar→sameTask completion,
 per-Workspace editor retention and Sam denial with previous UI cleared. Screenshot
 output/wlk-328/normal-pilot.png and not-admitted.png. Twelve focused admission/Workspace/mapping/availability checks, rootTypeScript,
-focused lint, brand32 and secret scan pass. Initial read-only review found no
-consequential findings; exact clean-head review/integration follow. No real
-admission activated.
+focused lint, brand32 and secret scan pass on clean b27cccec. Independent
+exact-head read-only review found no consequential findings. Actual process restart
+readback retained identical User/context/Task/event IDs and saved contents; evidence
+output/wlk-328/restart-readback.json and normal-pilot-final.png. Owned preview
+PIDs33093/33847 exited, own IAB tab closed and state lock released. Final source
+integration identity/state is recorded in PR98/Linear328. No real admission activated.
 
 PR95 draft829a3cd remains parked/browserdeliveryUNVERIFIED. No downloads or retries.
 WLK318 TWO unanswered approvals stay pending. WLK302 cloud scope/source unrecovered;
