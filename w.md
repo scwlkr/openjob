@@ -1,3 +1,40 @@
+# WLK-323 — bounded simulator compile failed; lane released
+
+Source ee419305a698135596a97bc9141e3530ec531d20 (merged PR92), unchanged
+through the single build. Linear https://linear.app/wlkr-labs/issue/WLK-323.
+PatriBible coordinator explicitly cleared the lane; shared lease
+9cf8df816b9d26940264c676 admitted10GiB with20GiB floor/free89.5GiB and was
+released with failed outcome. No further build phase started; coordinator notified.
+
+Isolated development prebuild succeeded. Copied CocoaPods deployment lock rejected
+worktree-relative paths; no-repo-update install succeeded and all201 PODS entries
+matched the existing lock. No package/version/source/configuration changes.
+XcodeBuildMCP build_sim failed after67.255s with invalid generated C++ identifier
+NativeSafeAreaContext 3. The reused shared cached dependency has byte-identical
+src/specs/NativeSafeAreaContext.ts and NativeSafeAreaContext 3.ts; generated
+safeareacontext.h contains both names. Origin of these duplicate files is unknown.
+Do not delete or repair the shared cache. This is a concrete dependency-input
+blocker, not a verified defect in Today/Task notes or a successful native build.
+
+Compile used Debug OpenJobDev, two jobs, signing disabled, forced JS bundling,
+/tmp/openjob-sim-derived and this worktree's generated native/ios only. No usable
+app artifact or runtime/UI/device/bridge/sign-in/TestFlight proof. No simulator
+boot/install/launch, live connector action, credentials/settings, publication or
+deployment. Existing PatriBible booted devices/browser/web/TestFlight preserved.
+Own dependency symlink removed; source remained clean. No xcodebuild left running.
+
+Evidence: /tmp/openjob-323-build-result.json; /tmp/openjob-sim-prebuild.log;
+/tmp/openjob-sim-pods.log; XcodeBuildMCP log
+~/Library/Developer/XcodeBuildMCP/workspaces/0.1.2-6207ec731efe/logs/build_sim_2026-10-17T01-05-44-119Z_pid61220_f2d14b52.log.
+Failed generated project/Pods (~1.2GiB) and DerivedData (~569MiB) retained for
+diagnosis under the failed reservation's protection; no unrelated cleanup.
+
+Next action: prepare a fresh isolated dependency tree from existing package-lock
+without reusing the duplicate-bearing shared cache, then coordinate a fresh bounded
+compile lane with PatriBible before another heavy phase. The single-build request
+has been consumed; no automatic build retry. WLK318's existing TWO approvals remain
+separate; do not retry pending permissions or change credentials/provider settings.
+
 # WLK-322 — native Personal Today
 
 Branch codex/wlk-322-native-today; baseline c166ef0 (merged PR91).
