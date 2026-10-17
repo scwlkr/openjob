@@ -1,3 +1,45 @@
+# WLK-324 — Personal JSON export implemented; draft PR95, browser proof blocked
+
+Branch codex/wlk-324-personal-export; reviewed source
+5cf83f7ffeab268d82f278b60436c23e353821c9; base/main33558059. Draft PR95:
+https://github.com/scwlkr/openjob/pull/95. This is a bounded R21/OJ-X4 product
+slice, not completion of independent Workspace onboarding or the full roadmap.
+Current WStack c3e3ac6 /0.2.0, AGENTS/mission/alignment/Linear/livePR state read.
+Full Workspace storage/identity cutover was deliberately not replaced with unused
+parallel records. No overlap with unrecovered WLK302 or pending WLK318.
+
+Implemented one-snapshot human-only version1 JSON export with explicit sections:
+Tasks, Calendar, optional saved authored drafts. Allowlisted projection preserves
+notes and links only when both endpoints are selected; omits incoming Mail/source
+references, account addresses/connections, Sent/activity/grants/tokens/receipts.
+Selected drafts retain authored recipient/subject/body and opaque sending account
+ID, explicitly fixture mode. API rechecks identity before return. Web defaults
+Tasks/Calendar on, drafts off. CLI saves a new private0600 file, cannot overwrite
+or print file content. Bound1MiB formatted UTF-8 /1000records per array.
+No import/restore, pending offline/unsaved/recovery text, shared Workspace or native
+export UI. Existing stack, providers, approved npm artifact and shared sessions kept.
+
+Evidence: focused projection/API selection/isolation/denial/redaction/size and CLI
+signed-fakeauth file checks passed (4 new tests); existing personalAPI regression
+also checked. TypeScript, focused lint, OpenAPI/schema generation/check, brand32,
+secret scan848files and diff checks passed. Independent exact-head review5cf83f7
+found no consequential findings. Actual built browser preview showed Export panel,
+Tasks/Calendar checked and invented drafts unchecked. This is UI-render/selection
+proof only: browser file delivery is UNVERIFIED, not passed.
+
+The browser download request on5201 remained unanswered and the tool transport
+closed. Parent reports a separate unanswered5214 request too. Parent explicitly
+ordered no further download permission requests or endpoint changes/retries. None
+was approved. Do not resume/retry either prompt, use another browser/endpoint to
+bypass it, or claim API/CLI proof as browser download proof. No browser-dependent
+acceptance completion or merge was performed. PR stays draft; WLK324 stays In
+Progress. Next: preserve this checkpoint; await explicit direction before any
+browser download verification. No additional engineering/test filler is needed.
+The owned temporary5201 preview was gracefully stopped after this checkpoint;
+existing5200/other useful previews, PatriBible devices/browser/live services kept.
+No heavy phase used; reuse PR94 simulator evidence, never repeat it for this slice.
+WLK318's TWO approvals and npm publication remain untouched.
+
 # WLK-323 — recovered compile and actual native fixture flow passed
 
 PR94 builds exact source61e9789852557a9fae72b97a9a50a3f8432e4eea in a fresh
