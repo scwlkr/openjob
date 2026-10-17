@@ -1,6 +1,8 @@
 # WLK-325 — first independent owner-only Workspace product slice
 
-Branch codex/wlk-325-owned-workspaces from verified main3355805. PR95 remains
+PR96 https://github.com/scwlkr/openjob/pull/96; reviewed implementation
+fc4446d68712e91478b608698213aec8a988e4f1, from verified main3355805.
+Branch codex/wlk-325-owned-workspaces. PR95 remains
 separate draft829a3cd, browser file delivery unverified, no download attempts.
 WLK325 implements a bounded R10/R11/R20 fixture milestone: one signed human owns
 Work and Family with opaque Workspace IDs distinct from User IDs, separate Task
@@ -36,8 +38,17 @@ exit cleanup to remove only matching lock inode/dev, reopened unchanged state.
 No old/shared files or simulators touched. PR94 simulator proof reused; WLK318
 TWO approvals, unrecovered WLK302 and npm publication remain untouched.
 
-Next: finish exact-head review/nondeploying PR integration, record landed identity
-in Linear; keep useful fixture state and preserve PR95's explicit no-retry boundary.
+Independent exact-source reviewfc4446d found no consequential findings. Six
+focused Workspace/availability checks and final typecheck passed. Source merge is
+nondeploying (manual-only workflow, no required remote checks/protections/rulesets).
+Owned fixture server/tab closed; actual exit cleanup released its lock and preserved
+saved state. Final landed identity is recorded in PR96/Linear.
+
+Next foundation: normal independent-identity eligibility and explicit retained
+Personal-context mapping/composition before real Workspace onboarding, followed by
+explicit invitations/resource grants/transfer as separate slices. No automatic
+production activation. Keep useful fixture state and preserve PR95's no-retry
+boundary; PR94 remains native proof.
 
 # WLK-323 — recovered compile and actual native fixture flow passed
 
