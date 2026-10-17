@@ -1,3 +1,13 @@
+## Disabled Google protocol adapter (WLK332 draft)
+
+Private server-only authorization URL, official-library code exchange/signature
+verification and explicit refresh adapter; tests use fake transports and invented
+signed tokens. Default-disabled, no real composition/route/storage activation.
+Existing broker entry shape retained; project-wide Google revocation remains an
+explicit owner decision and has no adapter method. Live orchestrator and exact
+callback/runtime configuration remain pending. See
+[adapter evidence and activation limits](docs/providers/GOOGLE_OAUTH_ADAPTER.md).
+
 ## Connections onboarding contract (WLK331 draft)
 
 Account-level Connections chooses an invented Gmail account and explicit owned
