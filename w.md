@@ -1,3 +1,50 @@
+# Local real pilot recovered — 17 October 2026, 10:04 a.m. Central
+
+At resumed UI qualification, both browser and curl received connection refused on
+127.0.0.1:5202; lsof showed no listener and old execution session50291 was absent.
+No retained exit record establishes why the process stopped. Previous health/pass
+receipts are historical observations, not current uptime proof. Parent explicitly
+prioritized restoring the existing approved real configuration before other work.
+
+Unchanged private /tmp/openjob-318-real-launcher.mjs restarted successfully against
+unchanged pilot source bf5ae4630ae2370d88cef6e792c63968d3b22ecb. Existing approved
+operator Document loaded only into process memory; no new credentials/access,
+secret files/logs, configuration changes or fixture replacement. NEW owned PID49520,
+execution session17753; birth Sat17Oct2026 10:03:31Central, command node
+/tmp/openjob-318-real-launcher.mjs. Bound only127.0.0.1:5202. Health200 at15:04:43UTC:
+local_real_pilot/nonprod, providers unconfigured, realSendingfalse,
+credentialsVerifiedfalse (presence-only health, not credential audit). Receipt
+/tmp/openjob-318-restored-health.json. Keep this short-lived useful process alive;
+no launchd/autostart/persistent access was installed. Recheck health after a host/
+execution reset rather than assuming an old PID/session remains owned or running.
+
+Browser verifier01a149f4 recovery PASS: own tab939997013 on exact5202/workspace
+restored existing signed-in Personal session automatically and loaded exact Task
+“Local pilot verification 17 October”, with linked Personal block18Oct2026
+15:00–15:30UTC /10:00–10:30Central. Calendar showed same title/time, linked-task
+label and open-linked-task control. Read-only; no new writes/sign-in/provider actions.
+Closed only own tab. Shane tab939996978 and persisted Task/block preserved.
+
+Merged Google Connections callback UI remains NOT browser-qualified. Supported
+browser surface lacks interception/fulfill/setContent. Advertised CDP documentation
+was read only on the owned approved-origin tab, with no prompt/denial. It describes
+tab-current-origin raw send/readEvents but does not enumerate permitted commands
+or establish Fetch interception/fulfillment, fixture serving or isolation guarantees.
+No raw command, evaluate, service worker, alternate origin/port, fixture runtime
+replacement or approval bypass attempted. Exact next qualification dependency:
+a supported documented isolated fixture surface at the approved origin, or explicit
+new fixture-origin authority; no new request made here. Existing real app has no
+Google flow injected and cannot qualify the merged fake callback flow itself.
+
+Queue rechecked: WLK324/PR95 browser download is explicitly parked/no retry;
+WLK327 needs consequential policy; WLK302 remains reserved/unrecovered; WLK318
+live Gmail target/token policy/Google setup/consent remain pending. No independent
+unblocked accepted queue slice was found; none invented. Source checkpoint remains
+2605be860cc1a1f24e762e8d97943174be6b9193 plus this documentation-only recovery
+receipt. No feature, deploy, publication, live Gmail or infrastructure changes.
+
+---
+
 # WLK334 landed receipt — 17 October 2026
 
 PR103 https://github.com/scwlkr/openjob/pull/103 merged source-only at
