@@ -17,7 +17,18 @@ stays mock. Provider revocation absent and project-wide consequence explicit.
 See docs/providers/GOOGLE_OAUTH_ADAPTER.md for bounded proof and exact remaining
 configuration/runtime decisions. Selected future mailbox shane.caleb.walker@gmail.com,
 no actual consent/API activation/secret retrieval/client/callback settings or deploy.
-No domain invented; all infra solely scwlkr/0o10. Final checks/review/PR in Linear.
+No domain invented; all infra solely scwlkr/0o10.
+
+Implementation e2a7fac2acfd40f415f21758fcd048e1355d5d96:50/50 focused tests pass,
+including9 new official-library/fake-transport cases, oldOAuth/store/vault/Connections.
+TypeScript, affectedESLint, brand32, secret658, diff and lock/pinnedversion checks
+pass; exact-clean rerun retained /tmp/openjob-332-exact-e2a7fac.log. Independent
+Spec/security and Standards reviews on exacte2a7fac found no consequential issues.
+Reviewers explicitly retain missing live routes, one-use state/initial subject
+binding, private token persistence/refresh coordination and live composition.
+Final docs-only checkpoint/PR and exact rerun are recorded in Linear. No full-suite,
+liveGoogle, installedapp/build or native proof claimed; broader baseline failures
+from previous integration remain unchanged. Stop at reviewed draft, no merge.
 
 ---
 
