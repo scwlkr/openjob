@@ -1,3 +1,31 @@
+# Source integration checkpoint — 17 October 2026
+
+PR100 merged at b0fed00cc93de69fd4a92d0b1cc5dc64b9b7f401 after exact-head review,
+focused16/16 tests, TypeScript, affected lint, brand32/secret642 and actual notes UI
+proof. Initial compile lacked ignored Cloudflare declarations; restored existing
+matching declarations then compile passed. PR101 reconciliation retains both source
+changes: fixture250KB bound plus Connections dispatch/persist; only w.md conflicted,
+both histories preserved below. Historical draft/pending wording below is superseded
+by this current checkpoint and actual-service sign-in proof. PR95 remains draft.
+
+Integration is in /tmp/openjob-100-101-integration, separate from running source
+/tmp/openjob-connections-slice at bf5ae46. Preserve PID16066/session50291, tab939996978
+and the verification Task/block. No simulated onboarding injected in real runtime.
+PR101 prior exact-head35/35 lifecycle+Connections+signedCLI checks, TS, affectedlint,
+OpenAPI34/49/types, brand32/secret652 passed. First CLI run hit sandbox loopbackEPERM;
+approved ephemeral listener rerun passed. Broader historical54/56 baseline failures
+(command oneOf18vs19, expired-date provider expectation) remain, not full-suite green.
+No required branch rules/checks or hooks; only manual artifact workflow, no push/deploy.
+All infra remains scwlkr/0o10. No provider access, storage activation or release.
+
+Remaining Gmail-read gate is in docs/LOCAL_ACCOUNT_ONBOARDING.md: existing public
+nonprod Firebase identity client/handler is not a verified Mail OAuth registration
+or runnable callback. Real lifecycle is disabled/mock-only with no production vault,
+exchange/verifier/read bindings. No actionable consent URL yet; selected mailbox
+remains shane.caleb.walker@gmail.com. Do not solve this by enabling fixture mode.
+
+---
+
 # Local setup / existing drafts UI checkpoint — 17 October 2026
 
 PR101 Connections UI PASS at sourceHEAD6eacb66/implementationcf618e2 on exact5202:
@@ -110,6 +138,107 @@ PR95/PR100 remain draft. PR99 IAB3/tab12/port5203 observations retain unresolved
 approval scope; preserve evidence, no clean authorization claim. Pending browser,
 WLK318 setup and live-account consent all unchanged. No browser/launcher/heavy phase,
 secret retrieval, real account/provider call/grant, configuration, deploy or release.
+
+---
+
+# Connection prerequisite review — documentation only
+
+Existing provider guide now contains a short Proposed first-connection review:
+[docs/providers/README.md](docs/providers/README.md#first-connection-review--17-october-2026-proposed).
+Reuses R30–R33/EXPERIENCE/ADR0021; records actual composition/mock-mode/source-link
+and Workspace resource-home gaps, Node/Compose runtime recommendation, opaque
+server credential-reference boundary and exact setup versus independent source work.
+Next bounded source slice: Connections/onboarding contract using existing injected
+OAuth/broker/repositories, with one read-path durable refresh/cleanup lifecycle.
+No implementation in this review; no new Linear execution queue. WLK310 holds design
+review, WLK302 blocked code, WLK318 parked sign-in approvals. First real view is Mail
+plus OpenJob blocks; provider Calendar is not implemented or consented.
+
+Recovered WLK302 HANDOFF via Linear1bbe36a4/owner final turn: uncommitted cloud branch
+based5358f6c, no PR/full gate, historical focused checks only. Source NOT recovered,
+cloud NOT restarted, no TLS/login duplication. Former /tmp checkout no longer exists;
+read existing PR100 branch into clean /tmp/openjob-connection-review without install.
+Original synced checkout/unrelated link preserved. PR95 and PR100 remain draft;
+PR99 UI qualification unresolved. No browser, secrets, account access, config or release.
+
+---
+
+# Documentation-only stop checkpoint — PR100 / WLK-330
+
+Parent direction: pause browser execution; no further notes/data-edge-case work.
+PR100 https://github.com/scwlkr/openjob/pull/100 stays DRAFT and UNMERGED.
+Reviewed implementation/source head263321c93d8213cc3a4eeed0839313f41d30786d:
+30 focused tests, TS, focused ESLint, brand32 and secret642 passed; exact-head
+read-only review found no actionable findings. This checkpoint changes docs only.
+No historical evidence or claims below have been deleted or rewritten.
+
+PR99 browser observations occurred in existing Codex IAB browser3, tab12,
+http://127.0.0.1:5203/pilot. Approval scope was NOT verified against the unanswered
+localhost5202 DevTools permission. UI qualification therefore remains unresolved,
+not cleanly authorized. Preserve exact screenshots/source receipts/state paths and
+PR99 comment https://github.com/scwlkr/openjob/pull/99#issuecomment-6233342505.
+Source/API results stand independently. No browser retry, alternate route, new
+permission request, security/config change, release or further implementation here.
+
+Next substantive accepted-roadmap milestone: R31 -> R32/R33, one Shane-approved
+real read-only account through account-level Connections, verified upstream
+identity and explicit resource home, then actual Mail -> linked Task -> local
+planning -> authored reply draft. Provider choice is not assumed; WLK302 IMAP
+checkpoint must be recovered before overlapping TLS/login implementation.
+Exact prerequisites: selected runtime/data and credential design reviewed before
+real tokens (C11 portable Linux is a direction, not a selected configured target);
+Shane authorizes the particular account/mailbox/resource and read scopes. R31's
+R30 dependency should be bounded to the selected read/refresh/revoke lifecycle:
+durable execution/revision/lease/cleanup with restart and revoke-before-call proof,
+not an unrelated universal send/platform buildout. Existing fake provider/vault/
+OAuth seams do not establish real credentials or live connection readiness.
+
+Existing local sign-in path WLK318 remains parked: approval to use the existing
+OpenJob Preview QA Fixture Operator reference for this pilot process and to add
+only127.0.0.1 to openjob-nonprod Auth authorized domains remain pending. Google and
+Apple Enabled metadata is already known; no provider-enable change is needed.
+Those approvals would permit the documented sign-in scope, NOT mailbox consent,
+new credentials, production/runtime configuration or real sends. Do not conflate
+the pending DevTools browser permission with either setup approval.
+
+Next owner action is resolve/review this narrowly selected connection prerequisite,
+then queue one coherent connection slice in Linear. Nothing implemented or new
+permission requested in this checkpoint. Existing state, pending permissions,
+original checkout issues and PatriBible sessions preserved. Stop here.
+
+---
+
+# WLK-330 — guarded Workspace Task notes (draft)
+
+Branch `codex/wlk-330-notes-conflict`, clean source checkout
+`/tmp/openjob-329-source-check-tqJ2GW`, base/main9a5c0c5f.
+Reproduced two empty-base editors both200 with stale overwrite before repair.
+Notes-specific exact expectedNotes chosen over whole-Workspace revision to avoid
+unrelated-write conflicts. Read-only critic accepted design and implementation.
+
+Normal Workspace notes require original base; exact comparison happens within
+every owned/retained Personal authoritative CAS retry. Same-base race one200/one409;
+missing/malformed400; unavailable Personal guard503; strict command fields retained.
+Refresh keeps original editor text/base; explicit discard/reopen adopts latest.
+250KB bounded payload fits two maximum JSON-escaped notes. Legacy Personal/offline/
+CLI commands unchanged; value guard permits same-value ABA, not full revision lock.
+Actual runtime admission remains UNSET, D06 Proposed; no real provider/config/access.
+
+Verification: TS and focused ESLint pass; 30 affected repository/API/Home/grants
+checks pass; brand32 and canonical secret642 pass in clean checkout. UI behavior UNVERIFIED: draft
+must remain unmerged pending authorized browser proof. No browser/DevTools/native/
+heavy phase or new permission request performed. PatriBible sessions preserved.
+
+Browser qualification for previous WLK329: observations came from existing Codex
+IAB ID3/tab12 at127.0.0.1:5203/pilot. They did not complete the unanswered localhost5202
+DevTools permission; its exact scope was not established, so observations are NOT
+proof of granted authorization. No retry/alternate browser/port workaround now.
+PR99 clarification https://github.com/scwlkr/openjob/pull/99#issuecomment-6233342505.
+
+Original synced checkout preserved: malformed origin/main 2 ref and untracked
+native/node_modules 2 link untouched; root secret invocation there EISDIR remains.
+Clean checkout reuses matching existing Desktop dependencies without installation.
+WLK318/PR95 parked; cloud WLK302 unrecovered; no publication/deploy/admission.
 
 ---
 

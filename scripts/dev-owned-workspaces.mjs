@@ -60,7 +60,7 @@ try {
       try {
         const url = new URL(incoming.url, `http://127.0.0.1:${port}`);
         if (url.pathname.startsWith('/__fixture/session/')) { const session = sessions.get(url.pathname.slice('/__fixture/session/'.length)); outgoing.writeHead(session ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify(session ?? {})); return; }
-        const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 100000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
+        const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 250000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
         const before = db.exportState(); const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
         const response = await (url.pathname.startsWith('/api/v1/connections') ? connectionsApi : url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
         if (incoming.method === 'POST' && (response.ok || url.pathname.startsWith('/api/v1/connections'))) { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }

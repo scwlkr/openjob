@@ -9,12 +9,12 @@ import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
 export type WorkspaceTasksHandle = { openTask: (id: string) => boolean; openLinkedTask: (source: CalendarTaskSource) => boolean; openMailTask: (source: MailTaskSource) => boolean };
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onSaveNotes?: (taskId: string, notes: string, expectedNotes: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
 const defaults = () => { const day = new Date().toISOString().slice(0, 10); return { start: `${day}T14:00`, end: `${day}T14:30` }; };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
 const format = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
-export default function WorkspaceTasks({ view, busy, command, onOpenSource, active = true, ref }: Props) {
+export default function WorkspaceTasks({ view, busy, command, onSaveNotes, onOpenSource, active = true, ref }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
@@ -90,11 +90,13 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
       {visibleTasks.map((task) => <article ref={task.id === openedTask ? taskArticle : undefined} tabIndex={-1} className={`${styles.task} ${task.id === openedTask ? styles.selected : ""}`} data-testid="task-row" key={task.id}>
         <label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(event) => command({ type: "task.complete", taskId: task.id, completed: event.target.checked }, "Task updated")} /><span className={`${taskStyles.title} ${task.completed ? styles.completed : ""}`}>{task.title}</span></label>
         <p className={taskStyles.metadata}>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{format(task.scheduledSlot.start)} – {format(task.scheduledSlot.end)} · {view.calendars.find((calendar) => calendar.id === view.events.find((event) => event.id === task.calendarEventId)?.calendarId)?.name || "Linked calendar"}</small> : <small>Unscheduled</small>}</p>
+        {onSaveNotes && notesId === task.id && !task.notes && <p>No saved notes.</p>}
         {task.notes && <pre className={taskStyles.notes} aria-label={`Notes for ${task.title}`}>{task.notes}</pre>}
-        {notesId === task.id && <form className={taskStyles.notesEditor} onSubmit={async event => { event.preventDefault(); if (await command({ type: "task.notes", taskId: task.id, notes: notesDraft }, "Task notes saved")) setNotesId(""); }}>
+        {notesId === task.id && <form className={taskStyles.notesEditor} onSubmit={async event => { event.preventDefault(); if (await (onSaveNotes ? onSaveNotes(task.id, notesDraft, notesBase) : command({ type: "task.notes", taskId: task.id, notes: notesDraft }, "Task notes saved"))) setNotesId(""); }}>
+          {onSaveNotes && (task.notes ?? "") !== notesBase && <p role="alert">Saved notes changed since you opened this editor. Your text is kept below. Review the latest saved notes above; discard and reopen to edit that version.</p>}
           <label>Task notes<textarea aria-label="Task notes" rows={7} maxLength={40000} disabled={busy} value={notesDraft} onChange={event => setNotesDraft(event.target.value)} /></label>
           <small>{[...notesDraft].length.toLocaleString()} / 20,000 characters · saved with this Task. Saved/offline Tasks include these authored notes.</small>
-          <div className={taskStyles.actions}><button disabled={busy || [...notesDraft].length > 20000} className={styles.primary}>Save notes</button><button type="button" disabled={busy} onClick={() => setNotesId("")}>Discard note edits</button></div>
+          <div className={taskStyles.actions}><button disabled={busy || [...notesDraft].length > 20000 || !!onSaveNotes && (task.notes ?? "") !== notesBase} className={styles.primary}>Save notes</button><button type="button" disabled={busy} onClick={() => setNotesId("")}>Discard note edits</button></div>
         </form>}
         {editingId === task.id && <form className={taskStyles.edit} onSubmit={async (event) => { event.preventDefault(); if (await command({ type: "task.update", taskId: task.id, title: editingTitle }, "Task title updated")) setEditingId(""); }}>
           <label className={styles.grow}>Task title<input aria-label="Task title" required value={editingTitle} onChange={(event) => setEditingTitle(event.target.value)} /></label>

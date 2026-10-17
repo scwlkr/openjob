@@ -1,3 +1,36 @@
+# Remaining Gmail-read gate after local sign-in proof
+
+Selected mailbox: **shane.caleb.walker@gmail.com**, existing project
+**openjob-nonprod (550998178053)**. The completed Google login grants OpenJob
+identity only. Mail remains unconnected; no consent URL is ready.
+
+Smallest next setup check is a nonsecret readback of the EXISTING Google web OAuth
+registration `550998178053-5fivrj3rggm6ttmg3sesiupsahk14dus.apps.googleusercontent.com`:
+confirm its intended Mail-use suitability, exact registered callback, consent/testing
+account restrictions and Gmail API availability. The checked-in Firebase handler
+`https://openjob-nonprod.firebaseapp.com/__/auth/handler` is an identity callback;
+it is not proof of an OpenJob Mail callback or extra Gmail scopes. Registration
+metadata above is known locally; its current provider-console Mail configuration
+has NOT been independently verified. No new client, key, origin or grant is implied.
+
+Before asking Shane to consent, a separately reviewed bounded source slice must
+supply the actual read-only authorization/callback/exchange/signature verification
+and owner/subject/home-bound credential-runtime path. Current lifecycle accepts only
+`disabled | mock`, requires an exact HTTPS callback, and real composition omits both
+onboarding and provider broker. Existing operator credentials serve Firestore; they
+are not mailbox OAuth tokens. Secure token storage/cleanup/refresh choice and its
+activation remain separate approval gates; none was enabled here. Infrastructure
+configuration/deployment belongs solely to scwlkr/0o10.
+
+Once that reviewed path and approved runtime exist, the smallest human consent is
+this selected account and exactly `openid`, `email`,
+`https://www.googleapis.com/auth/gmail.readonly`, followed by verified upstream
+subject/address and explicit resource-home binding before one bounded read.
+No send, Gmail modify or external Calendar scope. Do not enable simulated Connections
+in the signed-in real runtime as a shortcut. No additional feature was started.
+
+---
+
 # Current local setup and actual-service verification — 17 October 2026
 
 The exact approved nonproduction domain change is DONE and independently read back:

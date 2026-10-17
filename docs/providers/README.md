@@ -117,3 +117,84 @@ and offline Tasks/Calendar now have cloud interaction/storage/HTTP tests; actual
 device durability, encryption, rendering and release acceptance remain unverified.
 Provider-neutral [Calendar files](../PERSONAL_WORKSPACE.md#calendar-file-exchange)
 exchange a bounded timed-UTC subset without OAuth or a live provider connection.
+
+## First connection review — 17 October 2026 (Proposed)
+
+This narrows [R30–R33](../build-spec/ROADMAP.md#p3--connect-real-accounts),
+[Connections experience](../build-spec/EXPERIENCE.md#connect-an-account) and
+[ADR0021](../adr/0021-propose-provider-authority-and-integration-execution.md).
+It does not adopt the proposed credential/runtime defaults or authorize setup.
+
+Shane's path: open account-level **Connections**, choose an implemented provider,
+choose the account at the provider, review read-only Mail access and its explicit
+home Workspace, then return to the verified address and Inbox. Cancellation leaves
+it disconnected. Open an actual message, make a source-linked Task and plan it in
+OpenJob Calendar. Calendar labels must say **OpenJob planning blocks**: no provider
+Calendar adapter exists for this first Mail milestone. Provider Calendar consent
+and reads are a later R40 slice. Empty real Mail stays empty; examples remain a
+separate mode. Reconnect/disable/disconnect show the affected resource and status.
+
+Gmail is the engineering recommendation if approved access is equally available:
+its existing consent scaffold is Google-only. This is not a provider selection.
+Outlook has a read mapper but no consent lifecycle. IMAP needs WLK302 source
+recovery first; do not duplicate its TLS/login implementation.
+
+Source inspection at PR100 implementation263321c found these concrete gaps:
+
+- `server/portable-runtime.ts` does not bind a connection repository/reader/broker;
+  no central Connections management or provider callback route exists.
+- `server/providers/provider-connections.ts` accepts only disabled/mock execution
+  and mock records. A live path needs explicit composition and truthful API/UI
+  modes, not a renamed fixture or an environment switch around authorization.
+- `provider-oauth-lifecycle.ts` has injected mock exchange/identity verification,
+  process-local cleanup, no refresh flow, and requires a preknown expected subject.
+  First-connect account choice must bind the verified upstream subject after
+  consent to the initiating User/resource selection; reconnect must require the
+  existing subject. Neither may infer mailbox ownership from OpenJob sign-in/email.
+- Current metadata is owner/account scoped, without explicit Workspace resource
+  homes. Task/Calendar context adapters exclude Mail. `personal-workspace-mail.tsx`
+  creates title-only Tasks from preview; a real source reference/reopen path is
+  still needed without importing the Inbox into the Personal aggregate.
+
+Recommend the existing **portable Node/Compose TypeScript service** as the first
+Linux pilot composition, retaining Firebase/Firestore and the same API/broker.
+C11 confirms Linux direction; this recommendation does not select a server,
+public origin or deployment. Old hosted-first Cloudflare defaults remain Proposed;
+do not mix runtime profiles or treat workerd fixture results as Linux acceptance.
+
+Keep only opaque credential references in connection metadata. Resolve them
+server-side through the existing broker with owner/account/subject/revision checks.
+Use stable 1Password item/path references for approved operator/bootstrap material;
+do not copy values into docs, Git, browser, arguments or client profiles. Provider
+access/refresh-token storage needs the separately reviewed ADR0021/RUNTIME design:
+retain its proposed encrypted server repository with a separately managed wrapping
+key, or narrowly substitute an existing approved managed vault. A reference alone
+is not encryption or an approved vault. No particular vault/key has been selected
+or provisioned; the npm app's OS keyring for OpenJob login is not a provider vault.
+
+**Ready independent source slice:** bounded Connections/onboarding application
+contract: owner-only manageable binding list, read-only Mail resource-home
+selection, initiating-User/destination-bound handoff and verified callback result,
+explicit disconnected/consent/cancel/reconnect states; reuse current repositories
+and injected OAuth/broker seams. Include durable refresh/cleanup ownership and
+revision rechecks needed for this one read path, not a general sending platform.
+Prove the journey through isolated API/CLI transports before authorized UI/live
+proof. Do not implement TLS/login, cryptography or call real providers in that
+slice. Track its implementation as one bounded R30/R31 item in Linear after this
+review; WLK310 retains design evidence, WLK302 retains its blocked implementation,
+WLK318 remains the separate local sign-in setup item. No new queue created here.
+
+Owner setup is needed only when moving to live acceptance: review the selected
+runtime/data/credential design and origin/callback; authorize the existing suitable
+provider client/test configuration (change it only if needed), particular account,
+mailbox/read scope and resource home; approve necessary secret-reference access and
+runtime binding. WLK318's existing operator-reference/local Auth-domain approvals
+remain separate and pending. Browser permission also remains unresolved. None
+implies send, Calendar scope/write, new keys, production access or deployment.
+
+WLK302 handoff recovered from Linear comment1bbe36a4 (17Oct02:07UTC), corroborated
+by the stopped owner's final turn: branch `codex/wlk-302-imap-tls-runtime` based on
+5358f6c, changes uncommitted, no PR, full gate unfinished, cloud unavailable. It
+reports Node TLS9/9, API/CLI3/3, typed adapter10/10, affected checks72/72 and Worker
+socket-contract proof on its May22 baseline; these are historical reports, not
+rerun/recovered source or live TLS proof. No environment restarted or task resumed.

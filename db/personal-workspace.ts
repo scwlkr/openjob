@@ -1,3 +1,4 @@
+import { assertTaskNotesBase } from '../shared/task-notes-precondition.ts';
 import { applyCalendarIcalImport, isCalendarIcalImport } from "./calendar-ical.ts";
 import { projectTaskCalendar, validateTaskCalendarSyncInput, TASK_CALENDAR_MAX_AGE_MS, taskCalendarFail, type TaskCalendarSyncAck } from "../shared/task-calendar-sync.ts";
 import { mergeTaskCalendar, parseTaskCalendarReceipts, taskCalendarPayloadHash, taskCalendarRevision, type TaskCalendarReceipt } from "./task-calendar-sync.ts";
@@ -99,6 +100,12 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
       }) as TaskCalendarSyncAck;
     },
 
+    async saveTaskNotes(owner, input, expectedNotes) {
+      return mutate(owner, current => {
+        assertTaskNotesBase(current.state.tasks, input, expectedNotes);
+        return applyPersonalWorkspaceCommand(owner, current.state, input);
+      });
+    },
     async command(owner, input) {
       return mutate(owner, async current => {
         if (!isCalendarIcalImport(input)) return applyPersonalWorkspaceCommand(owner, current.state, input);
