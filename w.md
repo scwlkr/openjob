@@ -1,3 +1,41 @@
+# WLK-329 — bounded authorized Workspace Home
+
+Branch codex/wlk-329-workspace-home from PR98/main93711ac. Parent explicitly selected
+next coherent accepted-roadmap progress; C08/R20 Home dependencies now ready for
+owner-only Tasks/Calendar. Read current AGENTS/mission/WStack0.2/Linear/livePR state.
+Two bounded alternatives reviewed: selected server minimal projection over client
+snapshot fan-out (unnecessary notes transfer/partial/stale handling). No new grants,
+identity classification or real admission. D06 remains Proposed/future policy.
+
+Normal `/home` + Workspace Home, GET `/api/v1/workspaces/home`, same gated server
+and existing repositories. Current owner-qualified Work/Family/mappedPersonal only;
+no auto mapping/copy/cache authority. IDs/titles/times/counts/asOf only, no notes,
+Mail/unread/drafts/grants. Bounds51contexts/4concurrentreads/5Task+5blockrows each,
+next7days including ongoing; actual totals/truncation visible. Failed context read
+fails whole response, final binding/User rechecked, read-only Home cannot mutate.
+Actual runtime admission remains UNSET. Later setup/admission permissions separate.
+
+Navigation qualifies Workspace/item in fragment, Back/Forward/reload supported,
+exact existing Task/Calendar handles focus item; re-entry awaits scoped read while
+keeping editors mounted. Home entry/refresh/foreground re-read; failed/offline
+refresh clears previous summaries. Explicit catalog retry recovers initial loading.
+Synthetic browser observed 3contextlabels, exactWorkTask+Familyblock, unsavedWorknotes
+retained throughHome/Family, saved completion updatedHome, BackHome, failedrefresh
+clearedallrows,390/640nooverflow. Sourcecopyoutside sync required due stalledVite
+reads using synced source/deps; existingDesktopmatchingdependencies reused, noinstall.
+Owned preview source root recorded /tmp/openjob-329-preview-root; current savedstate
+/tmp/openjob-329-owned-Y0YeSH/state.json private0600/notencrypted. Keep useful state.
+
+Earlier overlapping Home source/tests appeared with older timestamps; preserved
+/tmp/openjob-329-overlap-preserved and reconciled. Unknownoldstate/lock
+/tmp/openjob-329-home.json and IABtab10 left untouched; unrelated untracked
+`native/node_modules 2` symlink preserved. Stalled ownedPIDs50682/51017 force-closed
+after graceful timeout; own locks retained .closed-PID. Outsidepreview51282 closed
+normally. No native/heavy phase. Fifteen focusedchecks+TS/lint pass; initialreview
+found catalogRetry readiness bug, fixed. Final tracked-source checks/review and PR
+integration follow; exact identity/proof in Linear/PR. Browserproof output/wlk-329/.
+PR95 downloads, WLK318 approvals, WLK302 and approvednpm/publication untouched.
+
 # WLK-328 — normal Workspace pilot composition, actual admission unset
 
 PR98 https://github.com/scwlkr/openjob/pull/98; implementation b27cccec.

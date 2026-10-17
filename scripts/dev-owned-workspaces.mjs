@@ -62,6 +62,6 @@ try {
     };
     queue = queue.then(run, run);
   }); } };
-  server = await createViteServer({ configFile: false, root: resolve('tests/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], resolve: { alias: { 'next/link': resolve('tests/browser/personal-workspace-fixture/link.tsx') } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfigFor('preview')), __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(nativeIdentities.apple.signInServices.nonproduction.serviceId), __OPENJOB_QA_PASSWORD_AUTH__: 'null' }, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
+  server = await createViteServer({ configFile: false, cacheDir: statePath + '.vite-cache', root: resolve('tests/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], resolve: { alias: { 'next/link': resolve('tests/browser/personal-workspace-fixture/link.tsx') } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfigFor('preview')), __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(nativeIdentities.apple.signInServices.nonproduction.serviceId), __OPENJOB_QA_PASSWORD_AUTH__: 'null' }, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
   await server.listen(); console.log(`Owned Workspace fixture: http://127.0.0.1:${port}/\nSynthetic Alex/Sam; no real sign-in, providers or access changes.\nSaved local fixture (not encrypted): ${statePath}`);
 } catch (error) { await close(); throw error; }

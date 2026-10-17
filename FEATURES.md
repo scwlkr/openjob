@@ -111,3 +111,15 @@ unconfigured exact User/provider/UID gate. Only the synthetic `/pilot` harness
 selects an admission binding. Real onboarding remains inactive; D06 classification
 and employer-isolation guarantees remain future WLK327 policy, not a prerequisite
 for this limited pilot engineering default. No linked binding inherits admission.
+
+
+### Authorized Workspace Home
+
+Normal `/home` and the Workspace shell provide a labeled read-only overview of
+owned open Tasks and upcoming7-day OpenJob Calendar blocks, including explicitly
+mapped Personal. A bounded server projection excludes notes, Mail/unread counts and
+grants; failed reads/refresh clear summaries. Item actions enter an exact qualified
+Workspace/Task/block; history/reload retain destination and per-Workspace unfinished
+editors survive context switches. Current owner/admission is rechecked, and actual
+runtime admission remains unset. This is source plus synthetic normal-session
+proof, not live account access, shared membership/native parity or provider Home.

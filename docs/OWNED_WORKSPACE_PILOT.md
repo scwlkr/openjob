@@ -161,3 +161,44 @@ linked-binding/foreign-context/agent denial, unset admission without storage,
 revoked binding before mutation/disclosure and actual portable router fail-closed.
 Browser proof covers mapping/create/notes/schedule/linked completion, retained
 per-Workspace editors and normal auth-observer identity-switch denial.
+
+
+## Authorized Workspace Home (WLK329)
+
+The normal `/home` page and the Workspace shell's Home show open Tasks and upcoming
+OpenJob Calendar blocks across the current human's owned Workspaces, including an
+explicitly mapped retained Personal context. Home does not create that mapping.
+All actual runtime admission remains unset as above. The synthetic `/pilot` harness
+uses the same app/session/API source; it is not evidence of live account access.
+
+`GET /api/v1/workspaces/home` composes current owner-qualified repository snapshots.
+It returns an allowlist of context metadata, Task IDs/titles and block IDs/titles/
+times, plus `asOf`/`until` and actual counts. No notes, source Mail, drafts, unread
+counts, grants or provider contents enter this projection. It stores no duplicate
+work and accepts no owner/resource selection. Home is read-only: actions enter the
+exact Workspace and item before invoking existing commands. A failed context read
+fails the whole response, with a final current-identity check before disclosure.
+
+Bounds: current catalog maximum51 contexts; at most4 snapshot reads concurrently;
+first5 open Tasks and first5 blocks per context, with visible shown/total counts.
+Blocks include ongoing work and the next7 days, sorted by start. Completed Tasks
+and ended/out-of-window blocks are excluded. This is a bounded overview, not full
+search or an atomic cross-Workspace snapshot; each context uses its current saved
+state. Workspace entry supports all saved work.
+
+Home refreshes on entry, explicit Refresh Home and return to the foreground.
+Loading or failed refresh and offline notification clear prior summaries. Identity
+change aborts the normal app's request lease and removes prior contexts. Home does
+not offer offline mutations. Item destinations qualify opaque IDs with Workspace,
+retain Back/Forward/reload and say “Unavailable in this context” for a missing item.
+Re-entry waits for a current scoped snapshot while keeping unfinished Workspace
+editors mounted; navigating Home/another context does not retarget their text.
+
+The fixture cache is isolated beside its owned state file to avoid sharing Vite
+cache mutations with other previews. On this Mac, serving the small unchanged
+source tree outside the synced Documents folder with existing matching dependencies
+was required for stable browser proof; no dependencies were installed or replaced.
+Fifteen focused Home/admission/context/mapping/availability checks, plus normal
+browser item/Calendar navigation, editor retention, completion refresh, failed
+refresh clearing and responsive views form this slice's proof. Native/full shared
+membership/provider Home remains outside this bounded owner-only implementation.

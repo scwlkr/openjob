@@ -1,3 +1,4 @@
+import { readWorkspaceHome } from './workspace-home.ts';
 import { workspaceIdentityEligibility } from './workspace-context-store.ts';
 import type { OwnedWorkspaceStore } from '../db/owned-workspaces.ts';
 import type { FirebaseTokenIdentity } from './firebase-id-token.ts';
@@ -15,6 +16,11 @@ export function createOwnedWorkspacesApi({ store, users, verifyIdToken }: { stor
       const user = await users.resolve(identity); if (!user || user.deletionPending) return fail('account_unavailable', 410);
       if (url.search || request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
       if (url.pathname === '/api/owned-workspaces/eligibility' && request.method === 'GET') return jsonResponse({ data: workspaceIdentityEligibility() });
+      if (url.pathname === '/api/owned-workspaces/home' && request.method === 'GET') {
+        const data = await readWorkspaceHome(user.userId, store); const current = await users.resolve(identity);
+        if (!current || current.userId !== user.userId || current.deletionPending) return fail('account_unavailable', 410);
+        return jsonResponse({ data });
+      }
       if (url.pathname === '/api/owned-workspaces/personal-context' && request.method === 'POST') {
         if (!store.personalContext) return fail('unavailable', 503);
         // No browser claim may determine identity control, source owner or target Workspace.

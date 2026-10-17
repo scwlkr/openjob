@@ -13,7 +13,7 @@ try {
       const { default: AccountApp } = await import('./account'); root.render(<AccountApp />);
     } else {
       const { default: PersonalWorkspaceApp } = await import('../../app/workspace/personal-workspace-app');
-      root.render(<><p style={{ padding: 12 }}>Authenticated prototype · external providers are unconfigured · real sending disabled.</p><PersonalWorkspaceApp workspaceMode={location.pathname.replace(/\/$/, '') === '/workspaces' ? 'pilot' : undefined} /></>);
+      root.render(<><p style={{ padding: 12 }}>Authenticated prototype · external providers are unconfigured · real sending disabled.</p><PersonalWorkspaceApp workspaceMode={['/home', '/workspaces'].includes(location.pathname.replace(/\/$/, '')) ? 'pilot' : undefined} /></>);
     }
   }
 } catch {
