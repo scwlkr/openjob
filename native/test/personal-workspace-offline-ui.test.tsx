@@ -39,14 +39,14 @@ async function press(name: string) { await fireEvent.press(await screen.findByRo
 beforeEach(async () => { await AsyncStorage.clear(); });
 
 it('saves provisional Tasks/Calendar on device across a restart, then explicitly syncs after reconnect', async () => {
-  const { controller, offline, load } = fixture(); const input = properties(controller); let tree = await render(ui(input));
+  const { controller, offline, load } = fixture(); const input = properties(controller); let tree = await render(ui(input)); await press('Tasks');
   await screen.findByText('Personal Tasks');
   expect(screen.getByRole('button', { name: 'Online Mail and linked work' })).toBeDisabled();
   await fireEvent.changeText(screen.getByLabelText('New task'), 'Saved offline task'); await press('Add task');
   await screen.findByText('Pending · saved on device'); await press('Schedule Saved offline task'); await press('Save task schedule');
   await waitFor(() => expect(screen.getByText('2 pending changes')).toBeTruthy()); await press('Calendar'); await press('Open linked task Saved offline task');
   expect(screen.queryByRole('button', { name: /Open source mail/ })).toBeNull();
-  await tree.unmount(); tree = await render(ui(input)); await screen.findByRole('button', { name: 'Complete Saved offline task' });
+  await tree.unmount(); tree = await render(ui(input)); await press('Tasks'); await screen.findByRole('button', { name: 'Complete Saved offline task' });
   await press('Complete Saved offline task'); await screen.findByText('3 pending changes');
   expect(controller.readPersonalWorkspace).not.toHaveBeenCalled(); expect(offline.sync).not.toHaveBeenCalled();
   const stored = JSON.stringify(await load('alex')); expect(stored).not.toMatch(/messages|drafts|sourceMessageId|token|accounts/);
@@ -58,7 +58,7 @@ it('saves provisional Tasks/Calendar on device across a restart, then explicitly
 it('reviews both conflict versions and requires explicit discard or replacement confirmation', async () => {
   const { controller, offline, save } = fixture();
   await save('alex', { status: 'conflict', pendingCount: 1, revision: 'base', projection: { ...projection('alex'), tasks: [{ id: 'local', ownerId: 'alex', title: 'Local plan', completed: false }] }, currentServer: { revision: 'changed', projection: { ...projection('alex'), tasks: [{ id: 'server', ownerId: 'alex', title: 'New server-only work', completed: false }], events: [{ id: 'new-event', calendarId: 'personal', title: 'Server-only block', start: '2026-10-16T15:00:00Z', end: '2026-10-16T16:00:00Z' }] } } });
-  await render(ui(properties(controller, 'alex', true))); await screen.findByText('Review local and server work');
+  await render(ui(properties(controller, 'alex', true))); await press('Tasks'); await screen.findByText('Review local and server work');
   expect(screen.getByText(/New server-only work/)).toBeTruthy(); expect(screen.getByText(/Server-only block.*2026-10-16T15:00:00Z/)).toBeTruthy();
   await press('Apply reviewed local version'); expect(screen.getByText(/This can remove newer server tasks/)).toBeTruthy(); expect(offline.resolve).not.toHaveBeenCalled();
   await press('Cancel confirmation'); await press('Use server version'); await press('Confirm discard local changes');
@@ -70,7 +70,7 @@ it('freezes edits during sync, retains returned newer pending work, and ignores 
   const { controller, offline, save } = fixture(); await save('alex', { status: 'pending', pendingCount: 1, projection: { ...projection('alex'), tasks: [{ id: 'task', ownerId: 'alex', title: 'Local pending', completed: false }] } });
   let completeSync!: (state: State) => void;
   jest.mocked(offline.sync).mockImplementationOnce(() => new Promise(resolve => { completeSync = resolve; }));
-  const input = properties(controller, 'alex', true); const tree = await render(ui(input)); await screen.findByRole('button', { name: 'Complete Local pending' }); await fireEvent.changeText(screen.getByLabelText('New task'), 'Unsaved during sync'); await press('Sync saved changes');
+  const input = properties(controller, 'alex', true); const tree = await render(ui(input)); await press('Tasks'); await screen.findByRole('button', { name: 'Complete Local pending' }); await fireEvent.changeText(screen.getByLabelText('New task'), 'Unsaved during sync'); await press('Sync saved changes');
   expect(screen.getByText('Syncing saved changes…')).toBeTruthy(); expect(screen.getByLabelText('New task')).toHaveDisplayValue('Unsaved during sync');
   expect(screen.getByRole('button', { name: 'Complete Local pending' })).toBeDisabled();
   await act(async () => completeSync({ status: 'pending', pendingCount: 1, projection: { ...projection('alex'), tasks: [{ id: 'newer', ownerId: 'alex', title: 'Newer saved work', completed: false }] } }));
@@ -78,7 +78,7 @@ it('freezes edits during sync, retains returned newer pending work, and ignores 
   let oldLoad!: (state: State) => void;
   jest.mocked(offline.load).mockImplementationOnce(() => new Promise(resolve => { oldLoad = resolve; }));
   await tree.rerender(ui({ ...input, sessionReady: false })); await waitFor(() => expect(offline.load).toHaveBeenCalledTimes(2));
-  await tree.rerender(ui({ ...input, ownerUserId: 'sam', sessionReady: false })); await screen.findByText('No personal tasks yet.');
+  await tree.rerender(ui({ ...input, ownerUserId: 'sam', sessionReady: false })); await press('Tasks'); await screen.findByText('No personal tasks yet.');
   await act(async () => oldLoad({ status: 'pending', pendingCount: 1, projection: { ...projection('alex'), tasks: [{ id: 'private', ownerId: 'alex', title: 'Alex private deferred', completed: false }] } }));
   expect(screen.queryByText(/Alex private deferred/)).toBeNull(); expect(input.onSessionRevoked).not.toHaveBeenCalled();
 });
@@ -89,7 +89,7 @@ it('requires another explicit review if resolution returns a newer server revisi
   const conflict: State = { status: 'conflict', pendingCount: 1, revision: 'base', projection: local, currentServer: { revision: 'first', projection: projection('alex') } };
   await save('alex', conflict);
   jest.mocked(offline.resolve).mockImplementationOnce(async () => save('alex', { ...conflict, currentServer: { revision: 'newer', projection: { ...projection('alex'), tasks: [{ id: 'new', ownerId: 'alex', title: 'Just added server work', completed: false }] } } }));
-  await render(ui(properties(controller, 'alex', true))); await screen.findByText('Review local and server work');
+  await render(ui(properties(controller, 'alex', true))); await press('Tasks'); await screen.findByText('Review local and server work');
   await press('Apply reviewed local version'); await press('Confirm apply reviewed local changes');
   await screen.findByText(/Just added server work/); expect(screen.queryByRole('button', { name: 'Confirm apply reviewed local changes' })).toBeNull();
   expect(offline.resolve).toHaveBeenCalledTimes(1);
@@ -113,8 +113,8 @@ it('preserves complete online Mail-to-linked-Task navigation while returning saf
     const clean = { tasks: online.tasks.map(({ id, ownerId, title, completed }) => ({ id, ownerId, title, completed })), calendars: online.calendars, events: online.events };
     return save(owner, { ...local, status: 'conflict', currentServer: { revision: 'new-online-work', projection: clean } });
   });
-  await render(ui(properties(controller, 'alex', true))); await screen.findByRole('button', { name: 'Complete Unsynced local priority' });
-  await press('Online Mail and linked work'); await screen.findByRole('button', { name: 'Add invented examples' });
+  await render(ui(properties(controller, 'alex', true))); await press('Tasks'); await screen.findByRole('button', { name: 'Complete Unsynced local priority' });
+  await press('Online Mail and linked work'); await press('Mail'); await screen.findByRole('button', { name: 'Add invented examples' });
   await press('Add invented examples'); await screen.findByRole('button', { name: 'Read Online source plan' }); await press('Read Online source plan'); await press('Create private task from mail');
   await screen.findByText('Saved online. No real mail was sent.'); await press('Tasks'); await press('Open source mail for Online source plan'); expect(screen.getByText('Online invented body')).toBeTruthy();
   await press('Back to saved Tasks and Calendar'); await screen.findByText('Conflict · review required');
@@ -125,7 +125,7 @@ it('preserves complete online Mail-to-linked-Task navigation while returning saf
 it('keeps editor input when persistence returns an error instead of claiming the new edit was saved', async () => {
   const { controller, offline, load } = fixture();
   jest.mocked(offline.edit).mockImplementationOnce(async owner => ({ ...await load(owner), error: 'storage' }));
-  await render(ui(properties(controller))); await screen.findByText('Personal Tasks');
+  await render(ui(properties(controller))); await press('Tasks'); await screen.findByText('Personal Tasks');
   await fireEvent.changeText(screen.getByLabelText('New task'), 'Do not lose this title'); await press('Add task');
   await screen.findByText('This change could not be saved on this device. Your editor input has been kept.');
   expect(screen.getByLabelText('New task')).toHaveDisplayValue('Do not lose this title'); expect(screen.queryByRole('button', { name: 'Complete Do not lose this title' })).toBeNull();
@@ -139,7 +139,7 @@ it('explains definitive sync errors and discards pending work only after explici
   await save('alex', pending);
   const server = { ...projection('alex'), tasks: [{ id: 'server', ownerId: 'alex', title: 'Latest server work', completed: false }] };
   jest.mocked(offline.resolve).mockImplementationOnce(async owner => save(owner, { status: 'synced', pendingCount: 0, revision: 'fresh-server', projection: server }));
-  await render(ui(properties(controller, 'alex', true)));
+  await render(ui(properties(controller, 'alex', true))); await press('Tasks');
   await screen.findByText('Server capacity was reached. Saved work is kept on this device. Reduce pending work or wait for capacity before syncing.');
   await press('Discard pending changes'); expect(screen.getByText(/Pending local work will be lost. Server work will not be overwritten./)).toBeTruthy();
   await press('Cancel confirmation'); expect(offline.resolve).not.toHaveBeenCalled(); expect((await load('alex')).pendingCount).toBe(1);
@@ -150,7 +150,7 @@ it('explains definitive sync errors and discards pending work only after explici
 
 
 it('edits notes in saved Tasks, keeps failed input and reopens saved notes after restart without Mail data', async () => {
-  const { controller, offline, load } = fixture(); const input = properties(controller); let tree = await render(ui(input));
+  const { controller, offline, load } = fixture(); const input = properties(controller); let tree = await render(ui(input)); await press('Tasks');
   await screen.findByText('Personal Tasks');
   await fireEvent.changeText(screen.getByLabelText('New task'), 'Offline planning'); await press('Add task');
   await screen.findByRole('button', { name: 'Edit notes for Offline planning' }); await press('Edit notes for Offline planning');
@@ -161,9 +161,25 @@ it('edits notes in saved Tasks, keeps failed input and reopens saved notes after
   await press('Save task notes'); await screen.findByText(/Request could not be completed/);
   expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Keep local notes');
   await press('Save task notes'); await screen.findByText('2 pending changes');
-  await tree.unmount(); tree = await render(ui(input)); await screen.findByText('Keep local notes');
+  await tree.unmount(); tree = await render(ui(input)); await press('Tasks'); await screen.findByText('Keep local notes');
   await press('Edit notes for Offline planning'); expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Keep local notes');
   await fireEvent.changeText(screen.getByLabelText('Task notes'), ''); await press('Save task notes'); await screen.findByText('3 pending changes');
   expect((await load('alex')).projection!.tasks[0]!.notes).toBeUndefined();
   expect(JSON.stringify(await load('alex'))).not.toMatch(/messages|sourceMessageId|accounts|token/);
+});
+
+it('starts saved Today with pending local planning and opens exact Task and block without online access', async () => {
+  const { controller, offline, save } = fixture(); const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10).toISOString(); const end = new Date(Date.parse(start) + 1800000).toISOString();
+  await save('alex', { status: 'pending', pendingCount: 1, revision: 'base', projection: { ...projection('alex'), tasks: [{ id: 'local', ownerId: 'alex', title: 'Local daily plan', completed: false, scheduledSlot: { start, end }, calendarEventId: 'daily' }], events: [{ id: 'daily', calendarId: 'personal', taskId: 'local', title: 'Local daily block', start, end }] } });
+  await render(ui(properties(controller))); await screen.findByText('Personal Today');
+  expect(screen.getByText(/Saved Tasks and Calendar on this device, including pending changes/)).toBeTruthy();
+  await press('Open task: Local daily plan'); await press('Edit notes for Local daily plan');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Still unfinished offline');
+  await press('Today'); await press('Open block: Local daily block');
+  expect(screen.getByText('Local daily block · opened daily block')).toBeTruthy();
+  await press('Open linked task Local daily block');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Still unfinished offline');
+  expect(screen.queryByRole('button', { name: /Open source mail/ })).toBeNull();
+  expect(controller.readPersonalWorkspace).not.toHaveBeenCalled(); expect(offline.refresh).not.toHaveBeenCalled(); expect(offline.sync).not.toHaveBeenCalled();
 });

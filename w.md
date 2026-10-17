@@ -1,3 +1,32 @@
+# WLK-322 — native Personal Today
+
+Branch codex/wlk-322-native-today; baseline c166ef0 (merged PR91).
+Linear https://linear.app/wlkr-labs/issue/WLK-322. Today is the initial online and
+saved-on-device entry, joining current device-local Calendar blocks, planned open
+Tasks and unscheduled work. It reuses shared personalToday and its DST behavior;
+no new API, ownership or scheduling engine. Date/timezone and online snapshot vs
+saved/pending state are explicit. Timer/foreground return updates the local day.
+Exact Task/block navigation keeps mounted notes/title/Calendar/reply editors and
+continues through Calendar → Task → source Mail only in the authorized online view.
+
+Evidence:32 React Native component checks cover existing flows, daily work loop,
+editor preservation, saved pending/offline routing without online reads and date
+rollover/foreground/listener cleanup. Shared local-day/DST23/25-hour check, native/
+root TypeScript, focused native lint, brand and secret checks apply. Existing cached
+native dependencies reused temporarily; link removed afterward. No install, heavy
+build, browser controller or native/device/layout/bridge/TestFlight evidence.
+Final reviewed source and landed merge identity are in PR/Linear.
+
+Next dependency: real-account runtime proof is WLK318 after its existing TWO
+approvals, following docs/LOCAL_ACCOUNT_ONBOARDING.md. Before an authorized native
+execution/build, coordinate the lane with PatriBible coordinator
+01a132de-0bf7-7561-944c-4a1d3d3a40d5; preserve current live web/TestFlight.
+Do not retry pending permissions, configure credentials/settings, connect providers,
+publish or deploy. Independent roadmap work should address an evidenced connected
+work gap; avoid expanding edge-case checks or claiming full native parity.
+Preserve useful5200 preview, original approved artifact, unpublished0.3.9,
+unrecovered WLK302 and unrelated work.
+
 # WLK-321 — native connected Task context
 
 Branch codex/wlk-321-native-work-loop; baseline f01a56a (merged PR90).

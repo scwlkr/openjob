@@ -47,7 +47,7 @@ async function settled() { await waitFor(() => expect(screen.queryByText('Workin
 it('connects invented mail, private task/calendar, preserved reply, simulated sent and effective grant revocation', async () => {
   const { controller, state } = fixture();
   await render(ui(props(controller))); await settled();
-  await press('Add invented examples'); await settled(); await press('Read Launch checklist');
+  await press('Mail'); await press('Add invented examples'); await settled(); await press('Read Launch checklist');
   await press('Mark message read'); await settled(); expect(state.alex!.messages[0]!.read).toBe(true);
   await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Keep this unsaved reply');
   await press('Create private task from mail'); await settled(); await press('Tasks');
@@ -75,7 +75,7 @@ it('does not expose provisional data and clears owner edits while ignoring defer
   await tree.rerender(ui({ ...input, ownerUserId: 'sam' })); await settled();
   const old = empty('alex'); old.messages = [{ id: 'private', accountId: 'private', subject: 'Old owner private message', from: '', to: '', body: '', receivedAt: '', read: false }];
   await act(async () => release(old)); expect(screen.queryByText(/Old owner private/)).toBeNull();
-  await press('Add invented examples'); await settled(); await press('Read Launch checklist'); await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Sam unsaved');
+  await press('Mail'); await press('Add invented examples'); await settled(); await press('Read Launch checklist'); await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Sam unsaved');
   await tree.rerender(ui(input)); await settled(); expect(screen.queryByDisplayValue('Sam unsaved')).toBeNull();
 });
 
@@ -83,7 +83,7 @@ it('clears current-owner data on 410 but ignores a stale mutation failure after 
   const { controller } = fixture(); const input = props(controller); const tree = await render(ui(input)); await settled();
   let rejectOld!: (error: Error) => void;
   jest.mocked(controller.commandPersonalWorkspace).mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
-  await press('Add invented examples');
+  await press('Mail'); await press('Add invented examples');
   await tree.rerender(ui({ ...input, ownerUserId: 'sam' })); await settled();
   await act(async () => rejectOld(Object.assign(new Error('private error'), { status: 401 })));
   expect(input.onSessionRevoked).not.toHaveBeenCalled(); expect(screen.queryByText('private error')).toBeNull();
@@ -95,7 +95,7 @@ it('clears current-owner data on 410 but ignores a stale mutation failure after 
 
 it('edits and deletes tasks and calendar blocks, validates UTC scheduling, and composes only local drafts', async () => {
   const { controller, state } = fixture(); await render(ui(props(controller))); await settled();
-  await press('Add invented examples'); await settled();
+  await press('Mail'); await press('Add invented examples'); await settled();
   await fireEvent.changeText(screen.getByLabelText('Search invented mail'), 'unmatched'); expect(screen.queryByRole('button', { name: 'Read Launch checklist' })).toBeNull();
   await fireEvent.changeText(screen.getByLabelText('Search invented mail'), 'LAUNCH'); await press('Read Launch checklist');
   await press('Compose invented draft'); await fireEvent.changeText(screen.getByLabelText('Draft recipient'), 'recipient@example.com');
@@ -139,7 +139,7 @@ it('requires strictly increasing UTC slots', () => {
 
 it('opens exact Mail-linked Tasks and keeps notes through module navigation, failed saves and replacement review', async () => {
   const { controller, state } = fixture(); const input = props(controller); const tree = await render(ui(input)); await settled();
-  await press('Add invented examples'); await settled(); await press('Read Launch checklist');
+  await press('Mail'); await press('Add invented examples'); await settled(); await press('Read Launch checklist');
   await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Unfinished source reply');
   await press('Create private task from mail'); await settled();
   state.alex!.tasks.push({ ...state.alex!.tasks[0]!, id: 'second', title: 'Second linked work', completed: true });
@@ -169,4 +169,41 @@ it('opens exact Mail-linked Tasks and keeps notes through module navigation, fai
   await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Old owner private input');
   await tree.rerender(ui(props(controller, 'sam'))); await settled();
   expect(screen.queryByDisplayValue('Old owner private input')).toBeNull();
+});
+
+it('starts Today with owned local-day work and opens exact items while retaining editors across the Mail work loop', async () => {
+  const { controller, state } = fixture(); const input = props(controller);
+  const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9).toISOString();
+  const end = new Date(Date.parse(start) + 1800000).toISOString();
+  state.alex!.accounts = [{ id: 'example', ownerId: 'alex', provider: 'gmail', label: 'Invented', address: 'personal@example.invalid', mode: 'fixture' }];
+  state.alex!.messages = [{ id: 'message', accountId: 'example', subject: 'Plan source', from: 'author@example.invalid', to: 'personal@example.invalid', body: 'Invented source', read: true, receivedAt: start }];
+  state.alex!.tasks = [
+    { id: 'task', ownerId: 'alex', title: 'Plan from Mail', completed: false, scheduledSlot: { start, end }, calendarEventId: 'block', sourceAccountId: 'example', sourceMessageId: 'message' },
+    { id: 'unplanned', ownerId: 'alex', title: 'Choose work time', completed: false },
+    { id: 'completed', ownerId: 'alex', title: 'Finished Task', completed: true },
+  ];
+  state.alex!.events = [{ id: 'block', calendarId: 'personal', taskId: 'task', title: 'Plan from Mail', start, end }];
+  const tree = await render(ui(input)); await settled();
+  expect(screen.getByText('Personal Today')).toBeTruthy(); expect(screen.getByText(/\(this device\)/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Open task: Choose work time' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Open task: Finished Task' })).toBeNull();
+  await press('Open task: Plan from Mail'); await press('Edit notes for Plan from Mail');
+  await fireEvent.changeText(screen.getByLabelText('Task notes'), 'Unfinished daily notes');
+  await press('Edit Plan from Mail'); await fireEvent.changeText(screen.getByLabelText('Task title'), 'Unfinished daily title');
+  await press('Today'); await press('Plan time in Calendar');
+  await fireEvent.changeText(screen.getByLabelText('Calendar block title'), 'Unfinished Calendar input');
+  await press('Today'); await press('Open block: Plan from Mail');
+  expect(screen.getByText('Plan from Mail · opened daily block')).toBeTruthy();
+  expect(screen.getByLabelText('Calendar block title')).toHaveDisplayValue('Unfinished Calendar input');
+  await press('Open linked task Plan from Mail');
+  expect(screen.getByLabelText('Task notes')).toHaveDisplayValue('Unfinished daily notes');
+  expect(screen.getByLabelText('Task title')).toHaveDisplayValue('Unfinished daily title');
+  await press('Open source mail for Plan from Mail'); await fireEvent.changeText(screen.getByLabelText('Reply body'), 'Unfinished daily reply');
+  await press('Today'); await press('Open task: Plan from Mail'); await press('Open source mail for Plan from Mail');
+  expect(screen.getByLabelText('Reply body')).toHaveDisplayValue('Unfinished daily reply');
+  expect(controller.commandPersonalWorkspace).not.toHaveBeenCalled();
+  await tree.rerender(ui(props(controller, 'sam'))); await settled();
+  expect(screen.getByText('Personal Today')).toBeTruthy(); expect(screen.getByText('No saved blocks today. Plan time in Calendar.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Open task: Plan from Mail' })).toBeNull();
+  expect(screen.queryByDisplayValue('Unfinished daily notes')).toBeNull();
 });
