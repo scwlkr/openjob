@@ -35,21 +35,21 @@ Neither `127.0.0.1` nor `localhost` is authorized. The portable service defaults
 exact hostname **127.0.0.1**, without protocol/port, in this nonproduction project.
 Do not add production/public origins or change provider consent/scopes implicitly.
 
-Google/Apple provider enabled/name metadata reads returned403 (`SERVICE_DISABLED`
-for Identity Toolkit on the existing CLI quota consumer, which matches none of
-the source app projects). This does not establish the nonproduction provider
-state. Google/Apple are **unverified**, not known disabled. Do not enable an API
-on an unrelated project to work around this metadata read. The public client IDs/Apple service ID already
-exist in the repository; no client-secret generation is implied. Existing signed-in
-CLI availability is not proof of permission to inspect every Auth setting.
+A later read-only lookup in the existing authorized in-app browser resolved provider
+status: the exact `openjob-nonprod` Authentication → Sign-in method page, Default
+tenant, visibly lists **Google Enabled** and **Apple Enabled**. No provider editor
+was opened or setting changed; the lookup tab was closed. The earlier API403
+(`SERVICE_DISABLED` on an unrelated CLI quota consumer) did not reflect provider
+state and does not justify enabling unrelated APIs/IAM. Enabled alone does not
+prove local OAuth redirect or actual sign-in. Existing public client/Apple service
+IDs are already in the repository; no secret/client generation is implied.
 
 ## One bundled owner-assisted setup step
 
 Before local real sign-in: approve reuse of the existing nonproduction operator
 reference for this pilot process, and approve adding only `127.0.0.1` to
-`openjob-nonprod` authorized domains. Confirm Google is already enabled in that
-project's Authentication providers page; if not, treat enabling it as a separate
-explicit change. No Gmail/Mail scopes or mailbox connection are needed to sign in.
+`openjob-nonprod` authorized domains. Google is already enabled on the existing default tenant; no provider-enable
+change is requested. No Gmail/Mail scopes or mailbox connection are needed to sign in.
 
 Then map existing public settings and the approved operator's client email/key
 inside a short-lived launcher process, start the local service, and discard secret

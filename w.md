@@ -1,3 +1,40 @@
+# WLK-319 — authored Task notes
+
+Active branch: codex/wlk-319-task-notes; baseline5a9faeb (merged PR89/Today).
+Task notes are optional plain text up to20,000 Unicode characters. Dedicated
+`task.notes` changes notes only; empty text clears. App/API/CLI schemas and types,
+native response/display, and shared offline projection/sync change together. Notes
+are never copied automatically from Mail or into Calendar/activity records.
+The web editor retains unfinished input across module navigation and failed saves;
+opening another Task's notes asks before discarding an unfinished edit.
+
+Verification:34 focused checks pass across signed API/CLI Unicode persistence,
+scoped agents/revocation/minimal results, durable offline browser/store sync and
+native-source HTTP composition. Root TypeScript/OpenAPI/generated types, brand and
+secret checks apply. Native unit bundling uses root TypeScript without an Expo
+install; it does not prove native bridge/device behavior. Independent review caught
+aggregate capacity: before-commit projection guard now enforces300k serialized
+UTF-16 units and500k UTF-8 bytes, leaving room inside512KiB sync requests. The
+boundary regression rejects overflow without mutation and recovers by clearing
+notes. Command body bound256KiB supports20k-character JSON escaping.
+
+Actual isolated headless UI: failed save kept multiline notes; Today navigation
+kept input; successful save/reload retained plain text, including literal HTML-like
+text. The replacement warning preserved another unfinished note after cancellation.
+Phone inspection found overlapping Task filters; wrapping field widths fixes it.
+Final exact source/review evidence belongs in Linear/PR. Useful saved demo remains
+http://127.0.0.1:5200/workspace, /tmp/openjob-317-workspace.json.
+
+WLK318: the TWO owner setup approvals remain pending. Use only an approved secure
+mechanism for existing nonproduction operator reuse; add only127.0.0.1 Auth domain
+after approval. No raw private key retrieved, configured or copied. Existing IAB
+Firebase dashboard proved Google and Apple Enabled onopenjob-nonprod Default tenant;
+lookup tab closed without provider edits. No metadata question remains for Shane.
+The pending user-browser DevTools route was left alone/closed; its permission was
+not assumed. Explicit parent authorization permitted the separate isolated fixture
+browser. Preserve earlier EOTP artifact, unpublished0.3.9, stopped WLK302 and
+PatriBible/ordinary Chrome. No provider connection, send, purchase, deploy or release.
+
 # WLK-317 — Personal Today follow-on
 
 Active branch codex/wlk-317-personal-today on merged94ab7a4 (PR88).
@@ -12,11 +49,9 @@ Independent diff review found no consequential defects. Final source evidence in
 Precise onboarding handoff: docs/LOCAL_ACCOUNT_ONBOARDING.md. Existing nonsecret
 nonprod client fields are committed; preview server binding names exist. Existing
 operator vault reference is documented but key not retrieved/verified. Public SDK
-metadata confirms127.0.0.1/localhost absent from authorized domains. Provider status
-metadata403 arose from disabled Identity Toolkit on a different CLI quota consumer;
-do not enable unrelated APIs. One owner-assisted step: approve reuse of the existing
-nonprod operator for the pilot, add only127.0.0.1 authorized domain, and read back
-whether Google sign-in is already enabled in openjob-nonprod. No changes made.
+metadata confirms127.0.0.1/localhost absent from authorized domains. Earlier provider API metadata403 arose from a different CLI quota consumer.
+Actual IAB dashboard now confirmsGoogle+Apple Enabled; no unrelated API change.
+Only existing nonprod operator reuse and127.0.0.1 authorized-domain approvals remain. No changes made.
 No generic new-project/key request; actual sign-in/write proof remains pending.
 
 # WLK-313 — portable installed app and Node service

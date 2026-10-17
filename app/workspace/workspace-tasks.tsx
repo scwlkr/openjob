@@ -18,6 +18,9 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
+  const [notesId, setNotesId] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesBase, setNotesBase] = useState("");
   const [scheduleId, setScheduleId] = useState("");
   const [calendarId, setCalendarId] = useState("");
   const [start, setStart] = useState(() => defaults().start);
@@ -87,6 +90,12 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
       {visibleTasks.map((task) => <article ref={task.id === openedTask ? taskArticle : undefined} tabIndex={-1} className={`${styles.task} ${task.id === openedTask ? styles.selected : ""}`} data-testid="task-row" key={task.id}>
         <label><input type="checkbox" aria-label={`Complete ${task.title}`} checked={task.completed} disabled={busy} onChange={(event) => command({ type: "task.complete", taskId: task.id, completed: event.target.checked }, "Task updated")} /><span className={`${taskStyles.title} ${task.completed ? styles.completed : ""}`}>{task.title}</span></label>
         <p className={taskStyles.metadata}>{task.sourceMessageId && <small>From private mail · </small>}{task.scheduledSlot ? <small>{format(task.scheduledSlot.start)} – {format(task.scheduledSlot.end)} · {view.calendars.find((calendar) => calendar.id === view.events.find((event) => event.id === task.calendarEventId)?.calendarId)?.name || "Linked calendar"}</small> : <small>Unscheduled</small>}</p>
+        {task.notes && <pre className={taskStyles.notes} aria-label={`Notes for ${task.title}`}>{task.notes}</pre>}
+        {notesId === task.id && <form className={taskStyles.notesEditor} onSubmit={async event => { event.preventDefault(); if (await command({ type: "task.notes", taskId: task.id, notes: notesDraft }, "Task notes saved")) setNotesId(""); }}>
+          <label>Task notes<textarea aria-label="Task notes" rows={7} maxLength={40000} disabled={busy} value={notesDraft} onChange={event => setNotesDraft(event.target.value)} /></label>
+          <small>{[...notesDraft].length.toLocaleString()} / 20,000 characters · saved with this Task. Saved/offline Tasks include these authored notes.</small>
+          <div className={taskStyles.actions}><button disabled={busy || [...notesDraft].length > 20000} className={styles.primary}>Save notes</button><button type="button" disabled={busy} onClick={() => setNotesId("")}>Discard note edits</button></div>
+        </form>}
         {editingId === task.id && <form className={taskStyles.edit} onSubmit={async (event) => { event.preventDefault(); if (await command({ type: "task.update", taskId: task.id, title: editingTitle }, "Task title updated")) setEditingId(""); }}>
           <label className={styles.grow}>Task title<input aria-label="Task title" required value={editingTitle} onChange={(event) => setEditingTitle(event.target.value)} /></label>
           <button className={styles.primary} disabled={busy || !editingTitle.trim()}>Save title</button><button type="button" disabled={busy} onClick={() => setEditingId("")}>Cancel edit</button>
@@ -94,6 +103,10 @@ export default function WorkspaceTasks({ view, busy, command, onOpenSource, acti
         <div className={taskStyles.actions}>
           {onOpenSource && view.accounts.some(account => account.id === task.sourceAccountId && account.ownerId === task.ownerId) && view.messages.some(message => message.id === task.sourceMessageId && message.accountId === task.sourceAccountId) && <button disabled={busy} onClick={() => onOpenSource({ accountId: task.sourceAccountId!, messageId: task.sourceMessageId! })}>Open source mail</button>}
           <button disabled={busy} onClick={() => { setEditingId(task.id); setEditingTitle(task.title); }}>Edit title</button>
+          <button disabled={busy || notesId === task.id} onClick={() => {
+            if (notesId && notesDraft !== notesBase && !window.confirm("Discard unfinished notes for the other Task?")) return;
+            setNotesId(task.id); setNotesDraft(task.notes || ""); setNotesBase(task.notes || "");
+          }}>Edit notes</button>
           <button disabled={busy} onClick={() => openSchedule(task)}>Schedule</button>
           {task.scheduledSlot && <button disabled={busy} onClick={async () => { if (await command({ type: "task.unschedule", taskId: task.id }, "Task unscheduled and linked calendar block removed")) { if (scheduleId === task.id) setScheduleId(""); } }}>Unschedule</button>}
           <button disabled={busy} onClick={async () => {

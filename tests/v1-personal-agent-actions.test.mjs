@@ -64,7 +64,7 @@ test('a scoped personal agent uses the same persisted HTTP commands, audits itse
   assert.equal((await f.call(`agent-grants/${agent.id}`, f.tokens.alex, 'DELETE')).status, 204);
   const before = JSON.stringify([...f.firestore.documents.values()]);
   assert.equal((await f.call('snapshot', token)).status, 401);
-  assert.equal((await f.call('commands', token, 'POST', { type: 'task.update', taskId: task.id, title: 'Denied after revoke' })).status, 401);
+  assert.equal((await f.call('commands', token, 'POST', { type: 'task.notes', taskId: task.id, notes: 'Denied after revoke' })).status, 401);
   assert.equal(JSON.stringify([...f.firestore.documents.values()]), before);
   const other = (await (await f.call('snapshot', f.tokens.sam)).json()).data;
   assert.equal(other.tasks.length, 0); assert.equal(other.events.length, 0);
@@ -79,9 +79,11 @@ test('write-only agent results are minimal and insufficient scopes deny without 
   assert.equal(typeof ack.id, 'string'); assert.deepEqual(Object.keys(ack).sort(), ['id', 'updated']);
   const snapshot = (await (await f.call('snapshot', writer.token)).json()).data;
   assert.equal(snapshot.tasks.length, 0); assert.equal(snapshot.calendars.length, 0);
+  const noted = await f.call('commands', writer.token, 'POST', {type:'task.notes',taskId:ack.id,notes:'Private writer note'});
+  assert.equal(noted.status,200); assert.deepEqual((await noted.json()).data,{id:ack.id,updated:true});
   const reader = await f.grant(['tasks:read'], ['tasks:personal']);
   const before = JSON.stringify([...f.firestore.documents.values()]);
-  assert.equal((await f.call('commands', reader.token, 'POST', { type: 'task.delete', taskId: ack.id })).status, 403);
+  assert.equal((await f.call('commands', reader.token, 'POST', { type: 'task.notes', taskId: ack.id, notes: 'Reader denied' })).status, 403);
   assert.equal((await f.call('commands', writer.token, 'POST', { type: 'task.schedule', taskId: ack.id, calendarId: 'personal', start: '2026-10-17T10:00:00Z', end: '2026-10-17T10:30:00Z' })).status, 403);
   assert.equal((await f.call('commands', writer.token, 'POST', { type: 'mail.send', draftId: 'nonexistent' })).status, 403);
   assert.equal(JSON.stringify([...f.firestore.documents.values()]), before);

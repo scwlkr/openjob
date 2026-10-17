@@ -108,7 +108,7 @@ commands are `mail.read` (`messageId`, `read`), `mail.draft` (`messageId`, `body
 `mail.compose` (`accountId`, `to`, `subject`, `body`), `mail.draft.update`
 (`draftId`, `to`, `subject`, `body`) and `mail.simulate-send` (`draftId`). Editing
 keeps the original mailbox and draft ID. Bodies allow up to 20,000 characters
-inside the 32 KiB JSON request limit. Valid recipient addresses stay local;
+inside the 256 KiB JSON request limit. Valid recipient addresses stay local;
 Simulated Sent uses the invented account’s `.invalid` sender. `mail.send` always
 returns `sending_disabled`; nothing reaches a provider or recipient.
 
@@ -209,3 +209,8 @@ Full app tarballs include `openjob app` (explicit saved synthetic demo) and
 fails closed without separately approved Firebase inputs and never supplies a
 fixture login. It does not enable real providers/sending. See
 [portable setup](https://github.com/scwlkr/openjob/blob/main/docs/PORTABLE_SERVICE.md).
+
+Personal Task notes use the existing strict JSON command:
+`{"type":"task.notes","taskId":"...","notes":"Authored context"}`.
+Pass through `openjob workspace command --input <file|->`; use empty notes to clear.
+Notes are plain text up to20,000 Unicode characters; title/planning stay unchanged.

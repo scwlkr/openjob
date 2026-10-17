@@ -3,7 +3,7 @@ export type WorkspaceScope = "mail:read" | "mail:draft" | "mail:simulate-send" |
 export type WorkspaceActor = { kind: "human"; ownerId: string } | { kind: "agent"; ownerId: string; agentId: string };
 export type WorkspaceAccount = { id: string; ownerId: string; provider: "gmail" | "outlook" | "imap"; label: string; address: string; mode: "fixture" };
 export type WorkspaceMessage = { id: string; accountId: string; subject: string; from: string; to: string; body: string; receivedAt: string; read: boolean };
-export type WorkspaceTask = { id: string; ownerId: string; title: string; completed: boolean; sourceMessageId?: string; sourceAccountId?: string; scheduledSlot?: { start: string; end: string }; calendarEventId?: string };
+export type WorkspaceTask = { id: string; ownerId: string; title: string; notes?: string; completed: boolean; sourceMessageId?: string; sourceAccountId?: string; scheduledSlot?: { start: string; end: string }; calendarEventId?: string };
 export type WorkspaceCalendar = { id: string; ownerId: string; accountId?: string; name: string; color: string };
 export type WorkspaceEvent = { id: string; calendarId: string; title: string; start: string; end: string; taskId?: string };
 export type WorkspaceDraft = { id: string; accountId: string; messageId?: string; to?: string; subject?: string; body: string; status: "draft" };
@@ -15,6 +15,7 @@ export type WorkspaceView = WorkspaceState;
 export type WorkspaceCommand =
   | { type: "task.create"; title: string; messageId?: string }
   | { type: "task.update"; taskId: string; title: string }
+  | { type: "task.notes"; taskId: string; notes: string }
   | { type: "task.unschedule"; taskId: string }
   | { type: "task.delete"; taskId: string }
   | { type: "task.complete"; taskId: string; completed: boolean }

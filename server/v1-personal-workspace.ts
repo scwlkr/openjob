@@ -16,7 +16,7 @@ type Options = {
   requestId?: () => string;
 };
 const COMMAND_FIELDS: Record<string, string[]> = {
-  "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"],
+  "task.create": ["type", "title", "messageId"], "task.update": ["type", "taskId", "title"], "task.notes": ["type", "taskId", "notes"],
   "task.complete": ["type", "taskId", "completed"], "task.unschedule": ["type", "taskId"],
   "task.schedule-available": ["type", "taskId", "calendarId", "start", "end"],
   "task.delete": ["type", "taskId"], "task.schedule": ["type", "taskId", "calendarId", "start", "end"],
@@ -83,9 +83,9 @@ export function createV1PersonalWorkspaceApi({ workspace, users, verifyIdToken, 
             const { done, value } = await reader.read();
             if (done) break;
             length += value.byteLength;
-            if (length > 32 * 1024) {
+            if (length > 256 * 1024) {
               await reader.cancel();
-              return fail("body_too_large", "Commands cannot exceed 32 KiB.", 413);
+              return fail("body_too_large", "Commands cannot exceed 256 KiB.", 413);
             }
             chunks.push(value);
           }

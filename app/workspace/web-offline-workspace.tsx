@@ -63,5 +63,5 @@ export default function WebOfflineWorkspace({ offline, owner, signal, active, on
   </section>;
 }
 function Summary({ title, projection }: { title: string; projection: TaskCalendarOfflineState["projection"] }) {
-  return <section><h3>{title}</h3>{projection?.tasks.map(task => <p key={task.id}>{task.title} · {task.completed ? "Completed" : "Open"} · {task.scheduledSlot ? `${task.scheduledSlot.start} – ${task.scheduledSlot.end}` : "Unscheduled"}</p>)}{projection?.events.map(event => <p key={event.id}>{event.title} · {event.start} – {event.end}</p>)}{(!projection || (!projection.tasks.length && !projection.events.length)) && <p>No tasks or calendar blocks.</p>}</section>;
+  return <section><h3>{title}</h3>{projection?.tasks.map(task => <div key={task.id}><p>{task.title} · {task.completed ? "Completed" : "Open"} · {task.scheduledSlot ? `${task.scheduledSlot.start} – ${task.scheduledSlot.end}` : "Unscheduled"}</p>{task.notes && <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{task.notes}</pre>}</div>)}{projection?.events.map(event => <p key={event.id}>{event.title} · {event.start} – {event.end}</p>)}{(!projection || (!projection.tasks.length && !projection.events.length)) && <p>No tasks or calendar blocks.</p>}</section>;
 }

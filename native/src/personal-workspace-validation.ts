@@ -4,7 +4,7 @@ import { OpenJobApiError } from './auth/coordinator';
 const mailboxIds = ['mail:example-gmail-personal', 'mail:example-gmail-work', 'mail:example-outlook'];
 const scopes = ['tasks:read', 'tasks:write', 'calendar:read', 'calendar:write', 'mail:read', 'mail:draft', 'mail:simulate-send'];
 const resources = ['tasks:personal', 'calendar:personal', ...mailboxIds];
-const actions = ['task.create', 'task.complete', 'task.update', 'task.delete', 'task.schedule', 'task.schedule-available', 'task.unschedule', 'calendar.create', 'calendar.update', 'calendar.delete', 'calendar.import', 'mail.read', 'mail.draft', 'mail.compose', 'mail.draft.update', 'mail.simulate-send', 'mail.examples.add', 'task-calendar.sync'];
+const actions = ['task.create', 'task.complete', 'task.update', 'task.notes', 'task.delete', 'task.schedule', 'task.schedule-available', 'task.unschedule', 'calendar.create', 'calendar.update', 'calendar.delete', 'calendar.import', 'mail.read', 'mail.draft', 'mail.compose', 'mail.draft.update', 'mail.simulate-send', 'mail.examples.add', 'task-calendar.sync'];
 type Row = Record<string, unknown>;
 function invalid(): never { throw new OpenJobApiError(502, 'invalid_response', 'OpenJob returned invalid personal workspace data.'); }
 function row(value: unknown, allowed: string[], required = allowed): Row {
@@ -48,8 +48,9 @@ export function validateNativePersonalWorkspace(value: unknown, owner: string): 
   });
   if (!calendars.length) invalid();
   const tasks = arrays.tasks!.map(value => {
-    const item = row(value, ['id', 'ownerId', 'title', 'completed', 'scheduledSlot', 'calendarEventId', 'sourceMessageId', 'sourceAccountId'], ['id', 'ownerId', 'title', 'completed']); unique(item.id);
+    const item = row(value, ['id', 'ownerId', 'title', 'notes', 'completed', 'scheduledSlot', 'calendarEventId', 'sourceMessageId', 'sourceAccountId'], ['id', 'ownerId', 'title', 'completed']); unique(item.id);
     if (item.ownerId !== owner || !text(item.title) || typeof item.completed !== 'boolean' || (item.sourceMessageId === undefined) !== (item.sourceAccountId === undefined) || item.sourceMessageId !== undefined && !messages.some(message => message.id === item.sourceMessageId && message.accountId === item.sourceAccountId)) invalid();
+    if (item.notes !== undefined && (typeof item.notes !== 'string' || [...item.notes].length > 20000)) invalid();
     if ((item.scheduledSlot === undefined) !== (item.calendarEventId === undefined)) invalid();
     if (item.scheduledSlot !== undefined) { const slot = row(item.scheduledSlot, ['start', 'end']); if (!date(slot.start) || !date(slot.end) || slot.start >= slot.end || !id(item.calendarEventId)) invalid(); }
     return item;

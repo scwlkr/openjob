@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
+import ts from 'typescript';
 import { createFakeFirestore, createPrivateKey } from './support/fake-firestore.mjs';
 import { createTestFirebaseAuthority } from './support/firebase-id-tokens.mjs';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
@@ -22,7 +23,8 @@ test('native personal client and auth controller complete the private HTTP workf
   t.after(() => rm(directory, { recursive: true, force: true }));
   const entry = join(directory, 'entry.ts');
   await writeFile(entry, `export {createNativePersonalWorkspaceApi} from ${JSON.stringify(resolve('native/src/personal-workspace-api.ts'))};\nexport {NativeAuthCoordinator} from ${JSON.stringify(resolve('native/src/auth/coordinator.ts'))};\n`);
-  await build({ configFile: false, logLevel: 'silent', build: { ssr: entry, outDir: directory, emptyOutDir: false, minify: false, rollupOptions: { output: { entryFileNames: 'native-runtime.mjs' } } } });
+  // This pure HTTP/source check needs root TypeScript, not Expo's native build config.
+  await build({ configFile: false, logLevel: 'silent', oxc: false, plugins: [{ name: 'native-http-source', transform(code, id) { if (id.endsWith('.ts')) return ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText; } }], build: { ssr: entry, outDir: directory, emptyOutDir: false, minify: false, rolldownOptions: { tsconfig: false, output: { entryFileNames: 'native-runtime.mjs' } } } });
   const { createNativePersonalWorkspaceApi, NativeAuthCoordinator } = await import(pathToFileURL(join(directory, 'native-runtime.mjs')).href);
   const now = new Date().toISOString();
   const authority = await createTestFirebaseAuthority({ now });
@@ -98,6 +100,8 @@ test('native personal client and auth controller complete the private HTTP workf
   let view = await controller.readPersonalWorkspace(owner); assert.equal(view.accounts.length, 3); assert.equal(view.messages.length, 6);
   await command({ type: 'task.create', title: 'Native connected work', messageId: 'example-message-3' });
   const task = (await controller.readPersonalWorkspace(owner)).tasks[0];
+  await command({type:'task.notes',taskId:task.id,notes:'  Native source notes\n📝'});
+  assert.equal((await controller.readPersonalWorkspace(owner)).tasks[0].notes,'  Native source notes\n📝');
   await command({ type: 'task.schedule', taskId: task.id, calendarId: 'personal', start: '2027-06-02T10:00:00Z', end: '2027-06-02T10:30:00Z' });
   await command({ type: 'task.complete', taskId: task.id, completed: true });
   await command({ type: 'mail.draft', messageId: 'example-message-3', body: 'Native invented reply' });
@@ -136,6 +140,7 @@ test('native personal client and auth controller complete the private HTTP workf
   const committedOnce = db.commitAttempts();
   assert.equal((await offline.sync(owner)).status, 'synced');
   assert.equal(db.commitAttempts(), committedOnce, 'lost response replay does not write again');
+  assert.equal((await controller.readPersonalWorkspace(owner)).tasks[0].notes,'  Native source notes\n📝');
   assert.equal((await controller.readPersonalWorkspace(owner)).tasks[0].sourceMessageId, 'example-message-3', 'private provenance survives stripped projection');
   await offline.edit(owner, { type: 'task.update', taskId: task.id, title: 'Ambiguous local proposal' });
   loseSyncResponse = true; assert.equal((await offline.sync(owner)).status, 'pending');

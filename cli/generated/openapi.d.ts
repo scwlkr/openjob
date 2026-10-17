@@ -1065,6 +1065,8 @@ export interface components {
             id: string;
             ownerId: string;
             title: string;
+            /** @description Optional authored plain text. No automatic Mail body or source metadata copy. */
+            notes?: string;
             completed: boolean;
             scheduledSlot?: {
                 /** Format: date-time */
@@ -1099,7 +1101,7 @@ export interface components {
             ownerId: string;
             actor: string;
             /** @enum {string} */
-            action: "task.create" | "task.update" | "task.complete" | "task.schedule" | "task.schedule-available" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
+            action: "task.create" | "task.update" | "task.notes" | "task.complete" | "task.schedule" | "task.schedule-available" | "task.unschedule" | "task.delete" | "calendar.create" | "calendar.update" | "calendar.delete" | "calendar.import" | "task-calendar.sync" | "mail.examples.add" | "mail.read" | "mail.draft" | "mail.compose" | "mail.draft.update" | "mail.simulate-send";
             /** Format: date-time */
             createdAt: string;
         };
@@ -1138,6 +1140,12 @@ export interface components {
             revision: string;
         };
         PersonalWorkspaceCommand: components["schemas"]["CalendarIcalImportCommand"] | {
+            /** @constant */
+            type: "task.notes";
+            taskId: string;
+            /** @description Plain authored text; empty or whitespace-only clears notes. Title and Calendar are unchanged. */
+            notes: string;
+        } | {
             /** @constant */
             type: "task.create";
             title: string;

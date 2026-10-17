@@ -85,3 +85,8 @@ Calendar files provide provider-neutral exchange without a provider connection. 
 Local npm distribution uses `npm run npm:prepare -- dev|latest` and a separate explicitly approved `npm:publish` command. Preparation checks, packs and clean-prefix runs real assets/API; publication reuses existing npm authentication and exact sealed bytes. Actions artifact generation is manual-only, with no automatic push/release publishing or new access. See [local release](docs/NPM_LOCAL_RELEASE.md).
 
 Personal Today shows browser-local planned/open work and Calendar blocks from the current private snapshot. Exact-item navigation clears destination filters, focuses the selected row and preserves unfinished module editors. Calendar editing stays UTC; this is not the proposed cross-Workspace Home.
+
+Personal Task notes retain authored context through title edits, planning, completion
+and explicit offline sync. The web editor supports save/clear and preserves failed
+or unfinished edits during module navigation. Existing scoped Task authorization
+and plain-text rendering apply; notes never enter Calendar titles or activity text.

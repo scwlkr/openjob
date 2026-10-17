@@ -87,5 +87,5 @@ export function OfflineWorkspace({ offline, ownerUserId, sessionReady, onSession
   </ScrollView>;
 }
 function ProjectionSummary({ title, projection }: { title: string; projection: State['projection'] }) {
-  return <Block><Copy heading>{title}</Copy>{!projection && <Copy>No available version.</Copy>}{projection?.tasks.map(task => <Copy key={task.id}>{task.title} · {task.completed ? 'Completed' : 'Open'} · {task.scheduledSlot ? `${task.scheduledSlot.start} – ${task.scheduledSlot.end}` : 'Unscheduled'}</Copy>)}{projection?.events.map(event => <Copy key={event.id}>{event.title} · {event.start} – {event.end}</Copy>)}{projection && !projection.tasks.length && !projection.events.length && <Copy>No tasks or calendar blocks.</Copy>}</Block>;
+  return <Block><Copy heading>{title}</Copy>{!projection && <Copy>No available version.</Copy>}{projection?.tasks.map(task => <Copy key={task.id}>{task.title}{task.notes ? `\nNotes: ${task.notes}` : ''} · {task.completed ? 'Completed' : 'Open'} · {task.scheduledSlot ? `${task.scheduledSlot.start} – ${task.scheduledSlot.end}` : 'Unscheduled'}</Copy>)}{projection?.events.map(event => <Copy key={event.id}>{event.title} · {event.start} – {event.end}</Copy>)}{projection && !projection.tasks.length && !projection.events.length && <Copy>No tasks or calendar blocks.</Copy>}</Block>;
 }

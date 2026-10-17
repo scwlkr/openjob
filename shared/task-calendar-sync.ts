@@ -22,14 +22,22 @@ function copy<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 export function validateTaskCalendarProjection(owner: string, value: unknown): TaskCalendarProjection {
   if (typeof owner !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(owner)) taskCalendarFail();
   const top = row(value, ['tasks', 'calendars', 'events']);
-  if (![top.tasks, top.calendars, top.events].every(items => Array.isArray(items) && items.length <= 1000) || JSON.stringify(value).length > 300000) taskCalendarFail();
+  if (![top.tasks, top.calendars, top.events].every(items => Array.isArray(items))) taskCalendarFail();
+  const encoded = JSON.stringify(value);
+  if ([top.tasks, top.calendars, top.events].some(items => (items as unknown[]).length > 1000) || encoded.length > 300000) taskCalendarFail('workspace_capacity');
+  // Leave room for the sync envelope inside the API's 512 KiB UTF-8 request bound.
+  // Count without TextEncoder so the same validator runs in the native runtime.
+  let bytes = 0;
+  for (const character of encoded) { const point = character.codePointAt(0)!; bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4; }
+  if (bytes > 500000) taskCalendarFail('workspace_capacity');
   const state = value as TaskCalendarProjection; const ids = new Set<string>();
   const unique = (id: unknown) => { if (!text(id, 128) || ids.has(id)) taskCalendarFail(); ids.add(id); };
   if (!state.calendars.length) taskCalendarFail();
   for (const value of state.calendars) { const calendar = row(value, ['id', 'ownerId', 'name', 'color']); unique(calendar.id); if (calendar.ownerId !== owner || !text(calendar.name) || typeof calendar.color !== 'string' || !/^#[a-f0-9]{6}$/i.test(calendar.color)) taskCalendarFail(); }
   for (const value of state.tasks) {
-    const task = row(value, ['id', 'ownerId', 'title', 'completed', 'scheduledSlot', 'calendarEventId'], ['id', 'ownerId', 'title', 'completed']); unique(task.id);
+    const task = row(value, ['id', 'ownerId', 'title', 'notes', 'completed', 'scheduledSlot', 'calendarEventId'], ['id', 'ownerId', 'title', 'completed']); unique(task.id);
     if (task.ownerId !== owner || !text(task.title) || typeof task.completed !== 'boolean' || (task.scheduledSlot === undefined) !== (task.calendarEventId === undefined)) taskCalendarFail();
+    if (task.notes !== undefined && (typeof task.notes !== 'string' || [...task.notes].length > 20000)) taskCalendarFail();
     if (task.scheduledSlot !== undefined) { const slot = row(task.scheduledSlot, ['start', 'end']); if (!taskCalendarDate(slot.start) || !taskCalendarDate(slot.end) || slot.start >= slot.end || !text(task.calendarEventId, 128)) taskCalendarFail(); }
   }
   for (const value of state.events) {
@@ -41,7 +49,7 @@ export function validateTaskCalendarProjection(owner: string, value: unknown): T
   return copy(state);
 }
 export function projectTaskCalendar(owner: string, view: WorkspaceView): TaskCalendarProjection {
-  return validateTaskCalendarProjection(owner, { tasks: view.tasks.map(({ id, ownerId, title, completed, scheduledSlot, calendarEventId }) => ({ id, ownerId, title, completed, ...(scheduledSlot ? { scheduledSlot } : {}), ...(calendarEventId ? { calendarEventId } : {}) })), calendars: view.calendars.map(({ id, ownerId, name, color }) => ({ id, ownerId, name, color })), events: view.events });
+  return validateTaskCalendarProjection(owner, { tasks: view.tasks.map(({ id, ownerId, title, notes, completed, scheduledSlot, calendarEventId }) => ({ id, ownerId, title, ...(notes !== undefined ? { notes } : {}), completed, ...(scheduledSlot ? { scheduledSlot } : {}), ...(calendarEventId ? { calendarEventId } : {}) })), calendars: view.calendars.map(({ id, ownerId, name, color }) => ({ id, ownerId, name, color })), events: view.events });
 }
 export function validateTaskCalendarSyncInput(owner: string, input: unknown): TaskCalendarSyncInput {
   const item = row(input, ['operationId', 'baseRevision', 'expiresAt', 'projection']);
@@ -50,10 +58,10 @@ export function validateTaskCalendarSyncInput(owner: string, input: unknown): Ta
 }
 export function applyTaskCalendarCommand(projection: TaskCalendarProjection, input: TaskCalendarCommand, owner: string, newId: () => string): TaskCalendarProjection {
   const state = validateTaskCalendarProjection(owner, projection);
-  const fields: Record<string, string[]> = { 'task.create': ['title'], 'task.update': ['taskId', 'title'], 'task.complete': ['taskId', 'completed'], 'task.delete': ['taskId'], 'task.unschedule': ['taskId'], 'task.schedule': ['taskId', 'calendarId', 'start', 'end'], 'calendar.create': ['calendarId', 'title', 'start', 'end'], 'calendar.update': ['eventId', 'title', 'start', 'end'], 'calendar.delete': ['eventId'] };
+  const fields: Record<string, string[]> = { 'task.create': ['title'], 'task.update': ['taskId', 'title'], 'task.notes': ['taskId', 'notes'], 'task.complete': ['taskId', 'completed'], 'task.delete': ['taskId'], 'task.unschedule': ['taskId'], 'task.schedule': ['taskId', 'calendarId', 'start', 'end'], 'calendar.create': ['calendarId', 'title', 'start', 'end'], 'calendar.update': ['eventId', 'title', 'start', 'end'], 'calendar.delete': ['eventId'] };
   if (!input || typeof input !== 'object' || !Object.prototype.hasOwnProperty.call(fields, input.type)) taskCalendarFail();
   const required = fields[input.type]!; const command = row(copy(input), ['type', ...required]);
-  for (const key of required) if (key === 'completed' ? typeof command[key] !== 'boolean' : !text(command[key])) taskCalendarFail();
+  for (const key of required) if (key === 'completed' ? typeof command[key] !== 'boolean' : key === 'notes' ? typeof command[key] !== 'string' || [...command[key]].length > 20000 : !text(command[key])) taskCalendarFail();
   if (typeof command.title === 'string') command.title = command.title.trim();
   const id = () => { const value = newId(); if (!isOfflineTaskCalendarId(value) || [...state.tasks, ...state.events, ...state.calendars].some(item => item.id === value)) taskCalendarFail(); return value; };
   const task = () => { const found = state.tasks.find(item => item.id === command.taskId); if (!found) taskCalendarFail('forbidden'); return found; };
@@ -63,6 +71,7 @@ export function applyTaskCalendarCommand(projection: TaskCalendarProjection, inp
   switch (input.type) {
     case 'task.create': state.tasks.push({ id: id(), ownerId: owner, title: command.title as string, completed: false }); break;
     case 'task.update': { const found = task(); found.title = command.title as string; const linked = state.events.find(event => event.id === found.calendarEventId); if (linked) linked.title = found.title; break; }
+    case 'task.notes': { const found = task(); if ((command.notes as string).trim()) found.notes = command.notes as string; else delete found.notes; break; }
     case 'task.complete': task().completed = command.completed as boolean; break;
     case 'task.delete': case 'task.unschedule': { const found = task(); state.events = state.events.filter(event => event.id !== found.calendarEventId); delete found.calendarEventId; delete found.scheduledSlot; if (input.type === 'task.delete') state.tasks = state.tasks.filter(item => item.id !== found.id); break; }
     case 'task.schedule': { times(); calendar(); const found = task(); let linked = state.events.find(event => event.id === found.calendarEventId); if (!linked) { linked = { id: id(), calendarId: command.calendarId as string, title: found.title, start: command.start as string, end: command.end as string, taskId: found.id }; state.events.push(linked); } Object.assign(linked, { calendarId: command.calendarId, start: command.start, end: command.end }); found.calendarEventId = linked.id; found.scheduledSlot = { start: linked.start, end: linked.end }; break; }

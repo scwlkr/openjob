@@ -16,6 +16,7 @@ export function Tasks({ view, busy, selectedId, command, onSource }: Props) {
   const selectedCalendar = calendarId || view.calendars[0]?.id || '';
   return <><Block><Copy heading>Personal Tasks</Copy><Field label="New task" value={title} onChange={setTitle} /><Action label="Add task" disabled={busy || !title.trim()} onPress={async () => { if (await command({ type: 'task.create', title })) setTitle(''); }} /></Block>
     {[...view.tasks].sort((a, b) => a.id === selectedId ? -1 : b.id === selectedId ? 1 : 0).map(task => <Block key={task.id}><Copy heading>{task.title}{selectedId === task.id ? ' · opened linked task' : ''}</Copy><Copy>{task.completed ? 'Completed' : 'Open'} · {task.scheduledSlot ? `${task.scheduledSlot.start} – ${task.scheduledSlot.end}` : 'Unscheduled'}</Copy>
+      {task.notes && <Copy>{task.notes}</Copy>}
       <Row><Action label={`${task.completed ? 'Reopen' : 'Complete'} ${task.title}`} disabled={busy} onPress={() => command({ type: 'task.complete', taskId: task.id, completed: !task.completed })} />
         <Action label={`Edit ${task.title}`} disabled={busy} onPress={() => { setEdit(task.id); setEditedTitle(task.title); }} />
         <Action label={`Schedule ${task.title}`} disabled={busy} onPress={() => { const slot = task.scheduledSlot || nowSlot(); setStart(slot.start); setEnd(slot.end); setCalendarId(view.events.find(event => event.id === task.calendarEventId)?.calendarId || view.calendars[0]?.id || ''); setSchedule(task.id); setError(''); }} />
