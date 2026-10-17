@@ -90,3 +90,14 @@ Personal Task notes retain authored context through title edits, planning, compl
 and explicit offline sync. The web editor supports save/clear and preserves failed
 or unfinished edits during module navigation. Existing scoped Task authorization
 and plain-text rendering apply; notes never enter Calendar titles or activity text.
+
+### Independent owner-only Workspace foundation
+
+The local `dev:owned-workspaces` fixture composes the real Workspace repository,
+API and web shell. One synthetic human creates and switches independent owned
+Workspaces, each with distinct Task-space/Calendar IDs and separately persisted
+Task/planning state. Shared Task/Calendar controls retain unfinished editors in
+context and maintain linked scheduling; foreign owner/item/resource requests fail.
+Mail, invitations, grants and owner transfer remain unavailable. This is a bounded
+fixture-verified foundation, not enabled real-account Workspace onboarding or
+native/offline parity. [Pilot guide](docs/OWNED_WORKSPACE_PILOT.md).
