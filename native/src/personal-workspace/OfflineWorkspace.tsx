@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import type { NativePersonalWorkspaceController, PersonalWorkspaceCommand, WorkspaceView } from '../personal-workspace-contracts';
 import type { PersonalWorkspaceProps } from './NativePersonalWorkspace';
+import { Today } from './Today';
 import { ReadyWorkspace } from './OnlineWorkspace';
 import { Tasks } from './Tasks';
 import { Calendar } from './Calendar';
@@ -19,9 +20,10 @@ export function OfflineWorkspace({ offline, ownerUserId, sessionReady, onSession
   const [operation, setOperation] = useState('');
   const [error, setError] = useState('');
   const [ended, setEnded] = useState(false);
-  const [tab, setTab] = useState('Tasks');
+  const [tab, setTab] = useState('Today');
   const [onlineRefresh, setOnlineRefresh] = useState(0);
   const [selectedTask, setSelectedTask] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState('');
   const [choice, setChoice] = useState<{ strategy: 'server' | 'local'; review: string } | null>(null);
   const lease = useRef({ active: true, pending: false, epoch: 0 });
   const scroll = useRef<ScrollView>(null);
@@ -52,7 +54,7 @@ export function OfflineWorkspace({ offline, ownerUserId, sessionReady, onSession
     if (name === 'Online') setOnlineRefresh(value => value + 1);
     else if (sessionReady && !busy) void run(() => offline.refresh(ownerUserId), 'Refreshing…');
   };
-  const visibleTab = !sessionReady && tab === 'Online' ? 'Tasks' : tab;
+  const visibleTab = !sessionReady && tab === 'Online' ? 'Today' : tab;
   const projection = state?.projection;
   const view: WorkspaceView | null = projection ? { ...projection, accounts: [], messages: [], drafts: [], sent: [], agents: [], activity: [] } : null;
   const command = (input: PersonalWorkspaceCommand) => {
@@ -72,7 +74,7 @@ export function OfflineWorkspace({ offline, ownerUserId, sessionReady, onSession
       {(error || state?.error) && <Copy>{error || stateError}</Copy>}
       {state?.status === 'pending' && <Action label="Discard pending changes" disabled={busy || !sessionReady} onPress={() => setChoice({ strategy: 'server', review })} />}
     </Block>
-    {visibleTab !== 'Online' ? <Row>{['Tasks', 'Calendar'].map(name => <Action key={name} label={name} selected={tab === name} onPress={() => open(name)} />)}<Action label="Online Mail and linked work" disabled={!sessionReady || busy} onPress={() => open('Online')} /></Row> : <Action label="Back to saved Tasks and Calendar" onPress={() => open('Tasks')} />}
+    {visibleTab !== 'Online' ? <Row>{['Today', 'Tasks', 'Calendar'].map(name => <Action key={name} label={name} selected={tab === name} onPress={() => open(name)} />)}<Action label="Online Mail and linked work" disabled={!sessionReady || busy} onPress={() => open('Online')} /></Row> : <Action label="Back to saved Tasks and Calendar" onPress={() => open('Tasks')} />}
     <Copy>Mail, source navigation and Agents are available in Online Mail and linked work. Saved Tasks and Calendar contain no source Mail references.</Copy>
     {state?.status === 'conflict' && <Block><Copy heading>Review local and server work</Copy><Copy>Neither version is silently replaced. Compare task titles, completion and UTC calendar slots before choosing.</Copy>
       <ProjectionSummary title="Saved on this device" projection={state.projection} /><ProjectionSummary title="Current server" projection={state.currentServer?.projection} />
@@ -81,8 +83,8 @@ export function OfflineWorkspace({ offline, ownerUserId, sessionReady, onSession
     </Block>}
       {choice && <Confirm busy={busy || !sessionReady} label={choice.strategy === 'server' ? 'Confirm discard local changes' : 'Confirm apply reviewed local changes'} message={choice.strategy === 'server' ? 'Discard all pending local Tasks and Calendar changes and fetch the latest server version? Pending local work will be lost. Server work will not be overwritten.' : 'Replace the current server Tasks and Calendar with the reviewed local version? This can remove newer server tasks and calendar blocks shown above. A changed server revision will require review again.'} onCancel={() => setChoice(null)} onConfirm={() => { if (choice.review !== review) { setChoice(null); setError('Work changed after review. Compare the versions again.'); return; } void run(() => offline.resolve(ownerUserId, choice.strategy), 'Applying reviewed choice…'); }} />}
     {!view && <Copy>No cached Tasks or Calendar. Restore a session and refresh from the server once to start.</Copy>}
-    {view && <><View style={{ display: visibleTab === 'Tasks' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Tasks'} importantForAccessibility={visibleTab === 'Tasks' ? 'auto' : 'no-hide-descendants'}><Tasks view={view} busy={busy || state?.status === 'syncing'} command={command} selectedId={selectedTask} onSource={() => undefined} /></View>
-      <View style={{ display: visibleTab === 'Calendar' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Calendar'} importantForAccessibility={visibleTab === 'Calendar' ? 'auto' : 'no-hide-descendants'}><Calendar view={view} busy={busy || state?.status === 'syncing'} command={command} onTask={id => { if (view.tasks.some(task => task.id === id)) { setSelectedTask(id); open('Tasks'); } }} /></View></>}
+    {view && <><View style={{ display: visibleTab === 'Today' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Today'} importantForAccessibility={visibleTab === 'Today' ? 'auto' : 'no-hide-descendants'}><Today view={view} busy={busy || state?.status === 'syncing'} saved onTask={id => { if (view.tasks.some(task => task.id === id)) { setSelectedTask(id); open('Tasks'); } }} onEvent={id => { if (view.events.some(event => event.id === id)) { setSelectedEvent(id); open('Calendar'); } }} onTasks={() => open('Tasks')} onCalendar={() => open('Calendar')} /></View><View style={{ display: visibleTab === 'Tasks' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Tasks'} importantForAccessibility={visibleTab === 'Tasks' ? 'auto' : 'no-hide-descendants'}><Tasks view={view} busy={busy || state?.status === 'syncing'} command={command} selectedId={selectedTask} onSource={() => undefined} /></View>
+      <View style={{ display: visibleTab === 'Calendar' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Calendar'} importantForAccessibility={visibleTab === 'Calendar' ? 'auto' : 'no-hide-descendants'}><Calendar view={view} selectedId={selectedEvent} busy={busy || state?.status === 'syncing'} command={command} onTask={id => { if (view.tasks.some(task => task.id === id)) { setSelectedTask(id); open('Tasks'); } }} /></View></>}
     {sessionReady && <View style={{ display: visibleTab === 'Online' ? 'flex' : 'none' }} accessibilityElementsHidden={visibleTab !== 'Online'} importantForAccessibility={visibleTab === 'Online' ? 'auto' : 'no-hide-descendants'}><ReadyWorkspace {...props} ownerUserId={ownerUserId} sessionReady={sessionReady} onSessionRevoked={revokeOnline} refreshKey={onlineRefresh} /></View>}
   </ScrollView>;
 }

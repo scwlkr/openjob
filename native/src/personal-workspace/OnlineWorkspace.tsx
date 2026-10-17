@@ -7,6 +7,7 @@ import { Action, Block, Copy, Row } from './controls';
 import { Mail, type MailHandle } from './Mail';
 import { Tasks } from './Tasks';
 import { Calendar } from './Calendar';
+import { Today } from './Today';
 import { Agents } from './Agents';
 
 import type { PersonalWorkspaceProps as Props } from './NativePersonalWorkspace';
@@ -17,12 +18,13 @@ export function ReadyWorkspace({ controller, ownerUserId, onRestoreSession, onSe
   const [view, setView] = useState<WorkspaceView | null>(null);
   const [grants, setGrants] = useState<PersonalAgentGrant[]>([]);
   const [checkedAt, setCheckedAt] = useState(0);
-  const [tab, setTab] = useState('Mail');
+  const [tab, setTab] = useState('Today');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [ended, setEnded] = useState(false);
   const [selectedTask, setSelectedTask] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState('');
   const mailRef = useRef<MailHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const openTab = (name: string) => { setTab(name); scrollRef.current?.scrollTo({ y: 0, animated: false }); };
@@ -60,13 +62,14 @@ export function ReadyWorkspace({ controller, ownerUserId, onRestoreSession, onSe
     <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 12 }}>
       <Row><OpenJobBrandmark inverse={isDark} size={32} /><OpenJobWordmark inverse={isDark} width={140} /></Row>
       <Copy heading>Personal workspace</Copy><Copy>Online-only Tasks, Calendar and invented Mail. No personal disk cache, real mailbox connection or actual delivery.</Copy>
-      <Row>{['Mail', 'Tasks', 'Calendar', 'Agents'].map(item => <Action key={item} label={item} selected={tab === item} disabled={!view} onPress={() => openTab(item)} />)}<Action label="Refresh workspace" disabled={busy} onPress={() => run()} /></Row>
+      <Row>{['Today', 'Mail', 'Tasks', 'Calendar', 'Agents'].map(item => <Action key={item} label={item} selected={tab === item} disabled={!view} onPress={() => openTab(item)} />)}<Action label="Refresh workspace" disabled={busy} onPress={() => run()} /></Row>
       {busy && <Copy>Working online…</Copy>}{!view && !error && <Copy>Loading personal workspace…</Copy>}
       {error ? <Text accessibilityRole="alert" style={{ color: palette.ink }}>{error}</Text> : null}{notice ? <Text accessibilityLiveRegion="polite" style={{ color: palette.positive }}>{notice}</Text> : null}
       {view && <>
+        <View style={{ display: tab === 'Today' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Today'} importantForAccessibility={tab === 'Today' ? 'auto' : 'no-hide-descendants'}><Today view={view} busy={busy} onTask={id => { if (view.tasks.some(task => task.id === id)) { setSelectedTask(id); openTab('Tasks'); } }} onEvent={id => { if (view.events.some(event => event.id === id)) { setSelectedEvent(id); openTab('Calendar'); } }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></View>
         <View style={{ display: tab === 'Mail' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Mail'} importantForAccessibility={tab === 'Mail' ? 'auto' : 'no-hide-descendants'}><Mail view={view} busy={busy} command={command} mailRef={mailRef} onTask={id => { if (lease.current.active && !lease.current.ended && view.tasks.some(task => task.id === id)) { setSelectedTask(id); openTab('Tasks'); } }} /></View>
         <View style={{ display: tab === 'Tasks' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Tasks'} importantForAccessibility={tab === 'Tasks' ? 'auto' : 'no-hide-descendants'}><Tasks view={view} busy={busy} command={command} selectedId={selectedTask} onSource={source} /></View>
-        <View style={{ display: tab === 'Calendar' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Calendar'} importantForAccessibility={tab === 'Calendar' ? 'auto' : 'no-hide-descendants'}><Calendar view={view} busy={busy} command={command} onTask={id => { if (lease.current.active && view.tasks.some(task => task.id === id)) { setSelectedTask(id); openTab('Tasks'); } }} /></View>
+        <View style={{ display: tab === 'Calendar' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Calendar'} importantForAccessibility={tab === 'Calendar' ? 'auto' : 'no-hide-descendants'}><Calendar view={view} selectedId={selectedEvent} busy={busy} command={command} onTask={id => { if (lease.current.active && view.tasks.some(task => task.id === id)) { setSelectedTask(id); openTab('Tasks'); } }} /></View>
         <View style={{ display: tab === 'Agents' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Agents'} importantForAccessibility={tab === 'Agents' ? 'auto' : 'no-hide-descendants'}><Agents grants={grants} checkedAt={checkedAt} busy={busy} revoke={id => run(() => controller.revokePersonalAgent(ownerUserId, id))} /></View>
         <Block><Copy heading>Recent activity</Copy>{view.activity.slice(-12).reverse().map(item => <Copy key={item.id}>{item.actor} · {item.action} · {item.createdAt}</Copy>)}</Block>
       </>}

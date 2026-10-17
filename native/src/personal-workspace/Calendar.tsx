@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { WorkspaceView, PersonalWorkspaceCommand } from '../personal-workspace-contracts';
 import { Action, Block, Confirm, Copy, Field, Row, nowSlot, validSlot } from './controls';
 
-type Props = { view: WorkspaceView; busy: boolean; command: (input: PersonalWorkspaceCommand) => Promise<boolean>; onTask: (id: string) => void };
-export function Calendar({ view, busy, command, onTask }: Props) {
+type Props = { view: WorkspaceView; busy: boolean; selectedId?: string; command: (input: PersonalWorkspaceCommand) => Promise<boolean>; onTask: (id: string) => void };
+export function Calendar({ view, busy, selectedId = '', command, onTask }: Props) {
   const [title, setTitle] = useState('');
   const [editing, setEditing] = useState('');
   const [calendarId, setCalendarId] = useState('');
@@ -13,9 +13,9 @@ export function Calendar({ view, busy, command, onTask }: Props) {
   const [error, setError] = useState('');
   const selectedCalendar = calendarId || view.calendars[0]?.id || '';
   return <><Copy heading>Personal Calendar · UTC agenda</Copy>
-    {[...view.events].sort((a,b) => a.start.localeCompare(b.start)).map(event => {
+    {[...view.events].sort((a,b) => a.id === selectedId ? -1 : b.id === selectedId ? 1 : a.start.localeCompare(b.start)).map(event => {
       const task = view.tasks.find(item => item.id === event.taskId && item.calendarEventId === event.id && view.calendars.some(calendar => calendar.id === event.calendarId && calendar.ownerId === item.ownerId));
-      return <Block key={event.id}><Copy heading>{event.title}</Copy><Copy>{event.start} – {event.end}{'\n'}{view.calendars.find(item => item.id === event.calendarId)?.name}{task ? ' · linked Task' : ''}</Copy>
+      return <Block key={event.id}><Copy heading>{event.title}{event.id === selectedId ? ' · opened daily block' : ''}</Copy><Copy>{event.start} – {event.end}{'\n'}{view.calendars.find(item => item.id === event.calendarId)?.name}{task ? ' · linked Task' : ''}</Copy>
         <Row>{task && <Action label={`Open linked task ${event.title}`} onPress={() => onTask(task.id)} />}<Action label={`Edit block ${event.title}`} disabled={busy} onPress={() => { setEditing(event.id); setTitle(event.title); setCalendarId(event.calendarId); setStart(event.start); setEnd(event.end); setError(''); }} /><Action label={`Delete block ${event.title}`} disabled={busy} onPress={() => setDeleting(event.id)} /></Row>
         {deleting === event.id && <Confirm message="Delete this calendar block? A linked Task will remain unscheduled." label="Confirm delete block" busy={busy} onCancel={() => setDeleting('')} onConfirm={async () => { if (await command({ type: 'calendar.delete', eventId: event.id })) { setDeleting(''); if (editing === event.id) { setEditing(''); setTitle(''); } } }} />}
       </Block>;
