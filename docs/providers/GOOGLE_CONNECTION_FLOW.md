@@ -100,8 +100,13 @@ typechecked; interactive browser proof is not claimed because the signed-in pilo
 and its established browser surface remain untouched.
 
 Before live activation, obtain current Google Data Access/Verification facts and
-the exact approved HTTPS origin from sole infrastructure owner
-`scwlkr/0o10` (task01a14a00, PR9 merged; first live VPS inventory approval pending).
+the exact approved HTTPS origin from the sole infrastructure owner
+(task01a14a00), working in the private infrastructure repository. The purchased
+Linux target has been inventoried and private bootstrap templates staged. Container
+runtime installation still awaits its daemon/network approval; no app is deployed.
+Inventory and staging do not establish an approved public HTTPS origin, callback
+registration, secret delivery or permission to activate OpenJob. Obtain that exact
+deployment handoff from the infrastructure owner; keep host/access details private.
 Select/review the concrete private-store/key/retention and existing-client-secret
 delivery policy; implement/verify that backend and its owner-deletion fences.
 Then seek specific approval for the exact existing Web-client callback addition,

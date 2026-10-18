@@ -1,3 +1,27 @@
+# Hosting dependency reconciled — 18 October 2026, 21:02 UTC
+
+Parent relayed the sole infrastructure owner's completed inventory of the purchased
+Linux target and staging of private bootstrap templates. First inventory is no
+longer pending. Container runtime installation awaits specific daemon/network
+approval; no app containers or deployment are active. Infrastructure remains with
+owner01a14a00 in the private infrastructure repository. No VPS action by this task;
+host, access and configuration details stay private.
+
+Next cross-repository dependency: infrastructure owner completes approved runtime
+setup and supplies the exact approved HTTPS origin/deployment handoff. OpenJob
+still needs its reviewed private-store/key/retention and secret-delivery policy,
+concrete backend, and specific Google setup/consent before activation. Inventory
+does not authorize these steps. No repeat approval request made.
+
+Local pilot health200 at21:02UTC, providers unconfigured, realSendingfalse. Current
+useful detached process is PID66919, started17Oct17:03:29UTC (see PR105 operational
+receipt); older PID/session records below are historical. Session/data untouched.
+Live main0b3ff88 and sole draftPR95 unchanged; complete Linear queue still only
+WLK302/324/327 unfinished with their recorded gates. No new accepted independent
+feature is unblocked. This corrects dependency facts only; no feature/live proof.
+
+---
+
 # Local real pilot recovered — 17 October 2026, 10:04 a.m. Central
 
 At resumed UI qualification, both browser and curl received connection refused on
@@ -105,8 +129,9 @@ library dependencies reused via isolated332tree; no install or shareddeps change
 WLK302 source remains unrecovered/stopped; no duplication/restart.
 
 Hosting update: OVH VPS purchased, allserverinfra private scwlkr/0o10, sole owner
-01a14a00-ce06-7721-a75a-9939f141802d, PR9 merged. First live inventory approval
-pending: no HTTPS target assumed, no server/config/deploy/credential changes here.
+01a14a00-ce06-7721-a75a-9939f141802d, PR9 merged. Inventory is complete per18Oct
+handoff above; runtime daemon/network approval and exact HTTPS deployment handoff
+remain pending. No server/config/deploy/credential changes here.
 OpenJob+PatriSearch primarilyVPS; Minecraftprimarilyhome. Pending approvals stay
 pending; no repeat notification/checklist. Final exacthead/check/review/landed
 results in Linear/PR. No newGoogle calls/grants/API enablement/client/secret/key/
