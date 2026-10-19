@@ -79,7 +79,8 @@ Check performs no authentication or publication. Both commands verify the approv
 bytes/manifest/identity, the original source's identity and ancestry in main,
 the clean current-main publisher and the live registry's owner, version integrity
 and monotonic dev tag. Publish then uses the existing scwlkr login and makes at
-most one explicit dev-tag attempt, with lifecycle scripts disabled. EOTP or an
+most one explicit dev-tag attempt, with lifecycle scripts and npm's internal
+network retries disabled. EOTP or an
 uncertain result stops; inspect registry before another human-triggered invocation.
 Follow npm's security prompt personally; no token, login configuration or 2FA
 change is part of this workflow. Normal prepare/publish freshness rules stay intact.

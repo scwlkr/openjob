@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { approvedPublication, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication } from '../distribution/approved-publication.mjs';
+import { approvedPublication, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs } from '../distribution/approved-publication.mjs';
 import { localPublicationIdentity, publicationDecision } from '../distribution/publication.mjs';
 
 const bytes = Buffer.from('invented archived bytes, no package/provider/authentication effects');
@@ -10,6 +10,13 @@ const identity = localPublicationIdentity({ channel: 'dev', ...source });
 const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
 const receipt = { ...approvedPublication, integrity };
 const plan = { identity, filename: `scwlkr-openjob-${identity.version}.tgz`, integrity, publishable: true };
+
+test('approved npm invocation fixes dev/registry and disables hooks and transport retries', () => {
+  assert.deepEqual(approvedPublishArgs('/private/sealed.tgz'), [
+    'publish', '/private/sealed.tgz', '--access', 'public', '--tag', 'dev',
+    '--registry=https://registry.npmjs.org', '--ignore-scripts', '--fetch-retries=0',
+  ]);
+});
 
 test('resumption binds original source/version/channel/approval and all archived bytes', () => {
   assert.deepEqual(verifyApprovedPlan(plan, bytes, source, receipt), identity);

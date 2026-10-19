@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { approvedPublication as receipt, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication } from '../distribution/approved-publication.mjs';
+import { approvedPublication as receipt, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs } from '../distribution/approved-publication.mjs';
 import { assertLocalPublish, publicationDecision, verifyPublicationManifest } from '../distribution/publication.mjs';
 
 const [mode, target, flag, approval, ...extra] = process.argv.slice(2);
@@ -61,7 +61,7 @@ try {
     },
     publish() {
       console.log('Publishing the original approved bytes once. Complete npm authentication personally; never share security links, OTPs or tokens.');
-      execFileSync('npm', ['publish', approvedTarball, '--access', 'public', '--tag', receipt.channel, `--registry=${receipt.registry}`, '--ignore-scripts'], { stdio: 'inherit' });
+      execFileSync('npm', approvedPublishArgs(approvedTarball), { stdio: 'inherit' });
     },
   });
   console.log(JSON.stringify({ version: identity.version, integrity: receipt.integrity, source: identity.source, publisher: runner, approval: receipt.approvalReference, status, published: mode === 'publish' }));

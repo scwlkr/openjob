@@ -33,6 +33,11 @@ export function verifyApprovedProvenance({ runner, remoteMain, ancestor, clean }
   }
 }
 
+export function approvedPublishArgs(tarball) {
+  return ['publish', tarball, '--access', 'public', '--tag', approvedPublication.channel,
+    `--registry=${approvedPublication.registry}`, '--ignore-scripts', '--fetch-retries=0'];
+}
+
 // Both CLI modes use the same last-minute registry/provenance checks. No retry.
 export async function completeApprovedPublication({ mode, decision, provenance, checkLogin, publish }) {
   if (!['check', 'publish'].includes(mode)) throw new Error('Unsupported publication operation.');
