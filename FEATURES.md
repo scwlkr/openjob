@@ -1,3 +1,11 @@
+## Resume an approved npm artifact
+
+A separate local resume command verifies the one recorded WLK307 owner approval,
+original tarball bytes and source ancestry from a clean current-main publisher.
+It preserves registry owner/channel/rollback checks and stops after an uncertain
+write. A read-only check prepares the handoff without touching npm authentication.
+Normal releases still require current source and their own exact approval.
+
 ## Disabled Google connection lifecycle (WLK334)
 
 Address + explicit home, authenticated callback/state consumption, private atomic
