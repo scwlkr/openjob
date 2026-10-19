@@ -1,3 +1,41 @@
+# WLK307 — immutable approved npm handoff recovered, 19 October 2026
+
+Parent authorizes repairing the original exact publication handoff. Approved
+version0.3.8-dev.1792161876.9ba3929fbf0c, source9ba3929fbf0ccc3e24e2577410a355fa3798736e,
+and SHA512 are bound in distribution/approved-publication.mjs to original owner
+approval Linear307/comment457f8b14. Registry read19Oct12:27UTC: exactversion404,
+devstill37c322b/latest0.3.7. No renewed artifact approval or different package.
+
+Original /tmp archive disappeared. Recovered exact plan and680634-byte tarball
+from original openjob-wlk-303/dist; SHA512 matches the approval byte-for-byte.
+Durable read-only copies now at
+/Users/shanewalker/Documents/Codex/2026-10-16/task/openjob-publication-handoff/approved-dev-9ba3929/.
+Recovery receipt records17 unrelated untracked duplicate-file hashes; all unchanged.
+Original checkout/source, duplicate files, tarballs, pilot/session/data preserved.
+
+Separate npm:resume:check / npm:resume use a clean current-main publisher, original
+source identity+main ancestry, fixed reviewed approval receipt, exact bytes/manifest,
+current registry owner/channel/monotonicity/existing-version integrity and private
+staging/no artifact scripts. Normal prepare/publish freshness remains unchanged.
+Check makes no npm/auth calls; publish makes at most one attempt with existing login,
+stops on EOTP/ambiguity, then requires registry reconciliation before another run.
+No build/repack, login/token/2FA/config change, stable release or new approval.
+
+Focused publisher/distribution21 tests, compile, affected lint, brand32, secrets669
+and diff checks pass. Independent exact-head review4452db8 confirmed no remaining
+consequential findings after disabling npm's internal network retries. PR107,
+landing and actual durable check-only result recorded in Linear307/PR. Publication and fresh registry install
+remain UNVERIFIED until the original approved bytes actually reach npm. Owner handoff
+will use a separate durable clean checkout and direct command outside /tmp.
+
+Latest parent infrastructure readback: Docker/Compose installed, active, zero app
+containers; exact public HTTPS/deployment handoff still pending. No infra actions
+here. app.openjob.dev remains only a recommendation. Personal Gmail activation is
+not requested now: alternative Timothy Friedman test account awaits exact address
+and ownership/authorization with parent. No Google/credential/browser/Terminal action.
+
+---
+
 # Hosting dependency reconciled — 18 October 2026, 21:02 UTC
 
 Parent relayed the sole infrastructure owner's completed inventory of the purchased

@@ -55,6 +55,40 @@ An expired login is a visible blocker, not permission to create credentials.
 A failed/ambiguous write or propagation read requires registry inspection before
 any retry. [npm publication](https://docs.npmjs.com/cli/v11/commands/npm-publish/)
 
+## Resume the existing immutable approval
+
+WLK307's October16 approval covers only
+`0.3.8-dev.1792161876.9ba3929fbf0c`, source
+`9ba3929fbf0ccc3e24e2577410a355fa3798736e`, and its recorded SHA512. The one
+original attempt failed with EOTP. Main advancing does not change those approved
+bytes. A reviewed receipt in `distribution/approved-publication.mjs` binds that
+single exception to the original owner-approval comment. It cannot authorize a
+new version, stable release, different channel or rebuilt package.
+
+Use a separate clean checkout at current remote main, preserving unrelated edits
+in the original checkout. Keep the original plan and tarball together in a durable
+directory outside `/tmp`; copying is allowed only after matching their recorded
+integrity. Never regenerate the artifact to make it fit the approval.
+
+```sh
+npm run npm:resume:check -- /absolute/durable/path/publication.json --approve 'sha512-XHe/R52kjuZnrHwPuKaElHJqnYfAdGrLOZwGrowoRRsXUyYgCRE37zHdo3J6z7NsY0lLEkVH9J81bqOk73D5Kg=='
+npm run npm:resume -- /absolute/durable/path/publication.json --approve 'sha512-XHe/R52kjuZnrHwPuKaElHJqnYfAdGrLOZwGrowoRRsXUyYgCRE37zHdo3J6z7NsY0lLEkVH9J81bqOk73D5Kg=='
+```
+
+Check performs no authentication or publication. Both commands verify the approved
+bytes/manifest/identity, the original source's identity and ancestry in main,
+the clean current-main publisher and the live registry's owner, version integrity
+and monotonic dev tag. Publish then uses the existing scwlkr login and makes at
+most one explicit dev-tag attempt, with lifecycle scripts and npm's internal
+network retries disabled. EOTP or an
+uncertain result stops; inspect registry before another human-triggered invocation.
+Follow npm's security prompt personally; no token, login configuration or 2FA
+change is part of this workflow. Normal prepare/publish freshness rules stay intact.
+
+This old artifact contains its original prototype functionality, not later main's
+real-pilot or Google lifecycle changes. Registry publication and fresh registry
+install/run remain separate acceptance evidence until actually observed.
+
 The initial 0.3.7 and dev publications remain unchanged. The retained reviewed
 0.3.8 candidate in `/tmp/openjob-307-candidate` is installation evidence, not an
 approved release. No new version is authorized for publication by this workflow.
