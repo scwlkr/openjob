@@ -1,3 +1,32 @@
+# WLK307 COMPLETE — exact registry artifact verified, 19 October 2026
+
+Owner completed manual npm web authentication/publication. npm accepted the upload
+but immediate readback failed while processing; NO root publication retry occurred.
+At12:47:57UTC registry confirmed exactversion0.3.8-dev.1792161876.9ba3929fbf0c,
+approved SHA512, dev pointing to that version and latest unchanged0.3.7. At12:49UTC
+independent public tarball download was680634bytes and matched the original approval
+byte-for-byte. Original source9ba3929fbf0ccc3e24e2577410a355fa3798736e unchanged.
+
+Fresh empty prefix/cache registry install with scripts disabled PASS; installed
+version/source matched. Actual packaged app ran outside source checkout on a separate
+ephemeral loopback port: JS/CSS/brand assets, create→schedule→complete Task, owner
+isolation, Host/Origin denial, source-file denial and shutdown PASS. Synthetic
+fixture proof only: no later-main Google/real-pilot features, live provider, native
+device, deployment or stable release claimed. Existing real pilot/session untouched.
+
+Durable handoff directory openjob-publication-handoff contains registry-processing.json,
+registry-install-receipt.json, original approval/bytes and no-republish notice.
+DO NOT rerun publication. Owner checkout remains18da3ff unchanged after its command;
+source auth-error repair PR108 merged5cf825d with23 focused checks/review. WLK307
+can close; original approval is fulfilled, not authorization for future artifacts.
+
+Use npm install -g @scwlkr/openjob@dev for this published prototype; latest remains
+0.3.7. Requires Node>=22.13.0. App is explicitly simulated; real sending disabled.
+Gmail alternative test account/HTTPS/backend activation, parkedPR95, WLK302 and
+WLK327 retain their own gates. Docker installed does not imply app deployment.
+
+---
+
 # WLK307 — owner E401 authentication handoff, 19 October 2026
 
 Subsequent owner report: web login completed as scwlkr; owner reran the existing
