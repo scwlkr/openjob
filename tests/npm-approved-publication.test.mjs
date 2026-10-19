@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { approvedPublication, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs } from '../distribution/approved-publication.mjs';
+import { approvedPublication, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs, checkApprovedNpmLogin } from '../distribution/approved-publication.mjs';
 import { localPublicationIdentity, publicationDecision } from '../distribution/publication.mjs';
 
 const bytes = Buffer.from('invented archived bytes, no package/provider/authentication effects');
@@ -16,6 +16,27 @@ test('approved npm invocation fixes dev/registry and disables hooks and transpor
     'publish', '/private/sealed.tgz', '--access', 'public', '--tag', 'dev',
     '--registry=https://registry.npmjs.org', '--ignore-scripts', '--fetch-retries=0',
   ]);
+});
+
+test('failed login reports exact private owner handoff without leaking npm stderr or another identity', () => {
+  checkApprovedNpmLogin(() => 'scwlkr\n');
+  assert.throws(() => checkApprovedNpmLogin(() => 'other-private-identity'), error => {
+    assert.match(error.message, /existing scwlkr/); assert.doesNotMatch(error.message, /other-private-identity/); return true;
+  });
+  assert.throws(() => checkApprovedNpmLogin(() => { throw Object.assign(new Error('secret-fixture-value https://auth.invalid/private'), { stderr: 'secret-fixture-value' }); }), error => {
+    assert.match(error.message, /npm login --auth-type=web --registry=https:\/\/registry.npmjs.org/);
+    assert.match(error.message, /saves a local credential/);
+    assert.doesNotMatch(error.stack, /secret-fixture-value|auth.invalid/); return true;
+  });
+});
+
+test('authentication failure stops before registry checks or publication with no retry', async () => {
+  const calls = [];
+  await assert.rejects(completeApprovedPublication({ mode: 'publish',
+    checkLogin() { calls.push('whoami'); checkApprovedNpmLogin(() => { throw new Error('E401'); }); },
+    decision() { calls.push('registry'); }, provenance() { calls.push('source'); }, publish() { calls.push('publish'); },
+  }), /before publication/);
+  assert.deepEqual(calls, ['whoami']);
 });
 
 test('resumption binds original source/version/channel/approval and all archived bytes', () => {

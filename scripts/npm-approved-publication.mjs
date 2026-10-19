@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { approvedPublication as receipt, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs } from '../distribution/approved-publication.mjs';
+import { approvedPublication as receipt, verifyApprovedPlan, verifyApprovedProvenance, completeApprovedPublication, approvedPublishArgs, checkApprovedNpmLogin } from '../distribution/approved-publication.mjs';
 import { assertLocalPublish, publicationDecision, verifyPublicationManifest } from '../distribution/publication.mjs';
 
 const [mode, target, flag, approval, ...extra] = process.argv.slice(2);
@@ -57,7 +57,7 @@ try {
   verifyPublicationManifest(pkg, identity);
   const status = await completeApprovedPublication({ mode, decision, provenance,
     checkLogin() {
-      if (execFileSync('npm', ['whoami', `--registry=${receipt.registry}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() !== 'scwlkr') throw new Error('Existing scwlkr npm authentication required. No login/settings change attempted.');
+      checkApprovedNpmLogin(() => execFileSync('npm', ['whoami', `--registry=${receipt.registry}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
     },
     publish() {
       console.log('Publishing the original approved bytes once. Complete npm authentication personally; never share security links, OTPs or tokens.');

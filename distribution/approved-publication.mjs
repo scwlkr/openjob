@@ -38,6 +38,16 @@ export function approvedPublishArgs(tarball) {
     `--registry=${approvedPublication.registry}`, '--ignore-scripts', '--fetch-retries=0'];
 }
 
+export function checkApprovedNpmLogin(readWhoami) {
+  let account;
+  try { account = readWhoami().trim(); }
+  catch {
+    // Never propagate npm stderr, auth URLs, tokens or configuration values.
+    throw new Error('npm authentication check failed before publication. Owner action: npm login --auth-type=web --registry=https://registry.npmjs.org (saves a local credential in the user npmrc), then npm whoami --registry=https://registry.npmjs.org must report scwlkr. Complete authentication privately. No login, credential or settings change was attempted by this command.');
+  }
+  if (account !== 'scwlkr') throw new Error('npm must report the existing scwlkr account before publication. No publication or authentication change attempted.');
+}
+
 // Both CLI modes use the same last-minute registry/provenance checks. No retry.
 export async function completeApprovedPublication({ mode, decision, provenance, checkLogin, publish }) {
   if (!['check', 'publish'].includes(mode)) throw new Error('Unsupported publication operation.');

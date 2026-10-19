@@ -89,6 +89,30 @@ This old artifact contains its original prototype functionality, not later main'
 real-pilot or Google lifecycle changes. Registry publication and fresh registry
 install/run remain separate acceptance evidence until actually observed.
 
+### If the existing login returns E401
+
+E401 from the initial `npm whoami` stops before publication. An owner-controlled
+refresh of the existing npm account can be done in the prepared checkout:
+
+```sh
+npm login --auth-type=web --registry=https://registry.npmjs.org
+npm whoami --registry=https://registry.npmjs.org
+```
+
+Login saves a local npm credential in the user `.npmrc`; it is a human action,
+not something the publisher does automatically. Use the existing `scwlkr` account
+and complete the npm browser flow privately. No password, token, OTP or security
+URL belongs in chat or repository files. Do not weaken 2FA or create a separate
+account/token. Continue the approved handoff only when whoami reports `scwlkr`.
+
+Environment npm config or a project `.npmrc` can take precedence over a saved
+user login. `NODE_AUTH_TOKEN`/`NPM_TOKEN` matter when referenced by configuration;
+their presence alone does not establish an override. Inspect only configuration
+key names, environment-variable names and presence, never `npm config list`, raw
+environment output or credential values. The Terminal environment may differ from
+an agent process. If an override is present or E401 persists after web login,
+stop and identify that configuration source before changing it or retrying publish.
+
 The initial 0.3.7 and dev publications remain unchanged. The retained reviewed
 0.3.8 candidate in `/tmp/openjob-307-candidate` is installation evidence, not an
 approved release. No new version is authorized for publication by this workflow.
