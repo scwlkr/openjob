@@ -5,6 +5,13 @@ proposal is cancelled; no trust records, environments, tokens or activation
 were created. The only Actions workflow is optional manual artifact generation;
 main pushes and releases no longer consume Actions minutes automatically.
 
+19 October registry receipt: the original approved
+`@scwlkr/openjob@0.3.8-dev.1792161876.9ba3929fbf0c` is now published and verified
+under `dev`; `latest` remains `0.3.7`. After npm's processing delay, exact SHA512,
+public tarball bytes and a clean registry install/packaged-app synthetic smoke
+passed. Do not republish it. This is the original source `9ba3929` prototype,
+not later main's real-pilot/Google lifecycle functionality. Node>=22.13.0 required.
+
 Use the existing npm/Node checkout and authenticated npm CLI. No scheduler,
 credential creation or security changes are needed. Keep a clean reviewed
 checkout. The commands below never deploy the hosted app.
