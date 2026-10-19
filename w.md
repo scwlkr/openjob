@@ -1,3 +1,25 @@
+# WLK307 — owner E401 authentication handoff, 19 October 2026
+
+Shane ran the repaired command and parent reports npm whoami E401 at12:39UTC,
+before publication. No root publish retry/login/credential/security change.
+Installed npm11.11.0 docs and login implementation confirm manual owner command:
+`npm login --auth-type=web --registry=https://registry.npmjs.org`, then
+`npm whoami --registry=https://registry.npmjs.org` must report scwlkr. Login saves
+a local user npmrc credential; owner completes browser authentication privately.
+
+Names/presence-only readback in root process: no NPM_CONFIG_*/npm_config_*,
+NPM_TOKEN or NODE_AUTH_TOKEN environment names; prepared project npmrc absent;
+user npmrc has registry.npmjs.org authToken key with no environment substitutions;
+global npmrc absent. No credential values output. Shane's Terminal environment
+may differ; do not claim its overrides ruled out. No automatic config removal.
+
+checkApprovedNpmLogin now redacts child errors/security links and reports the exact
+manual action/local credential effect. Wrong account also stays redacted.23 focused
+checks cover redaction and stopping before registry/publish; lint/brand32/secrets669/
+diff pass. Review/PR/landing in Linear307. No auth or publication attempted here.
+
+---
+
 # WLK307 — immutable approved npm handoff recovered, 19 October 2026
 
 Parent authorizes repairing the original exact publication handoff. Approved
