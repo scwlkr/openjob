@@ -1,5 +1,13 @@
 # WLK307 — owner E401 authentication handoff, 19 October 2026
 
+Subsequent owner report: web login completed as scwlkr; owner reran the existing
+handoff and npm printed acceptance of the exact approved dev version with registry
+processing pending. Immediate readback was unconfirmed. DO NOT PUBLISH AGAIN.
+Root public registry read12:43:56UTC stillversion404/devold/latest0.3.7. This is
+pending processing, not proof of a rejected upload. Only read-only reconciliation
+and, after exact integrity/tag confirmation, isolated registry install/run follow.
+No authentication/security URL from the owner's output is copied here.
+
 Shane ran the repaired command and parent reports npm whoami E401 at12:39UTC,
 before publication. No root publish retry/login/credential/security change.
 Installed npm11.11.0 docs and login implementation confirm manual owner command:
