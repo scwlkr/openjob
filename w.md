@@ -21,9 +21,10 @@ Check makes no npm/auth calls; publish makes at most one attempt with existing l
 stops on EOTP/ambiguity, then requires registry reconciliation before another run.
 No build/repack, login/token/2FA/config change, stable release or new approval.
 
-Focused publisher/distribution20 tests, compile, affected lint, brand32, secrets669
-and diff checks pass. Independent review, final head/PR/landing and actual durable
-check-only result recorded in Linear307/PR. Publication and fresh registry install
+Focused publisher/distribution21 tests, compile, affected lint, brand32, secrets669
+and diff checks pass. Independent exact-head review4452db8 confirmed no remaining
+consequential findings after disabling npm's internal network retries. PR107,
+landing and actual durable check-only result recorded in Linear307/PR. Publication and fresh registry install
 remain UNVERIFIED until the original approved bytes actually reach npm. Owner handoff
 will use a separate durable clean checkout and direct command outside /tmp.
 
