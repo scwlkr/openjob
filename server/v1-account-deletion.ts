@@ -195,6 +195,7 @@ type AccountDeletionOptions = {
   notifications: { removeAllForUser(userId: string): Promise<number> };
   agentGrants?: { removeAllForUser(userId: string): Promise<number> };
   personalWorkspaces?: { removeAllForUser(userId: string): Promise<number> };
+  privateGoogleConnections?: { removeForDeletion(userId: string, requestId: string): Promise<boolean> };
   now?: () => number;
   reportEscalation?: () => void;
   providers: {
@@ -477,6 +478,7 @@ function sameFirebaseIdentity(
 export function createV1AccountDeletionApi({
   agentGrants,
   personalWorkspaces,
+  privateGoogleConnections,
   groups,
   jobs,
   notifications,
@@ -574,6 +576,7 @@ export function createV1AccountDeletionApi({
     await notifications.removeAllForUser(job.userId);
     await agentGrants?.removeAllForUser(job.userId);
     await personalWorkspaces?.removeAllForUser(job.userId);
+    await privateGoogleConnections?.removeForDeletion(job.userId, job.requestId);
     const firebaseUids = [...new Set(
       job.credentials.map(({ firebaseUid }) => firebaseUid),
     )];

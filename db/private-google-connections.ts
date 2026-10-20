@@ -4,7 +4,7 @@ import { googleRows, type GoogleConnection, type PrivateGoogleConnections } from
 import { connectionFail } from '../shared/connection-onboarding.ts';
 
 type Client = ReturnType<typeof createFirestoreRestClient>;
-type Options = { executionMode?: 'disabled' | 'configured'; db: Client; key: CryptoKey; keyId: string };
+type Options = { executionMode?: 'disabled' | 'configured'; db: Client; key: CryptoKey; keyId: string; previousKeys?: Readonly<Record<string, CryptoKey>> };
 const encoder = new TextEncoder();
 const MAX_PLAINTEXT_BYTES = 600_000, MAX_DOCUMENT_BYTES = 850_000;
 const concurrent = (error: unknown) => error instanceof FirestoreRequestError && ['ABORTED', 'ALREADY_EXISTS', 'FAILED_PRECONDITION', 'NOT_FOUND'].includes(error.code ?? '');
@@ -19,18 +19,27 @@ function decode(value: string) {
  * retries an explicit authentication rejection; CAS contention reruns pure apply. */
 export function createFirestorePrivateGoogleConnections(options: Options): PrivateGoogleConnections & {
   cleanupExpiredForOwner(owner: string, now?: number): Promise<number>;
+  disconnectAllForOwner(owner: string): Promise<number>;
+  reencryptForOwner(owner: string): Promise<void>;
+  removeForDeletion(owner: string, requestId: string): Promise<boolean>;
 } {
   const { db, key, keyId, executionMode = 'disabled' } = options;
-  function enabled() {
-    if (executionMode !== 'configured' || !key) connectionFail('not_configured');
-    const algorithm = key.algorithm as AesKeyAlgorithm;
-    if (key.type !== 'secret' || key.extractable || algorithm.name !== 'AES-GCM' || algorithm.length !== 256 || !key.usages.includes('encrypt') || !key.usages.includes('decrypt') || !/^[a-zA-Z0-9_-]{1,64}$/.test(keyId)) connectionFail('not_configured');
+  const previousKeys = { ...options.previousKeys };
+  const keys = new Map(Object.entries(previousKeys)); keys.set(keyId, key);
+  const validId = (id: string) => /^[a-zA-Z0-9_-]{1,64}$/.test(id);
+  function validKey(candidate: CryptoKey, encrypt: boolean) {
+    const algorithm = candidate?.algorithm as AesKeyAlgorithm | undefined;
+    return candidate?.type === 'secret' && !candidate.extractable && algorithm?.name === 'AES-GCM' && algorithm.length === 256 && candidate.usages.includes('decrypt') && (!encrypt || candidate.usages.includes('encrypt'));
+  }
+  function enabled(requireKey = true) {
+    if (executionMode !== 'configured') connectionFail('not_configured');
+    if (requireKey && (!validId(keyId) || !validKey(key, true) || Object.keys(previousKeys).length > 4 || Object.hasOwn(previousKeys, keyId) || Object.entries(previousKeys).some(([id, value]) => !validId(id) || !validKey(value, false)))) connectionFail('not_configured');
   }
   function path(owner: string) {
     if (!/^user_[a-f0-9]{32}$/.test(owner)) connectionFail('invalid_input');
     return `v1PrivateGoogleConnections/${owner}`;
   }
-  const context = (owner: string) => encoder.encode(JSON.stringify(['openjob-private-google', 1, db.documentName(path(owner)), owner, keyId]));
+  const context = (owner: string, id = keyId) => encoder.encode(JSON.stringify(['openjob-private-google', 1, db.documentName(path(owner)), owner, id]));
   async function seal(owner: string, rows: GoogleConnection[]) {
     const plaintext = encoder.encode(JSON.stringify(googleRows(rows, owner)));
     if (plaintext.length > MAX_PLAINTEXT_BYTES) connectionFail('capacity');
@@ -44,10 +53,10 @@ export function createFirestorePrivateGoogleConnections(options: Options): Priva
     const response = await db.request(location, {}, { allowNotFound: true });
     if (response.status === 404) { await assertActiveUser(db, owner); return { doc: null, rows: [] as GoogleConnection[] }; }
     const doc = await response.json() as FirestoreDocument, fields = doc.fields;
-    if (doc.name !== db.documentName(location) || !doc.updateTime || !fields || Object.keys(fields).sort().join(',') !== 'ciphertext,iv,keyId,version' || fields.version.integerValue !== '1' || fields.keyId.stringValue !== keyId || typeof fields.iv.stringValue !== 'string' || typeof fields.ciphertext.stringValue !== 'string' || encoder.encode(JSON.stringify(doc)).length > MAX_DOCUMENT_BYTES) connectionFail('invalid_state');
+    if (doc.name !== db.documentName(location) || !doc.updateTime || !fields || Object.keys(fields).sort().join(',') !== 'ciphertext,iv,keyId,version' || fields.version.integerValue !== '1' || typeof fields.keyId.stringValue !== 'string' || !keys.has(fields.keyId.stringValue) || typeof fields.iv.stringValue !== 'string' || typeof fields.ciphertext.stringValue !== 'string' || encoder.encode(JSON.stringify(doc)).length > MAX_DOCUMENT_BYTES) connectionFail('invalid_state');
     const iv = decode(fields.iv.stringValue), ciphertext = decode(fields.ciphertext.stringValue);
     if (iv.length !== 12 || ciphertext.length < 16 || ciphertext.length > MAX_PLAINTEXT_BYTES + 16) connectionFail('invalid_state');
-    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: context(owner), tagLength: 128 }, key, ciphertext as BufferSource);
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: context(owner, fields.keyId.stringValue!), tagLength: 128 }, keys.get(fields.keyId.stringValue!)!, ciphertext as BufferSource);
     const rows = googleRows(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext)), owner);
     await assertActiveUser(db, owner);
     return { doc, rows };
@@ -67,18 +76,51 @@ export function createFirestorePrivateGoogleConnections(options: Options): Priva
     }
     return connectionFail('conflict');
   }
-  async function guarded<T>(operation: () => Promise<T>) {
-    enabled();
+  async function guarded<T>(operation: () => Promise<T>, requireKey = true) {
+    enabled(requireKey);
     try { return await operation(); }
     catch (error) {
       if (isInactiveUserError(error)) return connectionFail('forbidden');
       const code = (error as { code?: string })?.code;
-      if (code && ['invalid_input', 'invalid_state', 'capacity', 'conflict'].includes(code)) return connectionFail(code);
+      if (code && ['invalid_input', 'invalid_state', 'capacity', 'conflict', 'forbidden'].includes(code)) return connectionFail(code);
       // Never expose Firestore/provider response text, paths, plaintext or crypto errors.
       return connectionFail('unavailable');
     }
   }
+  async function removeForDeletion(owner: string, requestId: string) {
+    const location = path(owner), userPath = `v1UserDirectory/${owner}`;
+    if (typeof requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(requestId)) connectionFail('invalid_input');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const userResponse = await db.request(userPath, {}, { allowNotFound: true });
+      if (userResponse.status === 404) connectionFail('forbidden');
+      const user = await userResponse.json() as FirestoreDocument;
+      if (user.name !== db.documentName(userPath) || !user.updateTime || user.fields?.userId?.stringValue !== owner || user.fields.deletionState?.stringValue !== 'pending' || user.fields.deletionRequestId?.stringValue !== requestId) connectionFail('forbidden');
+      const response = await db.request(location, {}, { allowNotFound: true });
+      if (response.status === 404) return false;
+      const doc = await response.json() as FirestoreDocument;
+      if (doc.name !== db.documentName(location) || !doc.updateTime) connectionFail('invalid_state');
+      try {
+        await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [
+          { verify: user.name, currentDocument: { updateTime: user.updateTime } },
+          { delete: doc.name, currentDocument: { updateTime: doc.updateTime } },
+        ] }) });
+      } catch (error) { if (concurrent(error)) continue; throw error; }
+      return true;
+    }
+    return connectionFail('conflict');
+  }
   return {
+    removeForDeletion: (owner, requestId) => guarded(() => removeForDeletion(owner, requestId), false),
+    reencryptForOwner: owner => guarded(async () => { await change(owner, rows => rows); }),
+    disconnectAllForOwner: owner => guarded(async () => {
+      let count = 0;
+      await change(owner, rows => { count = rows.length; return rows.map(row => {
+        const next: GoogleConnection = { ...row, status: row.status === 'authorizing' ? 'cleanup_pending' : 'disconnected' };
+        delete next.pending; delete next.grant; delete next.operation; delete next.consentExpiresAt;
+        return next;
+      }); });
+      return count;
+    }),
     read: owner => guarded(async () => (await load(owner)).rows),
     change: (owner, apply) => guarded(() => change(owner, apply)),
     cleanupExpiredForOwner: (owner, now = Date.now()) => guarded(async () => {

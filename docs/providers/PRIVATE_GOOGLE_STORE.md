@@ -8,7 +8,9 @@ Firestore is an engineering choice that reuses the working database and user fen
 it is not a request for the owner to choose another database.
 
 Construction requires an explicitly injected REST client, nonextractable AES key
-and versioned key identifier. Operations default to disabled. Tests import fixed
+and versioned key identifier. A bounded snapshot of up to four previous key IDs/keys
+can decrypt older envelopes; only the current key encrypts writes. Duplicate IDs,
+unknown keys and invalid key capabilities fail closed. Operations default to disabled. Tests import fixed
 invented key bytes and use fake Firestore/Google transports. No key or client
 secret is generated, read or persisted for actual use.
 
@@ -40,17 +42,39 @@ Firestore deployment, disk durability or production restart.
 Explicit `cleanupExpiredForOwner` changes expired pending attempts to reconnect
 required and removes their verifier/nonce from the current envelope through CAS.
 No scheduler is installed. Disconnect already removes current grants through the
-same encrypted write. Neither operation erases old database backups or revokes
+same encrypted write. `disconnectAllForOwner` atomically clears pending secrets and
+current grants, preserving subject/home/connection lineage. In-flight authorization
+becomes cleanup-pending and cannot promote its late result. This is local access
+revocation, not Google grant revocation.
+
+`reencryptForOwner` rewrites the latest owner envelope under the current injected
+key through the same CAS and active-User fences. It preserves lifecycle state;
+it does not refresh a token or contact a provider. Existing old-key-only readers
+fail closed after re-encryption. A successful owner rewrite is not proof that an
+old key is safe to retire globally: every retained owner/backup and concurrent
+process must be accounted for before operational retirement. No loader, key
+creation/rotation service or automatic migration is installed.
+
+`removeForDeletion(owner, requestId)` is a separate internal cleanup path. It
+requires the exact existing User with deletionState=pending and matching request
+ID, then atomically verifies that User's update time and deletes the exact envelope
+with CAS. Active, absent, foreign and replaced deletion requests cannot authorize
+cleanup. It does not decrypt and can remove corrupt/unknown-key ciphertext even
+when a decryption key is missing. A successful delete with a lost response is not
+replayed; a later explicit inspection can observe the envelope absent. No current
+record can be recreated through normal writes while the User is pending deletion.
+An optional account-deletion worker dependency calls this before Firebase/User
+finalization; failure keeps deletion pending. Normal compositions inject no such
+dependency, so this source slice performs no real deletion. Neither operation erases old database backups or revokes
 Google's project-wide grants.
 
 ## Before activation
 
 No live policy is silently adopted by this implementation. The concrete activation
 handoff still needs approved key/client-secret delivery, private server-only database
-access, key loss/rotation and backup retention procedures, plus account-deletion
-cleanup of this collection. Ordinary access is fenced when deletion starts, but
-physical collection cleanup is deliberately not attached to the existing deletion
-worker in this disabled slice. Existing pending secrets expire after ten minutes;
+access, key loss/rotation and backup retention procedures, plus explicit injection of the account-deletion cleanup dependency in the selected
+runtime. The tested cleanup hook exists but remains unbound; ordinary access is
+fenced when deletion starts. Existing pending secrets expire after ten minutes;
 a later explicit cleanup invocation erases them from the current record. Backup
 erasure and upstream revocation need their actual operational limits documented.
 
@@ -59,7 +83,9 @@ mailbox consent remain separate. Basic Google name/profile sign-in does not gran
 Gmail access. This source does not send mail, access a mailbox or enable providers.
 
 Focused proof: `node --test tests/private-google-connections.test.mjs
- tests/google-connection-flow.test.mjs` (one shell line). This covers encrypted
+ tests/private-google-lifecycle.test.mjs tests/google-connection-flow.test.mjs
+ tests/v1-account-deletion.test.mjs` (one shell line). This covers encrypted
 first-consent/refresh/fake-Mail/disconnect, instance reconstruction, corruption and
 owner/database binding, CAS races, lost commit response, deletion race, expiry,
-capacity and disabled/no-call behavior. Provider responses and keys are synthetic.
+capacity, key re-encryption/retirement denial, local disconnect-all, exact pending
+deletion cleanup and disabled/no-call behavior. Provider responses and keys are synthetic.

@@ -1,22 +1,11 @@
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
 import { createFirestorePrivateGoogleConnections } from '../db/private-google-connections.ts';
-import { createFirestoreRestClient } from '../db/firestore-rest.ts';
-import { googleFlowFixture } from './support/google-connection-flow.mjs';
+import { privateGoogleStoreFixture as fixture } from './support/private-google-store.mjs';
 import { BINDING, ACCESS, REFRESH } from './support/google-oauth-transport.mjs';
 const originalFetch = globalThis.fetch;
 before(() => { globalThis.fetch = async () => { throw new Error('Unexpected real network'); }; });
 after(() => { globalThis.fetch = originalFetch; });
-async function fixture() {
-  const f = await googleFlowFixture();
-  // Deterministic invented test bytes only; no real key or credential is created.
-  const key = await crypto.subtle.importKey('raw', new Uint8Array(32).fill(7), 'AES-GCM', false, ['encrypt', 'decrypt']);
-  const client = createFirestoreRestClient(f.config, f.db.fetch), options = { db: client, key, keyId: 'synthetic-key-v1', executionMode: 'configured' };
-  const store = createFirestorePrivateGoogleConnections(options);
-  f.reconstruct({ repository: store });
-  const location = client.documentName(`v1PrivateGoogleConnections/${f.owner}`);
-  return { ...f, store, options, client, location };
-}
 
 test('encrypted concrete Firestore flow persists pending and grants across reconstruction, refreshes and disconnects using fake Google', async () => {
   const f = await fixture(), start = await f.begin();
