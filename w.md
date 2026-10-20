@@ -44,10 +44,12 @@ routing restored. iOS build lease42be431e909e74377380242a released succeeded.
 Android work in progress: /tmp/openjob-r53-ji537fxd is the outside-sync proof copy.
 Only its native package main selects the committed simulator-connected-smoke entry;
 the actual checkout's normal index.ts entry is unchanged. Development debug build
-session2017 uses two workers and existing debug networking. Owned AVD
-OpenJob_R53_Connected / emulator-5580 is booting; no existing Bubba AVD was reused.
-Android Build Space leaseaa96892ca56c7c57fe60b7e2 is active and must be released
-with its actual outcome. Its build automatically installed the required NDK using
+session2017 passed in25m33s (571tasks); the verified development APK is installed
+on owned AVD OpenJob_R53_Connected / emulator-5580. Existing debug networking was
+used; no existing Bubba AVD was reused. Android build lease
+aa96892ca56c7c57fe60b7e2 released succeeded. APK SHA256
+cda191317268d87ba205fab616004cb7c5db4e672f2a400d2e96e0fc7bee2be9;
+sanitized build receipt: output/r53/android-build-receipt.json. Its build automatically installed the required NDK using
 the SDK's existing accepted license; source lockfiles were unchanged. Local fake
 service PID5910/session60283 uses /tmp/openjob-r53-native-state.json on5213; it is
 disconnected after the iOS denial test. Use a fresh dedicated Android state next.
@@ -56,7 +58,9 @@ The Android fixture service session97374 now uses fresh dedicated
 /tmp/openjob-r53-android-state.json on5213; the disconnected iOS service was stopped.
 The emulator is online. CUA cannot bind its raw SDK window (not exposed as a supported
 app); alternative Android SDK UI automation needs explicit method authorization
-before input actions. Native build session2017 is still authoritative. Metro is
+before input actions. The build is complete; no Android UI input has run. Method authorization was
+requested through the current chat; do not infer approval from the earlier bounded
+Google notice authorization. Metro is
 loopback-only/offline on8088 with the committed fixture main selected only in the
 proof copy; Metro PID45723/session90405. Initial --offline/--host combination was
 rejected by locked Expo; EXPO_OFFLINE=1 plus --host localhost works and lsof confirms
