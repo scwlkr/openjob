@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { googleServiceConfiguration } from './google-config.mjs';
 
 export async function serviceConfiguration(environment) {
   const keys = ['FIREBASE_PROJECT_ID', 'FIREBASE_API_KEY', 'FIREBASE_APP_ID', 'FIREBASE_AUTH_DOMAIN', 'FIREBASE_CLIENT_EMAIL'];
@@ -13,6 +14,7 @@ export async function serviceConfiguration(environment) {
     missing,
     firebase: { projectId: environment.FIREBASE_PROJECT_ID ?? '', apiKey: environment.FIREBASE_API_KEY ?? '', appId: environment.FIREBASE_APP_ID ?? '', authDomain: environment.FIREBASE_AUTH_DOMAIN ?? '' },
     server: { projectId: environment.FIREBASE_PROJECT_ID, apiKey: environment.FIREBASE_API_KEY, clientEmail: environment.FIREBASE_CLIENT_EMAIL, privateKey },
+    google: await googleServiceConfiguration(environment),
     appleServiceId: environment.APPLE_SIGN_IN_SERVICE_ID ?? '',
   };
 }

@@ -27,7 +27,7 @@ const server = createServer(async (incoming, outgoing) => {
   try {
     const url = new URL(incoming.url, origin);
     if (url.pathname.startsWith('/__test')) { outgoing.writeHead(404).end(); return; }
-    if (url.pathname === '/healthz' && incoming.method === 'GET') { json(outgoing, config.missing.length ? 503 : 200, { mode: 'service', configured: !config.missing.length, missing: config.missing, providers: 'unconfigured', realSending: false }); return; }
+    if (url.pathname === '/healthz' && incoming.method === 'GET') { json(outgoing, config.missing.length ? 503 : 200, { mode: 'service', configured: !config.missing.length, missing: config.missing, providers: config.google ? 'configured_read_only' : 'unconfigured', realSending: false }); return; }
     if (url.pathname === '/runtime-config' && incoming.method === 'GET') {
       json(outgoing, 200, { firebase: config.firebase, appleServiceId: config.appleServiceId }); return;
     }
@@ -35,7 +35,7 @@ const server = createServer(async (incoming, outgoing) => {
       if (config.missing.length) { json(outgoing, 503, { error: { code: 'service_configuration_required', missing: config.missing } }); return; }
       const chunks = []; let length = 0;
       for await (const chunk of incoming) { length += chunk.length; if (length > 2 * 1024 * 1024) { json(outgoing, 413, { error: { code: 'request_too_large' } }); return; } chunks.push(chunk); }
-      runtime ??= createPortableRuntime(config.server);
+      runtime ??= createPortableRuntime(config.server, config.google ? { google: config.google, googleTransport: fetch, mailTransport: fetch } : {});
       const body = Buffer.concat(chunks);
       const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body } : {}) });
       const response = await runtime.fetch(request);
@@ -49,5 +49,5 @@ const server = createServer(async (incoming, outgoing) => {
     outgoing.writeHead(200, { 'content-type': mime[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }); outgoing.end(incoming.method === 'HEAD' ? undefined : content);
   } catch (error) { json(outgoing, error.code === 'ENOENT' || error.code === 'ENOTDIR' ? 404 : 500, { error: { code: 'service_request_failed' } }); }
 });
-server.listen(port, host, () => console.log(`OpenJob service: ${origin.origin}/workspace · ${config.missing.length ? 'configuration required' : 'Firebase configured'} · provider connections/sending unconfigured`));
+server.listen(port, host, () => console.log(`OpenJob service: ${origin.origin}/workspace · ${config.missing.length ? 'configuration required' : 'Firebase configured'} · ${config.google ? 'read-only Google configuration present' : 'provider connections unconfigured'} · real sending disabled`));
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { server.closeAllConnections(); server.close(); });

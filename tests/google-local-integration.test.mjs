@@ -6,14 +6,11 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateGoogleStoreFixture } from './support/private-google-store.mjs';
-import { createFirestoreRestClient } from '../db/firestore-rest.ts';
-import { createFirestorePrivateGoogleConnections } from '../db/private-google-connections.ts';
-import { createFirestorePersonalWorkspaceStore } from '../db/personal-workspace.ts';
-import { createPersonalApplication } from '../server/personal-application.ts';
+import { createPortableRuntime } from '../server/portable-runtime.ts';
 import { BINDING, ACCESS, REFRESH } from './support/google-oauth-transport.mjs';
 
 // One-shot local composition proof; never opens a browser or a real Google endpoint.
-test('loopback shared application + existing CLI complete Google lifecycle using encrypted fake Firestore', { timeout: 30_000 }, async t => {
+test('loopback opt-in portable runtime + existing CLI complete Google lifecycle using encrypted fake Firestore', { timeout: 30_000 }, async t => {
   const network = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('External network forbidden in local Google proof'); };
   t.after(() => { globalThis.fetch = network; });
@@ -21,11 +18,18 @@ test('loopback shared application + existing CLI complete Google lifecycle using
   t.after(() => rm(directory, { recursive: true, force: true }));
   const credential = join(directory, 'invented-cli-refresh');
   await writeFile(credential, 'invented-refresh', { mode: 0o600 });
-  const workspace = createFirestorePersonalWorkspaceStore(f.config, f.db.fetch);
   let application;
-  function reconstruct(repository = f.store) {
-    const { flow } = f.reconstruct({ repository });
-    application = createPersonalApplication({ workspace, users: f.users, verifyIdToken: f.verifyIdToken, google: flow });
+  function reconstruct() {
+    application = createPortableRuntime({ ...f.config, apiKey: 'fixture' }, {
+      databaseTransport: f.db.fetch, identityTransport: f.identityTransport,
+      googleTransport: f.protocol.transport, mailTransport: f.flowOptions.mailTransport,
+      evidenceMode: 'google-fixture', google: { executionMode: 'configured',
+        key: f.options.key, keyId: f.options.keyId, ownerUserId: f.owner,
+        firebaseUid: 'alex', address: BINDING.address,
+        clientId: f.flowOptions.google.clientId, clientSecret: f.flowOptions.google.clientSecret,
+        callbackUri: f.flowOptions.google.callbackUri,
+      },
+    });
   }
   reconstruct();
   const failures = [], paths = [], outputs = [];
@@ -35,7 +39,7 @@ test('loopback shared application + existing CLI complete Google lifecycle using
       if (req.url === '/firebase/token?key=fixture') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ id_token: f.sessions.alex.token, refresh_token: 'invented-refresh' })); return; }
       paths.push(req.url);
       const request = new Request(`http://127.0.0.1:${server.address().port}` + req.url, { method: req.method, headers: req.headers, ...(!['GET', 'HEAD'].includes(req.method) ? { body } : {}) });
-      const response = await application.connectionsApi.fetch(request);
+      const response = await application.fetch(request);
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text());
     } catch (error) { failures.push(error); res.writeHead(500); res.end(); }
   });
@@ -72,8 +76,7 @@ test('loopback shared application + existing CLI complete Google lifecycle using
   // Export/restore actual encrypted backing state, then reconstruct client/store/flow.
   // This is fake database restart proof, not live disk/database durability.
   f.db.restoreState(structuredClone(snapshot));
-  const restored = createFirestorePrivateGoogleConnections({ ...f.options, db: createFirestoreRestClient(f.config, f.db.fetch) });
-  reconstruct(restored);
+  reconstruct();
   assert.equal((await cli(['list'])).bindings[0].status, 'connected');
   await cli(['action', started.connectionId], { action: 'refresh' });
   const mail = await cli(['mail', started.connectionId]);

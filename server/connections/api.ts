@@ -5,11 +5,12 @@ import type { OpenJobUser } from '../v1-identity.ts';
 import { isInactiveUserError } from '../../db/user-history.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse, accountDeletionPendingResponse, signInMethodUnrecognizedResponse } from '../v1-http.ts';
 import type { ConnectionsApplication } from './application.ts';
-export function createConnectionsApi({ users, verifyIdToken, onboarding, google }: {
+export function createConnectionsApi({ users, verifyIdToken, onboarding, google, googleAdmission }: {
   users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> };
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   onboarding?: ConnectionsApplication;
   google?: GoogleConnectionsFlow;
+  googleAdmission?: { userId: string; provider: 'google'; firebaseUid: string };
 }) {
   const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: code === 'not_configured' ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.' });
   return { async fetch(request: Request) {
@@ -20,6 +21,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google 
       const url = new URL(request.url);
       if (url.search || request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
       if (google || url.pathname === '/api/v1/connections/google/callback') {
+        if (googleAdmission && (user.userId !== googleAdmission.userId || identity.provider !== googleAdmission.provider || identity.uid !== googleAdmission.firebaseUid)) return fail('forbidden', 403);
         const isCurrent = async () => { const current = await users.resolve(identity); return !!current && current.userId === user.userId && !current.deletionPending; };
         const response = await googleConnectionsRequest(request, user.userId, google, isCurrent);
         return await isCurrent() ? response : accountDeletionPendingResponse(defaultRequestId);

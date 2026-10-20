@@ -20,5 +20,5 @@ export async function onboardingFixture() {
   const api = createConnectionsApi({ users, verifyIdToken, onboarding: application });
   const request = (path = '', input, name = 'alex', target = api) => target.fetch(new Request('https://fixture.invalid/api/v1/connections' + path, { method: input === undefined ? 'GET' : 'POST', headers: { authorization: `Bearer ${sessions[name]?.token ?? name}`, ...(input === undefined ? {} : { 'content-type': 'application/json' }) }, ...(input === undefined ? {} : { body: JSON.stringify(input) }) }));
   const call = async (...args) => { const r = await request(...args); assert.equal(r.status, 200, await r.clone().text()); return (await r.json()).data; };
-  return { config, db, users, owned, sessions, owner, home, consent, store, application, api, verifyIdToken, request, call };
+  return { config, db, users, owned, sessions, owner, home, consent, store, application, api, verifyIdToken, identityTransport: authority.fetch, request, call };
 }
