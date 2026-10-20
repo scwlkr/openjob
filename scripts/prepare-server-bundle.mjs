@@ -9,7 +9,7 @@ const manifest=JSON.parse(await readFile(join(root,'dist/npm/package.json'),'utf
 const destination=join(root,'dist/server-bundle');
 await rm(destination,{recursive:true,force:true}); await mkdir(join(destination,'deployment'),{recursive:true});
 for(const name of ['compose.yaml','.dockerignore'])await cp(join(root,name),join(destination,name));
-await cp(join(root,'deployment/Dockerfile'),join(destination,'deployment/Dockerfile'));
+for(const name of ['Dockerfile','compose.google-local.yaml','service.env.example'])await cp(join(root,'deployment',name),join(destination,'deployment',name));
 await cp(join(root,'dist/npm'),join(destination,'dist/npm'),{recursive:true});
 await writeFile(join(destination,'README.md'),'# OpenJob local/server pilot bundle\n\nBuild on the target architecture with `docker compose --profile demo build demo`.\nRun the labeled local-only synthetic app with `docker compose --profile demo up -d demo`, then http://127.0.0.1:5191/workspace.\nThe separate `service` profile serves real Firebase authentication only after approved configuration; absent inputs yield setup/503, never a demo identity. No provider accounts or real sending are configured.\nBoth published ports bind host loopback. No server is purchased/deployed by this archive. See docs/PORTABLE_SERVICE.md in the source repository before an actual deployment. Do not publicly expose the synthetic profile.\n');
 const hashes={};

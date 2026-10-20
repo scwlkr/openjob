@@ -2,8 +2,9 @@
 
 `db/private-google-connections.ts` implements the existing private owner-envelope
 contract using Firestore REST compare-and-swap and WebCrypto AES-256-GCM. It is
-source preparation, with no normal runtime import, environment switch, key loader,
-credential access, collection provisioning, security-rule change or live activation.
+source preparation, with no default activation, credential access, collection provisioning, security-rule
+change or live activation. The explicit portable opt-in and bounded file loader
+are described in [portable configuration](../PORTABLE_SERVICE.md#optional-google-configuration-preparation).
 Firestore is an engineering choice that reuses the working database and user fence;
 it is not a request for the owner to choose another database.
 
@@ -52,7 +53,7 @@ key through the same CAS and active-User fences. It preserves lifecycle state;
 it does not refresh a token or contact a provider. Existing old-key-only readers
 fail closed after re-encryption. A successful owner rewrite is not proof that an
 old key is safe to retire globally: every retained owner/backup and concurrent
-process must be accounted for before operational retirement. No loader, key
+process must be accounted for before operational retirement. No implicit loader, key
 creation/rotation service or automatic migration is installed.
 
 `removeForDeletion(owner, requestId)` is a separate internal cleanup path. It
@@ -64,8 +65,9 @@ when a decryption key is missing. A successful delete with a lost response is no
 replayed; a later explicit inspection can observe the envelope absent. No current
 record can be recreated through normal writes while the User is pending deletion.
 An optional account-deletion worker dependency calls this before Firebase/User
-finalization; failure keeps deletion pending. Normal compositions inject no such
-dependency, so this source slice performs no real deletion. Neither operation erases old database backups or revokes
+finalization; failure keeps deletion pending. Default compositions inject no such
+dependency. Explicit portable opt-in exposes its internal cleanup capability but
+does not attach a worker or perform real deletion. Neither operation erases old database backups or revokes
 Google's project-wide grants.
 
 ## Before activation
@@ -115,9 +117,10 @@ This source work is now locally integrated. Remaining activation inputs are:
 2. Approved actual key/client-secret delivery references and private server-only
    Firestore access, with concrete backup/retention/rotation procedures. Do not
    generate keys, retrieve credentials or change rules during this proof.
-3. Small reviewed composition-root wiring that injects these dependencies and the
-   deletion hook explicitly. Normal roots deliberately remain unconfigured; this
-   wiring is engineering work, not an additional architecture approval ritual.
+3. The reviewed explicit portable configuration wires dependencies only after
+   opt-in; default roots remain unconfigured. Attach its internal deletion cleanup
+   to the authorized worker and prepare/select an existing owned Mail home. No
+   Workspace mapping/admission is silently created by enabling Google.
 4. Current Google Data Access/Verification facts, specific Gmail API/callback and
    runtime/store activation authorization, and human consent for the exact chosen
    alternate mailbox and only the disclosed read-only/offline scopes. Basic

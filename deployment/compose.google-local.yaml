@@ -1,0 +1,21 @@
+# Optional configuration overlay only. It does not configure TLS, DNS or ingress.
+# Normal compose.yaml/service remains Google-disabled. Do not start without approval.
+services:
+  service:
+    environment:
+      OPENJOB_GOOGLE_CONNECTIONS_MODE: ${OPENJOB_GOOGLE_CONNECTIONS_MODE:-disabled}
+      OPENJOB_GOOGLE_CLIENT_ID: ${OPENJOB_GOOGLE_CLIENT_ID:-}
+      OPENJOB_GOOGLE_OWNER_USER_ID: ${OPENJOB_GOOGLE_OWNER_USER_ID:-}
+      OPENJOB_GOOGLE_OWNER_FIREBASE_UID: ${OPENJOB_GOOGLE_OWNER_FIREBASE_UID:-}
+      OPENJOB_GOOGLE_MAILBOX: ${OPENJOB_GOOGLE_MAILBOX:-}
+      OPENJOB_GOOGLE_KEY_ID: ${OPENJOB_GOOGLE_KEY_ID:-}
+      OPENJOB_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/openjob_google_client_secret
+      OPENJOB_GOOGLE_KEY_FILE: /run/secrets/openjob_google_key
+    secrets:
+      - openjob_google_client_secret
+      - openjob_google_key
+secrets:
+  openjob_google_client_secret:
+    file: ${OPENJOB_GOOGLE_CLIENT_SECRET_SOURCE:?Explicit approved or synthetic file required}
+  openjob_google_key:
+    file: ${OPENJOB_GOOGLE_KEY_SOURCE:?Explicit approved or synthetic file required}

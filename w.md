@@ -1,3 +1,22 @@
+# WLK318 — explicit portable Google wiring/config preparation, 20 October 2026
+
+From021d10a, optional portable runtime composition injects existing encrypted store,
+Google/Mail transports and exact User/Google UID/mailbox admission. Default mode
+remains503/noGooglesecretreads. Separate bounded explicit-file config loader imports
+nonextractable existing key only on later configured startup; tests use invented
+bytes/files. Optional Compose secret overlay remains disabled/hostloopback; config
+--quiet validated with synthetic files, no daemon/container/service start. Portable
+SSR bundle compiled without execution. Cheap actual loopback Google/CLI proof now
+runs through createPortableRuntime itself. Existing pilot/sessions unaffected.
+
+No real credential delivery, key generation, grants, Workspace mapping/admission,
+provider calls, deployment/network/security changes. Exact operational setup inputs
+in docs/PORTABLE_SERVICE.md; chosen owned Mail home and deletion-worker hookup are
+not silently created by the flag. Final checks/review/landing in PR/Linear.
+PR95 unverified and unrelated; WLK302 recovery untouched.
+
+---
+
 # WLK318 — actual loopback Google/CLI integration proof, 20 October 2026
 
 From mergedPR111/dfc39f0, npm run test:google-local composes actual shared Personal

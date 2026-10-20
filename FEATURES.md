@@ -1,3 +1,12 @@
+## Explicit portable Google configuration (WLK318)
+
+The portable runtime can now compose the encrypted store/Google flow through
+explicit injected transports and selected User/Google-binding/mailbox inputs.
+A bounded secret-file loader and optional Compose overlay prepare later setup;
+defaults remain disabled with no Google files read. No real key/configuration,
+Workspace mapping/admission, grants, deployment or worker activation occurred.
+See [portable configuration](docs/PORTABLE_SERVICE.md#optional-google-configuration-preparation).
+
 ## Resume an approved npm artifact
 
 A separate local resume command verifies the one recorded WLK307 owner approval,

@@ -1,8 +1,10 @@
 # Google connection orchestration — WLK334
 
 This source-only flow joins the official Google protocol adapter to the existing
-human Connections API/UI. Normal portable/Cloudflare composition still injects
-neither Google flow nor private repository and returns503. No live Google calls,
+human Connections API/UI. Default portable/Cloudflare composition injects
+neither Google flow nor private repository and returns503. The portable service
+now has an [explicit opt-in configuration path](../PORTABLE_SERVICE.md#optional-google-configuration-preparation),
+with selected User/Google binding/mailbox and no default activation. No live Google calls,
 credentials, consent, registered callback, API activation, private-store activation
 or infrastructure settings were used. Existing simulated onboarding remains a
 separate engine and keeps its labels.
