@@ -1,3 +1,74 @@
+# WLK318 — alternate-only local service ready; browser control timed out
+
+Owner withdrew operator document access. No further 1Password/credential reads.
+Branch codex/wlk-318-alt-self-session from merged9d57528 supplies scoped source:
+new standalone self-authenticated Gmail composition + npm run dev:google-session.
+Only public nonprod Firebase config/selected alternate address. No Firestore,
+operator loader, saved OpenJob User or Task/Workspace routes. Existing backend
+users.resolve/deletionPending checks unchanged. Standalone route cannot observe
+OpenJob Firestore deletionPending and grants no saved-work capability.
+
+Normal Google sign-in uses separate memory-only Firebase app. Signed Firebase
+identity plus end-user accounts:lookup{idToken} checks exact selected verified
+mailbox, UID, Google provider subject, disabled/unlinked/revoked state. First UID
+learned only from authenticated self; core lease pins UID/subject/auth_time with
+strict Google client/audience/scopes and10min token-memory bound. No admin lookup,
+other-user enumeration, database permission changes, refresh/send/Calendar route.
+
+15 focused signed synthetic/self/revocation/auth-regression checks pass;
+TypeScript/affected lint/brand32 pass, rootsecret1030 pass. Reviewer found
+shared basic-auth persistence; corrected to separate memory-only app and repeated
+changed compile/lint gates passed. Added regression covers temporary-auth persistence
+and saved primary-session isolation. Root check attempt failed on known stale dependencies;
+all passing checks use prior locked isolated proof copy, shared install unchanged.
+
+Live service started from $TMPDIR/openjob-local-proof-5m1q071h with selected alt,
+loopback127.0.0.1:5202/mail-session; exec session3598, process14826. Actual health200
+local_mail_session/nonprod/sendingfalse and unauthenticated API denial verified.
+ALTS_SESSION=openjob-318-alt-self selected existing0003; alts open confirmed Edge
+profile0003 and requested local URL. No operator credential involved.
+
+BLOCK: cua.getApp(Microsoft Edge) timed out after33s and reset kernel; subsequent
+cua.getState timed out after31s/reset. No browser UI/sign-in/consent was observed
+or controlled. A fresh permitted getApp(Edge) retry also failed: Computer Use
+server error-10005, timed out waiting for initialize from codex app-server (32s),
+before any current-page observation/action. No further retry until something changes.
+No Gmail consent/read or Google settings changes. Stop repeating
+stalled control; restore supported Edge computer control (or owner handoff on
+already-open local page) to perform approved selected-alt sign-in, connect Gmail,
+one bounded read, disconnect. Stop at unexpected warnings/verification/allowlist.
+Previous denials remain unexecuted and withdrawn credential request stays closed.
+PR95/WLK302/WStack-installer holds unchanged. Original26 unrelated files preserved.
+
+---
+
+# WLK318 — merged local session source; operator account resolved by metadata
+
+PR115 merged20Oct18:52UTC at9d5752809f77b58f052da531ea78f27e504b3d8c;
+merged tree matches reviewed/tested8babdd7. Local main fast-forwarded, original26
+untracked files unchanged. No required remote checks/rules, repository hooks empty,
+only workflow manual artifact-only; no deploy/publication triggered.
+
+Parent explicitly permitted metadata-only credential-account diagnosis. Configured
+Shane account resolves by exact UUID, and the known operator vault resolves as
+My Passwords under that account. Email selector had returned no accounts. No
+operator document retrieval was retried; no key loaded, no pilot listener started.
+Private exact references remain in /tmp/openjob-318-session-launcher.mjs; retry
+must replace its email selector with verified account UUID only after approval.
+The needed existing document is OpenJob Preview QA Fixture Operator (dedicated
+openjob-nonprod Firestore service account, documented roles/datastore.user). It
+lets the existing API resolve the active saved OpenJob user. Gmail online popup
+needs no Google client secret. No new account/credential or additional IAM needed.
+
+Next: approve one document read bound to that verified owning account and known
+vault, RAM-only local launcher; then recover selected alternate binding from its
+own authenticated session. Saved Gmail API/read-only scope verified, Google marks
+scope unverified. No actual Gmail consent/read, verification submission, allowlist
+or warning bypass. Broader identity enumeration and account-unbound credential
+retry remain denied/not executed, with no bypass. PR95/WLK302 holds unchanged.
+
+---
+
 # WLK318 — local session Gmail source ready, 20 October 2026
 
 Branch `codex/wlk-318-local-gmail-session` from c03dd075. Default-off nonprod

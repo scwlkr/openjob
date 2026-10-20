@@ -1,3 +1,15 @@
+## Alternate-only local Gmail session (WLK318)
+
+`npm run dev:google-session` now starts a separate loopback-only Mail test using
+public nonproduction Firebase configuration and the selected alternate's normal
+Google sign-in. It checks the signed identity and only that user's current provider
+account, then reuses the exact-subject/audience/read-scope memory lease. No operator
+key, Firestore, saved-work access or database permission change is needed. Basic
+login and Mail access both use separate in-memory auth clients. Existing backend
+checks remain unchanged. Actual listener/anonymous denial verified; real sign-in,
+consent and read remain unverified due to computer-control initialization failure.
+[Usage and boundary](docs/LOCAL_ACCOUNT_ONBOARDING.md#alternate-only-route-without-an-operator-key).
+
 ## Local session Gmail read (WLK318)
 
 A default-off, loopback-only nonproduction mode adds a separate Google popup and
