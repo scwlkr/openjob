@@ -13,7 +13,12 @@ with injected nonextractable AES-256-GCM key, owner/document/version authenticat
 active-user write fences and bounded encoded size. Expired pending secrets can be
 explicitly cleaned. Synthetic tests cover reconstruction, corruption, isolation,
 CAS and uncertain commits; live durability is not claimed. No runtime binding,
-secret loader, deployed collection, provider activation or deletion-worker hookup.
+secret loader, deployed collection, provider activation or active deletion hook.
+Local disconnect-all and exact pending-deletion cleanup now strip current private
+material, with an optional uninjected deletion-worker hook. Injected previous keys
+can decrypt old records; explicit CAS re-encryption writes only with the current
+key. Synthetic tests cover in-flight suppression, lost delete response, request
+replacement and key retirement denial. No live key rotation/deletion/provider revoke.
 See [private store and activation limits](docs/providers/PRIVATE_GOOGLE_STORE.md).
 
 ## Disabled Google connection lifecycle (WLK334)

@@ -1,3 +1,24 @@
+# WLK318 — disabled token cleanup and injected key lifecycle, 20 October 2026
+
+Follow-on from mergedPR110/c96611a. Branch codex/wlk-318-token-lifecycle adds bounded
+previous-key decryption, explicit current-key CAS re-encryption, local disconnect-all
+and exact pending-User/request-fenced ciphertext deletion without requiring a key.
+Optional deletion-worker dependency runs before identity finalization; normal
+runtimes remain uninjected. No real keys, grants, deletion, migration or provider
+revocation. Fifty-one focused synthetic Google/store/deletion tests pass; final
+checks/review/landing are recorded in PR/Linear. Physical record deletion is not
+backup erasure or Google project-wide revocation. Operator key retirement still
+requires accounting for all owners/backups/processes, not just one successful rewrite.
+
+PR95 existing evidence reconciliation found no returned path, suggested filename,
+download artifact ID or URL. Original browser tab6 call awaited download then
+requested path(), without saveAs; metadata failed and raw output is unavailable.
+Narrow local task/tmp/Downloads name checks found no matching OpenJob export, which
+cannot exclude browser/cloud storage. Prior outcome remains uncertain/unverified;
+no retry, permission change or endpoint action performed. WLK302 untouched.
+
+---
+
 # WLK318 — disabled encrypted private Google backend, 20 October 2026
 
 Source preparation on codex/wlk-318-private-google-store from8980a21. Existing

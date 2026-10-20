@@ -129,6 +129,7 @@ function createHarness({
   failNotifications = false,
   failAgentGrants = false,
   failPersonalWorkspaces = false,
+  privateGoogleConnections,
   finalized = false,
   identity = GOOGLE,
   providerMismatch = false,
@@ -398,6 +399,7 @@ function createHarness({
         return 1;
       },
     },
+    privateGoogleConnections,
     personalWorkspaces: {
       async removeAllForUser(userId) {
         calls.push(`remove-personal-workspace:${userId}`);
@@ -1460,4 +1462,15 @@ test("status handler failures remain non-cacheable and disclose no capability", 
   );
   const body = await response.text();
   assert.equal(body.includes(STATUS_TOKEN), false);
+});
+
+
+test("optional private Google cleanup receives exact deletion job and failure blocks identity finalization", async () => {
+  const removals = [];
+  const success = createHarness({ privateGoogleConnections: { async removeForDeletion(user, request) { removals.push([user, request]); return true; } } });
+  assert.equal((await success.api.fetch(deletionRequest([googleProof()]))).status, 200);
+  assert.deepEqual(removals, [[USER.userId, 'del_test']]);
+  const failure = createHarness({ privateGoogleConnections: { async removeForDeletion() { throw new Error('synthetic cleanup failure'); } } });
+  assert.equal((await failure.api.fetch(deletionRequest([googleProof()]))).status, 202);
+  assert.equal(failure.calls.some(call => call.startsWith('delete-firebase:') || call.startsWith('delete-user:')), false);
 });
