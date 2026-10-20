@@ -89,3 +89,40 @@ first-consent/refresh/fake-Mail/disconnect, instance reconstruction, corruption 
 owner/database binding, CAS races, lost commit response, deletion race, expiry,
 capacity, key re-encryption/retirement denial, local disconnect-all, exact pending
 deletion cleanup and disabled/no-call behavior. Provider responses and keys are synthetic.
+
+## Run the local integrated flow
+
+`npm run test:google-local` runs a one-shot ephemeral127.0.0.1 HTTP service and
+actual existing CLI subprocesses against `createPersonalApplication`, the Google
+protocol flow and encrypted Firestore store. It restores an exported encrypted fake
+database snapshot and reconstructs the client/store/flow before refresh/read.
+It verifies synthetic callback consumption, fake Mail, disconnect, stable-home
+reconnect, foreign/agent/send denial and credential-free CLI output. All resources
+and authored fixture files belong to the test and close/remove on completion.
+The test does not open its returned Google authorization URL or contact Google;
+only the loopback HTTP service uses actual network. Its transient CLI credential
+file contains invented fixture text. No existing browser/pilot session is touched.
+
+The ordinary sandbox may disallow binding localhost; run this proof only in an
+execution context authorized to bind an ephemeral loopback port. A bind failure
+is not provider failure or a passing flow. No public listener is needed.
+
+This source work is now locally integrated. Remaining activation inputs are:
+
+1. Infrastructure owner's exact approved HTTPS origin and deployment handoff;
+   register only origin + `/connections/google/callback` for the chosen existing
+   Google Web client, preserving the Firebase handler.
+2. Approved actual key/client-secret delivery references and private server-only
+   Firestore access, with concrete backup/retention/rotation procedures. Do not
+   generate keys, retrieve credentials or change rules during this proof.
+3. Small reviewed composition-root wiring that injects these dependencies and the
+   deletion hook explicitly. Normal roots deliberately remain unconfigured; this
+   wiring is engineering work, not an additional architecture approval ritual.
+4. Current Google Data Access/Verification facts, specific Gmail API/callback and
+   runtime/store activation authorization, and human consent for the exact chosen
+   alternate mailbox and only the disclosed read-only/offline scopes. Basic
+   name/profile sign-in is insufficient. Then verify one bounded read.
+
+Interactive callback/browser proof and actual Firebase/Firestore/Google acceptance
+remain unverified. No further storage abstraction or new service is required by
+this local proof. PR95's unrelated browser-export outcome does not gate Mail work.

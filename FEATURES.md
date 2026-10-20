@@ -19,6 +19,9 @@ material, with an optional uninjected deletion-worker hook. Injected previous ke
 can decrypt old records; explicit CAS re-encryption writes only with the current
 key. Synthetic tests cover in-flight suppression, lost delete response, request
 replacement and key retirement denial. No live key rotation/deletion/provider revoke.
+`npm run test:google-local` now exercises the shared application, encrypted store
+and existing CLI over an ephemeral loopback server with synthetic identity/provider
+responses and encrypted snapshot reconstruction. No live/browser consent proof.
 See [private store and activation limits](docs/providers/PRIVATE_GOOGLE_STORE.md).
 
 ## Disabled Google connection lifecycle (WLK334)
