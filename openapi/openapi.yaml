@@ -2381,6 +2381,127 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/{connectionId}/tasks:
+    parameters:
+      - in: path
+        name: connectionId
+        required: true
+        schema:
+          type: string
+          pattern: ^con_[a-f0-9]{32}$
+    post:
+      tags: [Providers]
+      operationId: createConnectionMailTask
+      summary: Create or find a private source-linked Task in the connection home
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Configured Google owner pilot only. The home is server-bound. A repeated
+        message opens an existing Task without overwriting it. An explicit additional Task
+        uses a stable requestId. Saves reviewed title and private references, never Mail bodies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [messageId, title]
+              properties:
+                messageId:
+                  type: string
+                  pattern: ^[A-Za-z0-9_-]{1,128}$
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                requestId:
+                  type: string
+                  pattern: ^[a-f0-9-]{36}$
+      responses:
+        "200":
+          description: Task receipt; existing Task content is unchanged on retry.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [workspaceId, taskId, created]
+                    properties:
+                      workspaceId:
+                        type: string
+                        pattern: ^wsp_[a-f0-9]{32}$
+                      taskId:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,128}$
+                      created:
+                        type: boolean
+        default:
+          description: Redacted unavailable, unauthorized, invalid, capacity or reconnect result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/task-sources/{workspaceId}/{taskId}:
+    parameters:
+      - in: path
+        name: workspaceId
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+      - in: path
+        name: taskId
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+    get:
+      tags: [Providers]
+      operationId: readConnectionTaskSource
+      summary: Fetch a current authorized Task source from Gmail
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Requires current Task, exact Workspace and current Google binding.
+        Disconnect makes the source unavailable while keeping Tasks and Calendar.
+        No offline source or body cache; agents are denied.
+      responses:
+        "200":
+          description: A freshly read source message in its verified account.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [workspaceId, taskId, address, mode, message]
+                    properties:
+                      workspaceId:
+                        type: string
+                        pattern: ^wsp_[a-f0-9]{32}$
+                      taskId:
+                        type: string
+                        pattern: ^[A-Za-z0-9_-]{1,128}$
+                      address:
+                        type: string
+                      mode:
+                        enum: [google, google-fixture]
+                      message:
+                        $ref: "#/components/schemas/ProviderPreviewMessage"
+        default:
+          description: Redacted unavailable, unauthorized or reconnect result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/connections/{connectionId}/mail:
     parameters:
       - in: path

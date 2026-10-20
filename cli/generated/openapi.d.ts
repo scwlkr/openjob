@@ -951,6 +951,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connections/{connectionId}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create or find a private source-linked Task in the connection home
+         * @description Configured Google owner pilot only. The home is server-bound. A repeated message opens an existing Task without overwriting it. An explicit additional Task uses a stable requestId. Saves reviewed title and private references, never Mail bodies.
+         */
+        post: operations["createConnectionMailTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connections/task-sources/{workspaceId}/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Fetch a current authorized Task source from Gmail
+         * @description Requires current Task, exact Workspace and current Google binding. Disconnect makes the source unavailable while keeping Tasks and Calendar. No offline source or body cache; agents are denied.
+         */
+        get: operations["readConnectionTaskSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connections/{connectionId}/mail": {
         parameters: {
             query?: never;
@@ -5444,6 +5489,92 @@ export interface operations {
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
             /** @description Redacted failure, including unconfigured503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    createConnectionMailTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    messageId: string;
+                    title: string;
+                    requestId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Task receipt; existing Task content is unchanged on retry. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            workspaceId: string;
+                            taskId: string;
+                            created: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Redacted unavailable, unauthorized, invalid, capacity or reconnect result. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    readConnectionTaskSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A freshly read source message in its verified account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            workspaceId: string;
+                            taskId: string;
+                            address: string;
+                            /** @enum {unknown} */
+                            mode: "google" | "google-fixture";
+                            message: components["schemas"]["ProviderPreviewMessage"];
+                        };
+                    };
+                };
+            };
+            /** @description Redacted unavailable, unauthorized or reconnect result. */
             default: {
                 headers: {
                     [name: string]: unknown;

@@ -66,7 +66,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
     } catch (error) {
       if (isInactiveUserError(error)) return accountDeletionPendingResponse(defaultRequestId);
       const code = (error as { code?: string })?.code;
-      if (code && ['not_configured', 'invalid_input', 'forbidden', 'conflict', 'capacity', 'consent_failed', 'reconnect_required'].includes(code)) return fail(code, code === 'not_configured' ? 503 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required'].includes(code) ? 409 : 400);
+      if (code && ['not_configured', 'invalid_input', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'consent_failed', 'reconnect_required'].includes(code)) return fail(code, code === 'not_configured' ? 503 : code === 'source_unavailable' ? 404 : code === 'workspace_capacity' ? 413 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required'].includes(code) ? 409 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };

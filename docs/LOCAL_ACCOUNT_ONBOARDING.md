@@ -293,14 +293,22 @@ the integrated route's saved-user deletion checks. It can reject current Firebas
 revocation and account removal. No database permission, rule, IAM or security
 setting changes are required. Google may retain its consent after local disconnect.
 
-Live checkpoint20October: the key-free listener health and anonymous denial were
-verified; alts confirmed opening the local page in the selected existing Edge
-profile. Supported computer control failed during initialization before any page
-state was returned, including a fresh permitted retry. The later normal user
-sign-in passed signed identity/current-account verification: sanitized health is
-ready, with provider email present and Firebase primary email absent. The owner
-reports Gmail connected; a connection receipt is not exposed by health. Completed
-Mail reads remain zero, so bounded read acceptance remains unverified. Do not repeat the failed control
-path until it changes; use the owner's already-open page handoff. No hidden auth
-storage/session extraction or alternate browser/controller is used. No operator
-or 1Password access is authorized or needed for this route.
+Live checkpoint, 20 October: the agent completed the bounded alternate-only read.
+Supported native Edge control worked in the new local chat and confirmed existing
+profile0003 and the selected Timothy account. Google showed its unverified-app
+notice; Shane explicitly authorized continuing this exact read-only test. No
+verification submission, allowlist, configuration or scope change was made. The
+old launcher exited during the approval wait; port5202 was confirmed unused before
+restarting the same reviewed key-free snapshot. Normal temporary sign-in and Mail
+connection then succeeded. The six launcher/auth/reader/UI source files matched
+merged PR116 at7452af06828383e8412f3de8013282add5083a88.
+
+The agent clicked Read Mail once: the UI showed Read complete · 7 messages and
+independent sanitized health changed mailReads from0 to1 with realSending false.
+Then Disconnect Mail session cleared the view and showed Gmail access off plus
+Disconnected from this Mail session. No message contents, tokens or live screenshots
+were copied into artifacts. No Mail changes, sending, Calendar, operator/1Password
+access or persistent credential storage occurred. Google may retain its consent.
+This proves the standalone session's live read, not integrated saved-Workspace,
+source-linked Task, reply, provider Calendar, native or release acceptance. WLK384
+continues the configured-connection source-to-Task path using isolated fixtures.

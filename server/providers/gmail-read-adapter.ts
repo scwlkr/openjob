@@ -1,4 +1,4 @@
-import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter } from "../../shared/provider-contracts.ts";
+import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage } from "../../shared/provider-contracts.ts";
 import { fail, object, string, upstream, mapLabels, mapMessage } from "./gmail-wire.ts";
 import { gmailGet } from "./gmail-transport.ts";
 export { GmailReadError } from "./gmail-wire.ts";
@@ -44,7 +44,7 @@ function pageToken(value: string | undefined, binding: GmailAccountBinding) {
 }
 
 /** Unbound by runtime. Approval is closed by default, before credential lookup or HTTP. */
-export function createGmailReadAdapter(options: GmailReadAdapterOptions): ProviderReadAdapter {
+export function createGmailReadAdapter(options: GmailReadAdapterOptions): ProviderReadAdapter & { getMessage(input: { ownerId: string; accountId: string; messageId: string }): Promise<ProviderMessage> } {
   const { resolveCredential, approveExecution = () => false, fetchImplementation = fetch, now = Date.now, timeoutMs = 10000 } = options;
   if (!Array.isArray(options.bindings) || options.bindings.length > 100 || typeof resolveCredential !== "function" || typeof approveExecution !== "function" || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) fail("invalid_input");
   const bindings = structuredClone(options.bindings); const seen = new Set<string>(); const subjects = new Set<string>();
@@ -58,14 +58,22 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Provid
     if (!credential || !opaque(credential.subject) || credential.subject !== binding.subject || typeof credential.accessToken !== "string" || !/^[A-Za-z0-9._~+\/-]{1,8192}={0,2}$/.test(credential.accessToken) || !Number.isFinite(credential.expiresAt) || credential.expiresAt <= now()) fail("authentication_required");
     if (!Array.isArray(credential.scopes) || credential.scopes.length > 100 || !credential.scopes.includes(READ_SCOPE)) fail("consent_required");
   }
+  async function client(binding: GmailAccountBinding) {
+    await approved(binding);
+    let credential: GmailReadCredential | null;
+    try { credential = structuredClone(await resolveCredential(structuredClone(binding))); } catch { return fail('authentication_required'); }
+    consent(binding, credential);
+    const check = async () => { await approved(binding); consent(binding, credential); };
+    const get = async (path: string, query = new URLSearchParams()) => { await check(); return gmailGet(path, query, credential.accessToken, fetchImplementation, timeoutMs); };
+    const profile = await get('profile');
+    if (!email(profile.emailAddress) || profile.emailAddress.toLowerCase() !== binding.address.toLowerCase()) fail('authentication_required');
+    return { get, check };
+  }
   return {
     async listAccounts(ownerId) { if (!id(ownerId)) fail("invalid_input"); return bindings.filter(binding => binding.ownerId === ownerId).map(account); },
     async listMessages({ ownerId, accountId, cursor }) {
-      const binding = select(ownerId, accountId); const token = pageToken(cursor, binding); await approved(binding);
-      let credential: GmailReadCredential | null; try { credential = structuredClone(await resolveCredential(structuredClone(binding))); } catch { return fail("authentication_required"); }
-      consent(binding, credential);
-      const get = async (path: string, query = new URLSearchParams()) => { await approved(binding); consent(binding, credential); return gmailGet(path, query, credential.accessToken, fetchImplementation, timeoutMs); };
-      const profile = await get("profile"); if (!email(profile.emailAddress) || profile.emailAddress.toLowerCase() !== binding.address.toLowerCase()) fail("authentication_required");
+      const binding = select(ownerId, accountId); const token = pageToken(cursor, binding);
+      const { get, check } = await client(binding);
       const folders = mapLabels(await get("labels"), accountId); const labelIds = new Set(folders.map(folder => folder.upstreamId));
       const query = new URLSearchParams({ maxResults: "10" }); if (token !== undefined) query.set("pageToken", token);
       const page = await get("messages", query); const raw = page.messages ?? [];
@@ -75,8 +83,16 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Provid
       const messages = [];
       for (const row of rows) messages.push(mapMessage(await get(`messages/${row.messageId}`, new URLSearchParams({ format: "full" })), accountId, row.messageId, row.threadId, labelIds));
       // Recheck after all async reads before returning potentially private content.
-      await approved(binding); consent(binding, credential);
+      await check();
       return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 1, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, pageToken: string(page.nextPageToken, 256) }) };
+    },
+    async getMessage({ ownerId, accountId, messageId }) {
+      const binding = select(ownerId, accountId); upstream(messageId);
+      const { get, check } = await client(binding);
+      const folders = mapLabels(await get('labels'), accountId);
+      const raw = await get(`messages/${messageId}`, new URLSearchParams({ format: 'full' }));
+      const message = mapMessage(raw, accountId, messageId, upstream(raw.threadId), new Set(folders.map(folder => folder.upstreamId)));
+      await check(); return message;
     },
     async readChanges() { return fail("unsupported_operation"); },
   };

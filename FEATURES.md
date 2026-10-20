@@ -1,3 +1,16 @@
+## Connected Gmail source Tasks (WLK384)
+
+Configured Google Connections can create or find a private Task from a read message
+in that connection's fixed home. Review the editable title; the saved Task contains
+only authored work. Private provider references stay beside authoritative work,
+outside Task/Calendar snapshots, offline copies, Home, exports and agent responses.
+Repeated creation opens the existing Task; explicit additional Tasks use stable
+request IDs. Normal planning/completion remains available. Open connected source
+Mail checks current Task, home and connection before retrieving the message fresh.
+Disconnect leaves Task/Calendar work intact and denies further source reads.
+App, API and existing CLI share the implementation. This source slice uses injected
+providers and a labeled local fixture; integrated live acceptance remains separate.
+
 ## Alternate-only local Gmail session (WLK318)
 
 `npm run dev:google-session` now starts a separate loopback-only Mail test using
@@ -7,7 +20,8 @@ account, then reuses the exact-subject/audience/read-scope memory lease. No oper
 key, Firestore, saved-work access or database permission change is needed. Basic
 login and Mail access both use separate in-memory auth clients. Existing backend
 checks remain unchanged. Real alternate identity/current-account verification
-passed. The owner reports Gmail connected; completed Mail reads remain zero.
+passed. On20October the agent completed one authorized real read of7 messages, verified the
+server receipt and disconnected. This proves only the standalone alternate route.
 Supported browser control is unavailable, so bounded live-read acceptance is pending.
 [Usage and boundary](docs/LOCAL_ACCOUNT_ONBOARDING.md#alternate-only-route-without-an-operator-key).
 
@@ -20,7 +34,8 @@ The Google access token stays in process memory for at most ten minutes; disconn
 expiry and account changes suppress in-flight results. No offline refresh, token
 store, send, Mail modification or provider Calendar route is added. Existing
 persistent connections retain their configuration and behavior. Synthetic API and
-browser checks pass; real popup/consent and live Mail acceptance remain unverified.
+browser checks pass; real alternate popup/consent and one bounded read passed20October; integrated
+saved-workspace and provider-write acceptance remain separate.
 [Setup and limits](docs/LOCAL_ACCOUNT_ONBOARDING.md#local-session-gmail-wlk318).
 
 ## Bounded Google home and deletion preparation (WLK318)

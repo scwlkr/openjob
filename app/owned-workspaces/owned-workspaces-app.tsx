@@ -9,6 +9,7 @@ import WorkspaceTasks, { type WorkspaceTasksHandle } from '../workspace/workspac
 import WorkspaceCalendar, { type WorkspaceCalendarHandle } from '../workspace/workspace-calendar';
 import WorkspaceToday from '../workspace/workspace-today';
 import styles from '../workspace/workspace.module.css';
+import ConnectedTaskSource from '../connections/connected-task-source';
 
 type Request = (path?: string, input?: unknown) => Promise<unknown>;
 export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/api/owned-workspaces", mode = "fixture" }: { ownerUserId: string; getToken: () => Promise<string>; apiBase?: string; mode?: "fixture" | "pilot" }) {
@@ -70,7 +71,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
   }
   return <div className={styles.workspace}>
     <header className={styles.header}><OpenJobBrand /><strong>{mode === "fixture" ? "Independent Workspaces · fixture pilot" : "Workspaces · owner pilot"}</strong></header>
-    <p className={styles.banner}>{mode === "fixture" ? "Synthetic identity and local test database. No real accounts or providers are connected." : "Limited owner pilot using your existing OpenJob identity."} Each Workspace has its own Tasks and Calendar. Mail, invitations and agent grants are unavailable. Retained Personal work stays in its existing authority.</p>
+    <p className={styles.banner}>{mode === "fixture" ? "Synthetic identity and local test database. No real accounts or providers are connected." : "Limited owner pilot using your existing OpenJob identity. Configured Mail is available through Connections."} Each Workspace has its own Tasks and Calendar. Invitations and agent grants are unavailable. Retained Personal work stays in its existing authority.</p>
     <p className={styles.banner} role="status">{mode === "fixture" ? eligibility + " This fixture cannot grant real-account access." : "Limited admission is not a classification of independent personal control or a guarantee of employer isolation."}</p>
     <div className={styles.layout}><aside className={styles.sidebar}>
       <button disabled={busy} aria-current={!selected ? "page" : undefined} onClick={() => choose({ workspaceId: '' })}>Home</button>
@@ -80,11 +81,11 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
       <button disabled={busy} onClick={() => refresh().then(() => setError('')).catch(() => setError('Workspace list unavailable.'))}>Refresh Workspaces</button>
       <p>Only Workspaces owned by this identity appear. No mailbox is required.</p>
     </aside><main className={styles.main}>{error && <p role="alert" className={styles.error}>{error}</p>}{!catalogReady && !error && <p role="status">Loading Workspaces…</p>}{catalogReady && !selected && <WorkspaceHome owner={ownerUserId} request={request} busy={busy} onOpen={openFromHome} />}
-      {opened.map(id => { const item = catalog.find(item => item.workspaceId === id); return item && <WorkspaceSession key={id} workspace={item} active={selected === id} request={request} setBusy={setBusy} onNavigate={choose} navigation={selected === id ? destination : undefined} />; })}
+      {opened.map(id => { const item = catalog.find(item => item.workspaceId === id); return item && <WorkspaceSession key={id} workspace={item} active={selected === id} request={request} setBusy={setBusy} onNavigate={choose} navigation={selected === id ? destination : undefined} getToken={mode === 'pilot' ? getToken : undefined} />; })}
     </main></div>
   </div>;
 }
-function WorkspaceSession({ workspace, active, request, setBusy, navigation, onNavigate }: { onNavigate: (destination: WorkspaceDestination) => void; navigation?: WorkspaceDestination; workspace: OwnedWorkspace; active: boolean; request: Request; setBusy: (value: boolean) => void }) {
+function WorkspaceSession({ workspace, active, request, setBusy, navigation, onNavigate, getToken }: { getToken?: () => Promise<string>; onNavigate: (destination: WorkspaceDestination) => void; navigation?: WorkspaceDestination; workspace: OwnedWorkspace; active: boolean; request: Request; setBusy: (value: boolean) => void }) {
   const [snapshot, setSnapshot] = useState<OwnedWorkspaceSnapshot>(); const [tab, setTab] = useState('Today');
   const target = navigation?.item;
   const [loadedDestination, setLoadedDestination] = useState<WorkspaceDestination>();
@@ -127,7 +128,7 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     {active && !ready && !error && <p role="status">Loading Workspace…</p>}{missingTarget && <p role="alert" className={styles.error}>Unavailable in this context.</p>}
 {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {view && <><div hidden={!active || !ready || currentTab !== 'Today'}><WorkspaceToday contextName={workspace.name} view={view} busy={busy} onOpenTask={openTask} onOpenEvent={id => { if (calendar.current?.openEvent(id)) onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'block', id } }); }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></div>
-    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} />
+    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} /> : undefined} />
     <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} /></>}
   </section>;
 }
