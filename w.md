@@ -1,3 +1,26 @@
+# WLK318 — agent-owned live test blocked by native control initialization
+
+Owner20:10 explicitly requires us to test; do not request another owner click,
+refresh, sign-in retry or screenshot. This supersedes the earlier testing handoffs
+below. Preserve the existing Timothy Edge0003 session.
+
+Supported control inventory now gives precise evidence: only Shane Chrome extension
+is available; no Timothy Edge browser surface. Native app inventory fails -10005,
+timed out waiting for initialize from codex app-server. Reset only CUA REPL runtime,
+then one fresh exact com.microsoft.edgemac selection: same33s failure before any
+page state or UI action. Execution failed, not denied/pending/uncertain. No profile
+substitution, new access, security change, hidden credential extraction or alternate
+controller. Native control initialization needs supported host recovery; current
+tools provide no such repair action. Stop repeated unchanged native retries.
+
+Before attempts, sanitized pilot receipt remains real account ready/provider email
+present/Firebase primary email absent/mailReads0. Connection is owner-reported;
+bounded live read remains incomplete. No browser/session mutation or Mail read.
+Merged reviewed source remains PR116/main7452af0, unchanged; synthetic validation
+is complete and does not prove this remaining real end-to-end interaction.
+
+---
+
 # WLK318 — real alternate identity verified; Mail read still pending
 
 Owner19:51 reports Mail connected. Independently read only sanitized existing pilot
