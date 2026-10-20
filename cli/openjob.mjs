@@ -93,6 +93,8 @@ const COMMAND_OPTIONS = new Map([
   ["connections begin", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["connections action", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["connections mail", new Set(OUTPUT_OPTIONS)],
+  ["connections task", new Set([...OUTPUT_OPTIONS, "--input"])],
+  ["connections source", new Set(OUTPUT_OPTIONS)],
   ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
   ["workspace availability", new Set([...OUTPUT_OPTIONS, "--task", "--schedule-start", "--schedule-end", "--minutes"])],
   ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
@@ -176,6 +178,8 @@ const RESOURCE_HELP = {
   openjob connections begin --input <json-file>
   openjob connections action <connection-id> --input <json-file>
   openjob connections mail <connection-id>
+  openjob connections task <connection-id> --input <json-file>
+  openjob connections source <workspace-id> <task-id>
 
 Begin input: simulated choiceId+workspaceId, or configured Google address+workspaceId.
 Action input: action=approve(simulated)|cancel|disconnect|retry-cleanup|refresh(Google).
@@ -626,6 +630,12 @@ async function main(raw) {
     writeResult({ data: filterWorkspaceTasks(response.data.tasks, query) }); return;
   }
   if (resource === "connections") {
+    if (command === 'task' && rest.length === 1 && /^con_[a-f0-9]{32}$/.test(rest[0])) {
+      writeResult(await apiRequest(`/connections/${rest[0]}/tasks`, { method: 'POST', body: JSON.stringify(readInputObject(parsed.options.get('--input'))) })); return;
+    }
+    if (command === 'source' && rest.length === 2 && /^wsp_[a-f0-9]{32}$/.test(rest[0]) && /^[A-Za-z0-9_-]{1,128}$/.test(rest[1])) {
+      writeResult(await apiRequest(`/connections/task-sources/${rest[0]}/${rest[1]}`)); return;
+    }
     if (command === "list" && rest.length === 0) { writeResult(await apiRequest("/connections", {}, { retryable: true })); return; }
     if (command === "begin" && rest.length === 0) {
       const input = readInputObject(parsed.options.get("--input"));
@@ -635,7 +645,7 @@ async function main(raw) {
       const path = `/connections/${rest[0]}`;
       writeResult(await apiRequest(command === "mail" ? `${path}/mail` : path, command === "mail" ? {} : { method: "POST", body: JSON.stringify(readInputObject(parsed.options.get("--input"))) })); return;
     }
-    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id>. Approval action is simulated only; configured Google consent uses the browser. Normal Connections remain unconfigured.", 2);
+    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id> | task <id> --input <json-file> | source <workspace-id> <task-id>. Configured Google consent uses the browser. Normal Connections remain unconfigured.", 2);
   }
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();

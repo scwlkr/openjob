@@ -22,8 +22,10 @@ import { createWorkspacePilotRuntime } from '../server/workspace-pilot-runtime.t
 import { webFirebaseConfigFor } from '../config/web-firebase-config.mjs';
 import nativeIdentities from '../config/native-identities.json' with { type: 'json' };
 import { createOwnedWorkspacesApi } from '../server/owned-workspaces-api.ts';
+import { createGoogleConnectionsFlow } from '../server/connections/google-flow.ts';
+import { fixture as googleProtocolFixture, CLIENT, BINDING } from '../tests/support/google-oauth-transport.mjs';
 const options = new Map(); const args = process.argv.slice(2);
-while (args.length) { const key = args.shift(); if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH].'); options.set(key, args.shift()); }
+while (args.length) { const key = args.shift(); if (key === '--google-fixture' && !options.has(key)) { options.set(key, true); continue; } if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH] [--google-fixture].'); options.set(key, args.shift()); }
 const port = Number(options.get('--port') ?? 5202); if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port.');
 const statePath = resolve(options.get('--state-file') ?? join(await mkdtemp(join(tmpdir(), 'openjob-owned-')), 'state.json'));
 await mkdir(dirname(statePath), { recursive: true });
@@ -52,7 +54,27 @@ try {
   const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
   const consentFixture = createConsentFixture({ config, isOwnerActive: async owner => { await store.list(owner); return true; } });
   const onboarding = createConnectionsApplication({ store: createConnectionOnboardingStore(config, db.fetch), homes: store, consent: consentFixture.adapter, choices: fixtureChoices });
-  const connectionsApi = createConnectionsApi({ onboarding, users, verifyIdToken });
+  let google;
+  if (options.has('--google-fixture')) {
+    const protocol = googleProtocolFixture(), envelopes = new Map(), owner = sessions.get('alex').userId;
+    const home = await store.personalContext(owner);
+    google = createGoogleConnectionsFlow({ executionMode: 'configured', evidenceMode: 'google-fixture', homes: store,
+      isOwnerActive: async current => current === owner && (await store.list(current)).length > 0,
+      repository: { async read(current) { return structuredClone(envelopes.get(current) ?? []); }, async change(current, apply) { const next = apply(structuredClone(envelopes.get(current) ?? [])); envelopes.set(current, structuredClone(next)); return structuredClone(next); } },
+      google: { clientId: CLIENT, clientSecret: 'invented_client_secret', callbackUri: 'https://fixture.invalid/connections/google/callback', transport: protocol.transport },
+      mailTransport: async input => { const path = new URL(input).pathname;
+        if (path.endsWith('/profile')) return Response.json({ emailAddress: BINDING.address });
+        if (path.endsWith('/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'Inbox' }] });
+        if (path.endsWith('/messages')) return Response.json({ messages: [{ id: 'm1', threadId: 't1' }] });
+        if (!path.endsWith('/messages/m1')) return new Response(null, { status: 404 });
+        return Response.json({ id: 'm1', threadId: 't1', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', headers: [{ name: 'Subject', value: 'Review the connected-work proposal' }, { name: 'From', value: 'colleague@example.invalid' }, { name: 'To', value: BINDING.address }], body: { data: Buffer.from('Invented connected message. Review this work, plan it in your OpenJob Calendar, then return to its source.').toString('base64url') } } });
+      } });
+    const started = await google.begin(owner, BINDING.address, home.workspace.workspaceId), url = new URL(started.authorizationUrl);
+    protocol.hooks.claims = { nonce: url.searchParams.get('nonce') };
+    await google.callback(owner, { state: url.searchParams.get('state'), code: 'invented_fixture_code', callbackUri: 'https://fixture.invalid/connections/google/callback' });
+    await persist();
+  }
+  const connectionsApi = createConnectionsApi({ onboarding: google ? undefined : onboarding, google, users, verifyIdToken });
   const personalApi = createV1PersonalWorkspaceApi({ workspace: personal, users, verifyIdToken });
   const plugin = { name: 'owned-workspaces-fixture', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {
     if (!incoming.url?.startsWith('/api/v1/connections') && !incoming.url?.startsWith('/api/owned-workspaces') && !incoming.url?.startsWith('/api/v1/workspaces') && !incoming.url?.startsWith('/api/v1/workspace/') && !incoming.url?.startsWith('/__fixture/session/')) return next();

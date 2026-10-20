@@ -1,3 +1,55 @@
+# WLK384 — connected Mail source Tasks; WLK318 real read passed
+
+20October: this local chat is sole implementation owner. Supported Edge control
+now works. Timothy profile0003 completed signed account verification, explicitly
+authorized unverified-app continuation and one real read. UI: Read complete ·7
+messages. Sanitized server health: mailReads1/ready/realSendingfalse. Then local
+Mail disconnect cleared the view and showed access off. No live content/screenshots,
+secrets or tokens copied into artifacts; no sends, changes, Calendar, operator/
+1Password or persistent credentials. Google may retain consent. Existing launcher
+had exited while approval waited; port5202 was unused before restarting the same
+reviewed key-free snapshot. Six launcher/auth/reader/UI files hash-match merged
+PR116/main7452af06828383e8412f3de8013282add5083a88. This supersedes zero-read,
+control-unavailable, awaiting-merge and owner-click requests in older entries.
+
+WLK384/R33 source milestone: configured Google Mail -> reviewed title -> create/
+find private Task in fixed home -> existing planning/completion -> freshly fetched
+source. Private refs save atomically beside authoritative Personal/Owned work;
+ordinary Tasks, offline projections, Home, exports and agent replies omit them.
+Default creation deduplicates; explicit additional Tasks freeze a stable request
+and title across uncertain responses. Task deletion/offline reconciliation prunes
+sources. Exact current home/account/connection and Task checks fence source reads.
+Standalone temporary Mail route and real provider-write limits stay unchanged.
+
+Verification: isolated exact changed source reused existing locked dependency tree;
+compile, affected lint, OpenAPI/generated types, brand32 and root secret scan pass.
+Focused API/CLI tests cover both home types, restart, duplicate/CAS, foreign access,
+revoked reads, scoped-agent redaction/revoke, sync pruning and real-send denial.
+Root dependency/duplicate-output compile attempt failed as previously documented;
+initial isolated compile needed generated Cloudflare types, then exposed/fixed an
+unknown JSON typing error. Initial lint exposed/fixed effect state reset. Secret
+scan of a nongit proof copy failed; root scan passes. None counted as passes.
+
+Actual supported-browser fixture: read invented Mail, edit title, create Task,
+repeat opens same ID, open exact Task, save planning block, complete, return to
+fresh source. Disconnect then source-read denial preserves Task/block. Inspected
+1280/768/390 layouts; phone/tablet no horizontal overflow. UI date automation
+showed21October in inputs but saved the prior20October14:00–14:30UTC; evidence
+claims only that actual saved block. API planning independently passed21October.
+Synthetic screenshots: output/wlk-384/source-{desktop,tablet,phone,disconnected}.png.
+Review found uncertain additional-task retry title drift; fixed immutable pending
+intent. No remaining material source-review blocker.
+
+Current branch codex/wlk-384-connected-mail-task; final source/PR/merge and check
+counts belong in the delivery entry below/Linear.26 original untracked files
+remain byte-identical. Live session read does not prove the integrated saved-work
+journey, durable reply, provider Calendar/send, native/device or release support.
+Next R33 step is correctly addressed authored reply preparation under the same
+source authority, then authorized integrated live proof. Persistent Google/runtime
+activation, PR95/WLK324 download hold and WLK302 unrecovered IMAP stay separate.
+
+---
+
 # WLK318 — real alternate identity verified; Mail read still pending
 
 Owner19:51 reports Mail connected. Independently read only sanitized existing pilot
@@ -1355,3 +1407,10 @@ an approved artifact with latercode under thesameversion.
 WLK302 remainsunrecovered in stoppedcloudthread01a14099-4e09-73d1-bed5-0e41e70560de;
 no remote branch/PR/checkpoint. Do notduplicateitsTLS/login work. Unrelated
 PatriBible/Desktopwork untouched. Detailedhistory/evidence remainsLinear/Git.
+
+<!-- wstack:begin setup -->
+Wstack: 0.2.0
+Features: [FEATURES.md](FEATURES.md)
+Terms: [GLOSSARY.md](GLOSSARY.md)
+CLI: `npm run`
+<!-- wstack:end setup -->

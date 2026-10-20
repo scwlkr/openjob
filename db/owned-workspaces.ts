@@ -4,6 +4,7 @@ import { activeUserHistoryWrite, assertActiveUser } from './user-history.ts';
 import { assertTaskSlotAvailable } from '../shared/workspace-availability.ts';
 import { applyTaskCalendarCommand, type TaskCalendarCommand } from '../shared/task-calendar-sync.ts';
 import { WORKSPACE_ID, validateWorkspace, validateOwnedSnapshot, workspaceFail, type OwnedWorkspace, type OwnedWorkspaceSnapshot } from '../shared/owned-workspaces.ts';
+import { parseMailTaskSources, retainMailTaskSources, existingMailTask, type MailTaskReference, type MailTaskResult } from '../shared/mail-task-source.ts';
 
 /** New owner-only Workspace repository; never reads/migrates Personal Mail aggregates. */
 export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typeof fetch = fetch) {
@@ -37,10 +38,18 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
   const retryable = (error: unknown) => error instanceof FirestoreRequestError && ['ABORTED', 'ALREADY_EXISTS', 'FAILED_PRECONDITION', 'NOT_FOUND'].includes(error.code ?? '');
   const update = (path: string, fields: FirestoreDocument['fields'], previous: FirestoreDocument | null) => ({ update: { name: db.documentName(path), fields }, currentDocument: previous ? { updateTime: previous.updateTime } : { exists: false } });
   async function commit(owner: string, writes: unknown[]) { await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [await activeUserHistoryWrite(db, owner), ...writes] }) }); }
-  async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }) {
+  async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }, mail?: { source: MailTaskReference; current: () => Promise<void> }) {
     ownerId(owner);
     for (let attempt = 0; attempt < 3; attempt++) {
       await assertActiveUser(db, owner); const previous = await read(workPath(id)); const snapshot = decode(previous, owner);
+      const sources = retainMailTaskSources(parseMailTaskSources(previous?.fields?.mailSourcesJson?.stringValue), snapshot.work.tasks);
+      if (sources.some(source => source.workspaceId !== id)) workspaceFail('invalid_state');
+      if (mail) {
+        if (mail.source.workspaceId !== id) workspaceFail('forbidden');
+        await mail.current();
+        const existing = existingMailTask(sources, mail.source);
+        if (existing) { await assertActiveUser(db, owner); return { snapshot, receipt: { workspaceId: id, taskId: existing.taskId, created: false } }; }
+      }
       if (guard) assertTaskNotesBase(snapshot.work.tasks, input, guard.expectedNotes);
       // The existing pure Task/Calendar engine rejects all Mail, source-link and agent commands.
       const available = !!input && typeof input === 'object' && (input as { type?: string }).type === 'task.schedule-available';
@@ -48,7 +57,11 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
       const work = applyTaskCalendarCommand(snapshot.work, normalized as TaskCalendarCommand, owner, () => `offline_${crypto.randomUUID()}`);
       if (available) { const task = work.tasks.find(item => item.id === (input as { taskId: string }).taskId)!; assertTaskSlotAvailable({ ...snapshot.work, accounts: [], messages: [], drafts: [], sent: [], agents: [], activity: [] }, { taskId: task.id, ...task.scheduledSlot! }); }
       const result = validateOwnedSnapshot({ workspace: snapshot.workspace, work });
-      try { await commit(owner, [update(workPath(id), { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) } }, previous)]); return result; }
+      const receipt: MailTaskResult | undefined = mail ? { workspaceId: id, taskId: work.tasks.at(-1)!.id, created: true } : undefined;
+      const nextSources = parseMailTaskSources(JSON.stringify(retainMailTaskSources([...sources, ...(mail ? [{ ...mail.source, taskId: receipt!.taskId }] : [])], work.tasks)));
+      const fields = { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) }, mailSourcesJson: { stringValue: JSON.stringify(nextSources) } };
+      if (new TextEncoder().encode(JSON.stringify(fields)).length > 898000) workspaceFail('workspace_capacity');
+      try { await mail?.current(); await commit(owner, [update(workPath(id), fields, previous)]); return { snapshot: result, receipt }; }
       catch (error) { if (!retryable(error)) throw error; }
     }
     return workspaceFail('conflict');
@@ -68,8 +81,15 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
       return workspaceFail('conflict');
     },
     async snapshot(owner: string, id: string) { ownerId(owner); await assertActiveUser(db, owner); const result = decode(await read(workPath(id)), owner); await assertActiveUser(db, owner); return result; },
-    command: (owner: string, id: string, input: unknown) => change(owner, id, input),
-    saveTaskNotes: (owner: string, id: string, input: unknown, expectedNotes: unknown) => change(owner, id, input, { expectedNotes }),
+    command: async (owner: string, id: string, input: unknown) => (await change(owner, id, input)).snapshot,
+    saveTaskNotes: async (owner: string, id: string, input: unknown, expectedNotes: unknown) => (await change(owner, id, input, { expectedNotes })).snapshot,
+    createMailTask: async (owner: string, title: string, source: MailTaskReference, current: () => Promise<void>) => (await change(owner, source.workspaceId, { type: 'task.create', title }, undefined, { source, current })).receipt!,
+    async mailTaskSource(owner: string, workspaceId: string, taskId: string) {
+      ownerId(owner); await assertActiveUser(db, owner);
+      const doc = await read(workPath(workspaceId)), snapshot = decode(doc, owner);
+      const source = retainMailTaskSources(parseMailTaskSources(doc?.fields?.mailSourcesJson?.stringValue), snapshot.work.tasks).find(row => row.workspaceId === workspaceId && row.taskId === taskId);
+      await assertActiveUser(db, owner); return source;
+    },
   };
 }
 export type OwnedWorkspaceStore = ReturnType<typeof createOwnedWorkspaceStore>;

@@ -3,11 +3,14 @@ import { oauthHash, oauthRandom } from '../providers/provider-oauth-types.ts';
 import { createGoogleOAuthAdapter, type GoogleConsentBinding } from '../providers/google-oauth-adapter.ts';
 import { createGmailReadAdapter } from '../providers/gmail-read-adapter.ts';
 import { googleRows, googleBinding, uuid, validAddress, type GoogleConnection, type GoogleConnectionCatalog, type PrivateGoogleConnections } from './google-state.ts';
+import type { MailTaskReference, MailTaskResult, MailTaskSource } from '../../shared/mail-task-source.ts';
 
 type Options = {
   executionMode?: 'disabled' | 'configured'; evidenceMode?: 'google' | 'google-fixture';
   repository: PrivateGoogleConnections;
-  homes: { list(owner: string): Promise<{ workspaceId: string; name: string }[]> };
+  homes: { list(owner: string): Promise<{ workspaceId: string; name: string }[]>;
+    createMailTask?(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>): Promise<MailTaskResult>;
+    mailTaskSource?(owner: string, workspaceId: string, taskId: string): Promise<MailTaskSource | undefined> };
   isOwnerActive(owner: string): Promise<boolean>;
   google: Pick<Parameters<typeof createGoogleOAuthAdapter>[0], 'clientId' | 'clientSecret' | 'callbackUri' | 'transport'>;
   mailTransport?: typeof fetch;
@@ -49,7 +52,36 @@ export function createGoogleConnectionsFlow(options: Options) {
   async function failed(before: GoogleConnection) {
     try { await replace(before, denied(before, 'reconnect_required')); } catch { /* Never overwrite cancellation/new attempt. Interrupted claim remains denied. */ }
   }
+  async function mailReader(owner: string, id: string) {
+    enabled(); const before = await row(owner, id);
+    if (!mailTransport || before.status !== 'connected' || !before.grant || !before.subject) connectionFail('reconnect_required');
+    const current = async () => { await home(owner, before.workspaceId); if (JSON.stringify(await row(owner, id)) !== JSON.stringify(before) || before.grant!.entry.credential.expiresAt <= Date.now()) connectionFail('reconnect_required'); };
+    const reader = createGmailReadAdapter({ bindings: [{ ownerId: owner, accountId: before.accountId, subject: before.subject, address: before.address, label: before.address }], approveExecution: async () => { await current(); return true; }, resolveCredential: async () => { await current(); return before.grant!.entry.credential; }, fetchImplementation: mailTransport });
+    return { before, current, reader };
+  }
   return {
+    async createTask(owner: string, id: string, input: { messageId: string; title: string; requestId?: string }) {
+      if (!homes.createMailTask) connectionFail('not_configured');
+      if (typeof input.messageId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.messageId) || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 500 || input.requestId !== undefined && (typeof input.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.requestId))) connectionFail('invalid_input');
+      const { before, current, reader } = await mailReader(owner, id);
+      const message = await reader.getMessage({ ownerId: owner, accountId: before.accountId, messageId: input.messageId });
+      await current();
+      const requestHash = input.requestId ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([before.id, before.accountId, message.upstreamId, input.title]))))].map(value => value.toString(16).padStart(2, '0')).join('') : undefined;
+      const source = { workspaceId: before.workspaceId, connectionId: before.id, accountId: before.accountId, messageId: message.upstreamId, threadId: message.upstreamThreadId, ...(input.requestId ? { requestId: input.requestId, requestHash } : {}) };
+      const receipt = await homes.createMailTask(owner, input.title, source, current);
+      await current(); return receipt;
+    },
+    async taskSource(owner: string, workspaceId: string, taskId: string) {
+      enabled(); await home(owner, workspaceId);
+      if (!homes.mailTaskSource) connectionFail('not_configured');
+      const source = await homes.mailTaskSource(owner, workspaceId, taskId);
+      if (!source) connectionFail('source_unavailable');
+      const { before, current, reader } = await mailReader(owner, source.connectionId);
+      if (before.workspaceId !== workspaceId || before.accountId !== source.accountId) connectionFail('forbidden');
+      const message = await reader.getMessage({ ownerId: owner, accountId: before.accountId, messageId: source.messageId });
+      if (message.upstreamThreadId !== source.threadId || JSON.stringify(await homes.mailTaskSource(owner, workspaceId, taskId)) !== JSON.stringify(source)) connectionFail('source_unavailable');
+      await current(); return { workspaceId, taskId, address: before.address, mode: evidenceMode, message };
+    },
     async catalog(owner: string): Promise<GoogleConnectionCatalog> {
       enabled(); const rows = await read(owner), currentHomes = await homes.list(owner); await active(owner);
       return { mode: evidenceMode, homes: currentHomes.map(({ workspaceId, name }) => ({ workspaceId, name })), mailAvailable: !!mailTransport, bindings: rows.map(item => ({ id: item.id, workspaceId: item.workspaceId, address: item.address, status: item.status, ...(item.operation ? { operation: item.operation } : {}), expired: !!item.grant && item.grant.entry.credential.expiresAt <= Date.now() })) };
@@ -101,11 +133,9 @@ export function createGoogleConnectionsFlow(options: Options) {
       return { status: 'status_updated' };
     },
     async mail(owner: string, id: string) {
-      enabled(); const before = await row(owner, id); if (!mailTransport || before.status !== 'connected' || !before.grant || !before.subject) connectionFail('reconnect_required');
-      const current = async () => { await home(owner, before.workspaceId); return JSON.stringify(await row(owner, id)) === JSON.stringify(before); };
-      const reader = createGmailReadAdapter({ bindings: [{ ownerId: owner, accountId: before.accountId, subject: before.subject, address: before.address, label: before.address }], approveExecution: current, resolveCredential: async () => await current() ? before.grant!.entry.credential : null, fetchImplementation: mailTransport });
+      const { before, current, reader } = await mailReader(owner, id);
       const page = await reader.listMessages({ ownerId: owner, accountId: before.accountId });
-      if (!await current()) connectionFail('conflict'); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
+      await current(); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
     },
   };
 }

@@ -39,4 +39,4 @@ function NormalPilotFixture() {
   const [name, setName] = useState('alex');
   return <><p>Synthetic signed identities · local fake Firestore · normal app and server composition · no live providers or sending.</p><label>Test identity<select aria-label="Test identity" value={name} onChange={event => { const next = event.target.value; setName(next); window.location.hash = ''; selectPilot(next); }}><option value="alex">Alex</option><option value="sam">Sam</option></select></label><PersonalWorkspaceApp auth={pilotAuth} workspaceMode={window.location.pathname === "/connections" ? "connections" : "pilot"} /></>;
 }
-createRoot(document.getElementById('root')!).render(['/pilot', '/connections'].includes(window.location.pathname) ? <NormalPilotFixture /> : <Fixture />);
+createRoot(document.getElementById('root')!).render(['/pilot', '/connections', '/workspaces'].includes(window.location.pathname) ? <NormalPilotFixture /> : <Fixture />);

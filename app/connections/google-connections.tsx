@@ -4,17 +4,18 @@ import Link from 'next/link';
 import type { GoogleConnectionCatalog } from '../../server/connections/google-state';
 import type { ProviderMessagePage } from '../../shared/provider-contracts';
 import styles from '../workspace/workspace.module.css';
+import ConnectedMailTask from './connected-mail-task';
 type Request = (path?: string, input?: object) => Promise<unknown>;
 const labels = { consent_required: 'Awaiting Google consent', authorizing: 'Checking connection; refresh status or cancel if interrupted', connected: 'Read access connected', cancelled: 'Consent cancelled', reconnect_required: 'Reconnect required; previous attempt will not be replayed', cleanup_pending: 'OpenJob access denied; finish local cleanup', disconnected: 'Disconnected in OpenJob' };
 export default function GoogleConnections({ catalog, request, refresh }: { catalog: GoogleConnectionCatalog; request: Request; refresh(): Promise<void> }) {
   const [address, setAddress] = useState(''); const [home, setHome] = useState(''); const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false); const [handoff, setHandoff] = useState<string>(); const [mail, setMail] = useState<{ workspaceId: string; page: ProviderMessagePage }>();
+  const [busy, setBusy] = useState(false); const [handoff, setHandoff] = useState<string>(); const [mail, setMail] = useState<{ connectionId: string; workspaceId: string; page: ProviderMessagePage }>();
   async function act(path: string, input?: object) {
     if (busy) return; setBusy(true); setError(''); setHandoff(undefined); setMail(undefined);
     try {
       const result = await request(path, input) as { authorizationUrl?: string; workspaceId: string; page: ProviderMessagePage };
       if (result.authorizationUrl) setHandoff(result.authorizationUrl);
-      if (path.endsWith('/mail')) setMail(result);
+      if (path.endsWith('/mail')) setMail({ ...result, connectionId: path.split('/')[1] });
       else await refresh();
     } catch { setError('Connection unavailable. Refresh status before retrying.'); try { await refresh(); } catch { /* Parent shows unavailable state. */ } }
     finally { setBusy(false); }
@@ -33,6 +34,6 @@ export default function GoogleConnections({ catalog, request, refresh }: { catal
       {['cancelled', 'disconnected', 'reconnect_required'].includes(row.status) && <button disabled={busy} onClick={() => void act('', { address: row.address, workspaceId: row.workspaceId })}>Prepare reconnect consent</button>}
       {row.status === 'cleanup_pending' && <button disabled={busy} onClick={() => void act(`/${row.id}`, { action: 'retry-cleanup' })}>Finish local cleanup</button>}
     </div></article>)}<p>Disconnect denies OpenJob reads and removes its private credential copy. Google may retain the upstream grant. Revoking Google access can affect other clients in the same project; this application does not perform that revocation.</p></section>
-    {mail && <section className={styles.panel}><h2>{catalog.mode === 'google-fixture' ? 'Invented Mail' : 'Read-only Mail'}</h2>{mail.page.messages.map(message => <article key={message.id}><h3>{message.subject}</h3><p>{message.body}</p></article>)}<Link href={`/workspaces#${mail.workspaceId}`}>Open this Workspace for OpenJob Calendar planning</Link></section>}
+    {mail && <section className={styles.panel}><h2>{catalog.mode === 'google-fixture' ? 'Invented Mail' : 'Read-only Mail'}</h2>{mail.page.messages.map(message => <article key={message.id}><h3>{message.subject}</h3><p>{message.body}</p><ConnectedMailTask key={`${mail.connectionId}:${message.id}`} message={message} workspaceId={mail.workspaceId} connectionId={mail.connectionId} request={request} /></article>)}</section>}
   </>;
 }

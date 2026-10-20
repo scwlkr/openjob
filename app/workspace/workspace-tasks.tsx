@@ -9,12 +9,12 @@ import styles from "./workspace.module.css";
 import taskStyles from "./workspace-tasks.module.css";
 
 export type WorkspaceTasksHandle = { openTask: (id: string) => boolean; openLinkedTask: (source: CalendarTaskSource) => boolean; openMailTask: (source: MailTaskSource) => boolean };
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onSaveNotes?: (taskId: string, notes: string, expectedNotes: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; onSaveNotes?: (taskId: string, notes: string, expectedNotes: string) => Promise<boolean>; onOpenSource?: (source: MailSource) => void; connectedSource?: (taskId: string) => React.ReactNode; active?: boolean; ref?: Ref<WorkspaceTasksHandle> };
 const defaults = () => { const day = new Date().toISOString().slice(0, 10); return { start: `${day}T14:00`, end: `${day}T14:30` }; };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
 const format = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
-export default function WorkspaceTasks({ view, busy, command, onSaveNotes, onOpenSource, active = true, ref }: Props) {
+export default function WorkspaceTasks({ view, busy, command, onSaveNotes, onOpenSource, connectedSource, active = true, ref }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
@@ -103,6 +103,7 @@ export default function WorkspaceTasks({ view, busy, command, onSaveNotes, onOpe
           <button className={styles.primary} disabled={busy || !editingTitle.trim()}>Save title</button><button type="button" disabled={busy} onClick={() => setEditingId("")}>Cancel edit</button>
         </form>}
         <div className={taskStyles.actions}>
+          {connectedSource?.(task.id)}
           {onOpenSource && view.accounts.some(account => account.id === task.sourceAccountId && account.ownerId === task.ownerId) && view.messages.some(message => message.id === task.sourceMessageId && message.accountId === task.sourceAccountId) && <button disabled={busy} onClick={() => onOpenSource({ accountId: task.sourceAccountId!, messageId: task.sourceMessageId! })}>Open source mail</button>}
           <button disabled={busy} onClick={() => { setEditingId(task.id); setEditingTitle(task.title); }}>Edit title</button>
           <button disabled={busy || notesId === task.id} onClick={() => {

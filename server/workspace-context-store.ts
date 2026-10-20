@@ -3,6 +3,7 @@ import type { PersonalWorkspaceContextStore } from '../db/personal-workspace-con
 import type { PersonalWorkspaceStore } from '../shared/personal-workspace.ts';
 import { projectTaskCalendar, applyTaskCalendarCommand, type TaskCalendarCommand } from '../shared/task-calendar-sync.ts';
 import { validateOwnedSnapshot, workspaceFail, type OwnedWorkspace } from '../shared/owned-workspaces.ts';
+import type { MailTaskReference } from '../shared/mail-task-source.ts';
 
 // D06 is still Proposed. Existing Google/Apple bindings carry no adopted independent-control evidence.
 export const workspaceIdentityEligibility = () => ({ state: 'policy_pending' as const, realOnboardingEnabled: false as const, reason: 'independent_anchor_policy_not_adopted' as const });
@@ -18,6 +19,18 @@ export function createWorkspaceContextStore({ owned, personal, contexts }: { own
   return {
     async list(owner: string) { const items = await owned.list(owner); const context = await contexts.find(owner); return context ? [context, ...items] : items; },
     create: owned.create,
+    async createMailTask(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>) {
+      const context = await contexts.find(owner);
+      if (context?.workspaceId !== source.workspaceId) return owned.createMailTask(owner, title, source, current);
+      if (!personal.createMailTask) workspaceFail('unavailable');
+      return personal.createMailTask(owner, title, source, current);
+    },
+    async mailTaskSource(owner: string, workspaceId: string, taskId: string) {
+      const context = await contexts.find(owner);
+      if (context?.workspaceId !== workspaceId) return owned.mailTaskSource(owner, workspaceId, taskId);
+      if (!personal.mailTaskSource) workspaceFail('unavailable');
+      return personal.mailTaskSource(owner, workspaceId, taskId);
+    },
     async personalContext(owner: string) {
       // Validate/read current shape before creating the reference; no data/grant/sign-in mutation.
       const work = projectTaskCalendar(owner, await personal.snapshot(owner));

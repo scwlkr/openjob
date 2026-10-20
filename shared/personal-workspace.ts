@@ -2,6 +2,7 @@ import type { TaskCalendarSyncSnapshot, TaskCalendarSyncAck } from "./task-calen
 import { PERSONAL_MAIL_ACCOUNTS, PERSONAL_MAIL_MESSAGES, addPersonalMailExamples } from "./personal-mail-examples.ts";
 import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspace-contracts.ts";
 import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
+import type { MailTaskReference, MailTaskSource, MailTaskResult } from './mail-task-source.ts';
 import { createWorkspaceEngine } from "./workspace-engine.ts";
 
 import type { PersonalWorkspaceCommand } from "./personal-workspace-contracts.ts";
@@ -14,6 +15,8 @@ export type PersonalWorkspaceStore = {
   syncTaskCalendar?(ownerUserId: string, input: unknown): Promise<TaskCalendarSyncAck>;
   command(ownerUserId: string, input: unknown): Promise<unknown>;
   saveTaskNotes?(ownerUserId: string, input: unknown, expectedNotes: unknown): Promise<unknown>;
+  createMailTask?(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>): Promise<MailTaskResult>;
+  mailTaskSource?(owner: string, workspaceId: string, taskId: string): Promise<MailTaskSource | undefined>;
   removeAllForUser(ownerUserId: string): Promise<number>;
   createAgent(ownerUserId: string, input: PersonalAgentInput): Promise<{ agent: PersonalAgentGrant; token: string }>;
   listAgents(ownerUserId: string): Promise<PersonalAgentGrant[]>;

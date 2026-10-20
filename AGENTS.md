@@ -12,3 +12,7 @@ Brand and styling: follow [docs/brand/README.md](docs/brand/README.md) and its [
 - Cloud-only work uses isolated fixtures, no production secrets or real correspondence. No mailbox links in group-visible Tasks. Do not reset shared data, create credentials, spend money, or change hosting/security settings.
 - Never run release/deploy/Firestore publish commands as routine development. Ordinary merges require passing protections/checks and evidence they do not deploy. Human review precedes production release, including a deploying merge.
 - Preserve native release gates in [ADR 0017](docs/adr/0017-require-cross-platform-native-release-evidence.md) and [QA guidance](docs/qa-fixture.md). Cloud lint/type/unit checks do not prove simulator, emulator, or physical-device behavior; record unavailable evidence honestly.
+
+<!-- wstack:begin setup -->
+Wstack project notes → [w.md](w.md).
+<!-- wstack:end setup -->
