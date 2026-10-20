@@ -6,6 +6,16 @@ It preserves registry owner/channel/rollback checks and stops after an uncertain
 write. A read-only check prepares the handoff without touching npm authentication.
 Normal releases still require current source and their own exact approval.
 
+## Disabled encrypted Google store (WLK318)
+
+Private Google connection envelopes now have a concrete Firestore REST CAS backend
+with injected nonextractable AES-256-GCM key, owner/document/version authentication,
+active-user write fences and bounded encoded size. Expired pending secrets can be
+explicitly cleaned. Synthetic tests cover reconstruction, corruption, isolation,
+CAS and uncertain commits; live durability is not claimed. No runtime binding,
+secret loader, deployed collection, provider activation or deletion-worker hookup.
+See [private store and activation limits](docs/providers/PRIVATE_GOOGLE_STORE.md).
+
 ## Disabled Google connection lifecycle (WLK334)
 
 Address + explicit home, authenticated callback/state consumption, private atomic
