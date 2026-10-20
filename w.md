@@ -1,3 +1,17 @@
+# Continuation — R32 paging landed separately from native R53
+
+20October23:12UTC: PR121 merged on main as
+bf4bcd4c69ddb0dac885d6e8b20de97f339bcfda (source d36cd95, reviewed head d3fdeaf).
+Configured API/CLI/web Mail now reaches later pages, retains authored titles,
+blocks paging during uncertain Task confirmation, and recovers from invalid cursors.
+Thirty focused checks and actual fixture browser proof passed; canonical evidence
+is in main's w.md and Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
+This native branch still has its earlier main base; no native or proof inputs changed.
+R32 search/folders, lazy bodies, sync metadata and integrated live work remain open.
+R53 still awaits the separate Android SDK UI-method answer; the older Google
+unverified-app approval does not answer it. Preserve its installed APK, own emulator,
+loopback5213/8088 fixture services and original26 files. Do not repeat the real read.
+
 # P-WLK-6 / R53 — native connected Workspace journey
 
 20October: sole local implementation owner. Linear issue creation hit the free
