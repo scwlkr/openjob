@@ -1,3 +1,19 @@
+# WLK318 — actual loopback Google/CLI integration proof, 20 October 2026
+
+From mergedPR111/dfc39f0, npm run test:google-local composes actual shared Personal
+application + Google flow + encrypted Firestore backend on an ephemeral loopback
+HTTP socket, driven by existing CLI. Synthetic callback→snapshot restore/new store→
+refresh→fake Mail→disconnect→same-ID/home reconnect passes; foreign/agent/senddenial
+and output redaction pass. All provider/database/identities synthetic. No browser
+consent/live durability/Google acceptance claimed. Existing pilot/sessions unchanged.
+Initial restricted-sandbox bind failed EPERM; authorized loopback execution passed.
+No product/runtime wiring or dependency change. Final exact proof/review/landing
+in PR/Linear. Runtime/store/secret/deployment/Google activation inputs are concrete
+in docs/providers/PRIVATE_GOOGLE_STORE.md; composition injection is engineering,
+not a new owner architecture choice. PR95 unrelated and remains unverified.
+
+---
+
 # WLK318 — disabled token cleanup and injected key lifecycle, 20 October 2026
 
 Follow-on from mergedPR110/c96611a. Branch codex/wlk-318-token-lifecycle adds bounded

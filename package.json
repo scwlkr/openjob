@@ -61,6 +61,7 @@
     "npm:publish": "node scripts/npm-publication.mjs publish",
     "npm:resume:check": "node scripts/npm-approved-publication.mjs check",
     "npm:resume": "node scripts/npm-approved-publication.mjs publish",
+    "test:google-local": "node --test tests/google-local-integration.test.mjs",
     "test:portable": "node --test tests/portable-service.test.mjs",
     "server:bundle": "node scripts/prepare-server-bundle.mjs",
     "dev:owned-workspaces": "node scripts/dev-owned-workspaces.mjs"
