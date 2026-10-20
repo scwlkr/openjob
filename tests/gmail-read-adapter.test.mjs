@@ -158,3 +158,45 @@ test('maximum accepted Unicode cursor fields emit a usable bounded owner/account
   assert.equal(second.nextCursor, null);
   assert.equal(f.calls.find(call => call.url.searchParams.has('pageToken')).url.searchParams.get('pageToken'), upstreamPage);
 });
+
+test('Gmail folder filter uses the exact account-qualified label and binds continuation before credential lookup', async () => {
+  const f = fixture(), input = { ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: 'gmail_primary:folder:INBOX' };
+  const first = await f.adapter.listMessages(input);
+  assert.equal(first.messages.length, 1);
+  await f.adapter.listMessages({ ...input, cursor: first.nextCursor });
+  assert.ok(f.calls.filter(call => call.url.pathname.endsWith('/messages')).every(call => call.url.searchParams.get('labelIds') === 'INBOX'));
+  const before = f.resolved(); f.calls.length = 0;
+  for (const folderId of [undefined, 'gmail_primary:folder:UNREAD']) await assert.rejects(f.adapter.listMessages({ ...input, folderId, cursor: first.nextCursor }), matchCode('invalid_cursor'));
+  for (const folderId of ['gmail_other:folder:INBOX', 'gmail_primary:message:INBOX', 'gmail_primary:folder:%49NBOX', 'gmail_primary:folder:../INBOX']) await assert.rejects(f.adapter.listMessages({ ...input, folderId }), matchCode('invalid_input'));
+  const payload = JSON.parse(Buffer.from(first.nextCursor.slice(4), 'base64url')); delete payload.folderId; payload.version = 1;
+  await assert.rejects(f.adapter.listMessages({ ...input, folderId: undefined, cursor: `gm1.${Buffer.from(JSON.stringify(payload)).toString('base64url')}` }), matchCode('invalid_cursor'));
+  assert.equal(f.resolved(), before); assert.equal(f.calls.length, 0);
+});
+
+test('Gmail missing folder fails before listing; Spam/Trash are included only when explicitly selected', async () => {
+  const missing = fixture();
+  await assert.rejects(missing.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: 'gmail_primary:folder:Label_missing' }), matchCode('folder_unavailable'));
+  assert.equal(missing.calls.length, 2); assert.ok(missing.calls.every(call => !call.url.pathname.endsWith('/messages')));
+  for (const label of ['INBOX', 'SPAM', 'TRASH']) {
+    const f = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/labels') ? { labels: [{ id: label, name: 'Localized display name' }] } : url.pathname.endsWith('/messages/abc123') ? { ...message(), labelIds: [label] } : base(url) });
+    assert.equal((await f.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: `gmail_primary:folder:${label}` })).messages.length, 1);
+    const query = f.calls.find(call => call.url.pathname.endsWith('/messages')).url.searchParams;
+    assert.equal(query.get('labelIds'), label); assert.equal(query.get('includeSpamTrash'), label === 'INBOX' ? null : 'true');
+  }
+});
+
+test('a message moved after listing is omitted from the folder page but exact source reads still work', async () => {
+  const f = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), labelIds: ['UNREAD'] } : base(url) });
+  const page = await f.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: 'gmail_primary:folder:INBOX' });
+  assert.deepEqual(page.messages, []); assert.ok(page.nextCursor); assert.equal(page.syncCursor, null);
+  assert.equal((await f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' })).body, 'Hello café 日本語');
+});
+
+test('messages moved into Spam/Trash during an ordinary folder read stay excluded, without orphaning exact source reads', async () => {
+  for (const movedTo of ['SPAM', 'TRASH']) for (const selected of [undefined, 'INBOX']) {
+    const f = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/labels') ? { labels: [{ id: 'INBOX', name: 'Inbox' }, { id: movedTo, name: movedTo }] } : url.pathname.endsWith('/messages/abc123') ? { ...message(), labelIds: ['INBOX', movedTo] } : base(url) });
+    const page = await f.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, ...(selected ? { folderId: `gmail_primary:folder:${selected}` } : {}) });
+    assert.deepEqual(page.messages, []); assert.ok(page.nextCursor);
+    assert.equal((await f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' })).body, 'Hello café 日本語');
+  }
+});

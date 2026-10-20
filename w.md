@@ -1,3 +1,44 @@
+# P-WLK-6 / R32 — configured Gmail folder selection
+
+20October: source 7bd06e8784912166af053e146b1ddd74a8934955 extends merged PR121 with one
+account-qualified Mail folder selection through adapter/API/existing CLI/web.
+The picker uses returned Gmail label IDs and display names, validates against the
+current label list, and binds selected folder/null into canonical gm2 cursors.
+Old gm1 and mismatched folder cursors require a first-page restart. No persisted
+cursor migration or sync claim. Duplicate/unknown queries and other-account refs
+fail closed; simulated and standalone session query input stays prohibited.
+
+Next/First page retains the selected label; changing folders resets to page one.
+Authored titles survive both transitions. Uncertain Task requests block both picker
+and paging. Missing folders clear bodies and offer All Mail/another folder recovery.
+Explicit Spam/Trash selection sets includeSpamTrash. Ordinary results also recheck
+current message labels to omit messages moved there after listing (review P2 fixed).
+Exact source/reply reads stay independent of labels; authored Tasks survive movement
+or label removal. [Provider contract](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list).
+
+Thirty-five focused adapter/flow/source/reply/API/CLI checks passed, including actual
+loopback runtime/CLI folder+cursor forwarding. Fourteen standalone-session identity,
+lease, revocation and unsafe-operation checks also passed. Earlier groups overlap.
+Final source types/lint pass (two pre-existing warnings); OpenAPI38paths/54operations,
+generated types, brand generation/check32 and secret-safety scan726 pass. Independent
+review confirmed the moved-to-Spam/Trash fix and found no remaining issues.
+
+Practical headed browser proof: Inbox pagination, Review resets to page one, edited
+titles retain across labels/pages, empty Spam, injected missing-folder recovery,
+uncertain additional Task disables the picker until confirmation, disconnect clears
+Mail and Sam sees no Alex connection. The final source was restarted in a fresh
+fixture and folder/page/title/disconnect/isolation flow rechecked. At390px, picker
+height44px and document/viewport widths390px. Connections now applies its existing
+Workspace control styles so controls receive semantic brand roles and touch sizing.
+Synthetic screenshots and receipt: output/playwright/r32-folders/.
+
+No real read, provider effect, persistent access, deployment or publication. The
+original26 files remain byte-identical. Native PR120/source/build inputs remain
+separate and Android UI-method authorization is still pending. R32 still needs
+search, lazy bodies, sync/stale metadata and integrated live acceptance; native
+folder controls are separate. Continue those existing roadmap gaps in the same
+Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a; do not repeat the real read.
+
 # P-WLK-6 / R32 — configured Gmail page continuation
 
 20October: source d36cd954180b5636d01e58257abd1ad287b72a40 makes the adapter's nextCursor
