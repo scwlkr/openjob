@@ -40,9 +40,11 @@ Synthetic screenshots: output/wlk-384/source-{desktop,tablet,phone,disconnected}
 Review found uncertain additional-task retry title drift; fixed immutable pending
 intent. No remaining material source-review blocker.
 
-Current branch codex/wlk-384-connected-mail-task; final source/PR/merge and check
-counts belong in the delivery entry below/Linear.26 original untracked files
-remain byte-identical. Live session read does not prove the integrated saved-work
+Delivered source3610b862498d666402efd40009991b2e51d852af in PR117, merged
+20October21:21:42UTC at8b3ce2e9bb0315f3040eb8917f306a35738ffa03. Remote main
+tree exactly matches checked source; local main fast-forwarded. Validation groups
+30 and29 passed (overlapping, not59 distinct checks). WLK384 is Done for the
+bounded source milestone.26 original untracked files remain byte-identical. Live session read does not prove the integrated saved-work
 journey, durable reply, provider Calendar/send, native/device or release support.
 Next R33 step is correctly addressed authored reply preparation under the same
 source authority, then authorized integrated live proof. Persistent Google/runtime
