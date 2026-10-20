@@ -1,3 +1,211 @@
+# WLK318 — real alternate identity verified; Mail read still pending
+
+Owner19:51 reports Mail connected. Independently read only sanitized existing pilot
+health: lastAccountCheck ready, accountShape primaryEmailfalse/googleProvidertrue/
+providerEmailtrue, mailReads0, nonprod/sendingfalse. This confirms the real account
+contract: Google provider email is present while Firebase top-level email is absent.
+Signed Google/Firebase binding and current self-account checks have now passed live.
+Connection itself is user-reported; health does not expose a connection receipt.
+No completed bounded-read receipt exists. Did not reload, disconnect, repeat sign-in,
+extract session credentials or read Mail via another path. CUA remains unavailable
+from the established -10005 initialization failure; no repeat attempt without change.
+Smallest owner action: click Read Mail once in the already connected Edge0003 page.
+
+Source delivery: [PR116](https://github.com/scwlkr/openjob/pull/116) contains
+reviewed68d8645 plus sanitized documentation on the sole WLK318 branch. Cumulative
+read-only review found no material blockers; GitHub reports clean/mergeable with
+no configured checks. Ready for the authorized nondeploying source merge.
+19 API/auth tests,7 rendered UI tests, type/lint/brand/secret checks previously pass;
+no implementation changes since. Remote main remains9d575280 (PR115); no rulesets,
+required protections or repository hooks; sole workflow is manual artifact-only,
+no publishing. Ordinary source PR/merge is authorized and cannot auto-deploy under
+this verified repository configuration.26 unrelated untracked files preserved.
+No production/Google configuration, credentials, grant scope or stored data changed.
+
+---
+
+# WLK318 — Firebase email contract corrected; signed Google identity repair served locally
+
+Supersedes the prior email-scope diagnosis below. Live sanitized health after the
+owner's failed retry reported google_email_missing, mailReads0. This proves the
+normal end-user accounts:lookup response lacked a top-level email. SDK source
+maps that optional field directly to User.email; providerData email is separate.
+Official Firebase documentation explicitly permits missing top-level email for
+federated users in multiple-accounts-per-email mode:
+https://firebase.google.com/docs/auth/admin/manage-users
+Actual project account mode and live provider-email presence remain unverified;
+no admin configuration/lookup, account mutation or guessed-email fallback used.
+
+Both self-session backend and secondary Mail popup incorrectly required Firebase
+primary email/emailVerified. Replacement verifies the already-returned primary
+Google ID JWT with official google-auth-library signature/issuer/audience checks,
+plus azp, current expiry, email_verified, exact selected address and Google subject
+bound to the signed Firebase UID/provider subject and current self-account lookup.
+Firebase validSince/revocation/disabled checks remain. Google proof stays in page
+memory, never storage/logs. The separate Mail access token still requires verified
+email, exact audience/subject and only read-only Gmail plus identity scopes.
+All asynchronous read fences also check Google identity expiry; no relaxed grant.
+UI displays the server-verified address and no longer claims Google omitted email.
+
+A realistic provider-only Firebase REST/SDK fixture (no primary email or verification
+flag, Google provider email present) reproduces the exact401 google_email_missing
+on prior966308d, then passes with this fix.19 API/auth tests,7 rendered interaction
+checks, type/affected lint, brand32 and secret1033 pass using locked isolated deps.
+Read-only critic found and we fixed expiry-during-read; final review found no other
+material issue. Synthetic desktop/phone screenshots inspected. Initial browser run
+could not locate its expected1228 binary; rerun uses existing1248 Chromium, no install.
+Optional npm-exec-node regression invocation stalled and was stopped; direct local
+Node reproduced the expected pre-fix failure. Shared dependency install untouched.
+
+After notice, restarted only owned Node68773. Current owned Node9855, exec58769,
+http://127.0.0.1:5202/mail-session. Reviewed backend/frontend files match owned pilot
+copy hashes; actual /main.tsx imports and /@fs public modules contain this repair.
+Health200 nonprod/sendingfalse, lastAccountCheck not_checked, mailReads0 at startup.
+No new live acceptance, Gmail consent or read is claimed. Browser control remains
+unavailable (-10005 initialization timeout), with no repeat attempt or workaround.
+Next normal owner action: Complete Google sign-in on the existing Edge0003 page,
+then Connect Gmail for this session and Read Mail once if account verification
+succeeds. No Google settings change, operator key or1Password access required.
+The former memory proof was disposed, so a normal popup completion supplies it.
+All unrelated26 pre-existing untracked files remain preserved. Activation/server,
+PR95 no-retry and WLK302 recovery gates remain unchanged.
+
+---
+
+# WLK318 — temporary sign-in email repair installed; awaiting normal user check
+
+Owner19:20 screenshot shows intended alternate display name, Google sign-in badge,
+no SDK email, failed account check, no Gmail receipt. Source inspection confirms
+Firebase Google provider default adds profile only. Temporary login and Mail popup
+now explicitly request standard email identity scope. Default saved-work login
+unchanged. Temporary observer uses onIdTokenChanged so same-UID completion updates
+identity/session metadata. No server email/UID/subject/scope/revocation check relaxed.
+
+Regression reproduces profile-only response without email: POST
+/api/v1/connections/session/status returns401 email_permission_required with
+sanitized google_email_missing, and zero Gmail/provider-token calls. UI asks
+Complete Google sign-in; only actual email mismatch prompts account selection.
+16 API/self/revocation/auth checks,7 UI interaction/layout checks, type/lint and
+rootsecret1033 pass using locked isolated dependencies; shared install unchanged.
+Root attempts still fail on known missinggoogle-auth-library, not claimed passing.
+
+After disclosed temporary-login warning and authorized repair scope, stopped only
+verified owned Node14826, synced reviewed source, restarted own key-free pilot.
+New Node68773, execsession92273; health200 nonprod/sendingfalse, lastAccountCheck
+not_checked, mailReads0. Backend diagnostics now active; no post-restart user
+request yet observed. Underlying original real401/provider reason remains
+UNVERIFIED (missing SDK email is observed, failure mechanism reproduced, not a
+new live acceptance claim). No live Gmail consent/read. CUA initialization remains
+unavailable; no further failed-control retries. Normal owner sign-in/check on
+existing Edge0003 page supplies next exact sanitized receipt; no account switch
+suggestion without real mismatch. Operator/1Password permission remains withdrawn.
+
+---
+
+# WLK318 — Mail screen state and styling fixed; live auth remains unverified
+
+Current branch codex/wlk-318-alt-self-session contains committedd4e1868 key-free
+alt route plus this UI follow-on. Parent supplied current screenshot: signed-in
+checking state, no Gmail controls/receipts. Verified source causes: standalone page
+omitted required workspace root styling; session account status swallowed failure
+and had no deadline. No eligible-account failure receipt existed to prove its
+underlying provider cause. No account/binding/protection weakened to accept it.
+
+New compact branded card explicitly shows Google name/email from normal SDK
+metadata, signed-out/checking/signed-in/wrong-account/error states, separate Gmail
+access-off/connected/read-complete states, primary next action, secondary account
+switch/signout. Account check has8s deadline (including getIdToken), clear Retry,
+and friendly typed provider failures. Temporary identity metadata never authorizes
+API access. Exact server self/Gmail checks unchanged. No false read receipt.
+15 API/self/revocation/auth checks and6 browser state/interaction/layout checks
+pass; TypeScript/affected lint/brand32/rootsecret1033 pass. Initial fixture globals,
+Node strip-only syntax and lint failures fixed honestly before final checks.
+Rendered synthetic desktop+390px phone screenshots inspected:
+/tmp/openjob-mail-session-desktop.png and /tmp/openjob-mail-session-phone.png.
+
+Frontend sources copied to the existing proof server for normal hot update after
+warning that a reload clears temporary login. No browser reload/signout or server
+restart issued. Current backend remains prior running module until a later safe
+restart; new sanitized account failure reason/receipt counters are prepared in
+source. Existing service health/anonymous denial verified earlier. Supported CUA
+failed initialization; no further retries until something changes. Actual current
+Edge rendered result, Google eligibility, consent or Mail read remain UNVERIFIED.
+Never duplicate owner actions. No operator/1Password use, Google settings repeat,
+main-account credentials, deployment or publication. Original26 files preserved.
+
+---
+
+# WLK318 — alternate-only local service ready; browser control timed out
+
+Owner withdrew operator document access. No further 1Password/credential reads.
+Branch codex/wlk-318-alt-self-session from merged9d57528 supplies scoped source:
+new standalone self-authenticated Gmail composition + npm run dev:google-session.
+Only public nonprod Firebase config/selected alternate address. No Firestore,
+operator loader, saved OpenJob User or Task/Workspace routes. Existing backend
+users.resolve/deletionPending checks unchanged. Standalone route cannot observe
+OpenJob Firestore deletionPending and grants no saved-work capability.
+
+Normal Google sign-in uses separate memory-only Firebase app. Signed Firebase
+identity plus end-user accounts:lookup{idToken} checks exact selected verified
+mailbox, UID, Google provider subject, disabled/unlinked/revoked state. First UID
+learned only from authenticated self; core lease pins UID/subject/auth_time with
+strict Google client/audience/scopes and10min token-memory bound. No admin lookup,
+other-user enumeration, database permission changes, refresh/send/Calendar route.
+
+15 focused signed synthetic/self/revocation/auth-regression checks pass;
+TypeScript/affected lint/brand32 pass, rootsecret1030 pass. Reviewer found
+shared basic-auth persistence; corrected to separate memory-only app and repeated
+changed compile/lint gates passed. Added regression covers temporary-auth persistence
+and saved primary-session isolation. Root check attempt failed on known stale dependencies;
+all passing checks use prior locked isolated proof copy, shared install unchanged.
+
+Live service started from $TMPDIR/openjob-local-proof-5m1q071h with selected alt,
+loopback127.0.0.1:5202/mail-session; exec session3598, process14826. Actual health200
+local_mail_session/nonprod/sendingfalse and unauthenticated API denial verified.
+ALTS_SESSION=openjob-318-alt-self selected existing0003; alts open confirmed Edge
+profile0003 and requested local URL. No operator credential involved.
+
+BLOCK: cua.getApp(Microsoft Edge) timed out after33s and reset kernel; subsequent
+cua.getState timed out after31s/reset. No browser UI/sign-in/consent was observed
+or controlled. A fresh permitted getApp(Edge) retry also failed: Computer Use
+server error-10005, timed out waiting for initialize from codex app-server (32s),
+before any current-page observation/action. No further retry until something changes.
+No Gmail consent/read or Google settings changes. Stop repeating
+stalled control; restore supported Edge computer control (or owner handoff on
+already-open local page) to perform approved selected-alt sign-in, connect Gmail,
+one bounded read, disconnect. Stop at unexpected warnings/verification/allowlist.
+Previous denials remain unexecuted and withdrawn credential request stays closed.
+PR95/WLK302/WStack-installer holds unchanged. Original26 unrelated files preserved.
+
+---
+
+# WLK318 — merged local session source; operator account resolved by metadata
+
+PR115 merged20Oct18:52UTC at9d5752809f77b58f052da531ea78f27e504b3d8c;
+merged tree matches reviewed/tested8babdd7. Local main fast-forwarded, original26
+untracked files unchanged. No required remote checks/rules, repository hooks empty,
+only workflow manual artifact-only; no deploy/publication triggered.
+
+Parent explicitly permitted metadata-only credential-account diagnosis. Configured
+Shane account resolves by exact UUID, and the known operator vault resolves as
+My Passwords under that account. Email selector had returned no accounts. No
+operator document retrieval was retried; no key loaded, no pilot listener started.
+Private exact references remain in /tmp/openjob-318-session-launcher.mjs; retry
+must replace its email selector with verified account UUID only after approval.
+The needed existing document is OpenJob Preview QA Fixture Operator (dedicated
+openjob-nonprod Firestore service account, documented roles/datastore.user). It
+lets the existing API resolve the active saved OpenJob user. Gmail online popup
+needs no Google client secret. No new account/credential or additional IAM needed.
+
+Next: approve one document read bound to that verified owning account and known
+vault, RAM-only local launcher; then recover selected alternate binding from its
+own authenticated session. Saved Gmail API/read-only scope verified, Google marks
+scope unverified. No actual Gmail consent/read, verification submission, allowlist
+or warning bypass. Broader identity enumeration and account-unbound credential
+retry remain denied/not executed, with no bypass. PR95/WLK302 holds unchanged.
+
+---
+
 # WLK318 — local session Gmail source ready, 20 October 2026
 
 Branch `codex/wlk-318-local-gmail-session` from c03dd075. Default-off nonprod

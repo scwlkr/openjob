@@ -1,3 +1,8 @@
+> Current20October route: use only the explicitly approved alternate and the
+> [key-free local session](#alternate-only-route-without-an-operator-key).
+> Operator/1Password access is withdrawn. Earlier setup/account notes below are
+> historical; they do not authorize use of another account or credentials.
+
 # Remaining Gmail-read gate after local sign-in proof
 
 Selected mailbox: **shane.caleb.walker@gmail.com**, existing project
@@ -252,3 +257,50 @@ the scope is marked unverified and Google requests app verification. Real provid
 acceptance remains unverified. No test-user allowlisting,
 verification submission, warning bypass or live Mail read has occurred. The prior
 persistent-host activation decision remains separate and unanswered.
+
+
+### Alternate-only route without an operator key
+
+The owner withdrew operator-document access. Use `npm run dev:google-session`
+with `OPENJOB_GOOGLE_MAILBOX` set to the explicitly approved alternate address.
+This separate local runner uses existing public preview Firebase configuration,
+listens only at `http://127.0.0.1:5202/mail-session`, and never imports the portable
+runtime, Firestore stores, service-account configuration or a credential loader.
+It uses ordinary Google/Firebase sign-in in a separate memory-only Firebase app,
+preserving the existing saved app session. Then the person separately connects
+Gmail and explicitly reads once. The existing persistent and integrated session
+routes keep their saved OpenJob User checks unchanged.
+
+The local route cryptographically verifies the Firebase ID token for the exact
+nonproduction project, then sends only `{ idToken }` to the provider's fixed
+end-user `accounts:lookup` endpoint with the public API key. There is no admin
+OAuth credential, target-UID/email lookup or other-user enumeration. It requires
+one current account, matching UID, unique matching Google subject, and a present
+valid revocation cutoff no newer than the authentication event. The primary popup
+also supplies its short-lived Google ID JWT in memory. Official Google signature,
+issuer and client audience verification plus exact subject, verified email, azp and
+expiry checks bind the approved mailbox independently of Firebase’s optional
+primary email fields. Provider metadata or a guessed address never authorizes it. Disabled/deleted/unlinked/revoked or unavailable accounts fail closed. The
+first authenticated self identity pins the process; each lease also pins the
+original authentication event. Current-account checks fence pending Mail reads.
+The strict Google audience/scope/subject checks and ten-minute memory lease are
+shared with the integrated implementation.
+
+This route has no saved OpenJob User, Tasks, Workspace or agent capability. Its
+opaque temporary owner identifier is internal, not a new saved account. It cannot
+observe Firestore's OpenJob deletion-pending state; it does not replace or claim
+the integrated route's saved-user deletion checks. It can reject current Firebase
+revocation and account removal. No database permission, rule, IAM or security
+setting changes are required. Google may retain its consent after local disconnect.
+
+Live checkpoint20October: the key-free listener health and anonymous denial were
+verified; alts confirmed opening the local page in the selected existing Edge
+profile. Supported computer control failed during initialization before any page
+state was returned, including a fresh permitted retry. The later normal user
+sign-in passed signed identity/current-account verification: sanitized health is
+ready, with provider email present and Firebase primary email absent. The owner
+reports Gmail connected; a connection receipt is not exposed by health. Completed
+Mail reads remain zero, so bounded read acceptance remains unverified. Do not repeat the failed control
+path until it changes; use the owner's already-open page handoff. No hidden auth
+storage/session extraction or alternate browser/controller is used. No operator
+or 1Password access is authorized or needed for this route.

@@ -124,7 +124,7 @@ export type AuthenticationMethod = SignInMethod | "qa-password";
 
 export type AuthSession = {
   /** Local cache identity only; server authorization always verifies the ID token. */
-  localIdentity?: { uid: string; tenantId: string | null };
+  localIdentity?: { uid: string; tenantId: string | null; email?: string; displayName?: string };
   signInMethod: AuthenticationMethod;
   getIdToken(): Promise<string>;
 };
@@ -137,6 +137,8 @@ type AuthCredentialProofBase = {
 export type AuthCredentialProof =
   | (AuthCredentialProofBase & {
       signInMethod: "google";
+      /** Short-lived Google identity JWT; memory-only temporary account verification. */
+      getIdentityToken?(): Promise<string>;
       getRevocationProof(): Promise<GoogleAccountDeletionRevocationProof>;
     })
   | (AuthCredentialProofBase & {

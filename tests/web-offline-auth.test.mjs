@@ -9,7 +9,7 @@ import { build } from 'vite';
 test('Firebase restoration uses exact SDK local identity only on network failure and never invents provider permissions', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'openjob-offline-auth-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const fake = join(directory, 'firebase.mjs');
-  await writeFile(fake, `export const browserLocalPersistence={},inMemoryPersistence={}; export function getApps(){return []} export function initializeApp(){return {}} export function getAuth(){return {}} export async function setPersistence(){} export function onAuthStateChanged(auth,listener){queueMicrotask(()=>listener(globalThis.__offlineAuthUser));return ()=>{}} export class GoogleAuthProvider{} export class OAuthProvider{} export async function signOut(){} export async function signInWithEmailAndPassword(){} export async function signInWithPopup(){throw Error('unused')}`);
+  await writeFile(fake, `export const browserLocalPersistence={},inMemoryPersistence={}; export function getApps(){return []} export function initializeApp(){return {}} export function getAuth(){return {}} export async function setPersistence(){} export function onAuthStateChanged(auth,listener){queueMicrotask(()=>listener(globalThis.__offlineAuthUser));return ()=>{}} export const onIdTokenChanged=onAuthStateChanged; export class GoogleAuthProvider{} export class OAuthProvider{} export async function signOut(){} export async function signInWithEmailAndPassword(){} export async function signInWithPopup(){throw Error('unused')}`);
   await build({ configFile: false, logLevel: 'silent', resolve: { alias: { 'firebase/app': fake, 'firebase/auth': fake } }, define: { __OPENJOB_FIREBASE_CONFIG__: '{}', __OPENJOB_QA_PASSWORD_AUTH__: 'null', __OPENJOB_APPLE_SERVICE_ID__: '"fixture"' }, build: { ssr: resolve('app/firebase-auth.ts'), outDir: directory, emptyOutDir: false, minify: false, rollupOptions: { output: { entryFileNames: 'auth.mjs' } } } });
   const { createFirebaseAuth } = await import(pathToFileURL(join(directory, 'auth.mjs')).href);
   t.after(() => { delete globalThis.__offlineAuthUser; });
@@ -54,4 +54,56 @@ test('offline page preparation uses root worker messaging without notification p
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { serviceWorker: { async register(path, options) { calls.push({ path, options }); return { active: { postMessage(message, ports) { calls.push(message); ports[0].postMessage({ type: 'openjob:offline-shell-ready' }); ports[0].close(); } }, pushManager: { subscribe() { throw new Error('No subscription permitted.'); } } }; } } } });
   await prepareOfflineWorkspaceShell();
   assert.deepEqual(calls, [{ path: '/notification-service-worker.js', options: { scope: '/' } }, { type: 'openjob:prepare-offline-shell' }]);
+});
+
+test('temporary Mail login uses separate memory persistence and cannot sign out the saved primary login', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'openjob-session-auth-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const fake = join(directory, 'firebase.mjs');
+  globalThis.__mailAuthCalls = [];
+  t.after(() => { delete globalThis.__mailAuthCalls; });
+  await writeFile(fake, `const apps=[],auths=new Map();
+export const browserLocalPersistence='local',inMemoryPersistence='memory';
+export function getApps(){return apps} export function initializeApp(config,name){const app={name};apps.push(app);return app}
+export function getAuth(app){if(!auths.has(app.name))auths.set(app.name,{name:app.name,user:app.name==='openjob-web'?{uid:'saved',tenantId:null,email:null,emailVerified:false,providerData:[{providerId:'google.com',uid:'google-saved',email:'alex@example.invalid'}],async getIdTokenResult(){return {signInProvider:'google.com'}},async getIdToken(){return 'invented'}}:null});return auths.get(app.name)}
+export async function setPersistence(auth,mode){globalThis.__mailAuthCalls.push(['persistence',auth.name,mode])}
+export function onAuthStateChanged(auth,listener){queueMicrotask(()=>listener(auth.user));return ()=>{}}
+export async function signOut(auth){globalThis.__mailAuthCalls.push(['signout',auth.name]);auth.user=null}
+export const onIdTokenChanged=onAuthStateChanged; export class GoogleAuthProvider{constructor(){this.scopes=['profile']}addScope(scope){this.scopes.push(scope)}setCustomParameters(){}static credentialFromResult(){return {accessToken:'invented-primary-access',idToken:'invented-google-jwt'}}} export class OAuthProvider{}
+export async function signInWithEmailAndPassword(){} export async function signInWithPopup(auth,provider){globalThis.__mailAuthCalls.push(['popup',auth.name,[...provider.scopes]]);return {user:auths.get('openjob-web').user}}`);
+  await build({ configFile: false, logLevel: 'silent', resolve: { alias: { 'firebase/app': fake, 'firebase/auth': fake } }, define: { __OPENJOB_FIREBASE_CONFIG__: '{}', __OPENJOB_QA_PASSWORD_AUTH__: 'null', __OPENJOB_APPLE_SERVICE_ID__: '"fixture"' }, build: { ssr: resolve('app/firebase-auth.ts'), outDir: directory, emptyOutDir: false, rollupOptions: { output: { entryFileNames: 'auth.mjs' } } } });
+  const { createFirebaseAuth } = await import(pathToFileURL(join(directory, 'auth.mjs')).href);
+  const primary = createFirebaseAuth(), temporary = createFirebaseAuth({ sessionOnly: true });
+  const observe = auth => new Promise((resolve, reject) => { const cancel = auth.observe(value => { cancel(); resolve(value); }, reject); });
+  assert.equal((await observe(primary)).localIdentity.uid, 'saved');
+  assert.equal(await observe(temporary), null); await temporary.signOut();
+  assert.equal((await observe(primary)).localIdentity.uid, 'saved');
+  const proof = await temporary.signIn('google');
+  assert.equal(await proof.getIdentityToken(), 'invented-google-jwt');
+  await proof.dispose(); await assert.rejects(proof.getIdentityToken());
+  await primary.signIn('google');
+  assert.deepEqual(globalThis.__mailAuthCalls.find(([action,name]) => action === 'popup' && name === 'openjob-mail-person')[2], ['profile', 'email']);
+  assert.deepEqual(globalThis.__mailAuthCalls.find(([action,name]) => action === 'popup' && name === 'openjob-web')[2], ['profile']);
+  assert.ok(globalThis.__mailAuthCalls.some(([action,name,mode]) => action === 'persistence' && name === 'openjob-mail-person' && mode === 'memory'));
+  assert.equal(globalThis.__mailAuthCalls.some(([action,name]) => action === 'signout' && name === 'openjob-web'), false);
+  assert.equal(globalThis.__mailAuthCalls.some(([action,name,mode]) => action === 'persistence' && name === 'openjob-mail-person' && mode === 'local'), false);
+});
+
+test('Mail popup preserves Google token for server verification when Firebase primary email is null', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'openjob-provider-user-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const fake = join(directory, 'firebase.mjs');
+  globalThis.__popupFixture = { uid: 'firebase_alex', scopes: [], signedOut: 0 };
+  globalThis.location = { hostname: '127.0.0.1', protocol: 'http:' };
+  t.after(() => { delete globalThis.__popupFixture; delete globalThis.location; });
+  await writeFile(fake, `export const inMemoryPersistence='memory'; export function getApps(){return []} export function initializeApp(){return {}} export function getAuth(){return {}} export async function setPersistence(auth,mode){if(mode!=='memory')throw Error('persistence')} export async function signOut(){globalThis.__popupFixture.signedOut++}
+export class GoogleAuthProvider{addScope(scope){globalThis.__popupFixture.scopes.push(scope)}setCustomParameters(value){globalThis.__popupFixture.parameters=value}static credentialFromResult(){return {accessToken:'invented-mail-access'}}}
+export async function signInWithPopup(){return {user:{uid:globalThis.__popupFixture.uid,email:null,emailVerified:false,providerData:[{providerId:'google.com',uid:'google_alex',email:'alex@example.invalid'}]}}}`);
+  await build({ configFile: false, logLevel: 'silent', resolve: { alias: { 'firebase/app': fake, 'firebase/auth': fake } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify({ projectId: 'openjob-nonprod' }) }, build: { ssr: resolve('app/connections/session-google-popup.ts'), outDir: directory, emptyOutDir: false, rollupOptions: { output: { entryFileNames: 'popup.mjs' } } } });
+  const { withSessionGoogleToken } = await import(pathToFileURL(join(directory, 'popup.mjs')).href);
+  let consumed = 0;
+  await withSessionGoogleToken('firebase_alex', 'alex@example.invalid', new AbortController().signal, async value => { assert.equal(value, 'invented-mail-access'); consumed++; });
+  assert.equal(consumed, 1); assert.deepEqual(globalThis.__popupFixture.scopes, ['email', 'https://www.googleapis.com/auth/gmail.readonly']);
+  assert.equal(globalThis.__popupFixture.parameters.access_type, 'online'); assert.equal(globalThis.__popupFixture.parameters.include_granted_scopes, 'false');
+  globalThis.__popupFixture.uid = 'foreign';
+  await assert.rejects(withSessionGoogleToken('firebase_alex', 'alex@example.invalid', new AbortController().signal, async () => { consumed++; }));
+  assert.equal(consumed, 1); assert.equal(globalThis.__popupFixture.signedOut, 4);
 });

@@ -32,6 +32,7 @@ export function createGoogleMailSession(options: { configuration: GoogleSessionC
   }
   return {
     origin: config.origin,
+    forget: clear,
     status(owner: string, identity: FirebaseTokenIdentity) { admitted(owner, identity); expire(); return { mode: 'google-session' as const, address: config.address, status: 'consent_required' as const }; },
     begin(owner: string, identity: FirebaseTokenIdentity) {
       admitted(owner, identity); clear();

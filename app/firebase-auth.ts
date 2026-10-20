@@ -6,6 +6,7 @@ import {
   inMemoryPersistence,
   OAuthProvider,
   onAuthStateChanged,
+  onIdTokenChanged,
   setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -57,6 +58,17 @@ function firebaseClient() {
   return pending;
 }
 
+let sessionClientPromise: Promise<{ auth: ReturnType<typeof getAuth> }> | undefined;
+function sessionFirebaseClient() {
+  sessionClientPromise ??= (async () => {
+    const app = getApps().find(candidate => candidate.name === 'openjob-mail-person') ?? initializeApp(firebaseConfig, 'openjob-mail-person');
+    const auth = getAuth(app);
+    await setPersistence(auth, inMemoryPersistence);
+    return { auth };
+  })();
+  return sessionClientPromise;
+}
+
 function secondaryFirebaseClient() {
   if (secondaryClientPromise) return secondaryClientPromise;
   const pending = (async () => {
@@ -74,11 +86,12 @@ function secondaryFirebaseClient() {
   return pending;
 }
 
-function providerFor(method: SignInMethod, fresh = false) {
+function providerFor(method: SignInMethod, fresh = false, requireEmail = false) {
   const provider =
     method === "google"
       ? new GoogleAuthProvider()
       : new OAuthProvider("apple.com");
+  if (method === 'google' && requireEmail) provider.addScope('email');
   if (fresh) {
     provider.setCustomParameters({
       prompt: method === "google" ? "select_account" : "login",
@@ -105,6 +118,8 @@ function signInMethodFor(
 
 async function sessionFor(user: {
   uid: string;
+  email?: string | null;
+  displayName?: string | null;
   tenantId: string | null;
   providerData: { providerId: string }[];
   getIdToken(): Promise<string>;
@@ -124,7 +139,7 @@ async function sessionFor(user: {
     method = [...methods][0]!;
   }
   return {
-    localIdentity: { uid: user.uid, tenantId: user.tenantId },
+    localIdentity: { uid: user.uid, tenantId: user.tenantId, ...(user.email ? { email: user.email } : {}), ...(user.displayName ? { displayName: user.displayName } : {}) },
     signInMethod: method,
     getIdToken: () => user.getIdToken(),
   };
@@ -179,6 +194,11 @@ async function primaryCredentialProof(
     : {
         ...base,
         signInMethod: "google",
+        async getIdentityToken() {
+          requireActive();
+          if (!providerIdToken) throw new Error("Google identity proof unavailable.");
+          return providerIdToken;
+        },
         async getRevocationProof() {
           const idToken = providerIdToken;
           if (!idToken) {
@@ -193,7 +213,8 @@ async function primaryCredentialProof(
       };
 }
 
-export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOfflineRestore?: boolean } = {}): OpenJobAuth {
+export function createFirebaseAuth({ allowOfflineRestore = false, sessionOnly = false }: { allowOfflineRestore?: boolean; sessionOnly?: boolean } = {}): OpenJobAuth {
+  const primaryClient = sessionOnly ? sessionFirebaseClient : firebaseClient;
   let forceAccountSelection = false;
   let secondaryGeneration = 0;
   let activeSecondaryGeneration: number | null = null;
@@ -225,10 +246,10 @@ export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOffli
       let active = true;
       let emission = 0;
       let unsubscribe: () => void = () => undefined;
-      void firebaseClient()
+      void primaryClient()
         .then(({ auth }) => {
           if (!active) return;
-          unsubscribe = onAuthStateChanged(auth, (user) => {
+          unsubscribe = (sessionOnly ? onIdTokenChanged : onAuthStateChanged)(auth, (user) => {
             const currentEmission = ++emission;
             if (!user) {
               listener(null);
@@ -253,10 +274,10 @@ export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOffli
     },
 
     async signIn(method) {
-      const { auth } = await firebaseClient();
+      const { auth } = await primaryClient();
       const result = await signInWithPopup(
         auth,
-        providerFor(method, forceAccountSelection),
+        providerFor(method, forceAccountSelection, sessionOnly),
       );
       forceAccountSelection = false;
       return primaryCredentialProof(method, result);
@@ -269,7 +290,7 @@ export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOffli
           { code: "auth/operation-not-allowed" },
         );
       }
-      const { auth } = await firebaseClient();
+      const { auth } = await primaryClient();
       const previousTenantId = auth.tenantId;
       try {
         auth.tenantId = qaPasswordAuth.tenantId;
@@ -374,14 +395,14 @@ export function createFirebaseAuth({ allowOfflineRestore = false }: { allowOffli
 
     async signOut() {
       forceAccountSelection = false;
-      const { auth } = await firebaseClient();
+      const { auth } = await primaryClient();
       await clearSecondarySession();
       await signOut(auth);
     },
 
     async switchUser() {
       forceAccountSelection = true;
-      const { auth } = await firebaseClient();
+      const { auth } = await primaryClient();
       await clearSecondarySession();
       await signOut(auth);
     },

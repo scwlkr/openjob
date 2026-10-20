@@ -4,12 +4,14 @@ import '../../app/globals.css';
 
 const root = createRoot(document.getElementById('root')!);
 try {
-  const [health, configuration] = await Promise.all([fetch('/healthz').then(r => r.json() as Promise<{ configured: boolean; missing: string[] }>), fetch('/runtime-config').then(r => r.json())]);
+  const [health, configuration] = await Promise.all([fetch('/healthz').then(r => r.json() as Promise<{ configured: boolean; missing: string[]; mode?: string }>), fetch('/runtime-config').then(r => r.json())]);
   Object.assign(globalThis, { __OPENJOB_SERVICE_CONFIG__: configuration });
   if (!health.configured) {
     root.render(<main style={{ padding: 24 }}><OpenJobBrand /><h1>OpenJob service setup</h1><p>This is the real-service profile. Firebase configuration is required before sign-in. No invented session is substituted.</p><ul>{health.missing.map((name: string) => <li key={name}>{name}</li>)}</ul><p>Use <code>openjob app</code> for the separate labeled local demo. Provider connections and real sending are not configured.</p></main>);
   } else {
-    if (location.pathname === '/account') {
+    if (health.mode === 'local_mail_session') {
+      const { default: SelfSessionGmail } = await import('../../app/connections/self-session-gmail'); root.render(<SelfSessionGmail />);
+    } else if (location.pathname === '/account') {
       const { default: AccountApp } = await import('./account'); root.render(<AccountApp />);
     } else {
       const { default: PersonalWorkspaceApp } = await import('../../app/workspace/personal-workspace-app');
