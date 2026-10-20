@@ -3,13 +3,14 @@ import { PERSONAL_MAIL_ACCOUNTS, PERSONAL_MAIL_MESSAGES, addPersonalMailExamples
 import type { WorkspaceCommand, WorkspaceState, WorkspaceView } from "./workspace-contracts.ts";
 import type { PersonalAgentGrant, PersonalAgentInput } from "./personal-agent-grants.ts";
 import type { MailTaskReference, MailTaskSource, MailTaskResult } from './mail-task-source.ts';
+import type { ConnectedReplyStore } from './connected-reply.ts';
 import { createWorkspaceEngine } from "./workspace-engine.ts";
 
 import type { PersonalWorkspaceCommand } from "./personal-workspace-contracts.ts";
 export type { PersonalWorkspaceCommand } from "./personal-workspace-contracts.ts";
 export type { PersonalMailExamplesResult } from "./personal-mail-examples.ts";
 
-export type PersonalWorkspaceStore = {
+export type PersonalWorkspaceStore = Partial<ConnectedReplyStore> & {
   snapshot(ownerUserId: string): Promise<WorkspaceView>;
   readTaskCalendarSync?(ownerUserId: string): Promise<TaskCalendarSyncSnapshot>;
   syncTaskCalendar?(ownerUserId: string, input: unknown): Promise<TaskCalendarSyncAck>;

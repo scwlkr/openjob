@@ -4,6 +4,7 @@ import type { PersonalWorkspaceStore } from '../shared/personal-workspace.ts';
 import { projectTaskCalendar, applyTaskCalendarCommand, type TaskCalendarCommand } from '../shared/task-calendar-sync.ts';
 import { validateOwnedSnapshot, workspaceFail, type OwnedWorkspace } from '../shared/owned-workspaces.ts';
 import type { MailTaskReference } from '../shared/mail-task-source.ts';
+import type { ConnectedReplyStore } from '../shared/connected-reply.ts';
 
 // D06 is still Proposed. Existing Google/Apple bindings carry no adopted independent-control evidence.
 export const workspaceIdentityEligibility = () => ({ state: 'policy_pending' as const, realOnboardingEnabled: false as const, reason: 'independent_anchor_policy_not_adopted' as const });
@@ -16,7 +17,22 @@ export function createWorkspaceContextStore({ owned, personal, contexts }: { own
     if (work.calendars.length !== 1 || work.calendars[0].id !== 'personal') workspaceFail('invalid_state');
     return validateOwnedSnapshot({ workspace, work: { ...work, calendars: work.calendars.map(calendar => ({ ...calendar, id: workspace.calendarId })), events: work.events.map(event => ({ ...event, calendarId: event.calendarId === 'personal' ? workspace.calendarId : event.calendarId })) } });
   }
+  const connected: ConnectedReplyStore = {
+    async connectedReply(owner, source) {
+      const context = await contexts.find(owner);
+      if (context?.workspaceId !== source.workspaceId) return owned.connectedReply(owner, source);
+      if (!personal.connectedReply) workspaceFail('unavailable');
+      return personal.connectedReply(owner, source);
+    },
+    async saveConnectedReply(owner, source, input, expectedRevision, current) {
+      const context = await contexts.find(owner);
+      if (context?.workspaceId !== source.workspaceId) return owned.saveConnectedReply(owner, source, input, expectedRevision, current);
+      if (!personal.saveConnectedReply) workspaceFail('unavailable');
+      return personal.saveConnectedReply(owner, source, input, expectedRevision, current);
+    },
+  };
   return {
+    ...connected,
     async list(owner: string) { const items = await owned.list(owner); const context = await contexts.find(owner); return context ? [context, ...items] : items; },
     create: owned.create,
     async createMailTask(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>) {

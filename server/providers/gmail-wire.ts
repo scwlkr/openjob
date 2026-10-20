@@ -23,6 +23,22 @@ function headers(part: Record<string, unknown>) {
   }
   return result;
 }
+export type GmailReplyHeaders = { from?: string; to?: string; cc?: string; replyTo?: string; subject?: string; messageId?: string; references?: string; inReplyTo?: string };
+/** Private reply metadata, deliberately separate from general Mail read DTOs. */
+export function replyHeaders(value: unknown): GmailReplyHeaders {
+  const raw = object(object(value).payload).headers ?? [];
+  if (!Array.isArray(raw) || raw.length > 100) fail('malformed_response');
+  const fields = { from: 'from', to: 'to', cc: 'cc', 'reply-to': 'replyTo', subject: 'subject', 'message-id': 'messageId', references: 'references', 'in-reply-to': 'inReplyTo' } as const;
+  const result: GmailReplyHeaders = {};
+  for (const value of raw) {
+    const row = object(value), name = string(row.name, 128).toLowerCase();
+    if (!Object.hasOwn(fields, name)) continue;
+    const key = fields[name as keyof typeof fields];
+    if (Object.hasOwn(result, key) || typeof row.value !== 'string' || row.value.length > 4096 || /[\u0000\r\n\u007f]/.test(row.value)) fail('malformed_response');
+    result[key] = row.value;
+  }
+  return result;
+}
 function decodeBody(value: unknown) {
   if (value === undefined || value === "") return "";
   if (typeof value !== "string" || value.length > 90_000 || !/^[A-Za-z0-9_-]+={0,2}$/.test(value)) fail("malformed_response");

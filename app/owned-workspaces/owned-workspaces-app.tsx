@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReplyEditorBuffer } from '../connections/connected-reply-editor';
 import WorkspaceHome from './workspace-home';
 import { parseWorkspaceFragment, workspaceFragment, type WorkspaceDestination } from '../../shared/workspace-navigation';
 import { OpenJobBrand } from '../openjob-brand';
@@ -86,6 +87,12 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
   </div>;
 }
 function WorkspaceSession({ workspace, active, request, setBusy, navigation, onNavigate, getToken }: { getToken?: () => Promise<string>; onNavigate: (destination: WorkspaceDestination) => void; navigation?: WorkspaceDestination; workspace: OwnedWorkspace; active: boolean; request: Request; setBusy: (value: boolean) => void }) {
+  const [replyBuffers, setReplyBuffers] = useState<Record<string, ReplyEditorBuffer>>({});
+  useEffect(() => {
+    if (!Object.values(replyBuffers).some(buffer => buffer.dirty)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
+  }, [replyBuffers]);
   const [snapshot, setSnapshot] = useState<OwnedWorkspaceSnapshot>(); const [tab, setTab] = useState('Today');
   const target = navigation?.item;
   const [loadedDestination, setLoadedDestination] = useState<WorkspaceDestination>();
@@ -108,8 +115,9 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     if (target.kind === 'task') tasks.current?.openTask(target.id); else calendar.current?.openEvent(target.id);
   }, [active, ready, target, snapshot]);
   async function command(input: WorkspaceCommand, success: string, expectedNotes?: string) {
+    if (input.type === 'task.delete' && replyBuffers[input.taskId]?.dirty) { setError('Save or explicitly discard this Task’s unfinished reply before deleting the Task.'); return false; }
     if (busy) return false; busyState(true); setBusy(true); setError(''); setNotice('');
-    try { const result = accept(await request(`/${workspace.workspaceId}/commands`, expectedNotes === undefined ? input : { ...input, expectedNotes })); if (!mounted.current) return false; setSnapshot(result); setNotice(success); return true; }
+    try { const result = accept(await request(`/${workspace.workspaceId}/commands`, expectedNotes === undefined ? input : { ...input, expectedNotes })); if (!mounted.current) return false; setSnapshot(result); if (input.type === 'task.delete') setReplyBuffers(current => { const next = { ...current }; delete next[input.taskId]; return next; }); setNotice(success); return true; }
     catch { if (mounted.current) setError('Change unavailable in this Workspace. Your editor text is kept; refresh before retrying.'); return false; }
     finally { if (mounted.current) { busyState(false); setBusy(false); } }
   }
@@ -128,7 +136,7 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     {active && !ready && !error && <p role="status">Loading Workspace…</p>}{missingTarget && <p role="alert" className={styles.error}>Unavailable in this context.</p>}
 {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
     {view && <><div hidden={!active || !ready || currentTab !== 'Today'}><WorkspaceToday contextName={workspace.name} view={view} busy={busy} onOpenTask={openTask} onOpenEvent={id => { if (calendar.current?.openEvent(id)) onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'block', id } }); }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></div>
-    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} /> : undefined} />
+    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} buffer={replyBuffers[taskId]} onBuffer={buffer => setReplyBuffers(current => { const next = { ...current }; if (buffer) next[taskId] = buffer; else delete next[taskId]; return next; })} /> : undefined} />
     <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} /></>}
   </section>;
 }

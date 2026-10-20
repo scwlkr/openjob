@@ -4,11 +4,13 @@ import { createGoogleOAuthAdapter, type GoogleConsentBinding } from '../provider
 import { createGmailReadAdapter } from '../providers/gmail-read-adapter.ts';
 import { googleRows, googleBinding, uuid, validAddress, type GoogleConnection, type GoogleConnectionCatalog, type PrivateGoogleConnections } from './google-state.ts';
 import type { MailTaskReference, MailTaskResult, MailTaskSource } from '../../shared/mail-task-source.ts';
+import { replySource, validateReplySave, type ConnectedReplyStore, type ReplySaveInput, type ReplyPreparation } from '../../shared/connected-reply.ts';
+import { replyPlans, replyReviewToken } from './reply-plan.ts';
 
 type Options = {
   executionMode?: 'disabled' | 'configured'; evidenceMode?: 'google' | 'google-fixture';
   repository: PrivateGoogleConnections;
-  homes: { list(owner: string): Promise<{ workspaceId: string; name: string }[]>;
+  homes: Partial<ConnectedReplyStore> & { list(owner: string): Promise<{ workspaceId: string; name: string }[]>;
     createMailTask?(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>): Promise<MailTaskResult>;
     mailTaskSource?(owner: string, workspaceId: string, taskId: string): Promise<MailTaskSource | undefined> };
   isOwnerActive(owner: string): Promise<boolean>;
@@ -59,7 +61,40 @@ export function createGoogleConnectionsFlow(options: Options) {
     const reader = createGmailReadAdapter({ bindings: [{ ownerId: owner, accountId: before.accountId, subject: before.subject, address: before.address, label: before.address }], approveExecution: async () => { await current(); return true; }, resolveCredential: async () => { await current(); return before.grant!.entry.credential; }, fetchImplementation: mailTransport });
     return { before, current, reader };
   }
+  async function sourceContext(owner: string, workspaceId: string, taskId: string) {
+    enabled(); await home(owner, workspaceId);
+    if (!homes.mailTaskSource) connectionFail('not_configured');
+    const source = await homes.mailTaskSource(owner, workspaceId, taskId);
+    if (!source) connectionFail('source_unavailable');
+    const { before, current: access, reader } = await mailReader(owner, source.connectionId);
+    if (before.workspaceId !== workspaceId || before.accountId !== source.accountId) connectionFail('forbidden');
+    const current = async () => {
+      await access();
+      if (JSON.stringify(await homes.mailTaskSource!(owner, workspaceId, taskId)) !== JSON.stringify(source)) connectionFail('source_unavailable');
+    };
+    return { source, before, current, reader };
+  }
+  async function prepareReply(owner: string, workspaceId: string, taskId: string) {
+    const context = await sourceContext(owner, workspaceId, taskId), { before, source, reader, current } = context;
+    const result = await reader.getReplySource({ ownerId: owner, accountId: before.accountId, messageId: source.messageId });
+    if (result.message.upstreamThreadId !== source.threadId) connectionFail('source_unavailable');
+    const plans = replyPlans(before.address, result.headers), reviewToken = await replyReviewToken(owner, replySource(source), plans);
+    await current(); return { ...context, plans, reviewToken };
+  }
   return {
+    async reply(owner: string, workspaceId: string, taskId: string): Promise<ReplyPreparation> {
+      if (!homes.connectedReply) connectionFail('not_configured');
+      const { source, plans, reviewToken, current } = await prepareReply(owner, workspaceId, taskId);
+      const draft = await homes.connectedReply(owner, source);
+      await current(); return { workspaceId, taskId, storageKind: 'openjob', plans, reviewToken, draft: draft ?? null };
+    },
+    async saveReply(owner: string, workspaceId: string, taskId: string, value: ReplySaveInput) {
+      if (!homes.saveConnectedReply) connectionFail('not_configured');
+      const input = validateReplySave(value), { source, plans, reviewToken, current } = await prepareReply(owner, workspaceId, taskId);
+      if (input.reviewToken !== reviewToken) connectionFail('reply_review_required');
+      const draft = await homes.saveConnectedReply(owner, source, { mode: input.mode, body: input.body, plan: input.mode === 'reply' ? plans.reply : plans.replyAll }, input.expectedRevision, current);
+      await current(); return { workspaceId, taskId, draft };
+    },
     async createTask(owner: string, id: string, input: { messageId: string; title: string; requestId?: string }) {
       if (!homes.createMailTask) connectionFail('not_configured');
       if (typeof input.messageId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.messageId) || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 500 || input.requestId !== undefined && (typeof input.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.requestId))) connectionFail('invalid_input');
@@ -72,14 +107,9 @@ export function createGoogleConnectionsFlow(options: Options) {
       await current(); return receipt;
     },
     async taskSource(owner: string, workspaceId: string, taskId: string) {
-      enabled(); await home(owner, workspaceId);
-      if (!homes.mailTaskSource) connectionFail('not_configured');
-      const source = await homes.mailTaskSource(owner, workspaceId, taskId);
-      if (!source) connectionFail('source_unavailable');
-      const { before, current, reader } = await mailReader(owner, source.connectionId);
-      if (before.workspaceId !== workspaceId || before.accountId !== source.accountId) connectionFail('forbidden');
+      const { source, before, current, reader } = await sourceContext(owner, workspaceId, taskId);
       const message = await reader.getMessage({ ownerId: owner, accountId: before.accountId, messageId: source.messageId });
-      if (message.upstreamThreadId !== source.threadId || JSON.stringify(await homes.mailTaskSource(owner, workspaceId, taskId)) !== JSON.stringify(source)) connectionFail('source_unavailable');
+      if (message.upstreamThreadId !== source.threadId) connectionFail('source_unavailable');
       await current(); return { workspaceId, taskId, address: before.address, mode: evidenceMode, message };
     },
     async catalog(owner: string): Promise<GoogleConnectionCatalog> {
