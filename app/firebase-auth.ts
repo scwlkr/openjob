@@ -116,6 +116,8 @@ function signInMethodFor(
 
 async function sessionFor(user: {
   uid: string;
+  email?: string | null;
+  displayName?: string | null;
   tenantId: string | null;
   providerData: { providerId: string }[];
   getIdToken(): Promise<string>;
@@ -135,7 +137,7 @@ async function sessionFor(user: {
     method = [...methods][0]!;
   }
   return {
-    localIdentity: { uid: user.uid, tenantId: user.tenantId },
+    localIdentity: { uid: user.uid, tenantId: user.tenantId, ...(user.email ? { email: user.email } : {}), ...(user.displayName ? { displayName: user.displayName } : {}) },
     signInMethod: method,
     getIdToken: () => user.getIdToken(),
   };

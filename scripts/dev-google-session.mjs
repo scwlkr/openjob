@@ -15,7 +15,7 @@ const runtime = createGoogleSelfSession({ configuration: { ...firebase, address,
 const send = (response, code, data) => { response.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(data)); };
 const middleware = { name: 'local-self-authenticated-gmail', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {
   if (incoming.headers.host !== `127.0.0.1:${port}` || incoming.headers.origin && incoming.headers.origin !== origin) { outgoing.writeHead(403).end(); return; }
-  if (incoming.url === '/healthz') { send(outgoing, 200, { mode: 'local_mail_session', configured: true, project: firebase.projectId, realSending: false }); return; }
+  if (incoming.url === '/healthz') { void runtime.publicStatus().text().then(body => { outgoing.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(body); }); return; }
   if (incoming.url === '/runtime-config') { send(outgoing, 200, { firebase, appleServiceId: '' }); return; }
   if (!incoming.url?.startsWith('/api/')) return next();
   void (async () => {

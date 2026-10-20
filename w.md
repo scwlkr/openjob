@@ -1,3 +1,36 @@
+# WLK318 — Mail screen state and styling fixed; live auth remains unverified
+
+Current branch codex/wlk-318-alt-self-session contains committedd4e1868 key-free
+alt route plus this UI follow-on. Parent supplied current screenshot: signed-in
+checking state, no Gmail controls/receipts. Verified source causes: standalone page
+omitted required workspace root styling; session account status swallowed failure
+and had no deadline. No eligible-account failure receipt existed to prove its
+underlying provider cause. No account/binding/protection weakened to accept it.
+
+New compact branded card explicitly shows Google name/email from normal SDK
+metadata, signed-out/checking/signed-in/wrong-account/error states, separate Gmail
+access-off/connected/read-complete states, primary next action, secondary account
+switch/signout. Account check has8s deadline (including getIdToken), clear Retry,
+and friendly typed provider failures. Temporary identity metadata never authorizes
+API access. Exact server self/Gmail checks unchanged. No false read receipt.
+15 API/self/revocation/auth checks and6 browser state/interaction/layout checks
+pass; TypeScript/affected lint/brand32/rootsecret1033 pass. Initial fixture globals,
+Node strip-only syntax and lint failures fixed honestly before final checks.
+Rendered synthetic desktop+390px phone screenshots inspected:
+/tmp/openjob-mail-session-desktop.png and /tmp/openjob-mail-session-phone.png.
+
+Frontend sources copied to the existing proof server for normal hot update after
+warning that a reload clears temporary login. No browser reload/signout or server
+restart issued. Current backend remains prior running module until a later safe
+restart; new sanitized account failure reason/receipt counters are prepared in
+source. Existing service health/anonymous denial verified earlier. Supported CUA
+failed initialization; no further retries until something changes. Actual current
+Edge rendered result, Google eligibility, consent or Mail read remain UNVERIFIED.
+Never duplicate owner actions. No operator/1Password use, Google settings repeat,
+main-account credentials, deployment or publication. Original26 files preserved.
+
+---
+
 # WLK318 — alternate-only local service ready; browser control timed out
 
 Owner withdrew operator document access. No further 1Password/credential reads.

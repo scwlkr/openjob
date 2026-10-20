@@ -124,7 +124,7 @@ export type AuthenticationMethod = SignInMethod | "qa-password";
 
 export type AuthSession = {
   /** Local cache identity only; server authorization always verifies the ID token. */
-  localIdentity?: { uid: string; tenantId: string | null };
+  localIdentity?: { uid: string; tenantId: string | null; email?: string; displayName?: string };
   signInMethod: AuthenticationMethod;
   getIdToken(): Promise<string>;
 };

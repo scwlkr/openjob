@@ -53,7 +53,7 @@ test('self lookup fails closed on removed, disabled, unverified, mismatched or r
     const f = await fixture(); Object.assign(f.account, changes); assert.equal((await f.request('/api/v1/connections/session/status')).status, 401); assert.equal(f.calls.includes('tokeninfo'), false);
   }
   const f = await fixture(); f.hooks.lookup = { users: [] }; assert.equal((await f.request('/api/v1/connections/session/status')).status, 401);
-  f.hooks.status = 503; assert.equal((await f.request('/api/v1/connections/session/status')).status, 401);
+  f.hooks.status = 503; assert.equal((await f.request('/api/v1/connections/session/status')).status, 503);
 });
 test('learned UID and original authentication event remain pinned; revocation during read discards result', async () => {
   const f = await fixture(), { sessionId: id } = await f.call('/begin'); await f.call('/connect', { id, body: { accessToken: ACCESS } });
