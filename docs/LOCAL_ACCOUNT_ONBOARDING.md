@@ -1,3 +1,8 @@
+> Current20October route: use only the explicitly approved alternate and the
+> [key-free local session](#alternate-only-route-without-an-operator-key).
+> Operator/1Password access is withdrawn. Earlier setup/account notes below are
+> historical; they do not authorize use of another account or credentials.
+
 # Remaining Gmail-read gate after local sign-in proof
 
 Selected mailbox: **shane.caleb.walker@gmail.com**, existing project
@@ -270,9 +275,12 @@ The local route cryptographically verifies the Firebase ID token for the exact
 nonproduction project, then sends only `{ idToken }` to the provider's fixed
 end-user `accounts:lookup` endpoint with the public API key. There is no admin
 OAuth credential, target-UID/email lookup or other-user enumeration. It requires
-one current account, matching UID, verified selected email, unique matching Google
-subject, and a present valid revocation cutoff no newer than the authentication
-event. Disabled/deleted/unlinked/revoked or unavailable accounts fail closed. The
+one current account, matching UID, unique matching Google subject, and a present
+valid revocation cutoff no newer than the authentication event. The primary popup
+also supplies its short-lived Google ID JWT in memory. Official Google signature,
+issuer and client audience verification plus exact subject, verified email, azp and
+expiry checks bind the approved mailbox independently of Firebase’s optional
+primary email fields. Provider metadata or a guessed address never authorizes it. Disabled/deleted/unlinked/revoked or unavailable accounts fail closed. The
 first authenticated self identity pins the process; each lease also pins the
 original authentication event. Current-account checks fence pending Mail reads.
 The strict Google audience/scope/subject checks and ten-minute memory lease are
@@ -288,8 +296,11 @@ setting changes are required. Google may retain its consent after local disconne
 Live checkpoint20October: the key-free listener health and anonymous denial were
 verified; alts confirmed opening the local page in the selected existing Edge
 profile. Supported computer control failed during initialization before any page
-state was returned, including a fresh permitted retry. Actual user sign-in, Gmail
-consent and bounded Mail read remain unverified. Do not repeat the failed control
+state was returned, including a fresh permitted retry. The later normal user
+sign-in passed signed identity/current-account verification: sanitized health is
+ready, with provider email present and Firebase primary email absent. The owner
+reports Gmail connected; a connection receipt is not exposed by health. Completed
+Mail reads remain zero, so bounded read acceptance remains unverified. Do not repeat the failed control
 path until it changes; use the owner's already-open page handoff. No hidden auth
 storage/session extraction or alternate browser/controller is used. No operator
 or 1Password access is authorized or needed for this route.

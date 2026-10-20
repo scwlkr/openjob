@@ -6,8 +6,9 @@ Google sign-in. It checks the signed identity and only that user's current provi
 account, then reuses the exact-subject/audience/read-scope memory lease. No operator
 key, Firestore, saved-work access or database permission change is needed. Basic
 login and Mail access both use separate in-memory auth clients. Existing backend
-checks remain unchanged. Actual listener/anonymous denial verified; real sign-in,
-consent and read remain unverified due to computer-control initialization failure.
+checks remain unchanged. Real alternate identity/current-account verification
+passed. The owner reports Gmail connected; completed Mail reads remain zero.
+Supported browser control is unavailable, so bounded live-read acceptance is pending.
 [Usage and boundary](docs/LOCAL_ACCOUNT_ONBOARDING.md#alternate-only-route-without-an-operator-key).
 
 ## Local session Gmail read (WLK318)
