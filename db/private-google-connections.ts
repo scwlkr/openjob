@@ -1,6 +1,7 @@
 import { FirestoreRequestError, bytesToBase64Url, type createFirestoreRestClient, type FirestoreDocument } from './firestore-rest.ts';
 import { activeUserHistoryWrite, assertActiveUser, isInactiveUserError } from './user-history.ts';
 import { googleRows, type GoogleConnection, type PrivateGoogleConnections } from '../server/connections/google-state.ts';
+import { createPrivateGoogleDeletionCleanup } from './private-google-deletion.ts';
 import { connectionFail } from '../shared/connection-onboarding.ts';
 
 type Client = ReturnType<typeof createFirestoreRestClient>;
@@ -31,9 +32,9 @@ export function createFirestorePrivateGoogleConnections(options: Options): Priva
     const algorithm = candidate?.algorithm as AesKeyAlgorithm | undefined;
     return candidate?.type === 'secret' && !candidate.extractable && algorithm?.name === 'AES-GCM' && algorithm.length === 256 && candidate.usages.includes('decrypt') && (!encrypt || candidate.usages.includes('encrypt'));
   }
-  function enabled(requireKey = true) {
+  function enabled() {
     if (executionMode !== 'configured') connectionFail('not_configured');
-    if (requireKey && (!validId(keyId) || !validKey(key, true) || Object.keys(previousKeys).length > 4 || Object.hasOwn(previousKeys, keyId) || Object.entries(previousKeys).some(([id, value]) => !validId(id) || !validKey(value, false)))) connectionFail('not_configured');
+    if (!validId(keyId) || !validKey(key, true) || Object.keys(previousKeys).length > 4 || Object.hasOwn(previousKeys, keyId) || Object.entries(previousKeys).some(([id, value]) => !validId(id) || !validKey(value, false))) connectionFail('not_configured');
   }
   function path(owner: string) {
     if (!/^user_[a-f0-9]{32}$/.test(owner)) connectionFail('invalid_input');
@@ -76,8 +77,8 @@ export function createFirestorePrivateGoogleConnections(options: Options): Priva
     }
     return connectionFail('conflict');
   }
-  async function guarded<T>(operation: () => Promise<T>, requireKey = true) {
-    enabled(requireKey);
+  async function guarded<T>(operation: () => Promise<T>) {
+    enabled();
     try { return await operation(); }
     catch (error) {
       if (isInactiveUserError(error)) return connectionFail('forbidden');
@@ -87,30 +88,9 @@ export function createFirestorePrivateGoogleConnections(options: Options): Priva
       return connectionFail('unavailable');
     }
   }
-  async function removeForDeletion(owner: string, requestId: string) {
-    const location = path(owner), userPath = `v1UserDirectory/${owner}`;
-    if (typeof requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(requestId)) connectionFail('invalid_input');
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const userResponse = await db.request(userPath, {}, { allowNotFound: true });
-      if (userResponse.status === 404) connectionFail('forbidden');
-      const user = await userResponse.json() as FirestoreDocument;
-      if (user.name !== db.documentName(userPath) || !user.updateTime || user.fields?.userId?.stringValue !== owner || user.fields.deletionState?.stringValue !== 'pending' || user.fields.deletionRequestId?.stringValue !== requestId) connectionFail('forbidden');
-      const response = await db.request(location, {}, { allowNotFound: true });
-      if (response.status === 404) return false;
-      const doc = await response.json() as FirestoreDocument;
-      if (doc.name !== db.documentName(location) || !doc.updateTime) connectionFail('invalid_state');
-      try {
-        await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [
-          { verify: user.name, currentDocument: { updateTime: user.updateTime } },
-          { delete: doc.name, currentDocument: { updateTime: doc.updateTime } },
-        ] }) });
-      } catch (error) { if (concurrent(error)) continue; throw error; }
-      return true;
-    }
-    return connectionFail('conflict');
-  }
+  const deletion = createPrivateGoogleDeletionCleanup({ db, executionMode });
   return {
-    removeForDeletion: (owner, requestId) => guarded(() => removeForDeletion(owner, requestId), false),
+    removeForDeletion: deletion.removeForDeletion,
     reencryptForOwner: owner => guarded(async () => { await change(owner, rows => rows); }),
     disconnectAllForOwner: owner => guarded(async () => {
       let count = 0;

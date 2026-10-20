@@ -1,3 +1,5 @@
+import { createPrivateGoogleDeletionCleanup } from '../db/private-google-deletion.ts';
+import { createFirestoreRestClient } from '../db/firestore-rest.ts';
 import { createWorkspacePilotRuntime } from './workspace-pilot-runtime.ts';
 import { internalErrorResponse, defaultRequestId } from './v1-http.ts';
 import { createPersonalApplication } from './personal-application.ts';
@@ -37,6 +39,7 @@ import { createWebPushSender } from "./web-push";
 
 type FirebaseBindings = QaPasswordRuntimeBindings & {
   ACCOUNT_DELETION_KEY?: string;
+  GOOGLE_CONNECTIONS_CLEANUP_MODE?: string;
   ACCOUNT_DELETION_OPERATOR_TARGET?: string;
   APPLE_ACCOUNT_DELETION_CLIENT_IDS?: string;
   APPLE_ACCOUNT_DELETION_REDIRECT_URI?: string;
@@ -98,6 +101,10 @@ function getRuntime() {
     firebase,
     bindings.ACCOUNT_DELETION_KEY ?? "",
   );
+  const privateGoogleCleanup = createPrivateGoogleDeletionCleanup({
+    db: createFirestoreRestClient(firebase),
+    executionMode: bindings.GOOGLE_CONNECTIONS_CLEANUP_MODE,
+  });
   const accountDeletionProviders = createAccountDeletionProviderGateway({
     apple: {
       allowedClientIds: (bindings.APPLE_ACCOUNT_DELETION_CLIENT_IDS ?? "")
@@ -145,6 +152,7 @@ function getRuntime() {
     accountDeletionApi: createV1AccountDeletionApi({
       agentGrants,
       personalWorkspaces,
+      privateGoogleConnections: bindings.GOOGLE_CONNECTIONS_CLEANUP_MODE === 'configured' ? privateGoogleCleanup : undefined,
       groups,
       jobs: accountDeletionJobs,
       notifications: notificationSubscriptions,

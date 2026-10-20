@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
+import { createPrivateGoogleDeletionCleanup } from '../db/private-google-deletion.ts';
 import { createFirestorePrivateGoogleConnections } from '../db/private-google-connections.ts';
 import { privateGoogleStoreFixture as fixture } from './support/private-google-store.mjs';
 import { ACCESS } from './support/google-oauth-transport.mjs';
@@ -82,5 +83,14 @@ test('disabled lifecycle methods do not call transport, including deletion witho
   const db = { ...f.client, request: async () => { calls++; throw new Error('must not call'); } };
   const store = createFirestorePrivateGoogleConnections({ ...f.options, executionMode: 'disabled', key: undefined, db });
   for (const operation of [() => store.removeForDeletion(f.owner, 'del_synthetic'), () => store.reencryptForOwner(f.owner), () => store.disconnectAllForOwner(f.owner)]) await assert.rejects(operation(), error => error.code === 'not_configured');
+  assert.equal(calls, 0);
+});
+
+
+test('key-free worker cleanup is default-disabled and rejects unknown activation mode', async () => {
+  const f = await fixture(); let calls = 0;
+  const db = { ...f.client, request: async () => { calls++; throw new Error('must not call'); } };
+  await assert.rejects(createPrivateGoogleDeletionCleanup({ db }).removeForDeletion(f.owner, 'del_synthetic'), error => error.code === 'not_configured');
+  assert.throws(() => createPrivateGoogleDeletionCleanup({ db, executionMode: 'automatic' }), error => error.code === 'not_configured');
   assert.equal(calls, 0);
 });

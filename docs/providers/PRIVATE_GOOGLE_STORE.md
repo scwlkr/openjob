@@ -58,16 +58,17 @@ creation/rotation service or automatic migration is installed.
 
 `removeForDeletion(owner, requestId)` is a separate internal cleanup path. It
 requires the exact existing User with deletionState=pending and matching request
-ID, then atomically verifies that User's update time and deletes the exact envelope
-with CAS. Active, absent, foreign and replaced deletion requests cannot authorize
+ID, then atomically verifies that User's update time and deletes the exact envelope and retained Personal-home reference
+with CAS. Existing Personal-store deletion handles the retained work itself. Active, absent, foreign and replaced deletion requests cannot authorize
 cleanup. It does not decrypt and can remove corrupt/unknown-key ciphertext even
 when a decryption key is missing. A successful delete with a lost response is not
 replayed; a later explicit inspection can observe the envelope absent. No current
 record can be recreated through normal writes while the User is pending deletion.
-An optional account-deletion worker dependency calls this before Firebase/User
-finalization; failure keeps deletion pending. Default compositions inject no such
-dependency. Explicit portable opt-in exposes its internal cleanup capability but
-does not attach a worker or perform real deletion. Neither operation erases old database backups or revokes
+The existing account-deletion runtime attaches this dependency only with explicit
+`GOOGLE_CONNECTIONS_CLEANUP_MODE=configured`; absent means disabled, unknown modes
+fail closed. It runs before Firebase/User finalization; failure keeps deletion
+pending. This source change sets no binding and launches no worker or deletion.
+The portable server exposes no cleanup endpoint or new scheduler. Neither operation erases old database backups or revokes
 Google's project-wide grants.
 
 ## Before activation
@@ -118,9 +119,10 @@ This source work is now locally integrated. Remaining activation inputs are:
    Firestore access, with concrete backup/retention/rotation procedures. Do not
    generate keys, retrieve credentials or change rules during this proof.
 3. The reviewed explicit portable configuration wires dependencies only after
-   opt-in; default roots remain unconfigured. Attach its internal deletion cleanup
-   to the authorized worker and prepare/select an existing owned Mail home. No
-   Workspace mapping/admission is silently created by enabling Google.
+   opt-in; default roots remain unconfigured. Enable the reviewed cleanup binding in the existing same-project worker and
+   select the retained Personal home through its explicit mapping action. Google
+   opt-in admits only its exact selected binding to the bounded Workspace pilot;
+   no mapping is automatic.
 4. Current Google Data Access/Verification facts, specific Gmail API/callback and
    runtime/store activation authorization, and human consent for the exact chosen
    alternate mailbox and only the disclosed read-only/offline scopes. Basic

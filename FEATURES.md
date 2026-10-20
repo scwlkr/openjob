@@ -1,10 +1,20 @@
+## Bounded Google home and deletion preparation (WLK318)
+
+Explicit Google pilot configuration now admits its same selected binding to the
+existing owner Workspace setup; the person explicitly maps retained Personal,
+without copying saved work. Empty-home guidance links that action. Existing
+deletion runtime can attach key-free exact-request cleanup behind its separate
+default-off flag, removing Google ciphertext/home reference before identity
+finalization. No live mapping, worker, key, deletion or activation occurred.
+[Concrete activation handoff](docs/PORTABLE_SERVICE.md#activation-ready-checkpoint).
+
 ## Explicit portable Google configuration (WLK318)
 
 The portable runtime can now compose the encrypted store/Google flow through
 explicit injected transports and selected User/Google-binding/mailbox inputs.
 A bounded secret-file loader and optional Compose overlay prepare later setup;
 defaults remain disabled with no Google files read. No real key/configuration,
-Workspace mapping/admission, grants, deployment or worker activation occurred.
+automatic Workspace mapping, grants, deployment or worker activation occurred.
 See [portable configuration](docs/PORTABLE_SERVICE.md#optional-google-configuration-preparation).
 
 ## Resume an approved npm artifact

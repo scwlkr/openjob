@@ -108,12 +108,19 @@ Inputs, in addition to existing Firebase settings:
   Files are explicitly selected, bounded regular files; no default credential
   discovery, key generation or rotation. The imported key is nonextractable.
 
-The runtime uses existing owned/mapped Personal home metadata. It does not create
-or map a Workspace, populate Workspace-pilot admission, or change Mail home access.
-The chosen account must have an explicitly prepared owned Mail home before consent;
-missing homes remain unavailable. Key rotation across existing envelopes still
-uses explicit injected previous keys and the reviewed maintenance API, not this
-single-current-key file loader.
+Explicit Google pilot configuration now admits only that same selected User/Google
+binding to the existing owner-only Tasks/Calendar Workspace setup. This is the
+limited pilot, not general onboarding or employer-independent identity assurance.
+Default service mode still has no Workspace admission. No home is created by startup
+or catalog reads. If no home exists, Connections links to Workspace setup: the
+person clicks **Open existing Personal context**, then returns to Connections and
+selects **Personal (retained)**. This creates a stable reference to existing
+Personal Tasks/Calendar, without copying, rekeying or changing their saved records.
+Foreign Users, agents and other linked bindings cannot use this pilot. Repeated
+mapping returns the same home. Consent remains a separate explicit action.
+
+Key rotation across existing envelopes still uses explicit injected previous keys
+and the reviewed maintenance API, not this single-current-key file loader.
 
 For local Compose configuration review, the optional overlay
 `deployment/compose.google-local.yaml` mounts the two explicit source files as
@@ -135,6 +142,43 @@ The server bundle includes the overlay and blank input template.
 `npm run test:google-local` now exercises this exact portable runtime opt-in using
 injected synthetic database/auth/Google/Mail transports. No Google transport has a
 default in the runtime API; the later explicitly configured Node composition is
-what supplies real fetch. The internal deletion-cleanup capability is returned for
-an authorized worker to inject; this portable server has no deletion worker or
-cleanup HTTP endpoint. That operational hookup remains part of activation.
+what supplies real fetch. The portable server still has no deletion worker or cleanup HTTP endpoint. The
+existing account-deletion runtime now has a separately gated key-free cleanup
+binding: `GOOGLE_CONNECTIONS_CLEANUP_MODE=configured`. It is disabled when absent,
+rejects unknown values, and attaches the exact owner/request cleanup before
+Firebase/User finalization. Cleanup failure leaves deletion pending. It removes
+current Google ciphertext and the retained Personal home reference; existing
+Personal cleanup handles saved Tasks/Calendar. No key or Google access is required.
+This is code preparation only: no worker binding, launch or deployment occurred.
+The worker must use the same approved Firestore project and reviewed source before
+the live pilot is enabled. Setting a Node/Compose variable does not configure the
+separate worker.
+
+
+## Activation-ready checkpoint
+
+Minimum setup is one bounded nonproduction bundle, not another architecture choice:
+
+1. Supply the infrastructure owner's exact HTTPS origin/deployment target. Use the
+   fixed callback `/connections/google/callback`; preserve Firebase's handler.
+2. Resolve the chosen existing alternate User and Google UID, mailbox and existing
+   Web client through authorized metadata. Supply approved key/client-secret file
+   references using the documented input names; new key creation/access requires
+   its own authorization. Do not put private values in a review document or chat.
+3. Deploy the reviewed source to the chosen service and existing deletion runtime,
+   enabling only the selected binding and the separate cleanup flag in the same
+   database project. No scheduler, deletion request or worker execution is required
+   as a setup test. Then the person explicitly maps retained Personal if needed.
+4. After current Google scope-verification readback, authorize only the exact
+   existing-client callback/Gmail API setup and selected mailbox's disclosed
+   read-only/offline consent. First acceptance is one bounded read; no send or
+   provider Calendar permission. Disconnect is local denial, not upstream revoke.
+
+Only the concrete deployment/access/settings/grant effects above need applicable
+approval. Metadata lookup and filling nonsecret configuration references are
+engineering/setup work. No further storage abstraction is needed.
+
+Known proof limits: synthetic loopback/CLI and concrete fake-store deletion tests,
+root compile and source review; no interactive new-home UI proof, live Worker run,
+Google consent/read, deployed TLS or live database/backup-erasure proof. Prior
+actual local basic sign-in/Tasks/Calendar acceptance remains valid and separate.
