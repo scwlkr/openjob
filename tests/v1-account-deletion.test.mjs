@@ -1,3 +1,5 @@
+import { privateGoogleStoreFixture } from './support/private-google-store.mjs';
+import { createPrivateGoogleDeletionCleanup } from '../db/private-google-deletion.ts';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -123,6 +125,7 @@ function appleNativeProof(overrides = {}) {
 
 function createHarness({
   deleteForAccountResult = true,
+  user = USER,
   deletionPending: initiallyDeletionPending = false,
   failAuthorization = false,
   firebaseDeletionFailures = 0,
@@ -451,7 +454,7 @@ function createHarness({
       },
       async resolve(candidate) {
         return !userAbsent && candidate.uid === identity.uid
-          ? { ...USER, ...(deletionPending ? { deletionPending: true } : {}) }
+          ? { ...user, ...(deletionPending ? { deletionPending: true } : {}) }
           : null;
       },
     },
@@ -1473,4 +1476,21 @@ test("optional private Google cleanup receives exact deletion job and failure bl
   const failure = createHarness({ privateGoogleConnections: { async removeForDeletion() { throw new Error('synthetic cleanup failure'); } } });
   assert.equal((await failure.api.fetch(deletionRequest([googleProof()]))).status, 202);
   assert.equal(failure.calls.some(call => call.startsWith('delete-firebase:') || call.startsWith('delete-user:')), false);
+});
+
+
+test("worker processes concrete key-free Google/home cleanup before identity deletion; failure remains pending", async () => {
+  for (const fail of [false, true]) {
+    const f = await privateGoogleStoreFixture(); await f.begin();
+    const directory = f.client.documentName(`v1UserDirectory/${f.owner}`);
+    const pending = structuredClone(f.db.documents.get(directory)); pending.fields.deletionState = { stringValue: 'pending' }; pending.fields.deletionRequestId = { stringValue: 'del_test' }; pending.updateTime += '-pending'; f.db.documents.set(directory, pending);
+    const homePath = f.client.documentName(`v1PersonalWorkspaceContexts/${f.owner}`);
+    f.db.documents.set(homePath, { name: homePath, updateTime: 'synthetic-home', fields: { ownerUserId: { stringValue: f.owner } } });
+    const db = fail ? { ...f.client, request: async (path, ...rest) => { if (path === ':commit') throw new Error('synthetic unavailable'); return f.client.request(path, ...rest); } } : f.client;
+    const cleanup = createPrivateGoogleDeletionCleanup({ db, executionMode: 'configured' });
+    const harness = createHarness({ user: { userId: f.owner, username: 'synthetic' }, privateGoogleConnections: cleanup });
+    assert.equal((await harness.api.fetch(deletionRequest([googleProof()]))).status, fail ? 202 : 200);
+    assert.equal(f.db.documents.has(f.location), fail); assert.equal(f.db.documents.has(homePath), fail);
+    assert.equal(harness.calls.some(call => call.startsWith('delete-firebase:')), !fail);
+  }
 });

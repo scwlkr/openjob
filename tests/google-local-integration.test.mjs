@@ -6,6 +6,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateGoogleStoreFixture } from './support/private-google-store.mjs';
+import { createFirestorePersonalWorkspaceStore } from '../db/personal-workspace.ts';
 import { createPortableRuntime } from '../server/portable-runtime.ts';
 import { BINDING, ACCESS, REFRESH } from './support/google-oauth-transport.mjs';
 
@@ -16,6 +17,14 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
   t.after(() => { globalThis.fetch = network; });
   const f = await privateGoogleStoreFixture(), directory = await mkdtemp(join(tmpdir(), 'openjob-google-local-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
+  // Start like a new pilot: no independent homes, but retained Personal work.
+  for (const path of [...f.db.documents.keys()]) if (path.includes('/v1OwnedWorkspaceCatalogs/') || path.includes('/v1OwnedWorkspaces/')) f.db.documents.delete(path);
+  const personal = createFirestorePersonalWorkspaceStore(f.config, f.db.fetch);
+  await personal.command(f.owner, { type: 'task.create', title: 'Retained synthetic task' });
+  const personalPath = f.client.documentName(`v1PersonalWorkspaces/${f.owner}`);
+  const retainedBefore = structuredClone(f.db.documents.get(personalPath));
+  const contextPath = f.client.documentName(`v1PersonalWorkspaceContexts/${f.owner}`);
+  let home;
   const credential = join(directory, 'invented-cli-refresh');
   await writeFile(credential, 'invented-refresh', { mode: 0o600 });
   let application;
@@ -58,7 +67,7 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
     assert.equal(result.status, 0, 'CLI or loopback handler failed'); outputs.push(result.stdout, result.stderr); return JSON.parse(result.stdout).data;
   }
   async function begin() {
-    const started = await cli(['begin'], { address: BINDING.address, workspaceId: f.home });
+    const started = await cli(['begin'], { address: BINDING.address, workspaceId: home });
     const url = new URL(started.authorizationUrl); assert.equal(url.origin, 'https://accounts.google.com');
     f.protocol.hooks.claims = { nonce: url.searchParams.get('nonce') };
     return { ...started, state: url.searchParams.get('state') };
@@ -67,7 +76,16 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
     const response = await request('/google/callback', { state: started.state, code: 'invented-local-code', callbackUri: f.flowOptions.google.callbackUri });
     assert.equal(response.status, 200); assert.equal((await response.json()).data.status, 'connected');
   }
-  assert.equal((await cli(['list'])).mode, 'google-fixture');
+  const empty = await cli(['list']); assert.equal(empty.mode, 'google-fixture'); assert.deepEqual(empty.homes, []);
+  assert.equal(f.db.documents.has(contextPath), false); // Catalog reads never map.
+  const mapPersonal = token => network(base + '/api/v1/workspaces/personal-context', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' });
+  assert.equal((await mapPersonal(f.sessions.sam.token)).status, 403);
+  const mapped = await mapPersonal(f.sessions.alex.token); assert.equal(mapped.status, 200);
+  const prepared = (await mapped.json()).data; home = prepared.workspace.workspaceId;
+  assert.equal(prepared.work.tasks[0].title, 'Retained synthetic task');
+  const repeated = await mapPersonal(f.sessions.alex.token); assert.equal((await repeated.json()).data.workspace.workspaceId, home);
+  assert.deepEqual(f.db.documents.get(personalPath), retainedBefore);
+  assert.equal((await cli(['list'])).homes[0].workspaceId, home);
   const started = await begin(); await complete(started);
   const pendingReplay = await request('/google/callback', { state: started.state, code: 'invented-local-code', callbackUri: f.flowOptions.google.callbackUri });
   assert.equal(pendingReplay.status, 409);
@@ -80,15 +98,15 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
   assert.equal((await cli(['list'])).bindings[0].status, 'connected');
   await cli(['action', started.connectionId], { action: 'refresh' });
   const mail = await cli(['mail', started.connectionId]);
-  assert.equal(mail.mode, 'google-fixture'); assert.equal(mail.workspaceId, f.home); assert.equal(mail.page.messages[0].body, 'Invented connected message.');
+  assert.equal(mail.mode, 'google-fixture'); assert.equal(mail.workspaceId, home); assert.equal(mail.page.messages[0].body, 'Invented connected message.');
   assert.equal((await request(`/${started.connectionId}/mail`, undefined, f.sessions.sam.token)).status, 403);
   assert.equal((await request('', undefined, 'oj_agent_synthetic')).status, 401);
   assert.equal((await request(`/${started.connectionId}`, { action: 'send' })).status, 409);
   await cli(['action', started.connectionId], { action: 'disconnect' });
   assert.equal((await request(`/${started.connectionId}/mail`)).status, 409);
   const again = await begin(); assert.equal(again.connectionId, started.connectionId); await complete(again);
-  assert.equal((await cli(['list'])).bindings[0].workspaceId, f.home);
+  assert.equal((await cli(['list'])).bindings[0].workspaceId, home);
   await cli(['action', again.connectionId], { action: 'disconnect' });
   for (const secret of [ACCESS, REFRESH]) assert.equal(outputs.join('').includes(secret), false);
-  assert.equal(failures.length, 0); assert.ok(paths.every(path => path.startsWith('/api/v1/connections')));
+  assert.equal(failures.length, 0); assert.ok(paths.every(path => path.startsWith('/api/v1/connections') || path === '/api/v1/workspaces/personal-context'));
 });

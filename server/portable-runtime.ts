@@ -25,10 +25,12 @@ export function createPortableRuntime(config: Config, options: Options = {}) {
   const workspace = createFirestorePersonalWorkspaceStore(config, databaseTransport);
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectId, fetchImplementation: options.identityTransport ?? fetch });
   const identity = createV1IdentityApi({ groups, users, verifyIdToken, verifyCredentialToken: verifyIdToken.verifyToken });
-  const workspacePilot = createWorkspacePilotRuntime({ config, personal: workspace, users, verifyIdToken, transport: databaseTransport });
   // No provider fallback: callers explicitly supply both transports and private inputs.
   if (options.google && (!options.googleTransport || !options.mailTransport)) throw new Error('Explicit Google transports are required.');
   const google = options.google ? createGoogleConnectionsRuntime({ configuration: options.google, firebase: config, databaseTransport, googleTransport: options.googleTransport!, mailTransport: options.mailTransport!, evidenceMode: options.evidenceMode, homes: createWorkspaceContextStore({ owned: createOwnedWorkspaceStore(config, databaseTransport), personal: workspace, contexts: createPersonalWorkspaceContextStore(config, databaseTransport) }) }) : undefined;
+  // Explicit Google pilot selection admits only that same binding to existing
+  // owner-only Task/Calendar setup. Personal mapping still requires its POST action.
+  const workspacePilot = createWorkspacePilotRuntime({ config, personal: workspace, users, verifyIdToken, transport: databaseTransport, admission: google?.admission });
   const application = createPersonalApplication({ workspace, users, verifyIdToken, google: google?.flow, googleAdmission: google?.admission });
   return {
     // Internal capability only; portable service has no deletion-worker HTTP route.

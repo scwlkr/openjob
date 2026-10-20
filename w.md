@@ -1,3 +1,24 @@
+# WLK318 — necessary home/deletion-worker prep complete, 20 October 2026
+
+From3e20299. Explicit Googlepilot admits same selected User/GoogleUID to existing
+Workspace setup; startup/catalog do not map. Person clicks Open existing Personal
+context, keeps byte-identical saved Task/Calendar data, then selects retainedhome.
+No general onboarding/employer-independence inference. Key-free cleanup factory
+is attached to existing deletion runtime ONLY via separate default-off
+GOOGLE_CONNECTIONS_CLEANUP_MODE. Exactpendingowner/requestCAS removes cipher+home
+reference before identityfinalization; failurepending. No workerlaunch/binding,
+actualdeletion, key/secret/grant/deploychange. 46focused checks and actual2s synthetic
+loopback Personalmapping→Google/CLI lifecycle pass; final review/checks inPR/Linear.
+
+Stop at concrete activationready handoff docs/PORTABLE_SERVICE.md#activation-ready-checkpoint.
+No more theoretical infrastructure. Knownlimits: no newhome interactiveUI/liveWorker/
+Googleprovider/deployedTLS/liveDB acceptance. PR95 remains separateheld/unverified;
+WLK302 originalsource unrecovered/noformerownerrestart; WLK327 generalidentitypolicy
+not prerequisite for this boundedpilot. No independent accepted codequeue item is
+newly unblocked by these sourcechanges.
+
+---
+
 # WLK318 — explicit portable Google wiring/config preparation, 20 October 2026
 
 From021d10a, optional portable runtime composition injects existing encrypted store,
