@@ -200,3 +200,37 @@ test('messages moved into Spam/Trash during an ordinary folder read stay exclude
     assert.equal((await f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' })).body, 'Hello café 日本語');
   }
 });
+
+test('Gmail search forwards exact normalized query and folder, and binds its fingerprint before credentials', async () => {
+  const f = fixture(), query = 'from:colleague@example.invalid subject:"café 日本語" /?a&b#';
+  const input = { ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: 'gmail_primary:folder:INBOX', search: `  ${query}  ` };
+  const first = await f.adapter.listMessages(input);
+  const decoded = JSON.parse(Buffer.from(first.nextCursor.slice(4), 'base64url'));
+  assert.equal(decoded.version, 3); assert.match(decoded.searchHash, /^[a-f0-9]{64}$/); assert.equal(JSON.stringify(decoded).includes(query), false);
+  await f.adapter.listMessages({ ...input, search: query, cursor: first.nextCursor });
+  assert.ok(f.calls.filter(call => call.url.pathname.endsWith('/messages')).every(call => call.url.searchParams.get('q') === query && call.url.searchParams.get('labelIds') === 'INBOX'));
+  const before = f.resolved(); f.calls.length = 0;
+  for (const search of [undefined, 'different query', 'x'.repeat(513), 'bad\nquery', '   ']) await assert.rejects(f.adapter.listMessages({ ...input, search, cursor: first.nextCursor }), matchCode(search === undefined || search === 'different query' ? 'invalid_cursor' : 'invalid_input'));
+  assert.equal(f.calls.length, 0); assert.equal(f.resolved(), before);
+});
+
+test('maximum Unicode search keeps a usable bounded cursor without storing search text', async () => {
+  const binding = { ...BINDING, ownerId: 'u'.repeat(128), accountId: 'a'.repeat(128), subject: '界'.repeat(256) }, search = '検索'.repeat(256), token = '頁'.repeat(256);
+  const f = fixture({ bindings: [binding], wire: (url, _init, base) => url.pathname.endsWith('/messages') ? { messages: [], ...(url.searchParams.has('pageToken') ? {} : { nextPageToken: token }) } : base(url) });
+  const first = await f.adapter.listMessages({ ownerId: binding.ownerId, accountId: binding.accountId, search });
+  assert.ok(first.nextCursor.length <= 4096); assert.equal(Buffer.from(first.nextCursor.slice(4), 'base64url').toString('utf8').includes(search), false);
+  assert.equal((await f.adapter.listMessages({ ownerId: binding.ownerId, accountId: binding.accountId, search, cursor: first.nextCursor })).nextCursor, null);
+  assert.equal(f.calls.find(call => call.url.searchParams.has('pageToken')).url.searchParams.get('q'), search);
+});
+
+test('rejected first-page search and stale later page have distinct redacted recovery, no automatic retry', async () => {
+  const first = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages') ? new Response(`SECRET_PROVIDER_BODY ${TOKEN}`, { status: 400 }) : base(url) });
+  await assert.rejects(first.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'rejected query' }), matchCode('search_rejected'));
+  assert.equal(first.calls.filter(call => call.url.pathname.endsWith('/messages')).length, 1);
+  const later = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages') && url.searchParams.has('pageToken') ? new Response(null, { status: 400 }) : base(url) });
+  const page = await later.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'approved query' });
+  await assert.rejects(later.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'approved query', cursor: page.nextCursor }), matchCode('invalid_cursor'));
+  assert.equal(later.calls.filter(call => call.url.pathname.endsWith('/messages')).length, 2);
+  const profile = fixture({ wire: () => new Response(null, { status: 400 }) });
+  await assert.rejects(profile.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'query' }), matchCode('provider_error'));
+});

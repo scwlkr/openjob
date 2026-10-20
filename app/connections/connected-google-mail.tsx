@@ -6,6 +6,7 @@ import styles from '../workspace/workspace.module.css';
 
 type Props = { connectionId: string; workspaceId: string; initialPage: ProviderMessagePage; fixture: boolean; request(path?: string, input?: object): Promise<unknown> };
 export default function ConnectedGoogleMail({ connectionId, workspaceId, initialPage, fixture, request }: Props) {
+  const [searchInput, setSearchInput] = useState(''), [search, setSearch] = useState('');
   const [folder, setFolder] = useState('');
   const [folders, setFolders] = useState(initialPage.folders);
   const [page, setPage] = useState<ProviderMessagePage | undefined>(initialPage);
@@ -18,23 +19,29 @@ export default function ConnectedGoogleMail({ connectionId, workspaceId, initial
     if (before.has(id) === value) return before;
     const next = new Set(before); if (value) next.add(id); else next.delete(id); return next;
   }), []);
-  async function read(cursor?: string, nextNumber = 1, selectedFolder = folder) {
+  async function read(cursor?: string, nextNumber = 1, selectedFolder = folder, submittedSearch = search) {
     if (loading.current || pending.size) return;
-    loading.current = true; setBusy(true); setError(''); setPage(undefined); setFolder(selectedFolder);
+    loading.current = true; setBusy(true); setError(''); setPage(undefined); setFolder(selectedFolder); setSearch(submittedSearch);
     try {
-      const params = new URLSearchParams(); if (cursor !== undefined) params.set('cursor', cursor); if (selectedFolder) params.set('folderId', selectedFolder);
+      const params = new URLSearchParams(); if (cursor !== undefined) params.set('cursor', cursor); if (selectedFolder) params.set('folderId', selectedFolder); if (submittedSearch) params.set('search', submittedSearch);
       const query = params.size ? `?${params}` : '';
       const result = await request(`/${connectionId}/mail${query}`) as { workspaceId: string; page: ProviderMessagePage };
       if (result.workspaceId !== workspaceId || !Array.isArray(result.page?.messages) || !(result.page.nextCursor === null || typeof result.page.nextCursor === 'string')) throw new Error();
       setPage(result.page); setFolders(result.page.folders); setNumber(nextNumber);
     } catch (error) {
       const code = (error as { code?: string })?.code;
-      setError(code === 'folder_unavailable' ? 'This folder is no longer available. Choose All Mail or another folder.' : code === 'invalid_cursor' ? 'This Mail page is no longer available. Open the first page to continue.' : 'Mail could not be read. Check the connection, then open the first page to retry.');
+      setError(code === 'search_rejected' ? 'This search could not be used. Review your Gmail query or clear search.' : code === 'folder_unavailable' ? 'This folder is no longer available. Choose All Mail or another folder.' : code === 'invalid_cursor' ? 'This Mail page is no longer available. Open the first page to continue.' : 'Mail could not be read. Check the connection, then open the first page to retry.');
     } finally { loading.current = false; setBusy(false); }
   }
   return <section className={styles.panel} aria-label="Connected Mail">
     <h2>{fixture ? 'Invented Mail' : 'Read-only Mail'}</h2>
     <p>One page at a time. Edited Task titles are kept while changing pages or folders within this mailbox.</p>
+    <form className={styles.form} onSubmit={event => { event.preventDefault(); void read(undefined, 1, folder, searchInput.trim()); }}>
+      <label>Search Gmail<input type="search" maxLength={512} value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={busy || !!pending.size} placeholder="from:colleague@example.com" /></label>
+      <p>Use Gmail search syntax within this account and selected folder. Submit to apply.</p>
+      <div className={styles.actions}><button disabled={busy || !!pending.size}>Search Mail</button><button type="button" disabled={busy || !!pending.size || !search && !searchInput} onClick={() => { setSearchInput(''); void read(undefined, 1, folder, ''); }}>Clear search</button></div>
+    </form>
+    <p>{search ? `Applied search: ${search}` : 'No search applied.'}</p>
     <label>Mail folder<select aria-label="Mail folder" disabled={busy || !!pending.size} value={folder} onChange={event => void read(undefined, 1, event.target.value)}>
       <option value="">All Mail</option>{folders.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select></label>

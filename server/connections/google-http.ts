@@ -14,7 +14,7 @@ export async function googleConnectionsRequest(request: Request, owner: string, 
   const callback = path === '/api/v1/connections/google/callback';
   if (!match && !callback && !source) return fail('not_found', 404);
   if (request.method === 'GET' && match?.[1] && !match[2]) return fail('not_found', 404);
-  if (request.method === 'GET' && match) return match[2] === 'tasks' ? fail('not_found', 404) : jsonResponse({ data: match[1] && match[2] ? await flow.mail(owner, match[1], url.searchParams.get('cursor') ?? undefined, url.searchParams.get('folderId') ?? undefined) : !match[1] ? await flow.catalog(owner) : null });
+  if (request.method === 'GET' && match) return match[2] === 'tasks' ? fail('not_found', 404) : jsonResponse({ data: match[1] && match[2] ? await flow.mail(owner, match[1], url.searchParams.get('cursor') ?? undefined, url.searchParams.get('folderId') ?? undefined, url.searchParams.get('search') ?? undefined) : !match[1] ? await flow.catalog(owner) : null });
   if (request.method !== 'POST' || match?.[2] === 'mail') return fail('not_found', 404);
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') return fail('invalid_input', 415);
   const reader = request.body?.getReader(); if (!reader) return fail('invalid_input');

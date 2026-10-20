@@ -41,13 +41,13 @@ test('configured signed Mail exposes the eleventh message and exact page-two Tas
 test('strict Mail-only cursor query rejects malformed, duplicate, unknown and cross-account inputs before Gmail traffic', async () => {
   const f = await fixture(), first = await f.call(f.path), cursor = first.page.nextCursor;
   f.calls.length = 0;
-  for (const query of ['cursor=', 'cursor=bad', `cursor=${'a'.repeat(4097)}`, `cursor=${cursor}&cursor=${cursor}`, `cursor=${cursor}&search=secret`, 'search=secret']) {
+  for (const query of ['cursor=', 'cursor=bad', `cursor=${'a'.repeat(4097)}`, `cursor=${cursor}&cursor=${cursor}`, `cursor=${cursor}&unknown=secret`, 'unknown=secret']) {
     assert.equal((await f.request(`${f.path}?${query}`)).status, 400);
   }
   for (const field of ['owner', 'account', 'subject']) {
     const payload = JSON.parse(Buffer.from(cursor.slice(4), 'base64url'));
     payload[field] = 'foreign';
-    const foreign = `gm2.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+    const foreign = `gm3.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
     const response = await f.request(withCursor(f.path, foreign));
     assert.equal(response.status, 400); const body = await response.json();
     assert.equal(body.error.code, 'invalid_cursor'); assert.match(body.error.message, /first page/);
