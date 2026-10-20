@@ -5,8 +5,8 @@ import type { ProviderMessagePage } from '../../shared/provider-contracts';
 import { withSessionGoogleToken } from './session-google-popup';
 import styles from './gmail-session.module.css';
 
-type Lease = { id: string; bearer: string; controller: AbortController; expiresAt: number };
-export default function SessionGmail({ session, signal, onAvailable, verifiedAddress, popup = withSessionGoogleToken }: { session: AuthSession; signal: AbortSignal; onAvailable?(value: boolean): void; verifiedAddress?: string; popup?: typeof withSessionGoogleToken }) {
+type Lease = { id: string; bearer: string; controller: AbortController; expiresAt: number; identityProof?: string };
+export default function SessionGmail({ session, signal, onAvailable, verifiedAddress, identityProof, popup = withSessionGoogleToken }: { session: AuthSession; signal: AbortSignal; onAvailable?(value: boolean): void; verifiedAddress?: string; identityProof?: string; popup?: typeof withSessionGoogleToken }) {
   const [address, setAddress] = useState(verifiedAddress ?? ''); const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false); const [connected, setConnected] = useState(false);
   const [mail, setMail] = useState<ProviderMessagePage>();
@@ -15,19 +15,19 @@ export default function SessionGmail({ session, signal, onAvailable, verifiedAdd
     generation.current++; const previous = lease.current; lease.current = undefined;
     previous?.controller.abort(); setConnected(false); setBusy(false); setMail(undefined);
     if (previous) {
-      try { await fetch('/api/v1/connections/session', { method: 'DELETE', headers: { authorization: `Bearer ${previous.bearer}`, 'x-openjob-mail-session': previous.id }, cache: 'no-store', redirect: 'error', keepalive: true }); }
+      try { await fetch('/api/v1/connections/session', { method: 'DELETE', headers: { authorization: `Bearer ${previous.bearer}`, 'x-openjob-mail-session': previous.id, ...(previous.identityProof ? { 'x-openjob-google-identity': previous.identityProof } : {}) }, cache: 'no-store', redirect: 'error', keepalive: true }); }
       catch { /* Local access is cleared. Server deadline still expires within ten minutes. */ }
     }
   }, []);
   useEffect(() => {
     let current = true;
-    if (!verifiedAddress) void session.getIdToken().then(token => fetch('/api/v1/connections/session/status', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}', signal, cache: 'no-store', redirect: 'error' })).then(async response => { if (response.ok && current && !signal.aborted) { setAddress((await response.json() as { data: { address: string } }).data.address); onAvailable?.(true); } }).catch(() => {});
+    if (!verifiedAddress) void session.getIdToken().then(token => fetch('/api/v1/connections/session/status', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(identityProof ? { 'x-openjob-google-identity': identityProof } : {}) }, body: '{}', signal, cache: 'no-store', redirect: 'error' })).then(async response => { if (response.ok && current && !signal.aborted) { setAddress((await response.json() as { data: { address: string } }).data.address); onAvailable?.(true); } }).catch(() => {});
     const clear = () => { void disconnect(); };
     signal.addEventListener('abort', clear, { once: true }); window.addEventListener('pagehide', clear);
     return () => { current = false; signal.removeEventListener('abort', clear); window.removeEventListener('pagehide', clear); clear(); };
-  }, [session, signal, disconnect, onAvailable, verifiedAddress]);
+  }, [session, signal, disconnect, onAvailable, verifiedAddress, identityProof]);
   async function request(path: string, target: Lease, input?: object) {
-    const response = await fetch('/api/v1/connections/session' + path, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${target.bearer}`, 'x-openjob-mail-session': target.id, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal: target.controller.signal, cache: 'no-store', redirect: 'error' });
+    const response = await fetch('/api/v1/connections/session' + path, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${target.bearer}`, 'x-openjob-mail-session': target.id, ...(target.identityProof ? { 'x-openjob-google-identity': target.identityProof } : {}), ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal: target.controller.signal, cache: 'no-store', redirect: 'error' });
     if (!response.ok) throw new Error('Read permission unavailable. Disconnect and connect again.');
     return (await response.json() as { data: { expiresAt: number; page: ProviderMessagePage } }).data;
   }
@@ -37,10 +37,10 @@ export default function SessionGmail({ session, signal, onAvailable, verifiedAdd
     let target: Lease | undefined;
     try {
       signal.throwIfAborted(); const bearer = await session.getIdToken(); signal.throwIfAborted();
-      const response = await fetch('/api/v1/connections/session/begin', { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' }, body: '{}', signal, cache: 'no-store', redirect: 'error' });
+      const response = await fetch('/api/v1/connections/session/begin', { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json', ...(identityProof ? { 'x-openjob-google-identity': identityProof } : {}) }, body: '{}', signal, cache: 'no-store', redirect: 'error' });
       if (!response.ok) throw new Error();
       const started = (await response.json() as { data: { sessionId: string; expiresAt: number } }).data;
-      target = { id: started.sessionId, expiresAt: started.expiresAt, bearer, controller: new AbortController() };
+      target = { id: started.sessionId, expiresAt: started.expiresAt, bearer, identityProof, controller: new AbortController() };
       if (generation.current !== epoch || signal.aborted) { target.controller.abort(); return; }
       lease.current = target;
       await popup(session.localIdentity.uid, address, target.controller.signal, async accessToken => {

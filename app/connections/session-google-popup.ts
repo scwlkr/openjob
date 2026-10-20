@@ -19,7 +19,9 @@ export async function withSessionGoogleToken(uid: string, address: string, signa
     provider.setCustomParameters({ prompt: 'select_account', login_hint: address, access_type: 'online', include_granted_scopes: 'false' });
     const result = await signInWithPopup(auth, provider);
     signal.throwIfAborted();
-    if (result.user.uid !== uid || result.user.email?.toLowerCase() !== address.toLowerCase() || !result.user.emailVerified) throw new Error('Use the selected Google account.');
+    if (result.user.uid !== uid) throw new Error('Use the selected Google account.');
+    // Firebase's top-level email may be null for a federated user. The server
+    // verifies Google's token audience, subject, verified email and exact scopes.
     accessToken = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
     if (!accessToken) throw new Error('Google did not return read permission.');
     await consume(accessToken); signal.throwIfAborted();

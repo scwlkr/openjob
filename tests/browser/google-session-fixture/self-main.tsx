@@ -4,16 +4,16 @@ import type { AuthSession, OpenJobAuth } from '../../../app/openjob-contracts';
 import '../../../app/globals.css';
 
 const mode = new URL(location.href).searchParams.get('state') ?? 'ready';
-const session: AuthSession = { localIdentity: { uid: 'invented', tenantId: null, email: 'alex@example.invalid', displayName: 'Alex Example' }, signInMethod: 'google', getIdToken: async () => 'invented-firebase-proof' };
+const session: AuthSession = { localIdentity: { uid: 'invented', tenantId: null, ...(mode === 'provider-only' ? {} : { email: 'alex@example.invalid' }), displayName: 'Alex Example' }, signInMethod: 'google', getIdToken: async () => 'invented-firebase-proof' };
 let listener: (session: AuthSession | null) => void = () => {}, signed = mode !== 'signed-out', checks = 0;
-const auth: Pick<OpenJobAuth, 'observe' | 'signIn' | 'switchUser' | 'signOut'> = { observe(next: typeof listener) { listener = next; queueMicrotask(() => next(signed ? session : null)); return () => {}; }, async signIn() { signed = true; listener(session); return null; }, async switchUser() { signed = false; listener(null); }, async signOut() { signed = false; listener(null); } };
+const auth: Pick<OpenJobAuth, 'observe' | 'signIn' | 'switchUser' | 'signOut'> = { observe(next: typeof listener) { listener = next; queueMicrotask(() => next(signed ? session : null)); return () => {}; }, async signIn() { signed = true; listener(session); return { signInMethod: 'google', async getIdentityToken() { return 'invented-google-identity'; }, async getIdToken() { return 'invented-firebase-proof'; }, async getRevocationProof() { throw new Error('unused'); }, async dispose() {} }; }, async switchUser() { signed = false; listener(null); }, async signOut() { signed = false; listener(null); } };
 window.fetch = async (input, init) => {
   const path = String(input);
   if (path.endsWith('/status')) {
     checks++;
     if (mode === 'timeout' && checks === 1) return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
     if (mode === 'checking') return new Promise(() => {});
-    if (mode === 'email-missing') return Response.json({ error: { code: 'email_permission_required' } }, { status: 401 });
+    if (new Headers(init?.headers).get('x-openjob-google-identity') !== 'invented-google-identity') throw new Error('Missing identity proof');
     if (mode === 'wrong') return Response.json({ error: { code: 'wrong_account' } }, { status: 401 });
     if (mode === 'error' && checks === 1) return Response.json({ error: { code: 'account_check_unavailable', message: 'Account check: provider_request_failed.' } }, { status: 503 });
     return Response.json({ data: { address: 'alex@example.invalid' } });

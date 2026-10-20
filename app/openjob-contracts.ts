@@ -137,6 +137,8 @@ type AuthCredentialProofBase = {
 export type AuthCredentialProof =
   | (AuthCredentialProofBase & {
       signInMethod: "google";
+      /** Short-lived Google identity JWT; memory-only temporary account verification. */
+      getIdentityToken?(): Promise<string>;
       getRevocationProof(): Promise<GoogleAccountDeletionRevocationProof>;
     })
   | (AuthCredentialProofBase & {

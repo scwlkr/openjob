@@ -1,3 +1,51 @@
+# WLK318 — Firebase email contract corrected; signed Google identity repair served locally
+
+Supersedes the prior email-scope diagnosis below. Live sanitized health after the
+owner's failed retry reported google_email_missing, mailReads0. This proves the
+normal end-user accounts:lookup response lacked a top-level email. SDK source
+maps that optional field directly to User.email; providerData email is separate.
+Official Firebase documentation explicitly permits missing top-level email for
+federated users in multiple-accounts-per-email mode:
+https://firebase.google.com/docs/auth/admin/manage-users
+Actual project account mode and live provider-email presence remain unverified;
+no admin configuration/lookup, account mutation or guessed-email fallback used.
+
+Both self-session backend and secondary Mail popup incorrectly required Firebase
+primary email/emailVerified. Replacement verifies the already-returned primary
+Google ID JWT with official google-auth-library signature/issuer/audience checks,
+plus azp, current expiry, email_verified, exact selected address and Google subject
+bound to the signed Firebase UID/provider subject and current self-account lookup.
+Firebase validSince/revocation/disabled checks remain. Google proof stays in page
+memory, never storage/logs. The separate Mail access token still requires verified
+email, exact audience/subject and only read-only Gmail plus identity scopes.
+All asynchronous read fences also check Google identity expiry; no relaxed grant.
+UI displays the server-verified address and no longer claims Google omitted email.
+
+A realistic provider-only Firebase REST/SDK fixture (no primary email or verification
+flag, Google provider email present) reproduces the exact401 google_email_missing
+on prior966308d, then passes with this fix.19 API/auth tests,7 rendered interaction
+checks, type/affected lint, brand32 and secret1033 pass using locked isolated deps.
+Read-only critic found and we fixed expiry-during-read; final review found no other
+material issue. Synthetic desktop/phone screenshots inspected. Initial browser run
+could not locate its expected1228 binary; rerun uses existing1248 Chromium, no install.
+Optional npm-exec-node regression invocation stalled and was stopped; direct local
+Node reproduced the expected pre-fix failure. Shared dependency install untouched.
+
+After notice, restarted only owned Node68773. Current owned Node9855, exec58769,
+http://127.0.0.1:5202/mail-session. Reviewed backend/frontend files match owned pilot
+copy hashes; actual /main.tsx imports and /@fs public modules contain this repair.
+Health200 nonprod/sendingfalse, lastAccountCheck not_checked, mailReads0 at startup.
+No new live acceptance, Gmail consent or read is claimed. Browser control remains
+unavailable (-10005 initialization timeout), with no repeat attempt or workaround.
+Next normal owner action: Complete Google sign-in on the existing Edge0003 page,
+then Connect Gmail for this session and Read Mail once if account verification
+succeeds. No Google settings change, operator key or1Password access required.
+The former memory proof was disposed, so a normal popup completion supplies it.
+All unrelated26 pre-existing untracked files remain preserved. Activation/server,
+PR95 no-retry and WLK302 recovery gates remain unchanged.
+
+---
+
 # WLK318 — temporary sign-in email repair installed; awaiting normal user check
 
 Owner19:20 screenshot shows intended alternate display name, Google sign-in badge,

@@ -1,3 +1,5 @@
+import { OAuth2Client } from 'google-auth-library';
+import { configureGoogleOAuthTransport } from '../providers/google-oauth-transport.ts';
 import { createFirebaseIdTokenVerifier, type FirebaseTokenIdentity } from '../firebase-id-token.ts';
 import { createGoogleMailSession, type GoogleMailSession } from './google-session.ts';
 import { googleSessionRequest } from './google-session-http.ts';
@@ -14,7 +16,10 @@ export function createGoogleSelfSession(options: { configuration: Configuration;
   const origin = new URL(config.origin);
   if (config.projectId !== 'openjob-nonprod' || !config.apiKey || origin.origin !== config.origin || origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' || !origin.port || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.address) || !/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(config.clientId)) throw new Error('Local self-session configuration invalid.');
   const verify = createFirebaseIdTokenVerifier({ projectId: config.projectId, now, fetchImplementation: options.identityTransport });
+  const googleVerifier = new OAuth2Client({ clientId: config.clientId });
+  configureGoogleOAuthTransport(googleVerifier, options.googleTransport);
   let lastAccountCheck = 'not_checked', mailReads = 0;
+  let accountShape: { primaryEmail: boolean; googleProvider: boolean; providerEmail: boolean } | undefined;
   let selected: { uid: string; subject: string; owner: string; flow: GoogleMailSession } | undefined;
   const fail = (code: string, status: number, reason?: string) => errorResponse(defaultRequestId, { code, status, message: reason ? `Account check: ${reason}.` : 'Local Mail session unavailable. Sign in with the selected account and reconnect.' });
   async function current(token: string, identity: FirebaseTokenIdentity, signal: AbortSignal) {
@@ -33,11 +38,13 @@ export function createGoogleSelfSession(options: { configuration: Configuration;
     if (!Array.isArray(data.users) || data.users.length !== 1) throw new SelfAccountError('authentication_required', 'account_unavailable');
     const user = data.users[0], google = Array.isArray(user.providerUserInfo) ? user.providerUserInfo.filter((item: { providerId?: unknown }) => item.providerId === 'google.com') : [];
     const cutoff = typeof user.validSince === 'string' && /^\d+$/.test(user.validSince) ? Number(user.validSince) * 1000 : NaN;
-    if (typeof user.email !== 'string' || !user.email) throw new SelfAccountError('email_permission_required', 'google_email_missing');
-    if (typeof user.email === 'string' && user.email.toLowerCase() !== config.address.toLowerCase()) throw new SelfAccountError('wrong_account', 'selected_email_mismatch');
+    // Firebase federated users may legitimately have no top-level email.
+    // This projection is diagnostic only; the signed Google JWT verifies email.
+    accountShape = { primaryEmail: typeof user.email === 'string' && !!user.email, googleProvider: google.length === 1, providerEmail: google.length === 1 && typeof google[0].email === 'string' && !!google[0].email };
+    if (google.length === 1 && typeof google[0].email === 'string' && google[0].email.toLowerCase() !== config.address.toLowerCase()) throw new SelfAccountError('wrong_account', 'selected_email_mismatch');
     if (!Number.isSafeInteger(cutoff)) throw new SelfAccountError('authentication_required', 'revocation_state_unavailable');
     if (identity.authenticatedAt < cutoff) throw new SelfAccountError('authentication_required', 'google_signin_revoked');
-    if (user.localId !== identity.uid || user.disabled || user.emailVerified !== true || typeof user.email !== 'string' || google.length !== 1 || google[0].rawId !== identity.providerSubject) throw new SelfAccountError('authentication_required', 'google_identity_mismatch');
+    if (user.localId !== identity.uid || user.disabled || google.length !== 1 || google[0].rawId !== identity.providerSubject) throw new SelfAccountError('authentication_required', 'google_identity_mismatch');
     return !signal.aborted && identity.expiresAt > now();
   }
   return { async fetch(request: Request) {
@@ -49,17 +56,24 @@ export function createGoogleSelfSession(options: { configuration: Configuration;
     try {
       const identity = await verify.verifyToken(token);
       if (!identity || !await current(token, identity, request.signal)) { lastAccountCheck = 'google_signin_unverified'; selected?.flow.forget(); return fail('authentication_required', 401); }
+      const googleToken = request.headers.get('x-openjob-google-identity');
+      if (!googleToken || googleToken.length > 16384 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(googleToken)) throw new SelfAccountError('identity_proof_required', 'google_identity_proof_missing');
+      let googleIdentity;
+      try { googleIdentity = (await googleVerifier.verifyIdToken({ idToken: googleToken, audience: config.clientId, maxExpiry: 3600 })).getPayload(); }
+      catch { throw new SelfAccountError('identity_proof_required', 'google_identity_proof_invalid'); }
+      if (!googleIdentity || googleIdentity.sub !== identity.providerSubject || googleIdentity.azp !== undefined && googleIdentity.azp !== config.clientId || googleIdentity.email_verified !== true || typeof googleIdentity.email !== 'string' || googleIdentity.exp * 1000 <= now() || googleIdentity.iat * 1000 > now() + 30000) throw new SelfAccountError('identity_proof_required', 'google_identity_proof_invalid');
+      if (googleIdentity.email.toLowerCase() !== config.address.toLowerCase()) throw new SelfAccountError('wrong_account', 'selected_email_mismatch');
       lastAccountCheck = 'ready';
       // No admin discovery or configured hidden UID: learn only from the verified self account.
       const owner = 'user_' + Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(config.projectId + '\0' + identity.uid)))).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32);
       if (!selected) selected = { uid: identity.uid, subject: identity.providerSubject!, owner, flow: createGoogleMailSession({ configuration: { ...config, ownerUserId: owner, firebaseUid: identity.uid }, googleTransport: options.googleTransport, mailTransport: options.mailTransport, now }) };
       if (selected.uid !== identity.uid || selected.subject !== identity.providerSubject) return fail('forbidden', 403);
       const flow = selected.flow;
-      const isCurrent = async () => { try { const valid = await current(token, identity, request.signal); if (!valid) flow.forget(); return valid; } catch { flow.forget(); return false; } };
+      const isCurrent = async () => { try { const valid = googleIdentity.exp * 1000 > now() && await current(token, identity, request.signal) && googleIdentity.exp * 1000 > now(); if (!valid) flow.forget(); return valid; } catch { flow.forget(); return false; } };
       const response = await googleSessionRequest(request, owner, identity, flow, isCurrent);
       if (!await isCurrent()) return fail('authentication_required', 401);
       if (url.pathname.endsWith('/mail') && response.ok) mailReads++;
       return response;
     } catch (error) { selected?.flow.forget(); lastAccountCheck = error instanceof SelfAccountError ? error.reason : 'account_check_failed'; return error instanceof SelfAccountError ? fail(error.code, error.status, error.reason) : fail('reconnect_required', 409); }
-  }, publicStatus() { return jsonResponse({ mode: 'local_mail_session', configured: true, project: config.projectId, realSending: false, lastAccountCheck, mailReads }); } };
+  }, publicStatus() { return jsonResponse({ mode: 'local_mail_session', configured: true, project: config.projectId, realSending: false, lastAccountCheck, accountShape, mailReads }); } };
 }

@@ -194,6 +194,11 @@ async function primaryCredentialProof(
     : {
         ...base,
         signInMethod: "google",
+        async getIdentityToken() {
+          requireActive();
+          if (!providerIdToken) throw new Error("Google identity proof unavailable.");
+          return providerIdToken;
+        },
         async getRevocationProof() {
           const idToken = providerIdToken;
           if (!idToken) {
