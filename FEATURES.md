@@ -1,3 +1,23 @@
+## Native connected owner Workspaces (P-WLK-6 / R53)
+
+The signed-in native shell has a separate online Connected Workspaces surface.
+Open or create an owner Workspace, or explicitly map retained Personal work. The
+configured Mail view uses that Workspace's real connection contracts and never
+substitutes examples for an empty or unavailable account. Review a message's Task
+title, create/find its source Task, save notes, plan/complete it, open its Calendar
+block and return to fresh source Mail. Reply/Reply all shows From/To/Cc/subject and
+saves authored OpenJob drafts with the same revision/address review as web/CLI.
+Unfinished reply text survives module/context switches and blocks Task deletion
+until saved or discarded. Source bodies are transient; saved reply work stays in
+the authoritative server envelope. Session changes fence requests and private UI.
+
+The existing Personal/offline and Groups surfaces remain available. Configure
+provider consent in the existing Connections app. No native consent flow, offline
+Mail, provider Calendar writes or real sending is added. Rendered and loopback
+HTTP fixtures cover the bounded flow; simulator/emulator, real login/provider and
+physical-device/release evidence are separate gates. The opt-in development entry
+and its invented service are documented in [the simulator guide](docs/NATIVE_SIMULATOR_SMOKE.md).
+
 ## Connected authored reply drafts (WLK385)
 
 From a connected source Task, prepare a reply under its verified Google account.

@@ -1,3 +1,76 @@
+# P-WLK-6 / R53 — native connected Workspace journey
+
+20October: sole local implementation owner. Linear issue creation hit the free
+issue limit; execution continues in the existing OpenJob project discussion
+ba6592c3-b3e1-4908-b830-3532ab70aaf4, without changing the plan or creating another
+queue. Source a8a4b3ed98f704d821b49d790452ef5f7213164e is pushed in draft
+[PR120](https://github.com/scwlkr/openjob/pull/120), branch
+codex/p-wlk-6-native-connected-workspaces. Source-only draft; practical native gates
+are pending and R53 is not complete.
+
+Native Connected Workspaces uses the existing identity/session fence and shared
+HTTP routes for catalog/create/retained Personal mapping, configured Mail ->
+reviewed source Task -> normal Today/Tasks/Calendar -> complete -> fresh source ->
+reviewed authored OpenJob reply. Source bodies remain transient; per-context reply
+buffers survive module switches; unsaved replies block Task deletion. Guarded
+notes retain their original base. Verified session restoration is required before
+reopening ended connected access. Existing Personal/offline and Groups remain.
+Consent is still in the existing Connections app; no provider Calendar, sending,
+offline Mail or persistent provider access was enabled.
+
+Isolated root/native types, affected lint (existing warnings only), OpenAPI38paths /
+54operations, brand32 and root secret1051 pass. Six native suites pass100 tests;
+12 targeted API/native loopback HTTP checks pass (earlier groups overlap). These
+exercise both Owned and retained Personal homes, notes/draft stale writes, late
+identity responses, foreign-owner denial, redaction and disconnect denial. Final
+read-only source review has no findings; two earlier P2s were fixed and covered.
+All21 changed source files match the isolated build snapshot. Original26 untracked
+files remain byte-identical; shared dependencies and existing sessions preserved.
+
+iOS practical fixture proof passed from source a8a4b3e on the owned iPhone18 Pro /
+iOS27 simulator. Fresh locked native dependencies and all201 locked Pod entries
+match. First Xcode call exceeded the tool's300s response limit; the original build
+continued to completion. The unchanged incremental invocation then recorded a
+successful54.8s result and an embedded development-identity Release app. Actual UI:
+reviewed source Task title, authored notes, saved20October23:00–23:30UTC plan,
+Calendar exact Task, complete, fresh source and reviewed Reply all. Authored text
+survived Calendar and independent owner-Workspace creation/context switches. That
+new Workspace correctly had no Mail connection. Saved revision1 reopened after
+stop/relaunch with exact body/mode/account/recipients. Fixture disconnect denied
+native save and fresh-source access; completed Task/block remained. Synthetic
+screenshots/receipt are in output/r53. Owned simulator shut down; temporary keyboard
+routing restored. iOS build lease42be431e909e74377380242a released succeeded.
+
+Android work in progress: /tmp/openjob-r53-ji537fxd is the outside-sync proof copy.
+Only its native package main selects the committed simulator-connected-smoke entry;
+the actual checkout's normal index.ts entry is unchanged. Development debug build
+session2017 uses two workers and existing debug networking. Owned AVD
+OpenJob_R53_Connected / emulator-5580 is booting; no existing Bubba AVD was reused.
+Android Build Space leaseaa96892ca56c7c57fe60b7e2 is active and must be released
+with its actual outcome. Its build automatically installed the required NDK using
+the SDK's existing accepted license; source lockfiles were unchanged. Local fake
+service PID5910/session60283 uses /tmp/openjob-r53-native-state.json on5213; it is
+disconnected after the iOS denial test. Use a fresh dedicated Android state next.
+No real Mail read was repeated; key-free Timothy launcher remains disconnected.
+The Android fixture service session97374 now uses fresh dedicated
+/tmp/openjob-r53-android-state.json on5213; the disconnected iOS service was stopped.
+The emulator is online. CUA cannot bind its raw SDK window (not exposed as a supported
+app); alternative Android SDK UI automation needs explicit method authorization
+before input actions. Native build session2017 is still authoritative. Metro is
+loopback-only/offline on8088 with the committed fixture main selected only in the
+proof copy; Metro PID45723/session90405. Initial --offline/--host combination was
+rejected by locked Expo; EXPO_OFFLINE=1 plus --host localhost works and lsof confirms
+127.0.0.1:8088. Manifest200 selects the committed fixture entry and dev identity.
+Bounded SDK UI helper prepared at /tmp/openjob-r53-android-ui.py (syntax checked,
+not executed). It refuses other AVDs, apps and non-fixture services.
+
+Next: finish the Android written journey under ADR0017, record
+exact artifact inputs/results, update this receipt and Linear, then review the
+exact final PR head for an authorized nondeploying merge. Real native login,
+provider/device/storage/release gates and full R33/R53 acceptance remain separate.
+
+---
+
 # WLK385 — correctly addressed authored replies from connected Mail
 
 20October: source87d4082971a4ebdde5754af8df968316ac942633 completes the next
