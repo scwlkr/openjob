@@ -40,6 +40,7 @@ const BOOLEAN_OPTIONS = new Set([
   "--force",
   "--help",
   "--no-open",
+  "--metadata-only",
   "--quiet",
   "--version",
   "--yes",

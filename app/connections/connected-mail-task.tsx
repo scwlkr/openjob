@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { ProviderMessage } from '../../shared/provider-contracts';
+import type { ProviderMessageSummary } from '../../shared/provider-contracts';
 import type { MailTaskResult } from '../../shared/mail-task-source';
 import { workspaceFragment } from '../../shared/workspace-navigation';
 import styles from '../workspace/workspace.module.css';
 
-export default function ConnectedMailTask({ message, workspaceId, connectionId, request, title, onTitleChange, onPendingChange }: { title: string; onTitleChange(title: string): void; onPendingChange(id: string, pending: boolean): void; message: ProviderMessage; workspaceId: string; connectionId: string; request(path?: string, input?: object): Promise<unknown> }) {
+export default function ConnectedMailTask({ message, workspaceId, connectionId, request, title, onTitleChange, onPendingChange }: { title: string; onTitleChange(title: string): void; onPendingChange(id: string, pending: boolean): void; message: ProviderMessageSummary; workspaceId: string; connectionId: string; request(path?: string, input?: object): Promise<unknown> }) {
   const [receipt, setReceipt] = useState<MailTaskResult>();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [additional, setAdditional] = useState<{ requestId: string; title: string }>();

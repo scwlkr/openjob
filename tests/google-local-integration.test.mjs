@@ -124,6 +124,11 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
   f.flowOptions.mailTransport = originalMailTransport;
   reconstruct();
   assert.equal(mail.mode, 'google-fixture'); assert.equal(mail.workspaceId, home); assert.equal(mail.page.messages[0].body, 'Invented connected message.');
+  const summaries = await cli(['mail', started.connectionId, '--metadata-only']);
+  assert.equal(summaries.page.messages[0].upstreamId, 'm1'); assert.equal(Object.hasOwn(summaries.page.messages[0], 'body'), false);
+  assert.equal((await cli(['message', started.connectionId, 'm1'])).message.body, 'Invented connected message.');
+  assert.ok(paths.some(path => new URL(path, base).searchParams.get('view') === 'metadata'));
+  assert.ok(paths.some(path => path === `/api/v1/connections/${started.connectionId}/mail/m1`));
   const task = await cli(['task', started.connectionId], { messageId: 'm1', title: 'Review this connected message' });
   assert.equal(task.workspaceId, home); assert.equal(task.created, true);
   assert.deepEqual(await cli(['task', started.connectionId], { messageId: 'm1', title: 'Do not overwrite authored work' }), { ...task, created: false });

@@ -99,7 +99,7 @@ export function createGoogleConnectionsFlow(options: Options) {
       if (!homes.createMailTask) connectionFail('not_configured');
       if (typeof input.messageId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.messageId) || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 500 || input.requestId !== undefined && (typeof input.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.requestId))) connectionFail('invalid_input');
       const { before, current, reader } = await mailReader(owner, id);
-      const message = await reader.getMessage({ ownerId: owner, accountId: before.accountId, messageId: input.messageId });
+      const message = await reader.getMessageSummary({ ownerId: owner, accountId: before.accountId, messageId: input.messageId });
       await current();
       const requestHash = input.requestId ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([before.id, before.accountId, message.upstreamId, input.title]))))].map(value => value.toString(16).padStart(2, '0')).join('') : undefined;
       const source = { workspaceId: before.workspaceId, connectionId: before.id, accountId: before.accountId, messageId: message.upstreamId, threadId: message.upstreamThreadId, ...(input.requestId ? { requestId: input.requestId, requestHash } : {}) };
@@ -162,9 +162,16 @@ export function createGoogleConnectionsFlow(options: Options) {
       }
       return { status: 'status_updated' };
     },
-    async mail(owner: string, id: string, cursor?: string, folderId?: string, search?: string) {
+    async message(owner: string, id: string, messageId: string) {
+      if (typeof messageId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(messageId)) connectionFail('invalid_input');
       const { before, current, reader } = await mailReader(owner, id);
-      const page = await reader.listMessages({ ownerId: owner, accountId: before.accountId, cursor, folderId, search });
+      const message = await reader.getMessage({ ownerId: owner, accountId: before.accountId, messageId }).finally(current);
+      return { mode: evidenceMode, workspaceId: before.workspaceId, message };
+    },
+    async mail(owner: string, id: string, cursor?: string, folderId?: string, search?: string, view?: 'metadata') {
+      if (view !== undefined && view !== 'metadata') connectionFail('invalid_input');
+      const { before, current, reader } = await mailReader(owner, id);
+      const page = await (view === 'metadata' ? reader.listMessageSummaries : reader.listMessages)({ ownerId: owner, accountId: before.accountId, cursor, folderId, search });
       await current(); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
     },
   };

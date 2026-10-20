@@ -1,31 +1,32 @@
 'use client';
 import { useCallback, useRef, useState } from 'react';
-import type { ProviderMessagePage } from '../../shared/provider-contracts';
+import type { ProviderMessageSummaryPage, ProviderMessageSummary, ProviderMessage } from '../../shared/provider-contracts';
 import ConnectedMailTask from './connected-mail-task';
 import styles from '../workspace/workspace.module.css';
 
-type Props = { connectionId: string; workspaceId: string; initialPage: ProviderMessagePage; fixture: boolean; request(path?: string, input?: object): Promise<unknown> };
+type Props = { connectionId: string; workspaceId: string; initialPage: ProviderMessageSummaryPage; fixture: boolean; request(path?: string, input?: object): Promise<unknown> };
 export default function ConnectedGoogleMail({ connectionId, workspaceId, initialPage, fixture, request }: Props) {
   const [searchInput, setSearchInput] = useState(''), [search, setSearch] = useState('');
   const [folder, setFolder] = useState('');
   const [folders, setFolders] = useState(initialPage.folders);
-  const [page, setPage] = useState<ProviderMessagePage | undefined>(initialPage);
+  const [page, setPage] = useState<ProviderMessageSummaryPage | undefined>(initialPage);
   const [number, setNumber] = useState(1), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   // Only authored titles survive paging. Provider bodies are replaced, never accumulated.
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Set<string>>(new Set());
   const loading = useRef(false);
+  const [opened, setOpened] = useState<{ id: string; body?: string; error?: string }>();
   const onPendingChange = useCallback((id: string, value: boolean) => setPending(before => {
     if (before.has(id) === value) return before;
     const next = new Set(before); if (value) next.add(id); else next.delete(id); return next;
   }), []);
   async function read(cursor?: string, nextNumber = 1, selectedFolder = folder, submittedSearch = search) {
     if (loading.current || pending.size) return;
-    loading.current = true; setBusy(true); setError(''); setPage(undefined); setFolder(selectedFolder); setSearch(submittedSearch);
+    loading.current = true; setBusy(true); setError(''); setOpened(undefined); setPage(undefined); setFolder(selectedFolder); setSearch(submittedSearch);
     try {
-      const params = new URLSearchParams(); if (cursor !== undefined) params.set('cursor', cursor); if (selectedFolder) params.set('folderId', selectedFolder); if (submittedSearch) params.set('search', submittedSearch);
+      const params = new URLSearchParams({ view: 'metadata' }); if (cursor !== undefined) params.set('cursor', cursor); if (selectedFolder) params.set('folderId', selectedFolder); if (submittedSearch) params.set('search', submittedSearch);
       const query = params.size ? `?${params}` : '';
-      const result = await request(`/${connectionId}/mail${query}`) as { workspaceId: string; page: ProviderMessagePage };
+      const result = await request(`/${connectionId}/mail${query}`) as { workspaceId: string; page: ProviderMessageSummaryPage };
       if (result.workspaceId !== workspaceId || !Array.isArray(result.page?.messages) || !(result.page.nextCursor === null || typeof result.page.nextCursor === 'string')) throw new Error();
       setPage(result.page); setFolders(result.page.folders); setNumber(nextNumber);
     } catch (error) {
@@ -33,9 +34,21 @@ export default function ConnectedGoogleMail({ connectionId, workspaceId, initial
       setError(code === 'search_rejected' ? 'This search could not be used. Review your Gmail query or clear search.' : code === 'folder_unavailable' ? 'This folder is no longer available. Choose All Mail or another folder.' : code === 'invalid_cursor' ? 'This Mail page is no longer available. Open the first page to continue.' : 'Mail could not be read. Check the connection, then open the first page to retry.');
     } finally { loading.current = false; setBusy(false); }
   }
+  async function open(message: ProviderMessageSummary) {
+    if (loading.current || pending.size) return;
+    if (opened?.id === message.id) { setOpened(undefined); return; }
+    loading.current = true; setBusy(true); setOpened({ id: message.id });
+    try {
+      const result = await request(`/${connectionId}/mail/${message.upstreamId}`) as { workspaceId: string; message: ProviderMessage };
+      const full = result.message;
+      if (result.workspaceId !== workspaceId || full?.id !== message.id || full.accountId !== message.accountId || full.upstreamId !== message.upstreamId || full.upstreamThreadId !== message.upstreamThreadId || typeof full.body !== 'string') throw new Error();
+      setOpened({ id: message.id, body: full.body });
+    } catch { setOpened({ id: message.id, error: 'This message could not be read. It may be unavailable or your access may have changed. Close it and retry, or refresh Mail.' }); }
+    finally { loading.current = false; setBusy(false); }
+  }
   return <section className={styles.panel} aria-label="Connected Mail">
     <h2>{fixture ? 'Invented Mail' : 'Read-only Mail'}</h2>
-    <p>One page at a time. Edited Task titles are kept while changing pages or folders within this mailbox.</p>
+    <p>Browse message details, then choose Read message to load its plain text. Edited Task titles stay while changing pages, folders or search.</p>
     <form className={styles.form} onSubmit={event => { event.preventDefault(); void read(undefined, 1, folder, searchInput.trim()); }}>
       <label>Search Gmail<input type="search" maxLength={512} value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={busy || !!pending.size} placeholder="from:colleague@example.com" /></label>
       <p>Use Gmail search syntax within this account and selected folder. Submit to apply.</p>
@@ -51,10 +64,12 @@ export default function ConnectedGoogleMail({ connectionId, workspaceId, initial
       <button disabled={busy || !!pending.size || number === 1 && !!page} onClick={() => void read()}>First page</button>
       <button disabled={busy || !!pending.size || !page?.nextCursor} onClick={() => void read(page?.nextCursor ?? undefined, number + 1)}>Next page</button>
     </div>
-    {!!pending.size && <p>Finish confirming the Task before changing pages.</p>}
+    {!!pending.size && <p>Finish confirming the Task before changing Mail.</p>}
     {busy && <p role="status">Reading Mail…</p>}
     {page && <><p>Mail page {number}</p>{!page.messages.length && <p>This page has no messages.</p>}{page.messages.map(message => <article key={message.id}>
-      <h3>{message.subject}</h3><p>{message.body}</p>
+      <h3>{message.subject}</h3><p>From: {message.from || '(Unavailable)'} · To: {message.to || '(Unavailable)'}</p>
+      <button disabled={busy || !!pending.size} aria-expanded={opened?.id === message.id} onClick={() => void open(message)}>{opened?.id === message.id ? 'Close message' : 'Read message'}</button>
+      {opened?.id === message.id && <div>{opened.error ? <p role="alert">{opened.error}</p> : opened.body !== undefined ? <><p>Plain text only. HTML, attachments and remote images are not loaded.</p><p className={styles.body}>{opened.body || '(This message has an empty plain-text body.)'}</p></> : <p role="status">Reading message…</p>}</div>}
       <ConnectedMailTask message={message} workspaceId={workspaceId} connectionId={connectionId} request={request} title={titles[message.id] ?? message.subject.slice(0, 500)} onTitleChange={title => setTitles(before => ({ ...before, [message.id]: title }))} onPendingChange={onPendingChange} />
     </article>)}</>}
   </section>;

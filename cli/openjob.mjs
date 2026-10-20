@@ -92,7 +92,8 @@ const COMMAND_OPTIONS = new Map([
   ["connections list", new Set(OUTPUT_OPTIONS)],
   ["connections begin", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["connections action", new Set([...OUTPUT_OPTIONS, "--input"])],
-  ["connections mail", new Set([...OUTPUT_OPTIONS, "--cursor", "--folder", "--search"])],
+  ["connections mail", new Set([...OUTPUT_OPTIONS, "--cursor", "--folder", "--search", "--metadata-only"])],
+  ["connections message", new Set(OUTPUT_OPTIONS)],
   ["connections task", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["connections source", new Set(OUTPUT_OPTIONS)],
   ["connections reply", new Set(OUTPUT_OPTIONS)],
@@ -179,7 +180,8 @@ const RESOURCE_HELP = {
   openjob connections list
   openjob connections begin --input <json-file>
   openjob connections action <connection-id> --input <json-file>
-  openjob connections mail <connection-id> [--folder <folder-id>] [--search <gmail-query>] [--cursor <next-cursor>]
+  openjob connections mail <connection-id> [--folder <folder-id>] [--search <gmail-query>] [--cursor <next-cursor>] [--metadata-only]
+  openjob connections message <connection-id> <upstream-message-id>
   openjob connections task <connection-id> --input <json-file>
   openjob connections source <workspace-id> <task-id>
   openjob connections reply <workspace-id> <task-id>
@@ -188,7 +190,7 @@ const RESOURCE_HELP = {
 Begin input: simulated choiceId+workspaceId, or configured Google address+workspaceId.
 Action input: action=approve(simulated)|cancel|disconnect|retry-cleanup|refresh(Google).
 Google begin returns a browser consent URL; callback requires the signed human UI.
-Configured Gmail Mail accepts --folder with its returned account-qualified folder ID and --search with Gmail query syntax. Keep both filters with a matching nextCursor; omit --cursor to restart at the first page.
+Configured Gmail --metadata-only lists headers without bodies; connections message reads one exact message. Mail accepts --folder with its returned account-qualified folder ID and --search with Gmail query syntax. Keep both filters with a matching nextCursor; omit --cursor to restart at the first page.
 Normal runtime remains unconfigured; no CLI token input or automatic consent.`,
   workspace: `Usage:
   openjob workspace snapshot
@@ -635,6 +637,9 @@ async function main(raw) {
     writeResult({ data: filterWorkspaceTasks(response.data.tasks, query) }); return;
   }
   if (resource === "connections") {
+    if (command === 'message' && rest.length === 2 && /^con_[a-f0-9]{32}$/.test(rest[0]) && /^[A-Za-z0-9_-]{1,128}$/.test(rest[1])) {
+      writeResult(await apiRequest(`/connections/${rest[0]}/mail/${rest[1]}`, {}, { retryable: true })); return;
+    }
     if (command === 'task' && rest.length === 1 && /^con_[a-f0-9]{32}$/.test(rest[0])) {
       writeResult(await apiRequest(`/connections/${rest[0]}/tasks`, { method: 'POST', body: JSON.stringify(readInputObject(parsed.options.get('--input'))) })); return;
     }
@@ -655,11 +660,11 @@ async function main(raw) {
       if (folderId !== undefined && !/^[A-Za-z0-9_-]{1,128}:folder:[A-Za-z0-9_-]{1,128}$/.test(folderId)) throw new CliError("usage_error", "Use an account-qualified folder ID returned by this Gmail Mail account.", 2);
       const search = parsed.options.get("--search");
       if (search !== undefined && (search.length > 512 || !search.trim() || /[\u0000-\u001f\u007f]/.test(search))) throw new CliError("usage_error", "Use a nonempty Gmail query of at most 512 characters without control characters, or omit --search.", 2);
-      const query = new URLSearchParams(); if (cursor !== undefined) query.set('cursor', cursor); if (folderId !== undefined) query.set('folderId', folderId); if (search !== undefined) query.set('search', search.trim());
+      const query = new URLSearchParams(); if (parsed.options.has('--metadata-only')) query.set('view', 'metadata'); if (cursor !== undefined) query.set('cursor', cursor); if (folderId !== undefined) query.set('folderId', folderId); if (search !== undefined) query.set('search', search.trim());
       const mailPath = `${path}/mail${query.size ? `?${query}` : ""}`;
       writeResult(await apiRequest(command === "mail" ? mailPath : path, command === "mail" ? {} : { method: "POST", body: JSON.stringify(readInputObject(parsed.options.get("--input"))) })); return;
     }
-    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id> | task <id> --input <json-file> | source/reply <workspace-id> <task-id> | reply-save <workspace-id> <task-id> --input <json-file>. Configured Google consent uses the browser. Normal Connections remain unconfigured.", 2);
+    throw new CliError("usage_error", "Use connections list | begin --input <json-file> | action <id> --input <json-file> | mail <id> [--metadata-only] | message <id> <upstream-message-id> | task <id> --input <json-file> | source/reply <workspace-id> <task-id> | reply-save <workspace-id> <task-id> --input <json-file>. Configured Google consent uses the browser. Normal Connections remain unconfigured.", 2);
   }
   if (resource === "workspace" && command === "providers" && rest.length === 0) {
     const query = new URLSearchParams();

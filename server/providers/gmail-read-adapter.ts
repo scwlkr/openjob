@@ -1,5 +1,5 @@
-import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage, ProviderMessagePage } from "../../shared/provider-contracts.ts";
-import { fail, object, string, upstream, mapLabels, mapMessage, replyHeaders, type GmailReplyHeaders } from "./gmail-wire.ts";
+import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage, ProviderMessagePage, ProviderMessageSummary, ProviderMessageSummaryPage } from "../../shared/provider-contracts.ts";
+import { fail, object, string, upstream, mapLabels, mapMessage, mapMessageSummary, replyHeaders, type GmailReplyHeaders } from "./gmail-wire.ts";
 import { parseProviderResourceRef } from "../../shared/provider-preview.ts";
 import { gmailGet } from "./gmail-transport.ts";
 export { GmailReadError } from "./gmail-wire.ts";
@@ -46,7 +46,13 @@ function pageToken(value: string | undefined, binding: GmailAccountBinding, fold
 
 /** Unbound by runtime. Approval is closed by default, before credential lookup or HTTP. */
 type MessageInput = { ownerId: string; accountId: string; messageId: string };
-export function createGmailReadAdapter(options: GmailReadAdapterOptions): Omit<ProviderReadAdapter, "listMessages"> & { listMessages(input: { ownerId: string; accountId: string; cursor?: string; folderId?: string; search?: string }): Promise<ProviderMessagePage>; getMessage(input: MessageInput): Promise<ProviderMessage>; getReplySource(input: MessageInput): Promise<{ message: ProviderMessage; headers: GmailReplyHeaders }> } {
+type ListInput = { ownerId: string; accountId: string; cursor?: string; folderId?: string; search?: string };
+function metadataQuery() {
+  const query = new URLSearchParams({ format: 'metadata' });
+  for (const name of ['Subject', 'From', 'To']) query.append('metadataHeaders', name);
+  return query;
+}
+export function createGmailReadAdapter(options: GmailReadAdapterOptions): Omit<ProviderReadAdapter, "listMessages"> & { listMessages(input: ListInput): Promise<ProviderMessagePage>; listMessageSummaries(input: ListInput): Promise<ProviderMessageSummaryPage>; getMessageSummary(input: MessageInput): Promise<ProviderMessageSummary>; getMessage(input: MessageInput): Promise<ProviderMessage>; getReplySource(input: MessageInput): Promise<{ message: ProviderMessage; headers: GmailReplyHeaders }> } {
   const { resolveCredential, approveExecution = () => false, fetchImplementation = fetch, now = Date.now, timeoutMs = 10000 } = options;
   if (!Array.isArray(options.bindings) || options.bindings.length > 100 || typeof resolveCredential !== "function" || typeof approveExecution !== "function" || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) fail("invalid_input");
   const bindings = structuredClone(options.bindings); const seen = new Set<string>(); const subjects = new Set<string>();
@@ -79,41 +85,51 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Omit<P
     const message = mapMessage(raw, accountId, messageId, upstream(raw.threadId), new Set(folders.map(folder => folder.upstreamId)));
     await check(); return { raw, message };
   }
+  async function listPage<T extends ProviderMessageSummary>({ ownerId, accountId, cursor, folderId, search }: ListInput, map: (value: unknown, account: string, id: string, thread: string, labels: Set<string>) => T, metadata: boolean) {
+    const binding = select(ownerId, accountId);
+    let label: string | undefined;
+    if (folderId !== undefined) {
+      try { label = parseProviderResourceRef(folderId, accountId, 'folder').upstreamId; } catch { fail('invalid_input'); }
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(label!)) fail('invalid_input');
+    }
+    if (search !== undefined && (typeof search !== 'string' || search.length > 512 || !search.trim() || /[\u0000-\u001f\u007f]/.test(search))) fail('invalid_input');
+    const queryText = search?.trim() ?? '';
+    const searchHash = queryText ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(queryText))), byte => byte.toString(16).padStart(2, '0')).join('') : null;
+    const token = pageToken(cursor, binding, folderId ?? null, searchHash);
+    const { get, check } = await client(binding);
+    const folders = mapLabels(await get("labels"), accountId); const labelIds = new Set(folders.map(folder => folder.upstreamId));
+    if (label !== undefined && !labelIds.has(label)) fail('folder_unavailable');
+    const query = new URLSearchParams({ maxResults: "10" });
+    if (label !== undefined) query.set('labelIds', label);
+    if (queryText) query.set('q', queryText);
+    if (label === 'SPAM' || label === 'TRASH') query.set('includeSpamTrash', 'true');
+    if (token !== undefined) query.set("pageToken", token);
+    const page = await get("messages", query); const raw = page.messages ?? [];
+    if (!Array.isArray(raw) || raw.length > 10) fail("malformed_response");
+    if (page.nextPageToken !== undefined && (!opaque(page.nextPageToken) || page.nextPageToken === token)) fail("malformed_response");
+    const seenMessages = new Set<string>(); const rows = raw.map(value => { const row = object(value); const messageId = upstream(row.id); const threadId = upstream(row.threadId); if (seenMessages.has(messageId)) fail("malformed_response"); seenMessages.add(messageId); return { messageId, threadId }; });
+    const messages = [];
+    for (const row of rows) {
+      const message = map(await get(`messages/${row.messageId}`, metadata ? metadataQuery() : new URLSearchParams({ format: "full" })), accountId, row.messageId, row.threadId, labelIds);
+      if (label !== 'SPAM' && label !== 'TRASH' && ['SPAM', 'TRASH'].some(excluded => message.folderIds.includes(`${accountId}:folder:${excluded}`))) continue;
+      if (folderId !== undefined && !message.folderIds.includes(folderId)) continue; // Label removed after listing: never show another folder's content.
+      messages.push(message);
+    }
+    // Recheck after all async reads before returning potentially private content.
+    await check();
+    return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 3, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, folderId: folderId ?? null, searchHash, pageToken: string(page.nextPageToken, 256) }) };
+  }
   return {
     async listAccounts(ownerId) { if (!id(ownerId)) fail("invalid_input"); return bindings.filter(binding => binding.ownerId === ownerId).map(account); },
-    async listMessages({ ownerId, accountId, cursor, folderId, search }) {
-      const binding = select(ownerId, accountId);
-      let label: string | undefined;
-      if (folderId !== undefined) {
-        try { label = parseProviderResourceRef(folderId, accountId, 'folder').upstreamId; } catch { fail('invalid_input'); }
-        if (!/^[A-Za-z0-9_-]{1,128}$/.test(label!)) fail('invalid_input');
-      }
-      if (search !== undefined && (typeof search !== 'string' || search.length > 512 || !search.trim() || /[\u0000-\u001f\u007f]/.test(search))) fail('invalid_input');
-      const queryText = search?.trim() ?? '';
-      const searchHash = queryText ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(queryText))), byte => byte.toString(16).padStart(2, '0')).join('') : null;
-      const token = pageToken(cursor, binding, folderId ?? null, searchHash);
+    listMessages: input => listPage(input, mapMessage, false),
+    listMessageSummaries: input => listPage(input, mapMessageSummary, true),
+    async getMessageSummary({ ownerId, accountId, messageId }) {
+      const binding = select(ownerId, accountId); upstream(messageId);
       const { get, check } = await client(binding);
-      const folders = mapLabels(await get("labels"), accountId); const labelIds = new Set(folders.map(folder => folder.upstreamId));
-      if (label !== undefined && !labelIds.has(label)) fail('folder_unavailable');
-      const query = new URLSearchParams({ maxResults: "10" });
-      if (label !== undefined) query.set('labelIds', label);
-      if (queryText) query.set('q', queryText);
-      if (label === 'SPAM' || label === 'TRASH') query.set('includeSpamTrash', 'true');
-      if (token !== undefined) query.set("pageToken", token);
-      const page = await get("messages", query); const raw = page.messages ?? [];
-      if (!Array.isArray(raw) || raw.length > 10) fail("malformed_response");
-      if (page.nextPageToken !== undefined && (!opaque(page.nextPageToken) || page.nextPageToken === token)) fail("malformed_response");
-      const seenMessages = new Set<string>(); const rows = raw.map(value => { const row = object(value); const messageId = upstream(row.id); const threadId = upstream(row.threadId); if (seenMessages.has(messageId)) fail("malformed_response"); seenMessages.add(messageId); return { messageId, threadId }; });
-      const messages = [];
-      for (const row of rows) {
-        const message = mapMessage(await get(`messages/${row.messageId}`, new URLSearchParams({ format: "full" })), accountId, row.messageId, row.threadId, labelIds);
-        if (label !== 'SPAM' && label !== 'TRASH' && ['SPAM', 'TRASH'].some(excluded => message.folderIds.includes(`${accountId}:folder:${excluded}`))) continue;
-        if (folderId !== undefined && !message.folderIds.includes(folderId)) continue; // Label removed after listing: never show another folder's content.
-        messages.push(message);
-      }
-      // Recheck after all async reads before returning potentially private content.
-      await check();
-      return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 3, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, folderId: folderId ?? null, searchHash, pageToken: string(page.nextPageToken, 256) }) };
+      const folders = mapLabels(await get('labels'), accountId);
+      const raw = await get(`messages/${messageId}`, metadataQuery());
+      const message = mapMessageSummary(raw, accountId, messageId, upstream(raw.threadId), new Set(folders.map(folder => folder.upstreamId)));
+      await check(); return message;
     },
     async getMessage(input) { return (await readMessage(input)).message; },
     async getReplySource(input) { const { message, raw } = await readMessage(input); return { message, headers: replyHeaders(raw) }; },
