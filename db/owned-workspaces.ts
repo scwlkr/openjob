@@ -5,6 +5,7 @@ import { assertTaskSlotAvailable } from '../shared/workspace-availability.ts';
 import { applyTaskCalendarCommand, type TaskCalendarCommand } from '../shared/task-calendar-sync.ts';
 import { WORKSPACE_ID, validateWorkspace, validateOwnedSnapshot, workspaceFail, type OwnedWorkspace, type OwnedWorkspaceSnapshot } from '../shared/owned-workspaces.ts';
 import { parseMailTaskSources, retainMailTaskSources, existingMailTask, type MailTaskReference, type MailTaskResult } from '../shared/mail-task-source.ts';
+import { parseConnectedReplies, sameReplySource, upsertConnectedReply, type ConnectedReplyStore } from '../shared/connected-reply.ts';
 
 /** New owner-only Workspace repository; never reads/migrates Personal Mail aggregates. */
 export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typeof fetch = fetch) {
@@ -37,7 +38,13 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
   }
   const retryable = (error: unknown) => error instanceof FirestoreRequestError && ['ABORTED', 'ALREADY_EXISTS', 'FAILED_PRECONDITION', 'NOT_FOUND'].includes(error.code ?? '');
   const update = (path: string, fields: FirestoreDocument['fields'], previous: FirestoreDocument | null) => ({ update: { name: db.documentName(path), fields }, currentDocument: previous ? { updateTime: previous.updateTime } : { exists: false } });
-  async function commit(owner: string, writes: unknown[]) { await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [await activeUserHistoryWrite(db, owner), ...writes] }) }); }
+  async function commit(owner: string, writes: unknown[], current?: () => Promise<void>) { const fence = await activeUserHistoryWrite(db, owner); await current?.(); await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [fence, ...writes] }) }); }
+  function replies(doc: FirestoreDocument | null, id: string) {
+    if (doc?.fields?.connectedRepliesJson && typeof doc.fields.connectedRepliesJson.stringValue !== 'string') workspaceFail('invalid_state');
+    const result = parseConnectedReplies(doc?.fields?.connectedRepliesJson?.stringValue);
+    if (result.some(row => row.source.workspaceId !== id)) workspaceFail('invalid_state');
+    return result;
+  }
   async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }, mail?: { source: MailTaskReference; current: () => Promise<void> }) {
     ownerId(owner);
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -59,14 +66,39 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
       const result = validateOwnedSnapshot({ workspace: snapshot.workspace, work });
       const receipt: MailTaskResult | undefined = mail ? { workspaceId: id, taskId: work.tasks.at(-1)!.id, created: true } : undefined;
       const nextSources = parseMailTaskSources(JSON.stringify(retainMailTaskSources([...sources, ...(mail ? [{ ...mail.source, taskId: receipt!.taskId }] : [])], work.tasks)));
-      const fields = { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) }, mailSourcesJson: { stringValue: JSON.stringify(nextSources) } };
+      const fields = { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) }, mailSourcesJson: { stringValue: JSON.stringify(nextSources) }, connectedRepliesJson: { stringValue: JSON.stringify(replies(previous, id)) } };
       if (new TextEncoder().encode(JSON.stringify(fields)).length > 898000) workspaceFail('workspace_capacity');
-      try { await mail?.current(); await commit(owner, [update(workPath(id), fields, previous)]); return { snapshot: result, receipt }; }
+      try { await commit(owner, [update(workPath(id), fields, previous)], mail?.current); return { snapshot: result, receipt }; }
       catch (error) { if (!retryable(error)) throw error; }
     }
     return workspaceFail('conflict');
   }
+  const connected: ConnectedReplyStore = {
+    async connectedReply(owner, source) {
+      ownerId(owner); await assertActiveUser(db, owner);
+      const doc = await read(workPath(source.workspaceId)); decode(doc, owner);
+      const draft = replies(doc, source.workspaceId).find(row => sameReplySource(row.source, source))?.draft;
+      await assertActiveUser(db, owner); return draft;
+    },
+    async saveConnectedReply(owner, source, input, expectedRevision, current) {
+      ownerId(owner);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await assertActiveUser(db, owner); const previous = await read(workPath(source.workspaceId)), snapshot = decode(previous, owner);
+        await current();
+        const sources = retainMailTaskSources(parseMailTaskSources(previous?.fields?.mailSourcesJson?.stringValue), snapshot.work.tasks);
+        if (!sources.some(row => JSON.stringify(row) === JSON.stringify(source))) workspaceFail('source_unavailable');
+        const next = upsertConnectedReply(replies(previous, source.workspaceId), source, input, expectedRevision);
+        if (next.unchanged) { await current(); await assertActiveUser(db, owner); return next.draft; }
+        const fields = { ...previous!.fields, connectedRepliesJson: { stringValue: JSON.stringify(next.rows) } };
+        if (new TextEncoder().encode(JSON.stringify(fields)).length > 898000) workspaceFail('workspace_capacity');
+        try { await commit(owner, [update(workPath(source.workspaceId), fields, previous)], current); return next.draft; }
+        catch (error) { if (!retryable(error)) throw error; }
+      }
+      return workspaceFail('conflict');
+    },
+  };
   return {
+    ...connected,
     async list(owner: string) { await assertActiveUser(db, owner); const result = catalog(await read(catalogPath(owner)), owner); await assertActiveUser(db, owner); return result; },
     async create(owner: string, name: unknown) {
       ownerId(owner);

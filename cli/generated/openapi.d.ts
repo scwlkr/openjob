@@ -1038,10 +1038,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connections/task-sources/{workspaceId}/{taskId}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Review current reply addressing and reopen an authored OpenJob draft
+         * @description Human only. Freshly checks source, verified account, home and connection. Reply-To takes precedence over From; reply all excludes self and never adds Bcc. Saved addressing is retained for explicit review if headers changed. No Mail body cache, provider draft creation or sending. Authored drafts stay private and require current access.
+         */
+        get: operations["prepareConnectedReply"];
+        put?: never;
+        /**
+         * Save an authored reply in OpenJob after reviewing the complete current envelope
+         * @description The server derives all addressing and threading from fresh source metadata. reviewToken binds the full source/account and both reviewed envelope plans. A changed plan or stale text revision conflicts. Exact same-body/envelope retries return the saved revision. Disconnect or Task deletion denies access while retaining authored drafts. No provider write, send, auto-quote, offline Mail or agent draft access.
+         */
+        post: operations["saveConnectedReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ConnectedReplyPlan: {
+            from: string;
+            to: string[];
+            cc: string[];
+            subject: string;
+            inReplyTo?: string;
+            references: string[];
+        };
+        ConnectedReplyDraft: {
+            /** @constant */
+            storageKind: "openjob";
+            /** @enum {unknown} */
+            mode: "reply" | "reply-all";
+            plan: components["schemas"]["ConnectedReplyPlan"];
+            body: string;
+            revision: number;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         ConnectionCatalog: components["schemas"]["SimulatedConnectionCatalog"] | components["schemas"]["GoogleConnectionCatalog"];
         SimulatedConnectionCatalog: {
             /** @constant */
@@ -5696,6 +5742,99 @@ export interface operations {
             429: components["responses"]["RateLimitedResponse"];
             500: components["responses"]["InternalErrorResponse"];
             /** @description Redacted failure; disabled503, denied403, conflict409 or invalid400. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    prepareConnectedReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current reply plans and any saved authored draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            workspaceId: string;
+                            taskId: string;
+                            /** @constant */
+                            storageKind: "openjob";
+                            plans: {
+                                reply: components["schemas"]["ConnectedReplyPlan"];
+                                replyAll: components["schemas"]["ConnectedReplyPlan"];
+                            };
+                            reviewToken: string;
+                            draft: components["schemas"]["ConnectedReplyDraft"] | null;
+                        };
+                    };
+                };
+            };
+            /** @description Redacted invalid, unauthorized, unsupported, source or reconnect result. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    saveConnectedReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {unknown} */
+                    mode: "reply" | "reply-all";
+                    body: string;
+                    expectedRevision: number;
+                    reviewToken: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved authored draft; nothing was sent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            workspaceId: string;
+                            taskId: string;
+                            draft: components["schemas"]["ConnectedReplyDraft"];
+                        };
+                    };
+                };
+            };
+            /** @description Redacted conflict, capacity, invalid, source or reconnect result. */
             default: {
                 headers: {
                     [name: string]: unknown;

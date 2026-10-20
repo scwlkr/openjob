@@ -1,5 +1,5 @@
 import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage } from "../../shared/provider-contracts.ts";
-import { fail, object, string, upstream, mapLabels, mapMessage } from "./gmail-wire.ts";
+import { fail, object, string, upstream, mapLabels, mapMessage, replyHeaders, type GmailReplyHeaders } from "./gmail-wire.ts";
 import { gmailGet } from "./gmail-transport.ts";
 export { GmailReadError } from "./gmail-wire.ts";
 
@@ -44,7 +44,8 @@ function pageToken(value: string | undefined, binding: GmailAccountBinding) {
 }
 
 /** Unbound by runtime. Approval is closed by default, before credential lookup or HTTP. */
-export function createGmailReadAdapter(options: GmailReadAdapterOptions): ProviderReadAdapter & { getMessage(input: { ownerId: string; accountId: string; messageId: string }): Promise<ProviderMessage> } {
+type MessageInput = { ownerId: string; accountId: string; messageId: string };
+export function createGmailReadAdapter(options: GmailReadAdapterOptions): ProviderReadAdapter & { getMessage(input: MessageInput): Promise<ProviderMessage>; getReplySource(input: MessageInput): Promise<{ message: ProviderMessage; headers: GmailReplyHeaders }> } {
   const { resolveCredential, approveExecution = () => false, fetchImplementation = fetch, now = Date.now, timeoutMs = 10000 } = options;
   if (!Array.isArray(options.bindings) || options.bindings.length > 100 || typeof resolveCredential !== "function" || typeof approveExecution !== "function" || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) fail("invalid_input");
   const bindings = structuredClone(options.bindings); const seen = new Set<string>(); const subjects = new Set<string>();
@@ -69,6 +70,14 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Provid
     if (!email(profile.emailAddress) || profile.emailAddress.toLowerCase() !== binding.address.toLowerCase()) fail('authentication_required');
     return { get, check };
   }
+  async function readMessage({ ownerId, accountId, messageId }: MessageInput) {
+    const binding = select(ownerId, accountId); upstream(messageId);
+    const { get, check } = await client(binding);
+    const folders = mapLabels(await get('labels'), accountId);
+    const raw = await get(`messages/${messageId}`, new URLSearchParams({ format: 'full' }));
+    const message = mapMessage(raw, accountId, messageId, upstream(raw.threadId), new Set(folders.map(folder => folder.upstreamId)));
+    await check(); return { raw, message };
+  }
   return {
     async listAccounts(ownerId) { if (!id(ownerId)) fail("invalid_input"); return bindings.filter(binding => binding.ownerId === ownerId).map(account); },
     async listMessages({ ownerId, accountId, cursor }) {
@@ -86,14 +95,8 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Provid
       await check();
       return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 1, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, pageToken: string(page.nextPageToken, 256) }) };
     },
-    async getMessage({ ownerId, accountId, messageId }) {
-      const binding = select(ownerId, accountId); upstream(messageId);
-      const { get, check } = await client(binding);
-      const folders = mapLabels(await get('labels'), accountId);
-      const raw = await get(`messages/${messageId}`, new URLSearchParams({ format: 'full' }));
-      const message = mapMessage(raw, accountId, messageId, upstream(raw.threadId), new Set(folders.map(folder => folder.upstreamId)));
-      await check(); return message;
-    },
+    async getMessage(input) { return (await readMessage(input)).message; },
+    async getReplySource(input) { const { message, raw } = await readMessage(input); return { message, headers: replyHeaders(raw) }; },
     async readChanges() { return fail("unsupported_operation"); },
   };
 }

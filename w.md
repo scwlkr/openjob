@@ -1,3 +1,58 @@
+# WLK385 — correctly addressed authored replies from connected Mail
+
+20October: source87d4082971a4ebdde5754af8df968316ac942633 completes the next
+bounded R33 slice after PR117/118. One local implementation owner; read-only review
+found and then confirmed the fix for unfinished-reply deletion. Same authoritative
+Personal/Owned envelopes retain private OpenJob drafts, separate from source bodies
+and ordinary Task/Calendar, offline, Home/export and agent DTOs. All central writes
+preserve drafts within combined byte limits. Task deletion prunes source links but
+keeps saved authored replies; recreating the same source Task reopens its draft.
+Disconnect denies draft/source reads and saves; authorized reconnect recovers it.
+
+App/API/existing CLI share fresh source-derived From, Reply-To-or-From, explicit
+reply/reply-all, deduplicated To/Cc excluding self, subject and RFC Message-ID /
+References threading. Bcc and automatic quoting never enter the draft. Address parsing
+uses pinned email-addresses5.0.0 (MIT, bundled types, no install script). Unsupported
+headers fail closed. Full-envelope review tokens reject stale addressing; revisions
+prevent lost edits; exact same-body/envelope retries return the saved revision.
+Unsaved editor text stays through Workspace modules; save before leaving/reloading.
+Dirty replies block Task deletion until saved or explicitly discarded. Saved drafts
+are OpenJob records only: no provider draft writes, sending or external Calendar.
+
+Practical browser proof on isolated loopback fixture: invented Mail -> edited Task
+-> normal Calendar block20October14:00–14:30UTC -> completed Task -> source ->
+Reply-To and reply-all From/To/Cc review -> authored draft -> Calendar/linked-Task
+round trip retains unsaved text -> save -> reload reopens exact text/account/mode.
+Attempted Task deletion with unsaved reply was refused; explicit discard preserved
+the saved draft. Sam could not access Alex's connection. Disconnect then source
+reopening denied while Task/block stayed. Responsive390/768 widths had matching
+content width. Temporary viewport/emulation overrides cleared. Synthetic screenshots
+only: output/wlk-385/reply-{saved-desktop,phone,tablet,disconnected}.png.
+
+Focused API/CLI tests additionally cover independent Owned and retained Personal
+homes, normal writes/agent grants/offline sync preserving drafts, reconstruction,
+concurrent stale edits, changed source envelope, exact retry, source recreation,
+foreign owner/home, agent denial, oversized input and in-flight revocation. Compile,
+affected lint, OpenAPI38paths/54operations, generated types, brand32 and root secret
+scan pass. The later targeted regression group passed59 checks; earlier groups overlap
+and are not cumulative. Root shared dependencies/output were left unchanged; proof
+used fresh npm ci --ignore-scripts after inspecting root/native install scripts.
+All source files hash-match the isolated snapshot. Original26 untracked files remain
+byte-identical. Initial isolated build failed because the copy has no.git; retry uses
+the build's explicit OPENJOB_GIT_COMMIT input and passed all five bundle stages,
+without modifying build/protection rules.
+
+No repeat live read, Mail content capture, live saved-work writes, operator/1Password,
+new credentials/security settings, provider effects, deployment/publication or native
+release. Existing Timothy session/5202 launcher preserved, disconnected and key-free.
+This is fixture delivery, not full R33 live acceptance. Next: connect the same saved-
+work flow to an approved memory-only live test without acquiring persistent provider
+access; preserve the remaining runtime/data-write approvals and native release gates.
+R41 editable composition/send and R40 provider Calendar remain later work. WLK324's
+PR95 download hold and WLK302 unrecovered IMAP hold remain separate.
+
+---
+
 # WLK384 — connected Mail source Tasks; WLK318 real read passed
 
 20October: this local chat is sole implementation owner. Supported Edge control

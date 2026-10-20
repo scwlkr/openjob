@@ -26,7 +26,8 @@ export async function googleFlowFixture(options = {}) {
     if (url.pathname.endsWith('/profile')) return Response.json({ emailAddress: BINDING.address });
     if (url.pathname.endsWith('/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'Inbox' }] });
     if (url.pathname.endsWith('/messages')) return Response.json({ messages: [{ id: 'm1', threadId: 't1' }] });
-    return Response.json({ id: 'm1', threadId: 't1', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', body: { data: Buffer.from('Invented connected message.').toString('base64url') } } });
+    const headers = hooks.headers ?? [{ name: 'From', value: 'Colleague <colleague@example.invalid>' }, { name: 'Reply-To', value: '"Reply Desk, Inc." <replies@example.invalid>' }, { name: 'To', value: `${BINDING.address}, teammate@example.invalid` }, { name: 'Cc', value: 'teammate@example.invalid, observer@example.invalid' }, { name: 'Subject', value: 'Review this proposal' }, { name: 'Message-ID', value: '<proposal@example.invalid>' }, { name: 'References', value: '<root@example.invalid>' }];
+    return Response.json({ id: 'm1', threadId: 't1', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', headers, body: { data: Buffer.from('Invented connected message.').toString('base64url') } } });
   }, ...options };
   let flow, api;
   function reconstruct(overrides = {}) { flow = createGoogleConnectionsFlow({ ...flowOptions, ...overrides }); api = createConnectionsApi({ users: original.users, verifyIdToken: original.verifyIdToken, google: flow }); return { flow, api }; }

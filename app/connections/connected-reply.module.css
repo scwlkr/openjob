@@ -1,0 +1,10 @@
+.source { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.editor { display: grid; gap: 14px; padding: 20px; border-top: 1px solid var(--oj-line); min-width: 0; }
+.editor h3, .editor p { margin: 0; }
+.editor label { display: grid; align-items: stretch; font-size: 14px; }
+.editor button { margin: 0; justify-self: start; }
+.addressing { margin: 0; display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px 12px; }
+.addressing dt { color: var(--oj-muted); }
+.addressing dd { margin: 0; overflow-wrap: anywhere; }
+.editor details { border: 1px solid var(--oj-control-line); border-radius: 7px; padding: 12px; }
+.editor summary { min-height: 44px; cursor: pointer; }

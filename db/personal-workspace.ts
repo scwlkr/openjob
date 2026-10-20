@@ -8,13 +8,14 @@ import { applyPersonalAgentCommand, personalAgentSnapshot, applyPersonalWorkspac
 import { PERSONAL_AGENT_ID, PERSONAL_AGENT_TOKEN, PERSONAL_AGENT_LIFETIME_MS, newPersonalAgentSecret, parsePersonalAgentGrants, personalAgentHashEqual, personalAgentTokenHash, publicPersonalAgent, validatePersonalAgentInput, type StoredPersonalAgentGrant } from "../shared/personal-agent-grants.ts";
 import type { WorkspaceState } from "../shared/workspace-contracts.ts";
 import { parseMailTaskSources, retainMailTaskSources, existingMailTask, type MailTaskSource } from '../shared/mail-task-source.ts';
+import { parseConnectedReplies, sameReplySource, upsertConnectedReply, type StoredConnectedReply } from '../shared/connected-reply.ts';
 
 const MAX_ENCODED_BYTES = 900_000;
 function fail(code: string, message: string): never { throw Object.assign(new Error(message), { code }); }
 function concurrent(error: unknown) { return error instanceof FirestoreRequestError && ["ABORTED", "ALREADY_EXISTS", "FAILED_PRECONDITION", "NOT_FOUND"].includes(error.code ?? ""); }
 type Options = { now?: () => number; agentId?: () => string; secret?: () => string };
 type Credential = { owner: string; id: string; hash: string };
-type Envelope = { state: WorkspaceState; grants: StoredPersonalAgentGrant[]; receipts: TaskCalendarReceipt[]; mailSources: MailTaskSource[] };
+type Envelope = { state: WorkspaceState; grants: StoredPersonalAgentGrant[]; receipts: TaskCalendarReceipt[]; mailSources: MailTaskSource[]; replies: StoredConnectedReply[] };
 
 export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fetchImplementation: typeof fetch = fetch,
   { now = Date.now, agentId = () => `agt_${crypto.randomUUID().replaceAll("-", "")}`, secret = newPersonalAgentSecret }: Options = {}): PersonalWorkspaceStore {
@@ -28,14 +29,15 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
     return document;
   }
   function envelope(owner: string, document: FirestoreDocument | null): Envelope {
-    if (!document) return { state: createEmptyPersonalWorkspace(owner), grants: [], receipts: [], mailSources: [] };
+    if (!document) return { state: createEmptyPersonalWorkspace(owner), grants: [], receipts: [], mailSources: [], replies: [] };
     const encoded = document.fields?.stateJson?.stringValue;
     if (!encoded || new TextEncoder().encode(JSON.stringify(document)).length > MAX_ENCODED_BYTES) fail("invalid_state", "Invalid personal workspace record");
     let value: unknown;
     try { value = JSON.parse(encoded); } catch { fail("invalid_state", "Invalid personal workspace record"); }
     if (document.fields?.grantJson && typeof document.fields.grantJson.stringValue !== "string") fail("invalid_state", "Invalid personal grant envelope");
     if (document.fields?.syncJson && typeof document.fields.syncJson.stringValue !== "string") fail("invalid_state", "Invalid sync receipt envelope");
-    return { state: validatePersonalWorkspace(owner, value), grants: parsePersonalAgentGrants(owner, document.fields?.grantJson?.stringValue), receipts: parseTaskCalendarReceipts(owner, document.fields?.syncJson?.stringValue), mailSources: parseMailTaskSources(document.fields?.mailSourcesJson?.stringValue) };
+    if (document.fields?.connectedRepliesJson && typeof document.fields.connectedRepliesJson.stringValue !== 'string') fail('invalid_state', 'Invalid reply envelope');
+    return { state: validatePersonalWorkspace(owner, value), grants: parsePersonalAgentGrants(owner, document.fields?.grantJson?.stringValue), receipts: parseTaskCalendarReceipts(owner, document.fields?.syncJson?.stringValue), mailSources: parseMailTaskSources(document.fields?.mailSourcesJson?.stringValue), replies: parseConnectedReplies(document.fields?.connectedRepliesJson?.stringValue) };
   }
   async function commit(writes: unknown[]) { await firestore.request(":commit", { method: "POST", body: JSON.stringify({ writes }) }); }
   async function credential(token: string): Promise<Credential> {
@@ -48,7 +50,7 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
     if (!grant || grant.revoked || Date.parse(grant.createdAt) > now() || Date.parse(grant.expiresAt) <= now() || !personalAgentHashEqual(grant.tokenHash, auth.hash)) fail("authentication_required", "Personal agent access is unavailable");
     return grant;
   }
-  type Mutation = { result: unknown; state?: WorkspaceState; grants?: StoredPersonalAgentGrant[]; skip?: boolean; receipts?: TaskCalendarReceipt[]; mailSources?: MailTaskSource[]; beforeCommit?: () => void | Promise<void> };
+  type Mutation = { result: unknown; state?: WorkspaceState; grants?: StoredPersonalAgentGrant[]; skip?: boolean; receipts?: TaskCalendarReceipt[]; mailSources?: MailTaskSource[]; replies?: StoredConnectedReply[]; beforeCommit?: () => void | Promise<void> };
   async function mutate(owner: string, apply: (current: Envelope) => Mutation | Promise<Mutation>, auth?: Credential) {
     assertPersonalWorkspaceOwner(owner);
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -60,7 +62,7 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
       // Every newly saved Task/Calendar state must still fit the existing offline contract.
       if (next.state) projectTaskCalendar(owner, next.state);
       const mailSources = retainMailTaskSources(next.mailSources ?? current.mailSources, (next.state ?? current.state).tasks);
-      const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) }, syncJson: { stringValue: JSON.stringify(next.receipts ?? current.receipts) }, mailSourcesJson: { stringValue: JSON.stringify(mailSources) } } };
+      const update = { name: firestore.documentName(path(owner)), fields: { ownerUserId: { stringValue: owner }, stateJson: { stringValue: JSON.stringify(next.state ?? current.state) }, grantJson: { stringValue: JSON.stringify(next.grants ?? current.grants) }, syncJson: { stringValue: JSON.stringify(next.receipts ?? current.receipts) }, mailSourcesJson: { stringValue: JSON.stringify(mailSources) }, connectedRepliesJson: { stringValue: JSON.stringify(next.replies ?? current.replies) } } };
       if (new TextEncoder().encode(JSON.stringify(update)).length > MAX_ENCODED_BYTES - 1024) fail("workspace_capacity", "Personal workspace storage limit reached");
       try {
         const userFence = await activeUserHistoryWrite(firestore, owner);
@@ -80,6 +82,15 @@ export function createFirestorePersonalWorkspaceStore(config: FirebaseConfig, fe
   }
   return {
     async snapshot(owner) { return (await activeEnvelope(owner)).state; },
+    async connectedReply(owner, source) { return (await activeEnvelope(owner)).replies.find(row => sameReplySource(row.source, source))?.draft; },
+    async saveConnectedReply(owner, source, input, expectedRevision, currentAccess) {
+      return await mutate(owner, async current => {
+        await currentAccess();
+        if (!retainMailTaskSources(current.mailSources, current.state.tasks).some(row => JSON.stringify(row) === JSON.stringify(source))) fail('source_unavailable', 'Mail source unavailable');
+        const next = upsertConnectedReply(current.replies, source, input, expectedRevision);
+        return { result: next.draft, replies: next.rows, skip: next.unchanged, beforeCommit: currentAccess };
+      }) as Awaited<ReturnType<NonNullable<PersonalWorkspaceStore['saveConnectedReply']>>>;
+    },
     async mailTaskSource(owner, workspaceId, taskId) {
       const current = await activeEnvelope(owner);
       return retainMailTaskSources(current.mailSources, current.state.tasks).find(row => row.workspaceId === workspaceId && row.taskId === taskId);
