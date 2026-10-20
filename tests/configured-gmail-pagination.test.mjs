@@ -47,7 +47,7 @@ test('strict Mail-only cursor query rejects malformed, duplicate, unknown and cr
   for (const field of ['owner', 'account', 'subject']) {
     const payload = JSON.parse(Buffer.from(cursor.slice(4), 'base64url'));
     payload[field] = 'foreign';
-    const foreign = `gm1.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+    const foreign = `gm2.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
     const response = await f.request(withCursor(f.path, foreign));
     assert.equal(response.status, 400); const body = await response.json();
     assert.equal(body.error.code, 'invalid_cursor'); assert.match(body.error.message, /first page/);

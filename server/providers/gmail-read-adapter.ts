@@ -1,5 +1,6 @@
-import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage } from "../../shared/provider-contracts.ts";
+import type { ProviderAccount, ProviderConnectorStatus, ProviderReadAdapter, ProviderMessage, ProviderMessagePage } from "../../shared/provider-contracts.ts";
 import { fail, object, string, upstream, mapLabels, mapMessage, replyHeaders, type GmailReplyHeaders } from "./gmail-wire.ts";
+import { parseProviderResourceRef } from "../../shared/provider-preview.ts";
 import { gmailGet } from "./gmail-transport.ts";
 export { GmailReadError } from "./gmail-wire.ts";
 
@@ -28,24 +29,24 @@ function account(binding: GmailAccountBinding): ProviderAccount {
     capabilities: { mailRead: { available: true, reason: "Read mapping requires server-approved execution, an owned binding and Gmail readonly consent." }, calendarRead: { ...unavailable }, draft: { ...unavailable }, send: { ...unavailable }, calendarWrite: { ...unavailable }, reconnect: { ...unavailable } }, sync: { state: "blocked", asOf: null, reason: "No synchronization has been performed; Gmail history is unsupported." },
   };
 }
-type PageCursor = { version: 1; mode: "gmail-read-page"; owner: string; account: string; subject: string; pageToken: string };
+type PageCursor = { version: 2; mode: "gmail-read-page"; owner: string; account: string; subject: string; folderId: string | null; pageToken: string };
 function encode(cursor: PageCursor) {
-  const encoded = `gm1.${btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(cursor)))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")}`;
+  const encoded = `gm2.${btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(cursor)))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")}`;
   if (encoded.length > 4096) fail("malformed_response"); return encoded;
 }
-function pageToken(value: string | undefined, binding: GmailAccountBinding) {
+function pageToken(value: string | undefined, binding: GmailAccountBinding, folderId: string | null) {
   if (value === undefined) return undefined;
   try {
-    if (typeof value !== "string" || value.length > 4096 || !/^gm1\.[A-Za-z0-9_-]+$/.test(value)) throw new Error();
+    if (typeof value !== "string" || value.length > 4096 || !/^gm2\.[A-Za-z0-9_-]+$/.test(value)) throw new Error();
     const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(atob(value.slice(4).replaceAll("-", "+").replaceAll("_", "/")), char => char.charCodeAt(0)))) as PageCursor;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).sort().join(",") !== "account,mode,owner,pageToken,subject,version" || encode(parsed) !== value || parsed.version !== 1 || parsed.mode !== "gmail-read-page" || parsed.owner !== binding.ownerId || parsed.account !== binding.accountId || parsed.subject !== binding.subject || !opaque(parsed.pageToken)) throw new Error();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).sort().join(",") !== "account,folderId,mode,owner,pageToken,subject,version" || encode(parsed) !== value || parsed.version !== 2 || parsed.mode !== "gmail-read-page" || parsed.owner !== binding.ownerId || parsed.account !== binding.accountId || parsed.subject !== binding.subject || parsed.folderId !== folderId || !opaque(parsed.pageToken)) throw new Error();
     return parsed.pageToken;
   } catch { return fail("invalid_cursor"); }
 }
 
 /** Unbound by runtime. Approval is closed by default, before credential lookup or HTTP. */
 type MessageInput = { ownerId: string; accountId: string; messageId: string };
-export function createGmailReadAdapter(options: GmailReadAdapterOptions): ProviderReadAdapter & { getMessage(input: MessageInput): Promise<ProviderMessage>; getReplySource(input: MessageInput): Promise<{ message: ProviderMessage; headers: GmailReplyHeaders }> } {
+export function createGmailReadAdapter(options: GmailReadAdapterOptions): Omit<ProviderReadAdapter, "listMessages"> & { listMessages(input: { ownerId: string; accountId: string; cursor?: string; folderId?: string }): Promise<ProviderMessagePage>; getMessage(input: MessageInput): Promise<ProviderMessage>; getReplySource(input: MessageInput): Promise<{ message: ProviderMessage; headers: GmailReplyHeaders }> } {
   const { resolveCredential, approveExecution = () => false, fetchImplementation = fetch, now = Date.now, timeoutMs = 10000 } = options;
   if (!Array.isArray(options.bindings) || options.bindings.length > 100 || typeof resolveCredential !== "function" || typeof approveExecution !== "function" || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) fail("invalid_input");
   const bindings = structuredClone(options.bindings); const seen = new Set<string>(); const subjects = new Set<string>();
@@ -80,20 +81,35 @@ export function createGmailReadAdapter(options: GmailReadAdapterOptions): Provid
   }
   return {
     async listAccounts(ownerId) { if (!id(ownerId)) fail("invalid_input"); return bindings.filter(binding => binding.ownerId === ownerId).map(account); },
-    async listMessages({ ownerId, accountId, cursor }) {
-      const binding = select(ownerId, accountId); const token = pageToken(cursor, binding);
+    async listMessages({ ownerId, accountId, cursor, folderId }) {
+      const binding = select(ownerId, accountId);
+      let label: string | undefined;
+      if (folderId !== undefined) {
+        try { label = parseProviderResourceRef(folderId, accountId, 'folder').upstreamId; } catch { fail('invalid_input'); }
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(label!)) fail('invalid_input');
+      }
+      const token = pageToken(cursor, binding, folderId ?? null);
       const { get, check } = await client(binding);
       const folders = mapLabels(await get("labels"), accountId); const labelIds = new Set(folders.map(folder => folder.upstreamId));
-      const query = new URLSearchParams({ maxResults: "10" }); if (token !== undefined) query.set("pageToken", token);
+      if (label !== undefined && !labelIds.has(label)) fail('folder_unavailable');
+      const query = new URLSearchParams({ maxResults: "10" });
+      if (label !== undefined) query.set('labelIds', label);
+      if (label === 'SPAM' || label === 'TRASH') query.set('includeSpamTrash', 'true');
+      if (token !== undefined) query.set("pageToken", token);
       const page = await get("messages", query); const raw = page.messages ?? [];
       if (!Array.isArray(raw) || raw.length > 10) fail("malformed_response");
       if (page.nextPageToken !== undefined && (!opaque(page.nextPageToken) || page.nextPageToken === token)) fail("malformed_response");
       const seenMessages = new Set<string>(); const rows = raw.map(value => { const row = object(value); const messageId = upstream(row.id); const threadId = upstream(row.threadId); if (seenMessages.has(messageId)) fail("malformed_response"); seenMessages.add(messageId); return { messageId, threadId }; });
       const messages = [];
-      for (const row of rows) messages.push(mapMessage(await get(`messages/${row.messageId}`, new URLSearchParams({ format: "full" })), accountId, row.messageId, row.threadId, labelIds));
+      for (const row of rows) {
+        const message = mapMessage(await get(`messages/${row.messageId}`, new URLSearchParams({ format: "full" })), accountId, row.messageId, row.threadId, labelIds);
+        if (label !== 'SPAM' && label !== 'TRASH' && ['SPAM', 'TRASH'].some(excluded => message.folderIds.includes(`${accountId}:folder:${excluded}`))) continue;
+        if (folderId !== undefined && !message.folderIds.includes(folderId)) continue; // Label removed after listing: never show another folder's content.
+        messages.push(message);
+      }
       // Recheck after all async reads before returning potentially private content.
       await check();
-      return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 1, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, pageToken: string(page.nextPageToken, 256) }) };
+      return { messages, folders, calendars: [], events: [], syncCursor: null, nextCursor: page.nextPageToken === undefined ? null : encode({ version: 2, mode: "gmail-read-page", owner: ownerId, account: accountId, subject: binding.subject, folderId: folderId ?? null, pageToken: string(page.nextPageToken, 256) }) };
     },
     async getMessage(input) { return (await readMessage(input)).message; },
     async getReplySource(input) { const { message, raw } = await readMessage(input); return { message, headers: replyHeaders(raw) }; },

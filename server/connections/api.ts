@@ -15,7 +15,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
   googleSession?: GoogleMailSession;
   googleAdmission?: { userId: string; provider: 'google'; firebaseUid: string };
 }) {
-  const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: code === 'invalid_cursor' ? 'This Mail page is unavailable. Open the first page and retry.' : code === 'not_configured' ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.' });
+  const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: code === 'folder_unavailable' ? 'This Mail folder is unavailable. Choose All Mail or another folder.' : code === 'invalid_cursor' ? 'This Mail page is unavailable. Open the first page and retry.' : code === 'not_configured' ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.' });
   return { async fetch(request: Request) {
     try {
       if (/^Bearer\s+oj_/i.test(request.headers.get('authorization') ?? '')) return fail('authentication_required', 401);
@@ -25,9 +25,11 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
       if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
       if (url.search) {
         if (!google || request.method !== 'GET' || !/^\/api\/v1\/connections\/con_[a-f0-9]{32}\/mail$/.test(url.pathname)) return fail('invalid_input', 400);
-        if ([...url.searchParams.keys()].join(',') !== 'cursor') return fail('invalid_input', 400);
-        const cursor = url.searchParams.get('cursor')!;
-        if (!cursor || cursor.length > 4096 || !/^gm1\.[A-Za-z0-9_-]+$/.test(cursor)) return fail('invalid_cursor', 400);
+        const keys = [...url.searchParams.keys()];
+        if (keys.length !== new Set(keys).size || keys.some(key => !['cursor', 'folderId'].includes(key))) return fail('invalid_input', 400);
+        const cursor = url.searchParams.get('cursor'), folderId = url.searchParams.get('folderId');
+        if (cursor !== null && (!cursor || cursor.length > 4096 || !/^gm2\.[A-Za-z0-9_-]+$/.test(cursor))) return fail('invalid_cursor', 400);
+        if (folderId !== null && !/^[A-Za-z0-9_-]{1,128}:folder:[A-Za-z0-9_-]{1,128}$/.test(folderId)) return fail('invalid_input', 400);
       }
       if (url.pathname === '/api/v1/connections/session' || url.pathname.startsWith('/api/v1/connections/session/')) {
         const isCurrent = async () => { const current = await users.resolve(identity); return !request.signal.aborted && !!current && current.userId === user.userId && !current.deletionPending; };
@@ -72,7 +74,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
     } catch (error) {
       if (isInactiveUserError(error)) return accountDeletionPendingResponse(defaultRequestId);
       const code = (error as { code?: string })?.code;
-      if (code && ['not_configured', 'invalid_input', 'invalid_cursor', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : code === 'source_unavailable' ? 404 : code === 'workspace_capacity' ? 413 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
+      if (code && ['not_configured', 'invalid_input', 'invalid_cursor', 'folder_unavailable', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : ['source_unavailable', 'folder_unavailable'].includes(code) ? 404 : code === 'workspace_capacity' ? 413 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };

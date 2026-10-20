@@ -162,9 +162,9 @@ export function createGoogleConnectionsFlow(options: Options) {
       }
       return { status: 'status_updated' };
     },
-    async mail(owner: string, id: string, cursor?: string) {
+    async mail(owner: string, id: string, cursor?: string, folderId?: string) {
       const { before, current, reader } = await mailReader(owner, id);
-      const page = await reader.listMessages({ ownerId: owner, accountId: before.accountId, cursor });
+      const page = await reader.listMessages({ ownerId: owner, accountId: before.accountId, cursor, folderId });
       await current(); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
     },
   };
