@@ -1,14 +1,17 @@
-## Configured Gmail pages and folders (P-WLK-6 / R32)
+## Configured Gmail pages, folders and search (P-WLK-6 / R32)
 
-Configured Connections provides bounded Next/First pages and a picker of the
-account's actual Gmail labels. Labels can overlap; changing selection starts page
-one. Cursors bind owner, account, Google subject and selected folder. Authored Task
-titles survive paging/filter changes; pending Task confirmation blocks navigation.
-Missing labels recover through All Mail. Spam/Trash require explicit selection.
-Task source/reply access survives label movement while current connection authority
-still applies. API, existing CLI and web share the filter. This slice has fixture
-proof; search, sync, lazy bodies, native controls and integrated live acceptance
-remain separate. [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
+Configured Connections provides bounded Next/First pages, an account-qualified
+Gmail label picker and explicitly submitted Gmail search within that account and
+folder. Editing search does not change the applied query until submission; Search
+Mail, Clear search and folder changes start page one. Query fingerprints and folder
+bind cursors to the verified owner/account/subject. Authored Task titles survive
+filter changes; uncertain Task requests block search and navigation. Missing labels
+recover through All Mail; rejected search offers edit/clear without unfiltered
+fallback. Spam/Trash require explicit selection. Exact saved Task sources/replies
+survive filter changes while current authority still applies. API, existing CLI and
+web share this behavior. Fixture proof is complete for this slice; sync, lazy bodies,
+native controls and integrated live acceptance remain separate.
+[Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
 
 ## Connected authored reply drafts (WLK385)
 

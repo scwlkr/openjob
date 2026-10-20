@@ -1,3 +1,49 @@
+# P-WLK-6 / R32 — connected Gmail search
+
+20October: source d923fd0a2185f8a5c0dce3411646747f3ce2fecd adds submitted Gmail
+search through the configured adapter/API/existing CLI/web. Search is scoped to
+the verified account and selected Gmail label; outer whitespace is trimmed while
+operators, case, internal spaces and Unicode are forwarded unchanged as Gmail q.
+Input is nonblank, at most512 JavaScript characters, with no control characters.
+Canonical gm3 cursors bind a SHA-256 query fingerprint plus folder, owner, account
+and Google subject. Old or mismatched cursors require page one. Query text is not
+stored in cursors or connection persistence. Provider400 on the first search page
+returns redacted search_rejected; a later-page400 remains invalid_cursor. Neither
+retries silently nor falls back to unfiltered results.
+
+Web editing and applied search are separate: Next/First/folder changes use the
+submitted query; Search Mail and Clear search reset page one. Bodies replace per
+page. Authored titles survive query changes. Pending/unconfirmed additional Task
+requests block search, folder and paging until confirmed. Exact saved source/reply
+identity stays independent of filters. The existing client accepts --search along
+with --folder and a matching --cursor; other Connections routes and the standalone
+one-read route retain their query prohibition.
+
+Thirty-nine focused adapter/flow/source/reply/API/CLI checks and fourteen standalone
+session checks pass (overlapping groups, not cumulative). These cover exact Unicode
+query forwarding, maximum bounded cursors, denial before provider/credential access,
+owner/folder/query binding, redacted errors, empty results, unchanged exact Task
+source, query nonpersistence, disconnect and real-send denial. Root types, affected
+lint (two pre-existing warnings), OpenAPI38paths/54operations, generated CLI types,
+brand32 and secret safety pass. Independent source review found no issues.
+
+Practical headed fixture browser: unsent edited input leaves Next on the applied
+query; submit gives empty results; Clear restores browsing and authored title;
+rejected query clears bodies and offers edit/clear; injected cursor error recovers
+first page with query retained; Review retains query and resets page one; additional
+Task uncertainty disables search/folder/page controls, then retry confirms it;
+disconnect clears Mail and Sam sees no Alex connection. At390px, search height44px
+and document/viewport widths390px. Screenshots/receipt: output/playwright/r32-search/.
+The fixture recognizes only explicit invented queries; it does not emulate Gmail's
+full search parser. This is connected-flow fixture proof, not live Gmail acceptance.
+
+No additional real read, provider effect, persistent access, deployment or release.
+The original26 files remain byte-identical. Native PR120 and its unchanged build
+inputs remain separate; Android UI-method authorization is still pending. R32 still
+needs lazy bodies, sync/stale metadata and integrated live acceptance; native
+search/folder/paging controls remain separate. Continue the existing roadmap in
+Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a; do not repeat the completed real read.
+
 # P-WLK-6 / R32 — configured Gmail folder selection
 
 20October: source 7bd06e8784912166af053e146b1ddd74a8934955 extends merged PR121 with one
