@@ -4,6 +4,7 @@ const VALUE_OPTIONS = new Set([
   "--agent-token-file",
   "--account",
   "--cursor",
+  "--folder",
   "--calendar",
   "--task",
   "--minutes",

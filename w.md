@@ -1,3 +1,17 @@
+# Native draft integration — landed R32 pages and folders
+
+20October23:29UTC: integrating main8156b492d219544b6bf3141726af666746fd877e
+(PR121/122) into native draft PR120. Only FEATURES.md and this handoff conflicted;
+both native and Mail records are retained. This supersedes the earlier continuation
+note below that says the native branch still has its old main base. Current R32
+gaps are search, lazy bodies, sync/stale metadata and integrated live acceptance.
+Native paging/folder controls remain separate. All21 R53 source files plus its
+recorded package/lock/identity inputs hash-match a8a4b3e. The existing proof snapshot,
+installed Android APK, Metro and fake5213 service are untouched. Integration root
+and native types pass; six native suites pass160 tests; actual API/native HTTP group
+passes13 checks across both home types and current R32 contracts. Counts overlap
+earlier runs. Android UI-method authorization is still required before its UI journey. Do not repeat the standalone real read or infer approval from its old answer.
+
 # Continuation — R32 paging landed separately from native R53
 
 20October23:12UTC: PR121 merged on main as
@@ -88,6 +102,85 @@ exact final PR head for an authorized nondeploying merge. Real native login,
 provider/device/storage/release gates and full R33/R53 acceptance remain separate.
 
 ---
+
+# P-WLK-6 / R32 — configured Gmail folder selection
+
+20October: source 7bd06e8784912166af053e146b1ddd74a8934955 extends merged PR121 with one
+account-qualified Mail folder selection through adapter/API/existing CLI/web.
+The picker uses returned Gmail label IDs and display names, validates against the
+current label list, and binds selected folder/null into canonical gm2 cursors.
+Old gm1 and mismatched folder cursors require a first-page restart. No persisted
+cursor migration or sync claim. Duplicate/unknown queries and other-account refs
+fail closed; simulated and standalone session query input stays prohibited.
+
+Next/First page retains the selected label; changing folders resets to page one.
+Authored titles survive both transitions. Uncertain Task requests block both picker
+and paging. Missing folders clear bodies and offer All Mail/another folder recovery.
+Explicit Spam/Trash selection sets includeSpamTrash. Ordinary results also recheck
+current message labels to omit messages moved there after listing (review P2 fixed).
+Exact source/reply reads stay independent of labels; authored Tasks survive movement
+or label removal. [Provider contract](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list).
+
+Thirty-five focused adapter/flow/source/reply/API/CLI checks passed, including actual
+loopback runtime/CLI folder+cursor forwarding. Fourteen standalone-session identity,
+lease, revocation and unsafe-operation checks also passed. Earlier groups overlap.
+Final source types/lint pass (two pre-existing warnings); OpenAPI38paths/54operations,
+generated types, brand generation/check32 and secret-safety scan726 pass. Independent
+review confirmed the moved-to-Spam/Trash fix and found no remaining issues.
+
+Practical headed browser proof: Inbox pagination, Review resets to page one, edited
+titles retain across labels/pages, empty Spam, injected missing-folder recovery,
+uncertain additional Task disables the picker until confirmation, disconnect clears
+Mail and Sam sees no Alex connection. The final source was restarted in a fresh
+fixture and folder/page/title/disconnect/isolation flow rechecked. At390px, picker
+height44px and document/viewport widths390px. Connections now applies its existing
+Workspace control styles so controls receive semantic brand roles and touch sizing.
+Synthetic screenshots and receipt: output/playwright/r32-folders/.
+
+No real read, provider effect, persistent access, deployment or publication. The
+original26 files remain byte-identical. Native PR120/source/build inputs remain
+separate and Android UI-method authorization is still pending. R32 still needs
+search, lazy bodies, sync/stale metadata and integrated live acceptance; native
+folder controls are separate. Continue those existing roadmap gaps in the same
+Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a; do not repeat the real read.
+
+# P-WLK-6 / R32 — configured Gmail page continuation
+
+20October: source d36cd954180b5636d01e58257abd1ad287b72a40 makes the adapter's nextCursor
+reachable through configured Connections API, the existing CLI and web Mail.
+Only configured Google GET /connections/{id}/mail accepts one bounded cursor;
+unknown/repeated queries and foreign owner/account/subject cursors fail closed.
+Other Connections routes and simulated onboarding keep their query prohibition.
+Invalid cursors return a redacted400 with first-page recovery. Current account,
+home, expiry and disconnect checks still fence every page and in-flight result.
+
+Web Next page / First page replaces message bodies rather than accumulating them.
+Edited Task titles stay in memory while paging within that mailbox. Pending Task
+requests, including an unconfirmed additional Task, block paging until confirmed.
+API/CLI proof reaches message eleven, creates its exact source-linked Task, returns
+to page one, then rereads the correct source. A deleted source leaves authored work.
+
+Practical loopback browser proof passed at390px: two pages; edited titles retained
+both ways; injected invalid-cursor recovery; page-two Task -> normal Workspace ->
+correct source; interrupted additional Task -> paging denied -> retry confirmed;
+disconnect clears bodies; Sam sees no Alex connection. Expected503 standalone
+session discovery, injected400/503, and Sam403 errors are not provider failures.
+Synthetic screenshots: output/playwright/r32/page-two-{phone,task-source}.png.
+
+Thirty focused checks passed (29 adapter/flow/source/reply/CLI regressions plus one
+actual loopback portable-runtime/CLI composition). Root types, affected lint
+(two pre-existing warnings), OpenAPI38paths/54operations, generated CLI types,
+brand32 and tracked-source secret scan passed. Read-only review found no issues.
+Source delivery is authorized and the repository has only a manual artifact workflow,
+no push/PR publish job, no branch protection/ruleset or recorded deployment.
+
+R32 remains incomplete: connected search/folders, lazy body loading, sync/stale
+metadata and actual integrated live work remain open. Native paging is separate;
+native R53 stays in draft PR120 with its prior iOS proof and pending Android
+UI-method authorization. Its source/build/Metro inputs were left untouched.
+The standalone real read remains completed once and disconnected; this slice used
+only invented fixtures and granted no new provider access. Original26 files stay
+byte-identical. Linear execution thread:845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
 
 # WLK385 — correctly addressed authored replies from connected Mail
 

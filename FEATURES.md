@@ -18,6 +18,18 @@ HTTP fixtures cover the bounded flow; simulator/emulator, real login/provider an
 physical-device/release evidence are separate gates. The opt-in development entry
 and its invented service are documented in [the simulator guide](docs/NATIVE_SIMULATOR_SMOKE.md).
 
+## Configured Gmail pages and folders (P-WLK-6 / R32)
+
+Configured Connections provides bounded Next/First pages and a picker of the
+account's actual Gmail labels. Labels can overlap; changing selection starts page
+one. Cursors bind owner, account, Google subject and selected folder. Authored Task
+titles survive paging/filter changes; pending Task confirmation blocks navigation.
+Missing labels recover through All Mail. Spam/Trash require explicit selection.
+Task source/reply access survives label movement while current connection authority
+still applies. API, existing CLI and web share the filter. This slice has fixture
+proof; search, sync, lazy bodies, native controls and integrated live acceptance
+remain separate. [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
+
 ## Connected authored reply drafts (WLK385)
 
 From a connected source Task, prepare a reply under its verified Google account.

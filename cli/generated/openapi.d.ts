@@ -5633,7 +5633,12 @@ export interface operations {
     };
     readConnectionMail: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque nextCursor from this configured Google account and selected folder. Omit for the first page. Simulated Connections reject query parameters. */
+                cursor?: string;
+                /** @description Account-qualified Gmail folder ID from page.folders. Omit for All Mail excluding Spam and Trash. Only configured Google supports this filter. */
+                folderId?: string;
+            };
             header?: never;
             path: {
                 connectionId: string;

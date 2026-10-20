@@ -18,7 +18,10 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
   const request = useCallback(async (path = '', input?: object) => {
     signal.throwIfAborted(); const token = await session.getIdToken(); signal.throwIfAborted();
     const response = await fetch(`/api/v1/connections${path}`, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
-    if (!response.ok) throw new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.');
+    if (!response.ok) {
+      const value = await response.json().catch(() => null) as { error?: { code?: string } } | null;
+      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code === 'invalid_cursor' || value?.error?.code === 'folder_unavailable' ? value.error.code : 'connection_unavailable' });
+    }
     return (await response.json() as { data: ConnectionCatalog | GoogleConnectionCatalog | Mail }).data;
   }, [session, signal]);
   const refresh = useCallback(async () => { setMail(undefined); try { const value = await request(); if (!signal.aborted) setCatalog(value as ConnectionCatalog | GoogleConnectionCatalog); } catch (error) { if (!signal.aborted) setCatalog(undefined); throw error; } }, [request, signal]);
@@ -37,7 +40,7 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
     catch (error) { if (!signal.aborted) { setMail(undefined); setError(error instanceof Error ? error.message : 'Connection unavailable.'); try { await refresh(); } catch { setCatalog(undefined); } } }
     finally { if (!signal.aborted) setBusy(false); }
   }
-  return <main className={styles.main}><h1>Connections</h1><div className={styles.actions}><Link href="/workspaces">Workspaces</Link><Link href="/workspace">Personal work</Link><button onClick={onSignOut}>Sign out</button><button disabled={busy} onClick={() => void act('')}>Refresh status</button></div>
+  return <main className={`${styles.workspace} ${styles.main}`}><h1>Connections</h1><div className={styles.actions}><Link href="/workspaces">Workspaces</Link><Link href="/workspace">Personal work</Link><button onClick={onSignOut}>Sign out</button><button disabled={busy} onClick={() => void act('')}>Refresh status</button></div>
     <SessionGmail session={session} signal={signal} onAvailable={setSessionOnly} />
     {error && !sessionOnly && <p role="alert">{error}</p>}
     {catalog && catalog.mode !== 'simulated' && <GoogleConnections catalog={catalog} request={request} refresh={refresh} />}

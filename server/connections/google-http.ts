@@ -6,7 +6,7 @@ import type { ReplySaveInput } from '../../shared/connected-reply.ts';
 export async function googleConnectionsRequest(request: Request, owner: string, flow: GoogleConnectionsFlow | undefined, isCurrent: () => Promise<boolean>) {
   const fail = (code: string, status = 400) => errorResponse(defaultRequestId, { code, status, message: code === 'not_configured' ? 'Google connections are not configured.' : 'Connection unavailable. Refresh status before retrying.' });
   if (!flow) return fail('not_configured', 503);
-  const path = new URL(request.url).pathname;
+  const url = new URL(request.url), path = url.pathname;
   const source = /^\/api\/v1\/connections\/task-sources\/(wsp_[a-f0-9]{32})\/([A-Za-z0-9_-]{1,128})(\/reply)?$/.exec(path);
   if (source && request.method === 'GET') return jsonResponse({ data: await (source[3] ? flow.reply(owner, source[1], source[2]) : flow.taskSource(owner, source[1], source[2])) });
   if (source && !source[3]) return fail('not_found', 404);
@@ -14,7 +14,7 @@ export async function googleConnectionsRequest(request: Request, owner: string, 
   const callback = path === '/api/v1/connections/google/callback';
   if (!match && !callback && !source) return fail('not_found', 404);
   if (request.method === 'GET' && match?.[1] && !match[2]) return fail('not_found', 404);
-  if (request.method === 'GET' && match) return match[2] === 'tasks' ? fail('not_found', 404) : jsonResponse({ data: match[1] && match[2] ? await flow.mail(owner, match[1]) : !match[1] ? await flow.catalog(owner) : null });
+  if (request.method === 'GET' && match) return match[2] === 'tasks' ? fail('not_found', 404) : jsonResponse({ data: match[1] && match[2] ? await flow.mail(owner, match[1], url.searchParams.get('cursor') ?? undefined, url.searchParams.get('folderId') ?? undefined) : !match[1] ? await flow.catalog(owner) : null });
   if (request.method !== 'POST' || match?.[2] === 'mail') return fail('not_found', 404);
   if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') return fail('invalid_input', 415);
   const reader = request.body?.getReader(); if (!reader) return fail('invalid_input');

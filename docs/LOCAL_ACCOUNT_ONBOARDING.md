@@ -362,3 +362,25 @@ were also exercised. Focused API/CLI proof covers both home types and reconnect,
 concurrency/stale-plan/revocation. This does not prove the integrated live R33 journey,
 provider Calendar/send, native/device use or release. No real messages or credentials
 were persisted, and the existing disconnected Timothy session was preserved.
+
+
+## Configured Gmail pages (P-WLK-6 / R32)
+
+Configured Connections Mail now offers Next page and First page. Each request
+replaces its bounded page; edited Task titles stay in memory while paging inside
+the same mailbox. Finish confirming any pending Task request before changing pages.
+An unavailable cursor clears the old bodies and offers a first-page restart.
+The existing client also accepts `openjob connections mail <id> --cursor <nextCursor>`;
+omit the cursor to read the first page. Cursors stay bound to the verified owner,
+account and Google subject. Simulated onboarding and the one-read standalone
+Mail session do not accept this paging input. This is synthetic connected-flow
+proof, not another real-account read or authorization for integrated activation.
+
+The Mail folder picker uses this account's returned Gmail labels; labels can overlap.
+Selecting one starts page one. Next/First page retains that filter, and edited Task
+titles stay in memory across label changes. Missing labels offer All Mail recovery.
+Spam/Trash are included only when explicitly selected. Existing source-linked Tasks
+and replies remain attached to their exact message even if its labels move.
+CLI: add `--folder <page.folders[].id>` and reuse only the nextCursor from that same
+folder; omit both options to return to All Mail. Old cursors require a first-page
+restart. Folder input is configured-Google only and adds no provider permission.
