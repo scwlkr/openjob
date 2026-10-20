@@ -65,3 +65,11 @@ test('Mail screen remains compact and legible at desktop and phone widths', asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: '/tmp/openjob-mail-session-phone.png', fullPage: true });
 });
+
+test('missing email asks to complete Google identity permission without blaming the selected account', async ({ page }) => {
+  await page.goto('/self.html?state=email-missing');
+  await expect(page.getByRole('alert')).toContainText('Google did not provide your email address');
+  await expect(page.getByRole('button', { name: 'Complete Google sign-in' })).toBeVisible();
+  await expect(page.getByText('Use the approved Google account', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Connect Gmail for this session' })).toHaveCount(0);
+});

@@ -14,6 +14,7 @@ export async function withSessionGoogleToken(uid: string, address: string, signa
   try {
     await setPersistence(auth, inMemoryPersistence); await signOut(auth); signal.throwIfAborted();
     const provider = new GoogleAuthProvider();
+    provider.addScope('email');
     provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
     provider.setCustomParameters({ prompt: 'select_account', login_hint: address, access_type: 'online', include_granted_scopes: 'false' });
     const result = await signInWithPopup(auth, provider);

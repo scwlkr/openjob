@@ -1,3 +1,33 @@
+# WLK318 — temporary sign-in email repair installed; awaiting normal user check
+
+Owner19:20 screenshot shows intended alternate display name, Google sign-in badge,
+no SDK email, failed account check, no Gmail receipt. Source inspection confirms
+Firebase Google provider default adds profile only. Temporary login and Mail popup
+now explicitly request standard email identity scope. Default saved-work login
+unchanged. Temporary observer uses onIdTokenChanged so same-UID completion updates
+identity/session metadata. No server email/UID/subject/scope/revocation check relaxed.
+
+Regression reproduces profile-only response without email: POST
+/api/v1/connections/session/status returns401 email_permission_required with
+sanitized google_email_missing, and zero Gmail/provider-token calls. UI asks
+Complete Google sign-in; only actual email mismatch prompts account selection.
+16 API/self/revocation/auth checks,7 UI interaction/layout checks, type/lint and
+rootsecret1033 pass using locked isolated dependencies; shared install unchanged.
+Root attempts still fail on known missinggoogle-auth-library, not claimed passing.
+
+After disclosed temporary-login warning and authorized repair scope, stopped only
+verified owned Node14826, synced reviewed source, restarted own key-free pilot.
+New Node68773, execsession92273; health200 nonprod/sendingfalse, lastAccountCheck
+not_checked, mailReads0. Backend diagnostics now active; no post-restart user
+request yet observed. Underlying original real401/provider reason remains
+UNVERIFIED (missing SDK email is observed, failure mechanism reproduced, not a
+new live acceptance claim). No live Gmail consent/read. CUA initialization remains
+unavailable; no further failed-control retries. Normal owner sign-in/check on
+existing Edge0003 page supplies next exact sanitized receipt; no account switch
+suggestion without real mismatch. Operator/1Password permission remains withdrawn.
+
+---
+
 # WLK318 — Mail screen state and styling fixed; live auth remains unverified
 
 Current branch codex/wlk-318-alt-self-session contains committedd4e1868 key-free

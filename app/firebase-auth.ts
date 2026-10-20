@@ -6,6 +6,7 @@ import {
   inMemoryPersistence,
   OAuthProvider,
   onAuthStateChanged,
+  onIdTokenChanged,
   setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -85,11 +86,12 @@ function secondaryFirebaseClient() {
   return pending;
 }
 
-function providerFor(method: SignInMethod, fresh = false) {
+function providerFor(method: SignInMethod, fresh = false, requireEmail = false) {
   const provider =
     method === "google"
       ? new GoogleAuthProvider()
       : new OAuthProvider("apple.com");
+  if (method === 'google' && requireEmail) provider.addScope('email');
   if (fresh) {
     provider.setCustomParameters({
       prompt: method === "google" ? "select_account" : "login",
@@ -242,7 +244,7 @@ export function createFirebaseAuth({ allowOfflineRestore = false, sessionOnly = 
       void primaryClient()
         .then(({ auth }) => {
           if (!active) return;
-          unsubscribe = onAuthStateChanged(auth, (user) => {
+          unsubscribe = (sessionOnly ? onIdTokenChanged : onAuthStateChanged)(auth, (user) => {
             const currentEmission = ++emission;
             if (!user) {
               listener(null);
@@ -270,7 +272,7 @@ export function createFirebaseAuth({ allowOfflineRestore = false, sessionOnly = 
       const { auth } = await primaryClient();
       const result = await signInWithPopup(
         auth,
-        providerFor(method, forceAccountSelection),
+        providerFor(method, forceAccountSelection, sessionOnly),
       );
       forceAccountSelection = false;
       return primaryCredentialProof(method, result);

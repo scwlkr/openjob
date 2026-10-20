@@ -69,3 +69,13 @@ test('configuration cannot admit production or non-loopback', async () => {
   const f = await fixture();
   for (const changes of [{ projectId: 'openjob-dev' }, { origin: 'https://example.invalid' }, { address: '' }]) assert.throws(() => createGoogleSelfSession({ configuration: { ...f.configuration, ...changes }, identityTransport: f.identityTransport, googleTransport: f.googleTransport, mailTransport: f.mailTransport }));
 });
+
+ test('profile-only Firebase response requires explicit email sign-in, with no Gmail permission or read', async () => {
+  const f = await fixture(); delete f.account.email;
+  const response = await f.request('/api/v1/connections/session/status');
+  assert.equal(response.status, 401); const body = await response.json();
+  assert.equal(body.error.code, 'email_permission_required');
+  assert.equal(body.error.message, 'Account check: google_email_missing.');
+  assert.equal((await f.runtime.publicStatus().json()).lastAccountCheck, 'google_email_missing');
+  assert.equal(f.calls.every(call => call === 'self'), true);
+});

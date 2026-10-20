@@ -13,6 +13,7 @@ window.fetch = async (input, init) => {
     checks++;
     if (mode === 'timeout' && checks === 1) return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
     if (mode === 'checking') return new Promise(() => {});
+    if (mode === 'email-missing') return Response.json({ error: { code: 'email_permission_required' } }, { status: 401 });
     if (mode === 'wrong') return Response.json({ error: { code: 'wrong_account' } }, { status: 401 });
     if (mode === 'error' && checks === 1) return Response.json({ error: { code: 'account_check_unavailable', message: 'Account check: provider_request_failed.' } }, { status: 503 });
     return Response.json({ data: { address: 'alex@example.invalid' } });

@@ -33,6 +33,7 @@ export function createGoogleSelfSession(options: { configuration: Configuration;
     if (!Array.isArray(data.users) || data.users.length !== 1) throw new SelfAccountError('authentication_required', 'account_unavailable');
     const user = data.users[0], google = Array.isArray(user.providerUserInfo) ? user.providerUserInfo.filter((item: { providerId?: unknown }) => item.providerId === 'google.com') : [];
     const cutoff = typeof user.validSince === 'string' && /^\d+$/.test(user.validSince) ? Number(user.validSince) * 1000 : NaN;
+    if (typeof user.email !== 'string' || !user.email) throw new SelfAccountError('email_permission_required', 'google_email_missing');
     if (typeof user.email === 'string' && user.email.toLowerCase() !== config.address.toLowerCase()) throw new SelfAccountError('wrong_account', 'selected_email_mismatch');
     if (!Number.isSafeInteger(cutoff)) throw new SelfAccountError('authentication_required', 'revocation_state_unavailable');
     if (identity.authenticatedAt < cutoff) throw new SelfAccountError('authentication_required', 'google_signin_revoked');
