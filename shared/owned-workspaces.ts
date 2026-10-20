@@ -13,6 +13,6 @@ export function validateOwnedSnapshot(value: unknown): OwnedWorkspaceSnapshot {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'work,workspace') workspaceFail();
   const snapshot = value as OwnedWorkspaceSnapshot; const workspace = validateWorkspace(snapshot.workspace);
   const work = validateTaskCalendarProjection(workspace.ownerUserId, snapshot.work);
-  if (work.calendars.length !== 1 || work.calendars[0].id !== workspace.calendarId) workspaceFail('invalid_state');
+  if (work.calendars.length !== 1 || work.calendars[0]!.id !== workspace.calendarId) workspaceFail('invalid_state');
   return { workspace, work };
 }

@@ -4,8 +4,8 @@ import type { WorkspaceView } from '../personal-workspace-contracts';
 import { personalToday } from '../../../shared/workspace-today';
 import { Action, Block, Copy, Row } from './controls';
 
-type Props = { view: WorkspaceView; busy: boolean; saved?: boolean; onTask: (id: string) => void; onEvent: (id: string) => void; onTasks: () => void; onCalendar: () => void };
-export function Today({ view, busy, saved = false, onTask, onEvent, onTasks, onCalendar }: Props) {
+type Props = { view: WorkspaceView; busy: boolean; saved?: boolean; onTask: (id: string) => void; onEvent: (id: string) => void; onTasks: () => void; onCalendar: () => void; contextName?: string };
+export function Today({ view, busy, saved = false, onTask, onEvent, onTasks, onCalendar, contextName = 'Personal' }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const update = () => setNow(new Date());
@@ -16,9 +16,9 @@ export function Today({ view, busy, saved = false, onTask, onEvent, onTasks, onC
   const today = personalToday(view, now);
   const when = (value: string) => new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   return <>
-    <Copy heading>Personal Today</Copy>
+    <Copy heading>{contextName} Today</Copy>
     <Copy>{now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · {Intl.DateTimeFormat().resolvedOptions().timeZone} (this device)</Copy>
-    <Copy>{saved ? 'Saved Tasks and Calendar on this device, including pending changes. Reconnect and explicitly sync to share saved work.' : 'Personal work from the last loaded online workspace. Refresh for saved changes.'} Calendar editors use UTC. Mail remains online-only.</Copy>
+    <Copy>{saved ? 'Saved Tasks and Calendar on this device, including pending changes. Reconnect and explicitly sync to share saved work.' : `${contextName} work from the last loaded online workspace. Refresh for saved changes.`} Calendar editors use UTC. Mail remains online-only.</Copy>
     <Block><Copy heading>Today’s plan</Copy>
       {!today.events.length && <Copy>No saved blocks today. Plan time in Calendar.</Copy>}
       {today.events.map(event => <Block key={event.id}><Copy heading>{event.title}</Copy><Copy>{when(event.start)} – {when(event.end)}{'\n'}{view.calendars.find(item => item.id === event.calendarId)?.name}</Copy><Action label={`Open block: ${event.title}`} disabled={busy} onPress={() => onEvent(event.id)} /></Block>)}

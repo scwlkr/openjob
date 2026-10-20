@@ -1,4 +1,5 @@
 import { createNativePersonalWorkspaceApi } from "../personal-workspace-api";
+import { createNativeConnectedWorkspaceApi } from '../connected-workspaces-api';
 import { createSqlCipherOfflineWorkspaceCache } from '../offline-workspace-cache';
 import * as Crypto from 'expo-crypto';
 import {
@@ -109,6 +110,7 @@ export function createNativeAuthController(config: OpenJobRuntimeConfig) {
 
   return new NativeAuthCoordinator({
     ...personalWorkspace,
+    connectedWorkspaces: createNativeConnectedWorkspaceApi({ apiBaseUrl: config.apiBaseUrl }),
     personalOfflineCache: personalCache,
     loadPersonalOfflineCache: (owner, guard) => personalCache.load(owner, guard),
     offlineRandomUUID: Crypto.randomUUID,
