@@ -1,3 +1,41 @@
+# P-WLK-6 / R32 — configured Gmail page continuation
+
+20October: source d36cd954180b5636d01e58257abd1ad287b72a40 makes the adapter's nextCursor
+reachable through configured Connections API, the existing CLI and web Mail.
+Only configured Google GET /connections/{id}/mail accepts one bounded cursor;
+unknown/repeated queries and foreign owner/account/subject cursors fail closed.
+Other Connections routes and simulated onboarding keep their query prohibition.
+Invalid cursors return a redacted400 with first-page recovery. Current account,
+home, expiry and disconnect checks still fence every page and in-flight result.
+
+Web Next page / First page replaces message bodies rather than accumulating them.
+Edited Task titles stay in memory while paging within that mailbox. Pending Task
+requests, including an unconfirmed additional Task, block paging until confirmed.
+API/CLI proof reaches message eleven, creates its exact source-linked Task, returns
+to page one, then rereads the correct source. A deleted source leaves authored work.
+
+Practical loopback browser proof passed at390px: two pages; edited titles retained
+both ways; injected invalid-cursor recovery; page-two Task -> normal Workspace ->
+correct source; interrupted additional Task -> paging denied -> retry confirmed;
+disconnect clears bodies; Sam sees no Alex connection. Expected503 standalone
+session discovery, injected400/503, and Sam403 errors are not provider failures.
+Synthetic screenshots: output/playwright/r32/page-two-{phone,task-source}.png.
+
+Thirty focused checks passed (29 adapter/flow/source/reply/CLI regressions plus one
+actual loopback portable-runtime/CLI composition). Root types, affected lint
+(two pre-existing warnings), OpenAPI38paths/54operations, generated CLI types,
+brand32 and tracked-source secret scan passed. Read-only review found no issues.
+Source delivery is authorized and the repository has only a manual artifact workflow,
+no push/PR publish job, no branch protection/ruleset or recorded deployment.
+
+R32 remains incomplete: connected search/folders, lazy body loading, sync/stale
+metadata and actual integrated live work remain open. Native paging is separate;
+native R53 stays in draft PR120 with its prior iOS proof and pending Android
+UI-method authorization. Its source/build/Metro inputs were left untouched.
+The standalone real read remains completed once and disconnected; this slice used
+only invented fixtures and granted no new provider access. Original26 files stay
+byte-identical. Linear execution thread:845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
+
 # WLK385 — correctly addressed authored replies from connected Mail
 
 20October: source87d4082971a4ebdde5754af8df968316ac942633 completes the next

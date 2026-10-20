@@ -5633,7 +5633,10 @@ export interface operations {
     };
     readConnectionMail: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque nextCursor from this configured Google account. Omit for the first page. Simulated Connections reject query parameters. */
+                cursor?: string;
+            };
             header?: never;
             path: {
                 connectionId: string;

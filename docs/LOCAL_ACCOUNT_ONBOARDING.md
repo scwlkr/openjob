@@ -362,3 +362,16 @@ were also exercised. Focused API/CLI proof covers both home types and reconnect,
 concurrency/stale-plan/revocation. This does not prove the integrated live R33 journey,
 provider Calendar/send, native/device use or release. No real messages or credentials
 were persisted, and the existing disconnected Timothy session was preserved.
+
+
+## Configured Gmail pages (P-WLK-6 / R32)
+
+Configured Connections Mail now offers Next page and First page. Each request
+replaces its bounded page; edited Task titles stay in memory while paging inside
+the same mailbox. Finish confirming any pending Task request before changing pages.
+An unavailable cursor clears the old bodies and offers a first-page restart.
+The existing client also accepts `openjob connections mail <id> --cursor <nextCursor>`;
+omit the cursor to read the first page. Cursors stay bound to the verified owner,
+account and Google subject. Simulated onboarding and the one-read standalone
+Mail session do not accept this paging input. This is synthetic connected-flow
+proof, not another real-account read or authorization for integrated activation.

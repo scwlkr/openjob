@@ -97,7 +97,20 @@ test('loopback opt-in portable runtime + existing CLI complete Google lifecycle 
   reconstruct();
   assert.equal((await cli(['list'])).bindings[0].status, 'connected');
   await cli(['action', started.connectionId], { action: 'refresh' });
-  const mail = await cli(['mail', started.connectionId]);
+  const originalMailTransport = f.flowOptions.mailTransport;
+  f.flowOptions.mailTransport = async (input, init) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/messages')) return Response.json(url.searchParams.has('pageToken') ? { messages: [{ id: 'm1', threadId: 't1' }] } : { messages: [], nextPageToken: 'invented-next-page' });
+    return originalMailTransport(input, init);
+  };
+  reconstruct();
+  const firstPage = await cli(['mail', started.connectionId]);
+  assert.deepEqual(firstPage.page.messages, []); assert.ok(firstPage.page.nextCursor);
+  const mail = await cli(['mail', started.connectionId, '--cursor', firstPage.page.nextCursor]);
+  assert.equal(mail.page.nextCursor, null);
+  assert.ok(paths.some(path => path.includes('/mail?cursor=gm1.')));
+  f.flowOptions.mailTransport = originalMailTransport;
+  reconstruct();
   assert.equal(mail.mode, 'google-fixture'); assert.equal(mail.workspaceId, home); assert.equal(mail.page.messages[0].body, 'Invented connected message.');
   const task = await cli(['task', started.connectionId], { messageId: 'm1', title: 'Review this connected message' });
   assert.equal(task.workspaceId, home); assert.equal(task.created, true);

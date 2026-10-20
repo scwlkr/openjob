@@ -62,12 +62,17 @@ try {
       isOwnerActive: async current => current === owner && (await store.list(current)).length > 0,
       repository: { async read(current) { return structuredClone(envelopes.get(current) ?? []); }, async change(current, apply) { const next = apply(structuredClone(envelopes.get(current) ?? [])); envelopes.set(current, structuredClone(next)); return structuredClone(next); } },
       google: { clientId: CLIENT, clientSecret: 'invented_client_secret', callbackUri: 'https://fixture.invalid/connections/google/callback', transport: protocol.transport },
-      mailTransport: async input => { const path = new URL(input).pathname;
+      mailTransport: async input => { const url = new URL(input), path = url.pathname;
         if (path.endsWith('/profile')) return Response.json({ emailAddress: BINDING.address });
         if (path.endsWith('/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'Inbox' }] });
-        if (path.endsWith('/messages')) return Response.json({ messages: [{ id: 'm1', threadId: 't1' }] });
-        if (!path.endsWith('/messages/m1')) return new Response(null, { status: 404 });
-        return Response.json({ id: 'm1', threadId: 't1', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', headers: [{ name: 'Subject', value: 'Review the connected-work proposal' }, { name: 'From', value: 'Colleague <colleague@example.invalid>' }, { name: 'Reply-To', value: '"Reply Desk, Inc." <replies@example.invalid>' }, { name: 'To', value: `${BINDING.address}, teammate@example.invalid` }, { name: 'Cc', value: 'observer@example.invalid' }, { name: 'Message-ID', value: '<proposal@example.invalid>' }, { name: 'References', value: '<root@example.invalid>' }], body: { data: Buffer.from('Invented connected message. Review this work, plan it in your OpenJob Calendar, then return to its source.').toString('base64url') } } });
+        if (path.endsWith('/messages')) {
+          const token = url.searchParams.get('pageToken');
+          if (token !== null && token !== 'invented-next-page') return new Response(null, { status: 400 });
+          return Response.json(token ? { messages: [{ id: 'm2', threadId: 't2' }] } : { messages: [{ id: 'm1', threadId: 't1' }], nextPageToken: 'invented-next-page' });
+        }
+        const second = path.endsWith('/messages/m2');
+        if (!path.endsWith('/messages/m1') && !second) return new Response(null, { status: 404 });
+        return Response.json({ id: second ? 'm2' : 'm1', threadId: second ? 't2' : 't1', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', headers: [{ name: 'Subject', value: second ? 'Review the follow-up proposal' : 'Review the connected-work proposal' }, { name: 'From', value: 'Colleague <colleague@example.invalid>' }, { name: 'Reply-To', value: '"Reply Desk, Inc." <replies@example.invalid>' }, { name: 'To', value: `${BINDING.address}, teammate@example.invalid` }, { name: 'Cc', value: 'observer@example.invalid' }, { name: 'Message-ID', value: second ? '<follow-up@example.invalid>' : '<proposal@example.invalid>' }, { name: 'References', value: '<root@example.invalid>' }], body: { data: Buffer.from(second ? 'Invented second-page message. Review this follow-up in its own source-linked Task.' : 'Invented connected message. Review this work, plan it in your OpenJob Calendar, then return to its source.').toString('base64url') } } });
       } });
     const started = await google.begin(owner, BINDING.address, home.workspace.workspaceId), url = new URL(started.authorizationUrl);
     protocol.hooks.claims = { nonce: url.searchParams.get('nonce') };
