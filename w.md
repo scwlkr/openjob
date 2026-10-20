@@ -11,7 +11,10 @@ extract session credentials or read Mail via another path. CUA remains unavailab
 from the established -10005 initialization failure; no repeat attempt without change.
 Smallest owner action: click Read Mail once in the already connected Edge0003 page.
 
-Source delivery: reviewed68d8645 plus this sanitized receipt on sole WLK318 branch.
+Source delivery: [PR116](https://github.com/scwlkr/openjob/pull/116) contains
+reviewed68d8645 plus sanitized documentation on the sole WLK318 branch. Cumulative
+read-only review found no material blockers; GitHub reports clean/mergeable with
+no configured checks. Ready for the authorized nondeploying source merge.
 19 API/auth tests,7 rendered UI tests, type/lint/brand/secret checks previously pass;
 no implementation changes since. Remote main remains9d575280 (PR115); no rulesets,
 required protections or repository hooks; sole workflow is manual artifact-only,
