@@ -26,7 +26,8 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
       if (url.search) {
         if (!google || request.method !== 'GET' || !/^\/api\/v1\/connections\/con_[a-f0-9]{32}\/mail$/.test(url.pathname)) return fail('invalid_input', 400);
         const keys = [...url.searchParams.keys()];
-        if (keys.length !== new Set(keys).size || keys.some(key => !['cursor', 'folderId', 'search'].includes(key))) return fail('invalid_input', 400);
+        if (keys.length !== new Set(keys).size || keys.some(key => !['cursor', 'folderId', 'search', 'view'].includes(key))) return fail('invalid_input', 400);
+        if (url.searchParams.has('view') && url.searchParams.get('view') !== 'metadata') return fail('invalid_input', 400);
         const cursor = url.searchParams.get('cursor'), folderId = url.searchParams.get('folderId'), search = url.searchParams.get('search');
         if (cursor !== null && (!cursor || cursor.length > 4096 || !/^gm3\.[A-Za-z0-9_-]+$/.test(cursor))) return fail('invalid_cursor', 400);
         if (search !== null && (search.length > 512 || !search.trim() || /[\u0000-\u001f\u007f]/.test(search))) return fail('invalid_input', 400);
@@ -75,7 +76,7 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
     } catch (error) {
       if (isInactiveUserError(error)) return accountDeletionPendingResponse(defaultRequestId);
       const code = (error as { code?: string })?.code;
-      if (code && ['not_configured', 'invalid_input', 'invalid_cursor', 'search_rejected', 'folder_unavailable', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : ['source_unavailable', 'folder_unavailable'].includes(code) ? 404 : code === 'workspace_capacity' ? 413 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
+      if (code && ['not_configured', 'invalid_input', 'invalid_cursor', 'search_rejected', 'folder_unavailable', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'message_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : ['source_unavailable', 'folder_unavailable', 'message_unavailable'].includes(code) ? 404 : code === 'workspace_capacity' ? 413 : code === 'forbidden' ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };

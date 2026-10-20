@@ -9,8 +9,14 @@ filter changes; uncertain Task requests block search and navigation. Missing lab
 recover through All Mail; rejected search offers edit/clear without unfiltered
 fallback. Spam/Trash require explicit selection. Exact saved Task sources/replies
 survive filter changes while current authority still applies. API, existing CLI and
-web share this behavior. Fixture proof is complete for this slice; sync, lazy bodies,
-native controls and integrated live acceptance remain separate.
+web share these filters. Configured web browses metadata-only summaries and reads
+one bounded plain-text body on explicit Read message; close/navigation clears it.
+Opening a body preserves the Task form and authored title. Missing bodies leave
+summaries and Tasks usable; current access is rechecked for every read. Task creation
+verifies metadata without a body. CLI exposes --metadata-only and connections message;
+the existing full-read contract stays available for current clients. This slice has
+fixture proof; sync/stale metadata, native lazy controls and integrated live
+acceptance remain separate.
 [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
 
 ## Connected authored reply drafts (WLK385)

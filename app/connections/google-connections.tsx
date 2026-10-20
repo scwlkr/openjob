@@ -2,18 +2,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { GoogleConnectionCatalog } from '../../server/connections/google-state';
-import type { ProviderMessagePage } from '../../shared/provider-contracts';
+import type { ProviderMessageSummaryPage } from '../../shared/provider-contracts';
 import styles from '../workspace/workspace.module.css';
 import ConnectedGoogleMail from './connected-google-mail';
 type Request = (path?: string, input?: object) => Promise<unknown>;
 const labels = { consent_required: 'Awaiting Google consent', authorizing: 'Checking connection; refresh status or cancel if interrupted', connected: 'Read access connected', cancelled: 'Consent cancelled', reconnect_required: 'Reconnect required; previous attempt will not be replayed', cleanup_pending: 'OpenJob access denied; finish local cleanup', disconnected: 'Disconnected in OpenJob' };
 export default function GoogleConnections({ catalog, request, refresh }: { catalog: GoogleConnectionCatalog; request: Request; refresh(): Promise<void> }) {
   const [address, setAddress] = useState(''); const [home, setHome] = useState(''); const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false); const [handoff, setHandoff] = useState<string>(); const [mail, setMail] = useState<{ connectionId: string; workspaceId: string; page: ProviderMessagePage }>();
+  const [busy, setBusy] = useState(false); const [handoff, setHandoff] = useState<string>(); const [mail, setMail] = useState<{ connectionId: string; workspaceId: string; page: ProviderMessageSummaryPage }>();
   async function act(path: string, input?: object) {
     if (busy) return; setBusy(true); setError(''); setHandoff(undefined); setMail(undefined);
     try {
-      const result = await request(path, input) as { authorizationUrl?: string; workspaceId: string; page: ProviderMessagePage };
+      const result = await request(path.endsWith('/mail') ? `${path}?view=metadata` : path, input) as { authorizationUrl?: string; workspaceId: string; page: ProviderMessageSummaryPage };
       if (result.authorizationUrl) setHandoff(result.authorizationUrl);
       if (path.endsWith('/mail')) setMail({ ...result, connectionId: path.split('/')[1] });
       else await refresh();

@@ -234,3 +234,27 @@ test('rejected first-page search and stale later page have distinct redacted rec
   const profile = fixture({ wire: () => new Response(null, { status: 400 }) });
   await assert.rejects(profile.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'query' }), matchCode('provider_error'));
 });
+
+
+test('metadata browsing and Task identity reads omit all body/snippet data and use bounded Gmail metadata headers', async () => {
+  const f = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), snippet: 'SECRET_PROVIDER_BODY', payload: { headers: message().payload.headers, mimeType: 'text/plain', body: { data: '%malformed-unread-body' } } } : base(url) });
+  const page = await f.adapter.listMessageSummaries({ ownerId: BINDING.ownerId, accountId: BINDING.accountId });
+  assert.equal(page.messages[0].subject, 'Invented launch');
+  assert.equal(Object.hasOwn(page.messages[0], 'body'), false); assert.equal(Object.hasOwn(page.messages[0], 'snippet'), false);
+  const exact = await f.adapter.getMessageSummary({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' });
+  assert.deepEqual(exact, page.messages[0]);
+  for (const { url } of f.calls.filter(call => call.url.pathname.endsWith('/messages/abc123'))) {
+    assert.equal(url.searchParams.get('format'), 'metadata'); assert.deepEqual(url.searchParams.getAll('metadataHeaders'), ['Subject', 'From', 'To']);
+  }
+  await assert.rejects(f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' }), matchCode('malformed_response'));
+  const unavailable = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? new Response('SECRET_PROVIDER_BODY', { status: 404 }) : base(url) });
+  await assert.rejects(unavailable.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' }), matchCode('message_unavailable'));
+});
+
+test('explicit body reads reject false ASCII and never descend into attached message containers', async () => {
+  const input = { ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' };
+  const ascii = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), payload: { mimeType: 'text/plain', headers: [{ name: 'Content-Type', value: 'text/plain; charset=us-ascii' }], body: { data: encode('café') } } } : base(url) });
+  await assert.rejects(ascii.adapter.getMessage(input), matchCode('malformed_response'));
+  const nested = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), payload: { mimeType: 'message/rfc822', parts: [{ mimeType: 'text/plain', body: { data: encode('SECRET_PROVIDER_BODY') } }] } } : base(url) });
+  assert.match((await nested.adapter.getMessage(input)).body, /Plain-text content unavailable/);
+});

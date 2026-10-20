@@ -2502,6 +2502,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/connections/{connectionId}/mail/{messageId}:
+    parameters:
+      - in: path
+        name: connectionId
+        required: true
+        schema: *a1
+      - in: path
+        name: messageId
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+    get:
+      tags: [Providers]
+      operationId: readConnectionMessage
+      summary: Read one connected Gmail message on request
+      x-openjob-authorization: authenticated
+      x-openjob-retryable: true
+      description: Configured Google human-only exact-message read with current owner, home, account and credential checks. Safe bounded plain text only; no query parameters, HTML, attachments, remote images, provider writes or body persistence. A deleted message returns a redacted message_unavailable404.
+      responses:
+        "200":
+          description: Fresh authorized message; source identity is independent of the current folder/search.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [mode, workspaceId, message]
+                    properties:
+                      mode:
+                        enum: [google, google-fixture]
+                      workspaceId:
+                        type: string
+                        pattern: ^wsp_[a-f0-9]{32}$
+                      message:
+                        $ref: "#/components/schemas/ProviderPreviewMessage"
+        default:
+          description: Redacted unavailable, forbidden, reconnect or unconfigured response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/connections/{connectionId}/mail:
     parameters:
       - in: path
@@ -2539,6 +2586,13 @@ paths:
             minLength: 1
             maxLength: 512
             pattern: ^(?=.*\S)[^\u0000-\u001F\u007F]+$
+        - in: query
+          name: view
+          required: false
+          description: Configured Google metadata-only browsing; omits bodies and snippets. Omit to retain the existing full-message response.
+          schema:
+            type: string
+            enum: [metadata]
       summary: readConnectionMail
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
@@ -2583,7 +2637,9 @@ paths:
                           messages:
                             type: array
                             items:
-                              $ref: "#/components/schemas/ProviderPreviewMessage"
+                              oneOf:
+                                - $ref: "#/components/schemas/ProviderPreviewMessage"
+                                - $ref: "#/components/schemas/ProviderMessageSummary"
                           folders:
                             type: array
                             items:
@@ -4386,6 +4442,59 @@ components:
         to:
           type: string
         body:
+          type: string
+        receivedAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+        upstreamThreadId:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ProviderMessageSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - threadId
+        - folderIds
+        - subject
+        - from
+        - to
+        - receivedAt
+        - read
+        - upstreamThreadId
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        upstreamId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        threadId:
+          type: string
+          minLength: 1
+          maxLength: 3072
+        folderIds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 3072
+        subject:
+          type: string
+        from:
+          type: string
+        to:
           type: string
         receivedAt:
           type: string
