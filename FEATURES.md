@@ -1,3 +1,15 @@
+## Local session Gmail read (WLK318)
+
+A default-off, loopback-only nonproduction mode adds a separate Google popup and
+one explicit bounded Mail read. Its exact selected human identity, Google subject,
+mailbox, client audience and read-only scopes are checked before provider access.
+The Google access token stays in process memory for at most ten minutes; disconnect,
+expiry and account changes suppress in-flight results. No offline refresh, token
+store, send, Mail modification or provider Calendar route is added. Existing
+persistent connections retain their configuration and behavior. Synthetic API and
+browser checks pass; real popup/consent and live Mail acceptance remain unverified.
+[Setup and limits](docs/LOCAL_ACCOUNT_ONBOARDING.md#local-session-gmail-wlk318).
+
 ## Bounded Google home and deletion preparation (WLK318)
 
 Explicit Google pilot configuration now admits its same selected binding to the

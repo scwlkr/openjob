@@ -8,9 +8,9 @@ import { createConnectionsApplication } from '../../server/connections/applicati
 import { createConnectionsApi } from '../../server/connections/api.ts';
 import { createConsentFixture, fixtureChoices } from './connection-onboarding-fixture.mjs';
 import { createFirebaseIdTokenVerifier } from '../../server/firebase-id-token.ts';
-export async function onboardingFixture() {
-  const db = createFakeFirestore(), config = { projectId: 'openjob-dev', clientEmail: 'fixture@example.invalid', privateKey: await createPrivateKey() };
-  const now = new Date().toISOString(), authority = await createTestFirebaseAuthority({ now });
+export async function onboardingFixture({ projectId = 'openjob-dev' } = {}) {
+  const db = createFakeFirestore({ projectId }), config = { projectId, clientEmail: 'fixture@example.invalid', privateKey: await createPrivateKey() };
+  const now = new Date().toISOString(), authority = await createTestFirebaseAuthority({ now, projectId });
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: config.projectId, fetchImplementation: authority.fetch, now: () => Date.parse(now) });
   const users = createFirestoreUserStore(config, db.fetch), owned = createOwnedWorkspaceStore(config, db.fetch), sessions = {};
   for (const name of ['alex', 'sam']) { const token = await authority.issue({ uid: name }); const identity = await verifyIdToken(new Request('https://fixture.invalid', { headers: { authorization: `Bearer ${token}` } })); sessions[name] = { token, user: (await users.create(identity)).user }; }
