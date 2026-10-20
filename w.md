@@ -1,3 +1,26 @@
+# WLK318 — real alternate identity verified; Mail read still pending
+
+Owner19:51 reports Mail connected. Independently read only sanitized existing pilot
+health: lastAccountCheck ready, accountShape primaryEmailfalse/googleProvidertrue/
+providerEmailtrue, mailReads0, nonprod/sendingfalse. This confirms the real account
+contract: Google provider email is present while Firebase top-level email is absent.
+Signed Google/Firebase binding and current self-account checks have now passed live.
+Connection itself is user-reported; health does not expose a connection receipt.
+No completed bounded-read receipt exists. Did not reload, disconnect, repeat sign-in,
+extract session credentials or read Mail via another path. CUA remains unavailable
+from the established -10005 initialization failure; no repeat attempt without change.
+Smallest owner action: click Read Mail once in the already connected Edge0003 page.
+
+Source delivery: reviewed68d8645 plus this sanitized receipt on sole WLK318 branch.
+19 API/auth tests,7 rendered UI tests, type/lint/brand/secret checks previously pass;
+no implementation changes since. Remote main remains9d575280 (PR115); no rulesets,
+required protections or repository hooks; sole workflow is manual artifact-only,
+no publishing. Ordinary source PR/merge is authorized and cannot auto-deploy under
+this verified repository configuration.26 unrelated untracked files preserved.
+No production/Google configuration, credentials, grant scope or stored data changed.
+
+---
+
 # WLK318 — Firebase email contract corrected; signed Google identity repair served locally
 
 Supersedes the prior email-scope diagnosis below. Live sanitized health after the
