@@ -1,3 +1,49 @@
+# P-WLK-6 / R32 — explicitly requested connected Gmail bodies
+
+20October: source f4226dae06c14d93bd1cd2e1ba36bc2959e87aa9 follows merged search
+PR123/main161538dec4fd5ee791325c89cca235e45026a5e0. Configured web browsing now uses
+GET Mail?view=metadata: summaries contain headers/identity/labels/date/read state,
+with no body or snippet. Gmail requests format=metadata and only Subject/From/To
+headers. The existing full Mail response remains exact for current native/clients;
+standalone one-read behavior is unchanged. This is an explicit representation
+choice, not a provider permission or a new credential path.
+
+Read message uses GET /connections/{id}/mail/{upstreamId} for one fresh full read.
+Account/home derive from the connection, current owner/binding/expiry/consent/profile
+checks fence provider calls, and current access is checked on both success/failure
+before disclosure. Queries and malformed/foreign routes fail closed. Deleted Mail
+returns redacted message_unavailable404 and leaves authored Tasks. Exact Task-source
+and reply reads remain full/filter-independent; Task creation now verifies metadata
+without fetching a body. CLI: mail --metadata-only and message <id> <upstream-id>.
+
+The web holds one opened body in component memory, clears it on close/navigation,
+and keeps the Task form/title/receipt mounted through open/close/failure. Pending
+additional Task confirmation blocks body opening/search/navigation. Plain text uses
+inert React rendering, bounded existing MIME/base64/UTF-8 decoding and explicit
+HTML/attachment-unavailable fallback. No attachment requests or remote-image fetches.
+Decoder tightening skips nested message containers and rejects non-ASCII content
+that declares US-ASCII. The official metadata read contract was checked:
+https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/get.
+
+43 focused adapter/API/CLI/source/reply checks and14 standalone-session checks pass
+(overlapping groups, not cumulative). Types, affected lint (two existing warnings),
+OpenAPI39paths/55operations, generated CLI types, brand32 and secret safety pass.
+Independent source review found no issues. Practical headed390px browser proved
+metadata response without body, explicit first/second-page reads, edited title and
+created-Task receipt retained through close, injected unavailable-body recovery,
+uncertain additional Task blocks body opening then confirms, paging clears bodies
+and retains title, delayed full response cannot restore Mail after disconnect, and
+Sam sees no Alex connection. Body control44px, document/viewport390px. Synthetic
+screenshots/receipt/CLI history: output/playwright/r32-bodies/.
+
+No additional real read, provider effect, persistent access, deployment or release.
+Original26 files hash-match. Native PR120/build inputs remain separate and unchanged;
+its existing full-read consumer remains eager, and Android UI-method authorization
+is still pending. R32 still needs sync/metadata lifetime/stale state and integrated
+live acceptance. Native metadata/body controls and eventual default-contract
+convergence remain open. Continue the same Linear R32 thread845d4c0c-61a1-4a62-b9c3-
+96d0b5e3473a; do not repeat the completed alternate-only real read.
+
 # P-WLK-6 / R32 — connected Gmail search
 
 20October: source d923fd0a2185f8a5c0dce3411646747f3ce2fecd adds submitted Gmail

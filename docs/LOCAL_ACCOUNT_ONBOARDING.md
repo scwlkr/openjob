@@ -405,3 +405,26 @@ stored in connection records or cursors. Search remains configured-Google only.
 The local fixture recognizes explicit invented query examples, not Gmail's complete
 parser. This is synthetic connected-flow proof; the completed alternate-only real
 read does not establish integrated live search or saved-work acceptance.
+
+
+Configured web browsing now starts with message summaries, without bodies or snippets.
+Choose Read message to fetch one bounded plain-text body; Close message, paging,
+folder/search changes or disconnect clear the opened body. Opening and closing keep
+the authored Task title and created-Task link. An unavailable body leaves its row and
+Task usable; uncertain additional Task confirmation blocks body opening/navigation.
+Only inert plain text is displayed: HTML, attachments and remote images are not loaded.
+
+API: `GET /api/v1/connections/{id}/mail?view=metadata` applies the same existing
+cursor/folderId/search inputs but omits body from each message. The existing request
+without view retains its full-message response for current native/clients. Explicit
+`GET /api/v1/connections/{id}/mail/{upstreamId}` accepts no queries, rechecks the current
+home/account/credential and returns one full safe message. A deleted message returns
+redacted message_unavailable404 without deleting its Task. Task-source/reply reads
+retain their exact source identity independently of current labels/search.
+
+CLI: `openjob connections mail <id> --metadata-only` and
+`openjob connections message <id> <page.messages[].upstreamId>` use those same paths.
+The new browser path and Task creation request metadata from Gmail; Task creation no
+longer loads a body as a side effect. Existing full-read clients remain eager until
+their own controls move to explicit reads. Bodies stay transient; this fixture proof
+does not establish sync, metadata expiry, live integrated or native lazy acceptance.
