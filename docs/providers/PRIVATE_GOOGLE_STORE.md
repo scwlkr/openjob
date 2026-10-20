@@ -1,0 +1,65 @@
+# Disabled encrypted Google store — WLK318
+
+`db/private-google-connections.ts` implements the existing private owner-envelope
+contract using Firestore REST compare-and-swap and WebCrypto AES-256-GCM. It is
+source preparation, with no normal runtime import, environment switch, key loader,
+credential access, collection provisioning, security-rule change or live activation.
+Firestore is an engineering choice that reuses the working database and user fence;
+it is not a request for the owner to choose another database.
+
+Construction requires an explicitly injected REST client, nonextractable AES key
+and versioned key identifier. Operations default to disabled. Tests import fixed
+invented key bytes and use fake Firestore/Google transports. No key or client
+secret is generated, read or persisted for actual use.
+
+## Behavior
+
+The entire connection array—including addresses, grants and pending PKCE/nonce—is
+encrypted. Documents expose only format version, key identifier, nonce and
+ciphertext. Fresh 96-bit nonces and 128-bit authentication tags bind each envelope
+to its exact database/document path, owner, format and key identifier. Copied,
+corrupt, unknown-version or wrong-key envelopes fail closed. Errors never expose
+plaintext or underlying storage/provider messages. AES-GCM protects confidentiality
+and integrity; it does not protect against rollback by a trusted database operator.
+
+Read and write results require an active existing User. Writes atomically include
+the existing active-user history fence plus the envelope update-time/missing-document
+precondition. Only definitive CAS conflicts retry the pure transformation, at most
+three times. Transport failures or lost successful commit responses are returned
+without replay; callers must inspect current state, never repeat a consent exchange
+because a storage response was uncertain. Supplied transports must preserve this
+property. A post-commit activity failure also never retries the successful write.
+
+UTF-8 plaintext is bounded at 600,000 bytes and encoded documents at 850,000 bytes,
+below Firestore's document limit, including base64 overhead. This is deliberately
+stricter than the orchestration layer's character bound. Existing 50-connection
+limits remain. Reconstructed store instances read persisted ciphertext with the
+same injected key; tests prove persistence in a fake backing database, not a live
+Firestore deployment, disk durability or production restart.
+
+Explicit `cleanupExpiredForOwner` changes expired pending attempts to reconnect
+required and removes their verifier/nonce from the current envelope through CAS.
+No scheduler is installed. Disconnect already removes current grants through the
+same encrypted write. Neither operation erases old database backups or revokes
+Google's project-wide grants.
+
+## Before activation
+
+No live policy is silently adopted by this implementation. The concrete activation
+handoff still needs approved key/client-secret delivery, private server-only database
+access, key loss/rotation and backup retention procedures, plus account-deletion
+cleanup of this collection. Ordinary access is fenced when deletion starts, but
+physical collection cleanup is deliberately not attached to the existing deletion
+worker in this disabled slice. Existing pending secrets expire after ten minutes;
+a later explicit cleanup invocation erases them from the current record. Backup
+erasure and upstream revocation need their actual operational limits documented.
+
+The exact approved HTTPS deployment/callback handoff and Google configuration and
+mailbox consent remain separate. Basic Google name/profile sign-in does not grant
+Gmail access. This source does not send mail, access a mailbox or enable providers.
+
+Focused proof: `node --test tests/private-google-connections.test.mjs
+ tests/google-connection-flow.test.mjs` (one shell line). This covers encrypted
+first-consent/refresh/fake-Mail/disconnect, instance reconstruction, corruption and
+owner/database binding, CAS races, lost commit response, deletion race, expiry,
+capacity and disabled/no-call behavior. Provider responses and keys are synthetic.

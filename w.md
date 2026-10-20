@@ -1,3 +1,25 @@
+# WLK318 — disabled encrypted private Google backend, 20 October 2026
+
+Source preparation on codex/wlk-318-private-google-store from8980a21. Existing
+sign-in and Timothy Task/Calendar persistence are complete. Concrete Firestore CAS
+backend encrypts complete private connection envelopes with injected AES256-GCM
+key, owner/document/version-bound authentication and active-user commit fences.
+No runtime binding, key loader, secret access, deployment or provider activation.
+Eleven focused synthetic flow/store tests pass: first-consent→refresh→fake-Mail→
+disconnect/reconstruction, corruption/isolation/CAS/ambiguous-write/deletion/expiry/
+capacity. TypeScript, affected lint, brand32, secrets672 and diff checks pass.
+Independent source review found no consequential findings; exact integration
+identity is recorded in PR/Linear. See docs/providers/PRIVATE_GOOGLE_STORE.md.
+
+Remaining live gates: approved HTTPS origin/deployment, actual secret/key delivery,
+server-only collection access, operational key/retention/deletion cleanup, Google
+configuration/verification and explicit selected-mailbox consent. Backend selection
+is engineering work, not a mandatory owner decision. PR95 held while original
+instruction/tool outcomes are traced; no download retry. WLK302 source unrecovered,
+no former-owner restart or overlapping TLS work. Existing pilot/sessions preserved.
+
+---
+
 # WLK307 COMPLETE — exact registry artifact verified, 19 October 2026
 
 Owner completed manual npm web authentication/publication. npm accepted the upload

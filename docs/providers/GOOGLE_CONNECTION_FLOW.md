@@ -42,8 +42,9 @@ It holds a bounded owner envelope (50 connections,900KB), including pending PKCE
 nonce, state hashes, connection lineage, operation claims and private access/refresh
 grants. `change` MUST atomically compare/retry a pure transformation, fence active
 owners, preserve consistent reads and never replay an ambiguous successful write.
-There is intentionally no production implementation, default backend or secret
-loader in this source slice. The fixture implements atomic in-memory persistence
+A disabled encrypted Firestore implementation now exists as source preparation;
+see [private store](PRIVATE_GOOGLE_STORE.md). It has no runtime binding or secret
+loader. The fixture implements atomic in-memory persistence
 shared across reconstructed flow instances; this does not prove process-restart,
 encrypted storage or a live database.
 
@@ -102,8 +103,8 @@ and its established browser surface remain untouched.
 Before live activation, obtain current Google Data Access/Verification facts and
 the exact approved HTTPS origin from the sole infrastructure owner
 (task01a14a00), working in the private infrastructure repository. The purchased
-Linux target has been inventoried and private bootstrap templates staged. Container
-runtime installation still awaits its daemon/network approval; no app is deployed.
+Linux target has been inventoried and private bootstrap templates staged. Docker
+installation and owner password rotation subsequently completed. No app is deployed.
 Inventory and staging do not establish an approved public HTTPS origin, callback
 registration, secret delivery or permission to activate OpenJob. Obtain that exact
 deployment handoff from the infrastructure owner; keep host/access details private.
