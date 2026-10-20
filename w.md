@@ -1,3 +1,70 @@
+# WLK318 — local session Gmail source ready, 20 October 2026
+
+Branch `codex/wlk-318-local-gmail-session` from c03dd075. Default-off nonprod
+loopback mode adds separate in-memory Firebase Google popup, exact human/UID/
+subject/mailbox/client/scope checks, bounded explicit Mail read and disconnect/
+expiry/in-flight fences. No Google refresh credential, token persistence, send,
+Mail modification, provider Calendar or persistent connector change.
+
+Synthetic signed-API/Google/config/existing-connection checks20 pass, browser3
+pass, TypeScript/affected ESLint/brand32/secret scan pass. Independent source
+review found no consequential issues; added expiry-during-read case passes.
+Use locked isolated dependencies as noted below; shared install untouched.
+
+Shane explicitly approved the scoped local alternate test at18:11UTC via parent.
+Gmail API enabled and confirmed in openjob-nonprod. Only gmail.readonly was saved;
+Google confirmed Data access changes saved, marks scope unverified and requests
+verification. No verification submission/warning bypass/allowlist. Real popup/
+consent/read remain UNVERIFIED. Browser timeout reconciled before Save/readback.
+Existing operator document loader failed (no key loaded). Metadata-only CLI account
+access works outside sandbox, but exact email account selector returned no account. Private runner /tmp/openjob-318-session-launcher.mjs
+uses existing approved document reference, never logs/stores keys or tokens; its
+selected self-session observer has not run because startup failed. Exact selected
+UID/User binding remains unresolved; no new account or relaxed binding.
+
+Automatic approval review denied admin batch enumeration of up to100 identities
+as broader than the selected alternate lookup. It did not run and was not retried
+or bypassed. A later credential read without explicit account was also denied
+before execution because it could select the wrong account; no retry/bypass.
+Smallest next step: confirm the exact existing 1Password account owning the operator
+document reference, restore that scoped access, then use the alternate's own
+authenticated session to recover its exact binding. Google provider verification
+is an additional possible gate; stop at warnings or unexpected requirements.
+Only one bounded read is approved. No production/main Mail, server/DNS/deploy,
+PR95 retry, WLK302 overlap or WStack installer activity. Original26 files preserved.
+
+---
+
+# Local MacBook takeover — WLK318, 20 October 2026
+
+Active checkout: `scwlkrmac.local`, `/Users/shanewalker/Desktop/dev/openjob`.
+Local `main` fast-forwarded from `3ed6a69` to verified remote
+`c03dd075df9ef4682e1d84539ca5a499a530fcbb` (PR114); no product source edits.
+All 26 pre-existing untracked ` 2` files remain byte-identical. Their path/size/hash
+audit is in `$TMPDIR/openjob-local-takeover-ly7tnlqp/untracked-before.json`.
+Fetch initially failed on invalid `.git/refs/remotes/origin/main 2`; its unchanged
+contents are preserved at `.git/openjob-local-takeover-backup/refs-remotes-origin-main-2`.
+No other refs or unrelated files were removed. WStack local/remote both `c3e3ac6`.
+
+Verified this exact source on local Node26.5.0/npm11.11.0: 58 focused synthetic
+Google/store/config/deletion tests, actual ephemeral loopback HTTP/existing CLI,
+root TypeScript, brand32 and secret scan1015 pass. Shared dependencies are stale
+(missing google-auth-library); left untouched. Tests/types used a git-archive copy
+at `$TMPDIR/openjob-local-proof-5m1q071h` with locked root dependencies installed
+using scripts-disabled npm ci. No native install/build, full npm test, browser
+consent, live Google/Firestore, deployed service or device acceptance is claimed.
+
+Linear and remote PR state re-read: only PR95 is open. Next queue action remains
+the pending pilot.openjob.dev activation decision; do not configure secrets, grant
+access, change DNS/network or deploy. Pilot is alternate0003 Timothy,
+scw.builds@gmail.com; no main-account use. PR95 browser delivery remains uncertain,
+no retry before reconciliation. WLK302 source remains in the stopped cloud owner;
+no overlapping implementation or owner restart. WLK327 needs its policy decision.
+No independent accepted unblocked source task found. Continue in this local chat;
+prior owners remain idle. This continuity note is the only new tracked edit.
+
+---
+
 # WLK318 — necessary home/deletion-worker prep complete, 20 October 2026
 
 From3e20299. Explicit Googlepilot admits same selected User/GoogleUID to existing

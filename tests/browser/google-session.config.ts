@@ -1,0 +1,3 @@
+import { defineConfig } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+export default defineConfig({ testDir: '.', testMatch: ['google-session.spec.ts'], workers: 1, reporter: 'line', outputDir: '../../output/playwright/google-session', use: { baseURL: 'http://127.0.0.1:4193', launchOptions: process.env.OPENJOB_CHROMIUM_EXECUTABLE ? { executablePath: process.env.OPENJOB_CHROMIUM_EXECUTABLE } : undefined }, webServer: { cwd: fileURLToPath(new URL('../..', import.meta.url)), command: 'node node_modules/vite/bin/vite.js --config tests/browser/google-session-vite.config.ts', port: 4193, reuseExistingServer: false } });

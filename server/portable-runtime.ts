@@ -9,12 +9,14 @@ import { createGoogleConnectionsRuntime, type PortableGoogleConfiguration } from
 import { createOwnedWorkspaceStore } from '../db/owned-workspaces.ts';
 import { createPersonalWorkspaceContextStore } from '../db/personal-workspace-context.ts';
 import { createWorkspaceContextStore } from './workspace-context-store.ts';
+import { createGoogleMailSession, type GoogleSessionConfiguration } from './connections/google-session.ts';
 
 type Config = { projectId: string; apiKey: string; clientEmail: string; privateKey: string };
 
 type Options = {
   databaseTransport?: typeof fetch; identityTransport?: typeof fetch;
   google?: PortableGoogleConfiguration;
+  googleSession?: GoogleSessionConfiguration;
   googleTransport?: typeof fetch; mailTransport?: typeof fetch;
   evidenceMode?: 'google' | 'google-fixture';
 };
@@ -27,11 +29,13 @@ export function createPortableRuntime(config: Config, options: Options = {}) {
   const identity = createV1IdentityApi({ groups, users, verifyIdToken, verifyCredentialToken: verifyIdToken.verifyToken });
   // No provider fallback: callers explicitly supply both transports and private inputs.
   if (options.google && (!options.googleTransport || !options.mailTransport)) throw new Error('Explicit Google transports are required.');
+  if (options.googleSession && (options.google || config.projectId !== 'openjob-nonprod' || !options.googleTransport || !options.mailTransport)) throw new Error('Local Gmail session requires nonproduction and explicit transports.');
+  const googleSession = options.googleSession ? createGoogleMailSession({ configuration: options.googleSession, googleTransport: options.googleTransport!, mailTransport: options.mailTransport! }) : undefined;
   const google = options.google ? createGoogleConnectionsRuntime({ configuration: options.google, firebase: config, databaseTransport, googleTransport: options.googleTransport!, mailTransport: options.mailTransport!, evidenceMode: options.evidenceMode, homes: createWorkspaceContextStore({ owned: createOwnedWorkspaceStore(config, databaseTransport), personal: workspace, contexts: createPersonalWorkspaceContextStore(config, databaseTransport) }) }) : undefined;
   // Explicit Google pilot selection admits only that same binding to existing
   // owner-only Task/Calendar setup. Personal mapping still requires its POST action.
   const workspacePilot = createWorkspacePilotRuntime({ config, personal: workspace, users, verifyIdToken, transport: databaseTransport, admission: google?.admission });
-  const application = createPersonalApplication({ workspace, users, verifyIdToken, google: google?.flow, googleAdmission: google?.admission });
+  const application = createPersonalApplication({ workspace, users, verifyIdToken, google: google?.flow, googleAdmission: google?.admission, googleSession });
   return {
     // Internal capability only; portable service has no deletion-worker HTTP route.
     privateGoogleCleanup: google?.cleanup,

@@ -1,5 +1,6 @@
 'use client';
 import GoogleConnections from './google-connections';
+import SessionGmail from './session-gmail';
 import type { GoogleConnectionCatalog } from '../../server/connections/google-state';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -10,6 +11,7 @@ import styles from '../workspace/workspace.module.css';
 type Mail = { mode: 'simulated'; workspaceId: string; page: ProviderMessagePage };
 const labels = { authorizing: 'Checking consent — refresh or cancel if interrupted', consent_required: 'Read-only consent required', connected: 'Connected · simulated', cancelled: 'Consent cancelled', reconnect_required: 'Reconnect required', cleanup_pending: 'Disconnected · cleanup pending', disconnected: 'Disconnected' };
 export default function ConnectionsSession({ session, signal, onSignOut }: { session: AuthSession; signal: AbortSignal; onSignOut(): Promise<void> }) {
+  const [sessionOnly, setSessionOnly] = useState(false);
   const [catalog, setCatalog] = useState<ConnectionCatalog | GoogleConnectionCatalog>(); const [error, setError] = useState('');
   const [choice, setChoice] = useState(''); const [home, setHome] = useState('');
   const [busy, setBusy] = useState(false); const [mail, setMail] = useState<Mail>();
@@ -36,7 +38,8 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
     finally { if (!signal.aborted) setBusy(false); }
   }
   return <main className={styles.main}><h1>Connections</h1><div className={styles.actions}><Link href="/workspaces">Workspaces</Link><Link href="/workspace">Personal work</Link><button onClick={onSignOut}>Sign out</button><button disabled={busy} onClick={() => void act('')}>Refresh status</button></div>
-    {error && <p role="alert">{error}</p>}
+    <SessionGmail session={session} signal={signal} onAvailable={setSessionOnly} />
+    {error && !sessionOnly && <p role="alert">{error}</p>}
     {catalog && catalog.mode !== 'simulated' && <GoogleConnections catalog={catalog} request={request} refresh={refresh} />}
     {catalog?.mode === 'simulated' && <><p className={styles.banner}>Simulated onboarding · invented accounts and Mail · no provider access, grants or sending. Approval below runs a local test transport.</p>
       <section className={styles.panel}><h2>Add read-only Mail</h2>{catalog.providers.map(provider => <p key={provider.id}>{provider.id}: {provider.reason}</p>)}

@@ -5,11 +5,14 @@ import type { OpenJobUser } from '../v1-identity.ts';
 import { isInactiveUserError } from '../../db/user-history.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse, accountDeletionPendingResponse, signInMethodUnrecognizedResponse } from '../v1-http.ts';
 import type { ConnectionsApplication } from './application.ts';
-export function createConnectionsApi({ users, verifyIdToken, onboarding, google, googleAdmission }: {
+import { googleSessionRequest } from './google-session-http.ts';
+import type { GoogleMailSession } from './google-session.ts';
+export function createConnectionsApi({ users, verifyIdToken, onboarding, google, googleAdmission, googleSession }: {
   users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> };
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   onboarding?: ConnectionsApplication;
   google?: GoogleConnectionsFlow;
+  googleSession?: GoogleMailSession;
   googleAdmission?: { userId: string; provider: 'google'; firebaseUid: string };
 }) {
   const fail = (code: string, status: number) => errorResponse(defaultRequestId, { code, status, message: code === 'not_configured' ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.' });
@@ -20,6 +23,11 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
       const user = await users.resolve(identity); if (!user) return signInMethodUnrecognizedResponse(defaultRequestId); if (user.deletionPending) return accountDeletionPendingResponse(defaultRequestId);
       const url = new URL(request.url);
       if (url.search || request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
+      if (url.pathname === '/api/v1/connections/session' || url.pathname.startsWith('/api/v1/connections/session/')) {
+        const isCurrent = async () => { const current = await users.resolve(identity); return !request.signal.aborted && !!current && current.userId === user.userId && !current.deletionPending; };
+        const response = await googleSessionRequest(request, user.userId, identity, googleSession, isCurrent);
+        return await isCurrent() ? response : accountDeletionPendingResponse(defaultRequestId);
+      }
       if (google || url.pathname === '/api/v1/connections/google/callback') {
         if (googleAdmission && (user.userId !== googleAdmission.userId || identity.provider !== googleAdmission.provider || identity.uid !== googleAdmission.firebaseUid)) return fail('forbidden', 403);
         const isCurrent = async () => { const current = await users.resolve(identity); return !!current && current.userId === user.userId && !current.deletionPending; };

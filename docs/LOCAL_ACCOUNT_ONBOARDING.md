@@ -199,3 +199,56 @@ himself if current operator metadata access is insufficient.
 Existing npm EOTP/authentication handoff is independent. Candidate0.3.9 is still
 unpublished and has no publication approval. A rented server is not a prerequisite
 for the local workflow or further credential-independent app work.
+
+
+## Local session Gmail (WLK318)
+
+This optional route reuses the existing Firebase Google popup in a separate named
+Firebase app with in-memory persistence. Basic sign-in does not request Mail access.
+The person separately connects Gmail and clicks **Read Mail once**. The existing
+Gmail adapter reads one page of at most ten messages, with its existing text and
+attachment bounds; it does not follow pagination or fetch attachment bytes.
+It displays plain text only. This session route does not create a durable Mail
+resource or link Mail into Tasks or a Workspace.
+
+Default is disabled. An explicitly approved local nonproduction operator may set
+`OPENJOB_GOOGLE_SESSION_MODE=configured`, `FIREBASE_PROJECT_ID=openjob-nonprod`,
+`OPENJOB_PUBLIC_ORIGIN=http://127.0.0.1:PORT`, and these nonsecret exact selections:
+`OPENJOB_GOOGLE_OWNER_USER_ID`, `OPENJOB_GOOGLE_OWNER_FIREBASE_UID`,
+`OPENJOB_GOOGLE_MAILBOX`, `OPENJOB_GOOGLE_CLIENT_ID`. Use the existing Google web
+client. Never commit selected private identity metadata. The service must listen
+on that same `127.0.0.1:PORT`; persistent Google mode must remain disabled. Existing
+Firebase operator configuration is still required; no new credential is created
+by this flag. There is no Google client secret, encryption key, DNS, remote server
+or offline refresh requirement for this route.
+
+The popup requests only `gmail.readonly` beyond ordinary Google identity scopes,
+with online access and no incremental grant accumulation. The server independently
+validates the granted scopes, exact client audience, subject and verified email.
+Only the selected active signed-in human can open, read or disconnect the session;
+agent tokens are denied. The token is never written to Firestore, browser storage,
+configuration or logs. A random session handle binds each request to its original
+Firebase authentication event. Reconnect replaces the prior lease.
+
+Disconnect clears the local view and token, and fences pending provider results.
+Sign-out, page exit and navigation clear the view and try to disconnect. If that
+network cleanup fails, the server token expires at the original deadline, at most
+ten minutes or the earlier Google/Firebase expiry. Process exit forgets it. This
+is local disconnect, not Google-wide revocation; Google may retain the consent.
+A future read requires a new explicit session. No background provider refresh,
+Mail changes, sending, Calendar access or existing connection-token cleanup occurs.
+
+Verification: `npm run test:google-session` uses signed synthetic Firebase sessions,
+fake Firestore and injected fixed provider transports. Tests cover identity/scope
+isolation, no persistence, expiry and disconnect during validation/read. The small
+`npm run test:google-session:browser` fixture uses invented Mail and a fake popup
+to exercise actual connect/read/disconnect/expiry/sign-out controls and storage
+absence. These checks do not prove a real Google popup, scope grant or live read.
+
+20 October operational receipt: owner approved the selected alternate's single
+read-only local test. Gmail API enablement in the existing nonproduction project
+was confirmed. Only gmail.readonly was saved and Google confirmed the change;
+the scope is marked unverified and Google requests app verification. Real provider
+acceptance remains unverified. No test-user allowlisting,
+verification submission, warning bypass or live Mail read has occurred. The prior
+persistent-host activation decision remains separate and unanswered.

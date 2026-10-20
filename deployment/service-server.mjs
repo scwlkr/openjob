@@ -18,6 +18,7 @@ const origin = new URL(process.env.OPENJOB_PUBLIC_ORIGIN ?? `http://127.0.0.1:${
 if (origin.href !== origin.origin + '/' || !['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password) throw new Error('OPENJOB_PUBLIC_ORIGIN must be one http(s) origin.');
 if (origin.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(origin.hostname)) throw new Error('Non-loopback service origins require HTTPS.');
 const config = await serviceConfiguration(process.env);
+if (config.googleSession && (host !== '127.0.0.1' || origin.origin !== `http://127.0.0.1:${port}`)) throw new Error('Local Gmail session requires its exact loopback listener.');
 const web = await realpath(fileURLToPath(new URL('../service-web/', import.meta.url)));
 let runtime;
 const json = (response, status, data) => { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(data)); };
@@ -29,13 +30,13 @@ const server = createServer(async (incoming, outgoing) => {
     if (url.pathname.startsWith('/__test')) { outgoing.writeHead(404).end(); return; }
     if (url.pathname === '/healthz' && incoming.method === 'GET') { json(outgoing, config.missing.length ? 503 : 200, { mode: 'service', configured: !config.missing.length, missing: config.missing, providers: config.google ? 'configured_read_only' : 'unconfigured', realSending: false }); return; }
     if (url.pathname === '/runtime-config' && incoming.method === 'GET') {
-      json(outgoing, 200, { firebase: config.firebase, appleServiceId: config.appleServiceId }); return;
+      json(outgoing, 200, { firebase: config.firebase, appleServiceId: config.appleServiceId, googleSessionEnabled: !!config.googleSession }); return;
     }
     if (url.pathname.startsWith('/api/')) {
       if (config.missing.length) { json(outgoing, 503, { error: { code: 'service_configuration_required', missing: config.missing } }); return; }
       const chunks = []; let length = 0;
       for await (const chunk of incoming) { length += chunk.length; if (length > 2 * 1024 * 1024) { json(outgoing, 413, { error: { code: 'request_too_large' } }); return; } chunks.push(chunk); }
-      runtime ??= createPortableRuntime(config.server, config.google ? { google: config.google, googleTransport: fetch, mailTransport: fetch } : {});
+      runtime ??= createPortableRuntime(config.server, config.google ? { google: config.google, googleTransport: fetch, mailTransport: fetch } : config.googleSession ? { googleSession: config.googleSession, googleTransport: fetch, mailTransport: fetch } : {});
       const body = Buffer.concat(chunks);
       const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body } : {}) });
       const response = await runtime.fetch(request);
