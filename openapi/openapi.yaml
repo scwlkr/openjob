@@ -2512,6 +2512,16 @@ paths:
       tags:
         - Providers
       operationId: readConnectionMail
+      parameters:
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque nextCursor from this configured Google account. Omit for the first page. Simulated Connections reject query parameters.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+            pattern: ^gm1\.[A-Za-z0-9_-]+$
       summary: readConnectionMail
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
