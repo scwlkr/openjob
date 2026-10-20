@@ -312,3 +312,53 @@ access or persistent credential storage occurred. Google may retain its consent.
 This proves the standalone session's live read, not integrated saved-Workspace,
 source-linked Task, reply, provider Calendar, native or release acceptance. WLK384
 continues the configured-connection source-to-Task path using isolated fixtures.
+
+
+## Connected OpenJob reply drafts (WLK385)
+
+The configured connection path now extends a source Task to an authored OpenJob
+draft. This is separate from the temporary standalone5202 Mail session. No real
+saved-work onboarding, persistent provider access, provider writes or activation is
+performed by this delivery; the existing alternate-only authorization remains bounded.
+
+In the configured owner pilot, open the source-linked Task, plan/complete it normally,
+then Open connected source Mail and Prepare reply draft. Review the verified From,
+Reply or Reply all, To/Cc and subject; write Your reply and Save OpenJob draft. The
+server honors a valid present Reply-To, otherwise From; sent messages target their
+original recipients instead of self. Reply-all excludes the verified address and
+cross-field duplicates, without inferring aliases or revealing Bcc. Standard Message-ID,
+In-Reply-To and References values are retained for future threading; absent Message-ID
+is shown honestly. Unsupported/malformed address or threading headers are unavailable.
+
+Saved text/account/mode reopen after reload. Unsaved text stays during Workspace
+module/context switching, with an unload warning; save before leaving this page.
+A newer saved version or changed source plan cannot silently overwrite reviewed work.
+Refresh to review; explicitly choose the saved text or keep your editor over the
+reviewed version. Task deletion refuses unfinished reply edits until saved or
+explicitly discarded. Saved drafts remain private after disconnect/Task deletion,
+but cannot be read or saved without current source access. Recreate a Task from the
+same source after an authorized reconnect to reopen its draft. A draft catalog and
+full composition/editable recipients belong to later Mail work.
+
+The existing client exposes the same operations:
+
+```sh
+node cli/openjob.mjs connections reply <workspace-id> <task-id>
+node cli/openjob.mjs connections reply-save <workspace-id> <task-id> --input <reviewed-json-file>
+```
+
+Save JSON contains only `mode` (`reply` or `reply-all`), authored `body`, the returned
+`expectedRevision` (saved draft revision, or0), and returned `reviewToken`. The server
+derives addressing/source/account; client-supplied From, recipients or source IDs are
+rejected. Same-body/envelope retries return the current saved record; differing stale
+text conflicts. API path: `/api/v1/connections/task-sources/{workspaceId}/{taskId}/reply`
+(GET preparation, POST save). Agents cannot access these operations. Private drafts
+stay outside ordinary Task/Calendar projections, offline sync, Home and agent responses.
+
+20October isolated supported-browser proof completed invented Mail -> reviewed Task
+-> saved local planning -> completion -> source -> reply-all -> authored save/reload.
+Unsaved Calendar navigation, deletion guard/discard, owner isolation and disconnect
+were also exercised. Focused API/CLI proof covers both home types and reconnect,
+concurrency/stale-plan/revocation. This does not prove the integrated live R33 journey,
+provider Calendar/send, native/device use or release. No real messages or credentials
+were persisted, and the existing disconnected Timothy session was preserved.

@@ -1,3 +1,19 @@
+## Connected authored reply drafts (WLK385)
+
+From a connected source Task, prepare a reply under its verified Google account.
+Review Reply or Reply all, the server-derived From/To/Cc/subject, and write your own
+text. Reply-To takes precedence; reply-all excludes self and duplicates. Save OpenJob
+draft retains authored text and threading headers in the same private work authority.
+No source body is quoted or cached. Saved drafts reopen after reload; unsaved text
+stays through Workspace module switches. Stale recipients require renewed review and
+concurrent edits conflict. Save or explicitly discard an unfinished reply before
+Task deletion. Saved replies survive deletion/disconnect, but access requires the
+current source and connection; recreating its source Task reopens the saved draft.
+App, shared API and existing CLI use one contract. Provider draft creation, sending,
+editable To/Cc/Bcc/subject, aliases and provider Calendar remain later capabilities.
+Isolated fixtures passed the full read-to-authored-draft flow; live integrated
+acceptance remains separate. [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#connected-openjob-reply-drafts-wlk385).
+
 ## Connected Gmail source Tasks (WLK384)
 
 Configured Google Connections can create or find a private Task from a read message
@@ -22,7 +38,7 @@ login and Mail access both use separate in-memory auth clients. Existing backend
 checks remain unchanged. Real alternate identity/current-account verification
 passed. On20October the agent completed one authorized real read of7 messages, verified the
 server receipt and disconnected. This proves only the standalone alternate route.
-Supported browser control is unavailable, so bounded live-read acceptance is pending.
+Supported browser control and the bounded standalone live read passed; integrated saved-work acceptance remains separate.
 [Usage and boundary](docs/LOCAL_ACCOUNT_ONBOARDING.md#alternate-only-route-without-an-operator-key).
 
 ## Local session Gmail read (WLK318)
