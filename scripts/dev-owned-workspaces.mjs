@@ -66,7 +66,10 @@ try {
         if (path.endsWith('/profile')) return Response.json({ emailAddress: BINDING.address });
         if (path.endsWith('/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'Inbox' }, { id: 'Label_review', name: 'Review' }, { id: 'SPAM', name: 'Spam' }, { id: 'TRASH', name: 'Trash' }] });
         if (path.endsWith('/messages')) {
-          const token = url.searchParams.get('pageToken'), label = url.searchParams.get('labelIds');
+          const token = url.searchParams.get('pageToken'), label = url.searchParams.get('labelIds'), search = url.searchParams.get('q');
+          if (search && !['subject:proposal', 'subject:follow-up', 'subject:missing'].includes(search)) return new Response(null, { status: 400 });
+          if (search === 'subject:missing') return Response.json({ messages: [] });
+          if (search === 'subject:follow-up' && label !== 'SPAM' && label !== 'TRASH') return Response.json({ messages: [{ id: 'm2', threadId: 't2' }] });
           if (label === 'SPAM' || label === 'TRASH') return Response.json({ messages: [] });
           if (label === 'Label_review') return Response.json({ messages: [{ id: 'm2', threadId: 't2' }] });
           if (token !== null && token !== 'invented-next-page') return new Response(null, { status: 400 });

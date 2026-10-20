@@ -20,7 +20,7 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
     const response = await fetch(`/api/v1/connections${path}`, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
     if (!response.ok) {
       const value = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code === 'invalid_cursor' || value?.error?.code === 'folder_unavailable' ? value.error.code : 'connection_unavailable' });
+      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code === 'invalid_cursor' || value?.error?.code === 'folder_unavailable' || value?.error?.code === 'search_rejected' ? value.error.code : 'connection_unavailable' });
     }
     return (await response.json() as { data: ConnectionCatalog | GoogleConnectionCatalog | Mail }).data;
   }, [session, signal]);

@@ -2516,12 +2516,12 @@ paths:
         - in: query
           name: cursor
           required: false
-          description: Opaque nextCursor from this configured Google account and selected folder. Omit for the first page. Simulated Connections reject query parameters.
+          description: Opaque nextCursor from this configured Google account and selected folder and normalized search. Omit for the first page. Simulated Connections reject query parameters.
           schema:
             type: string
             minLength: 1
             maxLength: 4096
-            pattern: ^gm2\.[A-Za-z0-9_-]+$
+            pattern: ^gm3\.[A-Za-z0-9_-]+$
         - in: query
           name: folderId
           required: false
@@ -2530,6 +2530,15 @@ paths:
             type: string
             maxLength: 264
             pattern: ^[A-Za-z0-9_-]{1,128}:folder:[A-Za-z0-9_-]{1,128}$
+        - in: query
+          name: search
+          required: false
+          description: Bounded Gmail query syntax, trimmed and scoped to this account and folder. Keep the same search with its cursor. Omit to clear search.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+            pattern: ^(?=.*\S)[^\u0000-\u001F\u007F]+$
       summary: readConnectionMail
       x-openjob-authorization: authenticated
       x-openjob-retryable: true

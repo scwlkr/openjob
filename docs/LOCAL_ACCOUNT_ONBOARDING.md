@@ -384,3 +384,24 @@ and replies remain attached to their exact message even if its labels move.
 CLI: add `--folder <page.folders[].id>` and reuse only the nextCursor from that same
 folder; omit both options to return to All Mail. Old cursors require a first-page
 restart. Folder input is configured-Google only and adds no provider permission.
+
+
+Search Gmail accepts a submitted Gmail query within the selected account and folder.
+Edit the field, then choose Search Mail; changing text alone leaves Next/First on
+the applied query shown below it. Submission and Clear search start page one;
+changing folders retains the applied query. Rejected queries clear old bodies and
+ask for edit/clear; no unfiltered fallback occurs. Finish confirming any pending
+additional Task before changing search or navigation. Authored Task titles remain
+in memory through query changes, and saved Task source/reply links keep their exact
+message independently of the current search.
+
+CLI: `openjob connections mail <id> --search 'subject:proposal'` accepts the same
+optional `--folder <page.folders[].id>` and matching `--cursor <nextCursor>`.
+Only outer whitespace is trimmed; Gmail receives operators, case and Unicode as
+entered. Search must be nonblank, at most512 JavaScript characters, with no control
+characters. Canonical gm3 cursors bind a query hash and selected folder; old or
+mismatched cursors require a first-page restart. Query text is transient and is not
+stored in connection records or cursors. Search remains configured-Google only.
+The local fixture recognizes explicit invented query examples, not Gmail's complete
+parser. This is synthetic connected-flow proof; the completed alternate-only real
+read does not establish integrated live search or saved-work acceptance.

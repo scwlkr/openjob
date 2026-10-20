@@ -1,7 +1,7 @@
 import type { ProviderFolder, ProviderMessage } from "../../shared/provider-contracts.ts";
 import { createProviderResourceRef as ref } from "../../shared/provider-preview.ts";
 
-export type GmailReadErrorCode = "execution_disabled" | "authentication_required" | "consent_required" | "provider_forbidden" | "rate_limited" | "provider_error" | "network_error" | "malformed_response" | "unsupported_operation" | "invalid_cursor" | "folder_unavailable" | "forbidden" | "invalid_input" | "timeout";
+export type GmailReadErrorCode = "execution_disabled" | "authentication_required" | "consent_required" | "provider_forbidden" | "rate_limited" | "provider_error" | "network_error" | "malformed_response" | "unsupported_operation" | "invalid_cursor" | "search_rejected" | "folder_unavailable" | "forbidden" | "invalid_input" | "timeout";
 export class GmailReadError extends Error {
   readonly code: GmailReadErrorCode;
   constructor(code: GmailReadErrorCode) { super(`Gmail read adapter: ${code.replaceAll("_", " ")}.`); this.name = "GmailReadError"; this.code = code; }
