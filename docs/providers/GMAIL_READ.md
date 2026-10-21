@@ -77,3 +77,15 @@ text as inert text, keeps one body transiently, and clears it on close/navigatio
 disconnect. Existing full-read native/client consumers remain eager. Synthetic
 adapter/API/CLI/browser proof does not close real connected, native lazy, sync,
 metadata lifetime or release acceptance.
+
+
+## Metadata observation lifetime
+
+Configured metadata responses describe a conservative pre-scan observation with
+stale/expiry bounds capped by current credential expiry. Fresh current checks run
+after both successful and failed scans. The web uses elapsed monotonic and wall
+bounds anchored at request start, clears expired content, and polls only a visible
+first page at a bounded interval. It stops on the first failure. HTTP remains no-store;
+no durable metadata/body cache, history cursor or global deletion feed is introduced.
+Sleeping clocks are covered by synthetic elapsed-time checks, not a physical sleep
+qualification. See [browser clock behavior](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now#ticking_during_sleep).

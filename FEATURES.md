@@ -15,8 +15,11 @@ Opening a body preserves the Task form and authored title. Missing bodies leave
 summaries and Tasks usable; current access is rechecked for every read. Task creation
 verifies metadata without a body. CLI exposes --metadata-only and connections message;
 the existing full-read contract stays available for current clients. This slice has
-fixture proof; sync/stale metadata, native lazy controls and integrated live
-acceptance remain separate.
+fixture proof. Metadata observations now show last read/stale/expiry, with bounded
+visible-first-page refresh and explicit recovery after failure. Expiry hides provider
+content; reviewed Task requests survive in Connections memory and keep exact retries.
+Current-page polling is not complete mailbox sync. History/tombstones, native lazy/
+freshness controls and integrated live acceptance remain separate.
 [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
 
 ## Connected authored reply drafts (WLK385)
