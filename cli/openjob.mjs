@@ -7,6 +7,7 @@ import { parseCalendarIcal, previewCalendarIcalImport } from "./lib/calendar-ica
 import { openSync, fstatSync, closeSync, readSync } from "node:fs";
 import { readWorkspaceAgentToken } from "./lib/owned-workspace-agents.mjs";
 import { runOwnedWorkspace } from "./lib/owned-workspace.mjs";
+import { runReplyOperation } from "./lib/reply-operations.mjs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
@@ -91,6 +92,10 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["operation list", new Set([...OUTPUT_OPTIONS, "--workspace", "--task", "--cursor"])],
+  ["operation show", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["operation enqueue", new Set([...OUTPUT_OPTIONS, "--workspace", "--input"])],
+  ["operation run-fixture", new Set([...OUTPUT_OPTIONS, "--workspace"])],
   ["connections list", new Set(OUTPUT_OPTIONS)],
   ["connections begin", new Set([...OUTPUT_OPTIONS, "--input"])],
   ["connections action", new Set([...OUTPUT_OPTIONS, "--input"])],
@@ -153,6 +158,7 @@ Local app and updates:
   OPENJOB_NO_UPDATE_CHECK=1    Disable automatic notice-only checks
 
 Resources:
+  operation    Inspect/queue/run fixture reply operations in an explicit Workspace
   connections  List, begin, action or read Mail; normal runtime closed
   workspace  Personal Tasks, Calendar and invented Mail through the shared API
   auth       Sign in, inspect authentication, or sign out
@@ -194,6 +200,16 @@ Action input: action=approve(simulated)|cancel|disconnect|retry-cleanup|refresh(
 Google begin returns a browser consent URL; callback requires the signed human UI.
 Configured Gmail --metadata-only lists headers without bodies; connections message reads one exact message. Mail accepts --folder with its returned account-qualified folder ID and --search with Gmail query syntax. Keep both filters with a matching nextCursor; omit --cursor to restart at the first page.
 Normal runtime remains unconfigured; no CLI token input or automatic consent.`,
+  operation: `Usage:
+  openjob operation list --workspace <wsp_id> [--task <task-id>] [--cursor <cursor>]
+  openjob operation show <op_id> --workspace <wsp_id>
+  openjob operation enqueue --workspace <wsp_id> --input <path|->
+  openjob operation run-fixture <op_id> --workspace <wsp_id>
+
+Synthetic launcher only. Enqueue is accepted intent, not a send. Retain requestId
+and exact input for explicit retry; mutations never retry automatically.
+run-fixture exits 0 confirmed simulation, 4 rejected, 8 queued/executing/unknown.
+Unknown operations cannot execute again. List/show inspect status without an effect.`,
   workspace: `Usage:
   openjob workspace snapshot
   openjob workspace availability --task <id> --schedule-start <ISO> --schedule-end <ISO> --minutes <5-480>
@@ -595,6 +611,7 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === 'operation') { await runReplyOperation({ command, rest, options: parsed.options, apiRequest, writeResult }); return; }
   if (resource === "workspace" && parsed.options.has("--workspace")) {
     await runOwnedWorkspace({ command, rest, options: parsed.options, apiRequest, writeResult, confirmDestructiveAction }); return;
   }

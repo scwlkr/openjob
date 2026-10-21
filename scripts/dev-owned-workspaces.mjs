@@ -23,7 +23,10 @@ import { webFirebaseConfigFor } from '../config/web-firebase-config.mjs';
 import nativeIdentities from '../config/native-identities.json' with { type: 'json' };
 import { createOwnedWorkspacesApi } from '../server/owned-workspaces-api.ts';
 import { createGoogleConnectionsFlow } from '../server/connections/google-flow.ts';
-import { fixture as googleProtocolFixture, CLIENT, BINDING } from '../tests/support/google-oauth-transport.mjs';
+import { googleRows } from '../server/connections/google-state.ts';
+import { createReplyOperationRepository } from '../db/reply-operations.ts';
+import { createFixtureReplyOperations } from '../server/reply-operations.ts';
+import { fixture as googleProtocolFixture, CLIENT, BINDING, ACCESS, REFRESH } from '../tests/support/google-oauth-transport.mjs';
 const options = new Map(); const args = process.argv.slice(2);
 while (args.length) { const key = args.shift(); if (key === '--google-fixture' && !options.has(key)) { options.set(key, true); continue; } if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH] [--google-fixture].'); options.set(key, args.shift()); }
 const port = Number(options.get('--port') ?? 5202); if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port.');
@@ -38,25 +41,36 @@ async function close() { if (stopping) return; stopping = true; await queue.catc
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void close().then(() => process.exit(0)); });
 try {
   const db = createFakeFirestore();
+  const envelopes = new Map();
   try {
     const raw = await readFile(statePath); if (raw.length > 32 * 1024 * 1024) throw new Error('Oversized fixture.');
     const value = JSON.parse(raw.toString('utf8'));
-    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 150 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces|v1ConnectionOnboarding)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
+    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 500 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces|v1ConnectionOnboarding|v1FixtureOperations|v1FixtureOutboundPayloads|v1FixtureIntegrationJobs|v1FixtureOperationIndexes)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
+    if (value.fixtureGoogleRows !== undefined) {
+      if (!options.has('--google-fixture') || !Array.isArray(value.fixtureGoogleRows) || value.fixtureGoogleRows.length > 1) throw new Error('Restart this invented Google fixture with --google-fixture.');
+      for (const [owner, rows] of value.fixtureGoogleRows) {
+        const validated = googleRows(rows, owner);
+        // Only the protocol fixture's fixed invented credentials may reach this local test file.
+        if (!/^user_[a-f0-9]{32}$/.test(owner) || validated.length > 1 || validated.some(row => row.address !== BINDING.address || row.subject !== BINDING.subject || row.pending || row.operation || row.grant && (row.grant.refreshToken !== REFRESH || row.grant.entry.credential.accessToken !== ACCESS || row.grant.entry.credential.subject !== BINDING.subject))) throw new Error('Invalid invented Google fixture; preserve original.');
+        envelopes.set(owner, validated);
+      }
+    }
     db.restoreState(value.state);
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  async function persist() { const raw = JSON.stringify({ kind: 'openjob-owned-workspace-fixture', version: 1, state: db.exportState() }); if (Buffer.byteLength(raw) > 32 * 1024 * 1024) throw new Error('Fixture capacity.'); const temporary = statePath + `.tmp-${process.pid}`; await writeFile(temporary, raw, { mode: 0o600, flag: 'wx' }); await rename(temporary, statePath); }
+  async function persist() { const raw = JSON.stringify({ kind: 'openjob-owned-workspace-fixture', version: 1, state: db.exportState(), ...(options.has('--google-fixture') ? { fixtureGoogleRows: [...envelopes] } : {}) }); if (Buffer.byteLength(raw) > 32 * 1024 * 1024) throw new Error('Fixture capacity.'); const temporary = statePath + `.tmp-${process.pid}`; await writeFile(temporary, raw, { mode: 0o600, flag: 'wx' }); await rename(temporary, statePath); }
+  // Persist every operation commit before acknowledging it to the runner, including executing.
+  const durableFixtureTransport = async (input, init) => { const response = await db.fetch(input, init); if (String(input).endsWith('/documents:commit') && response.ok) await persist(); return response; };
   const now = new Date().toISOString(), authority = await createTestFirebaseAuthority({ now });
   const verifyIdToken = createFirebaseIdTokenVerifier({ projectId: 'openjob-dev', fetchImplementation: authority.fetch, now: () => Date.parse(now) });
   const config = { projectId: 'openjob-dev', clientEmail: 'workspace-fixture@example.invalid', privateKey: await createPrivateKey() };
   const users = createFirestoreUserStore(config, db.fetch), owned = createOwnedWorkspaceStore(config, db.fetch), personal = createFirestorePersonalWorkspaceStore(config, db.fetch), contexts = createPersonalWorkspaceContextStore(config, db.fetch), store = createWorkspaceContextStore({ owned, personal, contexts }), sessions = new Map();
   for (const name of ['alex', 'sam']) { const token = await authority.issue({ uid: `owned_fixture_${name}` }); const identity = await verifyIdToken(new Request('http://fixture.invalid', { headers: { authorization: `Bearer ${token}` } })); const { user } = await users.create(identity); sessions.set(name, { token, userId: user.userId }); const items = await store.list(user.userId); for (const item of items) await store.snapshot(user.userId, item.workspaceId); }
   await persist(); const api = createOwnedWorkspacesApi({ store, users, verifyIdToken });
-  const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
   const consentFixture = createConsentFixture({ config, isOwnerActive: async owner => { await store.list(owner); return true; } });
   const onboarding = createConnectionsApplication({ store: createConnectionOnboardingStore(config, db.fetch), homes: store, consent: consentFixture.adapter, choices: fixtureChoices });
   let google;
   if (options.has('--google-fixture')) {
-    const protocol = googleProtocolFixture(), envelopes = new Map(), owner = sessions.get('alex').userId;
+    const protocol = googleProtocolFixture(), owner = sessions.get('alex').userId;
     const home = await store.personalContext(owner);
     google = createGoogleConnectionsFlow({ executionMode: 'configured', evidenceMode: 'google-fixture', homes: store,
       isOwnerActive: async current => current === owner && (await store.list(current)).length > 0,
@@ -79,11 +93,15 @@ try {
         if (!path.endsWith('/messages/m1') && !second) return new Response(null, { status: 404 });
         return Response.json({ id: second ? 'm2' : 'm1', threadId: second ? 't2' : 't1', internalDate: String(Date.now()), labelIds: second ? ['INBOX', 'Label_review'] : ['INBOX'], payload: { mimeType: 'text/plain', headers: [{ name: 'Subject', value: second ? 'Review the follow-up proposal' : 'Review the connected-work proposal' }, { name: 'From', value: 'Colleague <colleague@example.invalid>' }, { name: 'Reply-To', value: '"Reply Desk, Inc." <replies@example.invalid>' }, { name: 'To', value: `${BINDING.address}, teammate@example.invalid` }, { name: 'Cc', value: 'observer@example.invalid' }, { name: 'Message-ID', value: second ? '<follow-up@example.invalid>' : '<proposal@example.invalid>' }, { name: 'References', value: '<root@example.invalid>' }], body: { data: Buffer.from(second ? 'Invented second-page message. Review this follow-up in its own source-linked Task.' : 'Invented connected message. Review this work, plan it in your OpenJob Calendar, then return to its source.').toString('base64url') } } });
       } });
+    if (!envelopes.has(owner)) {
     const started = await google.begin(owner, BINDING.address, home.workspace.workspaceId), url = new URL(started.authorizationUrl);
     protocol.hooks.claims = { nonce: url.searchParams.get('nonce') };
     await google.callback(owner, { state: url.searchParams.get('state'), code: 'invented_fixture_code', callbackUri: 'https://fixture.invalid/connections/google/callback' });
+    }
     await persist();
   }
+  const fixtureOperations = google ? createFixtureReplyOperations({ repository: createReplyOperationRepository(config, durableFixtureTransport), authority: google.fixtureReplyAuthority(), dispatch: async () => ({ kind: 'confirmed', receiptId: 'sim_' + crypto.randomUUID().replaceAll('-', '') }) }) : undefined;
+  const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, fixtureOperations, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
   const connectionsApi = createConnectionsApi({ onboarding: google ? undefined : onboarding, google, users, verifyIdToken });
   const personalApi = createV1PersonalWorkspaceApi({ workspace: personal, users, verifyIdToken });
   const plugin = { name: 'owned-workspaces-fixture', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {
@@ -93,9 +111,9 @@ try {
         const url = new URL(incoming.url, `http://127.0.0.1:${port}`);
         if (url.pathname.startsWith('/__fixture/session/')) { const session = sessions.get(url.pathname.slice('/__fixture/session/'.length)); outgoing.writeHead(session ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' }); outgoing.end(JSON.stringify(session ?? {})); return; }
         const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 250000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
-        const before = db.exportState(); const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
+        const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
         const response = await (url.pathname.startsWith('/api/v1/connections') ? connectionsApi : url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
-        if (['POST', 'DELETE'].includes(incoming.method) && (response.ok || url.pathname.startsWith('/api/v1/connections'))) { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
+        if (['POST', 'DELETE'].includes(incoming.method) && (response.ok || url.pathname.startsWith('/api/v1/connections'))) await persist();
         outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()));
       } catch { outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: { code: 'fixture_unavailable' } })); }
     };

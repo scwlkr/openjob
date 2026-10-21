@@ -5,8 +5,9 @@ import { createGoogleOAuthAdapter, type GoogleConsentBinding } from '../provider
 import { createGmailReadAdapter } from '../providers/gmail-read-adapter.ts';
 import { googleRows, googleBinding, uuid, validAddress, type GoogleConnection, type GoogleConnectionCatalog, type PrivateGoogleConnections } from './google-state.ts';
 import type { MailTaskReference, MailTaskResult, MailTaskSource } from '../../shared/mail-task-source.ts';
-import { replySource, validateReplySave, type ConnectedReplyStore, type ReplySaveInput, type ReplyPreparation } from '../../shared/connected-reply.ts';
+import { replySource, sameReplyPlan, validateReplySave, type ConnectedReplyStore, type ReplySaveInput, type ReplyPreparation } from '../../shared/connected-reply.ts';
 import { replyPlans, replyReviewToken } from './reply-plan.ts';
+import { operationFail, validateFrozenReply, type FrozenReplyPayload, type ReplyOperationInput } from '../../shared/reply-operation.ts';
 
 type Options = {
   executionMode?: 'disabled' | 'configured'; evidenceMode?: 'google' | 'google-fixture';
@@ -83,6 +84,27 @@ export function createGoogleConnectionsFlow(options: Options) {
     await current(); return { ...context, plans, reviewToken };
   }
   return {
+    /** Only the synthetic launcher may compose this authority with an injected dispatcher. */
+    fixtureReplyAuthority() {
+      if (evidenceMode !== 'google-fixture') connectionFail('not_configured');
+      return {
+        async freeze(owner: string, workspaceId: string, input: ReplyOperationInput) {
+          if (!homes.connectedReply) connectionFail('not_configured');
+          const context = await prepareReply(owner, workspaceId, input.taskId);
+          const draft = await homes.connectedReply(owner, context.source);
+          if (!draft || !draft.body.trim() || draft.revision !== input.draftRevision) operationFail('conflict');
+          if (context.reviewToken !== input.reviewToken || JSON.stringify(draft.plan) !== JSON.stringify(draft.mode === 'reply' ? context.plans.reply : context.plans.replyAll)) connectionFail('reply_review_required');
+          const payload = validateFrozenReply({ version: 1, action: 'reply.simulate', ownerUserId: owner, workspaceId, taskId: input.taskId, source: replySource(context.source), connectionRevision: context.before.attemptId, providerSubject: context.before.subject, reviewToken: context.reviewToken, draft });
+          return { payload, current: async () => { await context.current(); if (JSON.stringify(await homes.connectedReply!(owner, context.source)) !== JSON.stringify(draft)) operationFail('conflict'); } };
+        },
+        async current(payload: FrozenReplyPayload) {
+          const context = await prepareReply(payload.ownerUserId, payload.workspaceId, payload.taskId);
+          const plan = payload.draft.mode === 'reply' ? context.plans.reply : context.plans.replyAll;
+          if (JSON.stringify(replySource(context.source)) !== JSON.stringify(payload.source) || context.before.attemptId !== payload.connectionRevision || context.before.subject !== payload.providerSubject || context.reviewToken !== payload.reviewToken || !sameReplyPlan(plan, payload.draft.plan)) connectionFail('forbidden');
+          await context.current();
+        },
+      };
+    },
     async reply(owner: string, workspaceId: string, taskId: string): Promise<ReplyPreparation> {
       if (!homes.connectedReply) connectionFail('not_configured');
       const { source, plans, reviewToken, current } = await prepareReply(owner, workspaceId, taskId);
