@@ -5,6 +5,7 @@ import type { ConnectedReplyDraft, ReplyPreparation, ReplySaveInput } from '../.
 import type { ProviderMessage, ProviderMessageSummary, ProviderMessageSummaryPage } from '../../shared/provider-contracts';
 import type { MailReadFreshness } from '../../shared/connected-mail-freshness';
 import type { GoogleConnectionCatalog } from '../../shared/google-connection-catalog';
+import type { WorkspaceAgentGrant, WorkspaceAgentAction } from '../../shared/owned-workspace-agents';
 
 export type { OwnedWorkspace, OwnedWorkspaceSnapshot, ConnectedReplyDraft, ReplyPreparation, ReplySaveInput, ProviderMessage, ProviderMessageSummary, GoogleConnectionCatalog };
 export type ConnectedMail = { mode: 'google' | 'google-fixture'; workspaceId: string; page: ProviderMessageSummaryPage; freshness: MailReadFreshness };
@@ -13,6 +14,7 @@ export type ConnectedMessage = { mode: 'google' | 'google-fixture'; workspaceId:
 export type ConnectedSource = { mode: 'google' | 'google-fixture'; workspaceId: string; taskId: string; address: string; message: ProviderMessage };
 export type ConnectedCommand = TaskCalendarCommand & { expectedNotes?: string };
 export type MailTaskInput = { messageId: string; title: string; requestId?: string };
+export type ConnectedAgents = { agents: WorkspaceAgentGrant[]; actions: WorkspaceAgentAction[] };
 /** Same API contracts as web/CLI. No credential access in presentation code. */
 export type NativeConnectedWorkspaceApi = {
   list(token: string, owner: string): Promise<OwnedWorkspace[]>;
@@ -20,6 +22,8 @@ export type NativeConnectedWorkspaceApi = {
   personal(token: string, owner: string): Promise<OwnedWorkspaceSnapshot>;
   read(token: string, owner: string, workspaceId: string): Promise<OwnedWorkspaceSnapshot>;
   command(token: string, owner: string, workspaceId: string, input: ConnectedCommand): Promise<OwnedWorkspaceSnapshot>;
+  agentGrants(token: string, owner: string, workspace: OwnedWorkspace): Promise<ConnectedAgents>;
+  revokeAgent(token: string, owner: string, workspaceId: string, agentId: string): Promise<{ id: string; revoked: true }>;
   connections(token: string, owner: string): Promise<GoogleConnectionCatalog>;
   mail(token: string, owner: string, workspaceId: string, connectionId: string, query?: ConnectedMailQuery): Promise<ConnectedMail>;
   message(token: string, owner: string, workspaceId: string, connectionId: string, messageId: string): Promise<ConnectedMessage>;

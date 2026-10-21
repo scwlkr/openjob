@@ -22,6 +22,7 @@ function fixture(subject = 'Proposal') {
   const prepare = (): ReplyPreparation => ({ workspaceId: id, taskId: 'task', storageKind: 'openjob', plans: { reply: plan, replyAll: { ...plan, to: [...plan.to, 'teammate@example.invalid'], cc: ['observer@example.invalid'] } }, reviewToken: 'e'.repeat(64), draft });
   const controller: NativeConnectedWorkspaceController = {
     list: jest.fn(async () => [structuredClone(snapshot.workspace)]), create: jest.fn(async () => structuredClone(snapshot)), personal: jest.fn(async () => structuredClone(snapshot)), read: jest.fn(async () => structuredClone(snapshot)),
+    agentGrants: jest.fn(async () => ({ agents: [], actions: [] })), revokeAgent: jest.fn(async (_owner, _workspace, agentId) => ({ id: agentId, revoked: true as const })),
     command: jest.fn(async (_owner, _id, value) => { const { expectedNotes, ...input } = value; if (input.type === 'task.notes' && (snapshot.work.tasks.find(task => task.id === input.taskId)?.notes || '') !== expectedNotes) throw Object.assign(new Error(), { status: 409, code: 'conflict' }); snapshot = { ...snapshot, work: applyTaskCalendarCommand(snapshot.work, input, owner, () => `offline_00000000-0000-4000-8000-${String(nextId++).padStart(12, '0')}`) }; return structuredClone(snapshot); }),
     connections: jest.fn(async () => ({ mode: 'google-fixture' as const, mailAvailable: true, homes: [{ workspaceId: id, name: 'Work' }], bindings: [{ id: connection, workspaceId: id, address: plan.from, status: connected ? 'connected' as const : 'disconnected' as const, expired: false }] })),
     mail: jest.fn(async () => { current(); const { body, ...metadata } = message; void body; return { workspaceId: id, mode: 'google-fixture' as const, freshness: mailReadFreshness(Date.now(), Date.now() + 3600000), page: { messages: [metadata], folders: [], events: [], calendars: [], nextCursor: null, syncCursor: null } }; }),
@@ -44,6 +45,7 @@ test('native connected Mail -> reviewed Task -> Calendar -> complete -> source -
   await press('Complete Reviewed proposal'); await waitFor(() => expect(f.snapshot.work.tasks[0]?.completed).toBe(true));
   await press('Open connected source Mail'); await screen.findByText('Invented provider source body'); await press('Prepare reply draft'); await press('Reply all');
   await fireEvent.changeText(await screen.findByLabelText('Your connected reply'), 'Reviewed, planned and completed.');
+  await press('Workspace Agents'); await screen.findByText('No agents have access to this Workspace.');
   await press('Workspace Calendar'); await press('Open linked task Reviewed proposal'); await press('Open connected source Mail');
   expect(await screen.findByLabelText('Your connected reply')).toHaveDisplayValue('Reviewed, planned and completed.');
   await press('Refresh reply and saved version'); await press('Save OpenJob draft'); await screen.findByText('OpenJob draft saved. Nothing sent.');
@@ -80,6 +82,7 @@ test('native browsing stays metadata-only until explicit body read; close and mo
   await fireEvent.changeText(screen.getByLabelText('Connected Task title'), 'Keep this authored title');
   await press('Read message Proposal'); await screen.findByText('Invented provider source body');
   await press('Close message Proposal'); expect(screen.queryByText('Invented provider source body')).toBeNull();
+  await press('Workspace Agents'); await screen.findByText('No agents have access to this Workspace.');
   await press('Workspace Calendar'); await press('Workspace Mail'); await press(`Read Mail ${plan.from}`);
   expect(await screen.findByLabelText('Connected Task title')).toHaveDisplayValue('Keep this authored title'); expect(screen.queryByText('Invented provider source body')).toBeNull(); expect(f.controller.message).toHaveBeenCalledTimes(1);
 });
@@ -111,7 +114,7 @@ test('an uncertain additional Task keeps its exact input and UUID across module 
   let reject!: (error: Error) => void;
   const apply = jest.mocked(f.controller.createMailTask).getMockImplementation()!;
   jest.spyOn(f.controller, 'createMailTask').mockImplementationOnce(async (...args) => { await apply(...args); return new Promise((_, fail) => { reject = fail; }); });
-  await press('Create another Task from Proposal'); await press('Workspace Calendar');
+  await press('Create another Task from Proposal'); await press('Workspace Agents'); await screen.findByText('No agents have access to this Workspace.');
   await act(async () => reject(new Error('Response lost')));
   await press('Workspace Mail'); await press(`Read Mail ${plan.from}`); await screen.findByText(/Task result is uncertain/);
   expect(screen.getByLabelText('Connected Task title')).toHaveDisplayValue('Additional reviewed Task'); expect(screen.getByLabelText('Connected Task title')).toBeDisabled(); expect(screen.getByRole('button', { name: 'Search Mail' })).toBeDisabled();
@@ -201,6 +204,17 @@ test('folder/search/cursor controls retain applied query and recover honestly fr
   expect(screen.queryByRole('header', { name: 'Proposal' })).toBeNull(); expect(screen.getByLabelText('Connected Task title')).toHaveDisplayValue('Keep authored Task through failure');
   await press('Clear Mail search'); await screen.findByRole('header', { name: 'Proposal' });
   await fireEvent.changeText(screen.getByLabelText('Search Gmail'), 'subject:missing'); await press('Search Mail'); await screen.findByText('This page has no messages.'); expect(screen.queryByRole('header', { name: 'Proposal' })).toBeNull();
+});
+test('agent action links refresh saved work and refuse a removed item before selecting its current Task or block', async () => {
+  const f = fixture(); await open(f);
+  const agentId = `agt_${'e'.repeat(32)}`, taskId = 'offline_00000000-0000-4000-8000-000000000001', eventId = 'offline_00000000-0000-4000-8000-000000000002';
+  jest.spyOn(f.controller, 'agentGrants').mockResolvedValue({ agents: [{ id: agentId, workspaceId: id, ownerUserId: owner, name: 'Workspace helper', scopes: ['tasks:read', 'calendar:read'], resourceIds: [f.snapshot.workspace.taskSpaceId, f.snapshot.workspace.calendarId], revoked: false, createdAt: '2026-10-20T12:00:00.000Z', expiresAt: '2026-10-21T12:00:00.000Z' }], actions: [{ agentId, operation: 'task.create', itemId: taskId, at: '2026-10-20T12:00:00.000Z' }, { agentId, operation: 'calendar.create', itemId: eventId, at: '2026-10-20T12:01:00.000Z' }] });
+  f.snapshot.work.tasks.push({ id: taskId, ownerId: owner, title: 'Fresh agent Task', completed: false });
+  await press('Workspace Agents'); await press('Open item: Task created'); await screen.findByRole('header', { name: 'Fresh agent Task · opened linked task' });
+  await press('Workspace Agents'); await press('Open item: Calendar block created'); await screen.findByText(/This agent action’s item is unavailable in the current Workspace/);
+  expect(screen.getByRole('header', { name: 'Workspace agent access' })).toBeTruthy();
+  f.snapshot.work.events.push({ id: eventId, calendarId: f.snapshot.workspace.calendarId, title: 'Fresh agent block', start: '2026-10-21T14:00:00.000Z', end: '2026-10-21T14:30:00.000Z' });
+  await press('Open item: Calendar block created'); await screen.findByRole('header', { name: 'Fresh agent block · opened daily block' });
 });
 test('foreground stale/expired observations hide provider details and require explicit refresh, retaining authored titles', async () => {
   jest.useFakeTimers({ doNotFake: ['queueMicrotask'] }); const f = fixture(); let root: Awaited<ReturnType<typeof open>> | undefined;

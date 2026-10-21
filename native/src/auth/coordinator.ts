@@ -374,6 +374,8 @@ export class NativeAuthCoordinator implements NativeTaskListController {
         personal: owner => this.withPersonalSession(owner, token => api.personal(token, owner)),
         read: (owner, id) => this.withPersonalSession(owner, token => api.read(token, owner, id)),
         command: (owner, id, input) => this.withPersonalSession(owner, token => api.command(token, owner, id, input)),
+        agentGrants: (owner, workspace) => this.withPersonalSession(owner, token => api.agentGrants(token, owner, workspace)),
+        revokeAgent: (owner, id, agentId) => this.withPersonalSession(owner, token => api.revokeAgent(token, owner, id, agentId)),
         connections: owner => this.withPersonalSession(owner, token => api.connections(token, owner)),
         mail: (owner, id, connection, query) => this.withPersonalSession(owner, token => api.mail(token, owner, id, connection, query)),
         message: (owner, id, connection, messageId) => this.withPersonalSession(owner, token => api.message(token, owner, id, connection, messageId)),

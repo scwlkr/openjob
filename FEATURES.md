@@ -20,6 +20,14 @@ Workspace memory across module switches. Explicit two-step Stop retrying release
 an unavailable request while preserving its title and previous receipt; it warns
 that a Task may already exist. No automatic mutation retry or navigation occurs.
 
+Workspace Agents reviews existing independent-Workspace grants, exact scopes and
+resources, last-checked expiry/revocation and bounded confirmed actions. Revoke
+requires confirmation and a current acknowledgement/readback. Unconfirmed results
+hide stale access data and require manual refresh. Item links refresh current
+Workspace work before opening an existing Task or block. Mail intents and reply
+buffers survive Agents navigation. Retained Personal uses its existing Agents
+view; credential issuance stays in the CLI. No credential is displayed here.
+
 The existing Personal/offline and Groups surfaces remain available. Configure
 provider consent in the existing Connections app. No native consent flow, offline
 Mail, provider Calendar writes or real sending is added. Rendered and loopback
@@ -60,7 +68,8 @@ view shows permissions, expiry, revocation and recent confirmed actions with lin
 to retained work. Failed revocation requires explicit inspection; current authority
 and concurrent-revoke checks fence writes. Synthetic browser/CLI/restart proof
 passed. Normal runtime remains unconfigured. Mail delegation, multi-person policy,
-native agent controls and live acceptance remain separate.
+broader policy and live acceptance remain separate. Native connected Workspaces
+provide owner review/revocation of these existing grants; issuance remains in CLI.
 [Usage](docs/WORKSPACE_AGENTS.md).
 
 ## Configured Gmail pages, folders and search (P-WLK-6 / R32)

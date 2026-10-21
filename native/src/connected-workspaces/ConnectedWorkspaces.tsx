@@ -10,6 +10,7 @@ import { useOpenJobTheme } from '../theme';
 import { ConnectedSourceReply, type NativeReplyBuffer } from './ConnectedSource';
 import { ConfiguredMail } from './ConfiguredMail';
 import { useNativeMailIntents } from './mail-task-intents';
+import { WorkspaceAgents } from './WorkspaceAgents';
 
 type Props = { controller: NativeConnectedWorkspaceController; owner: string; active: boolean; sessionReady: boolean; onAccessEnded(error: unknown): void };
 export function ConnectedWorkspaces(props: Props) {
@@ -50,7 +51,7 @@ function WorkspacePanel({ controller, owner, workspace, active, onAccessEnded }:
   const run = useCallback(async (action?: () => Promise<OwnedWorkspaceSnapshot>) => {
     if (!lease.current.active || lease.current.pending) return false;
     lease.current.pending = true; setBusy(true); setError(''); setNotice('');
-    try { const value = action ? await action() : await controller.read(owner, id); if (!lease.current.active) return false; setSnapshot(value); if (action) setNotice('Workspace work saved. No provider writes.'); return true; }
+    try { const value = action ? await action() : await controller.read(owner, id); if (!lease.current.active) return false; setSnapshot(value); if (action) setNotice('Workspace work saved. No provider writes.'); return value; }
     catch (failure) { if (lease.current.active) { setError('Workspace request unavailable. Editor text is kept; refresh to check current saved work.'); onAccessEnded(failure); } return false; }
     finally { if (lease.current.active) { lease.current.pending = false; setBusy(false); } }
   }, [controller, owner, id, onAccessEnded]);
@@ -60,10 +61,10 @@ function WorkspacePanel({ controller, owner, workspace, active, onAccessEnded }:
     if (input.type === 'task.delete' && buffers[input.taskId]?.dirty) { setError('Save or explicitly discard this Task’s unfinished reply before deleting.'); return false; }
     const result = await run(() => controller.command(owner, id, { ...input, ...(expectedNotes === undefined ? {} : { expectedNotes }) } as ConnectedCommand));
     if (result && input.type === 'task.delete') setBuffers(current => { const next = { ...current }; delete next[input.taskId]; return next; });
-    return result;
+    return !!result;
   }
   const view: WorkspaceView | undefined = snapshot && { ...snapshot.work, accounts: [], messages: [], drafts: [], sent: [], agents: [], activity: [] };
-  return <><Copy heading>{workspace.name}</Copy><Row>{['Today', 'Mail', 'Tasks', 'Calendar'].map(value => <Action key={value} label={`Workspace ${value}`} selected={tab === value} disabled={busy || !view} onPress={() => setTab(value)} />)}<Action label="Refresh Workspace work" disabled={busy} onPress={() => void run()} /></Row>
+  return <><Copy heading>{workspace.name}</Copy><Row>{['Today', 'Mail', 'Tasks', 'Calendar', 'Agents'].map(value => <Action key={value} label={`Workspace ${value}`} selected={tab === value} disabled={busy || !view} onPress={() => setTab(value)} />)}<Action label="Refresh Workspace work" disabled={busy} onPress={() => void run()} /></Row>
     <Copy>Task and Calendar editors stay in this context while switching modules. Save reply edits before leaving the app.</Copy>
     {error ? <Copy>{error}</Copy> : null}{notice ? <Copy>{notice}</Copy> : null}{busy && <Copy>Working online…</Copy>}
     {view && <>
@@ -71,6 +72,12 @@ function WorkspacePanel({ controller, owner, workspace, active, onAccessEnded }:
       {active && tab === 'Mail' && <ConfiguredMail intents={mailIntents} controller={controller} owner={owner} workspaceId={id} onTask={async task => { await run(); if (lease.current.active) openTask(task); }} onAccessEnded={onAccessEnded} />}
       <View style={{ display: tab === 'Tasks' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Tasks'} importantForAccessibility={tab === 'Tasks' ? 'auto' : 'no-hide-descendants'}><Tasks contextName={workspace.name} view={view} busy={busy} selectedId={selectedTask} command={command} onSource={() => undefined} onSaveNotes={(task, notes, base) => command({ type: 'task.notes', taskId: task, notes }, base)} connectedSource={taskId => active && tab === 'Tasks' ? <ConnectedSourceReply controller={controller} owner={owner} workspaceId={id} taskId={taskId} buffer={buffers[taskId]} onBuffer={buffer => setBuffers(current => { const next = { ...current }; if (buffer) next[taskId] = buffer; else delete next[taskId]; return next; })} onAccessEnded={onAccessEnded} /> : null} /></View>
       <View style={{ display: tab === 'Calendar' ? 'flex' : 'none' }} accessibilityElementsHidden={tab !== 'Calendar'} importantForAccessibility={tab === 'Calendar' ? 'auto' : 'no-hide-descendants'}><Calendar contextName={workspace.name} view={view} busy={busy} command={command} selectedId={selectedEvent} onTask={openTask} /></View>
+      {active && tab === 'Agents' && <WorkspaceAgents key={`${owner}:${id}`} controller={controller} owner={owner} workspace={workspace} onAccessEnded={onAccessEnded} onOpenItem={async target => {
+        const fresh = await run(); if (!fresh || !lease.current.active) return;
+        const exists = target.kind === 'task' ? fresh.work.tasks.some(task => task.id === target.id) : fresh.work.events.some(event => event.id === target.id);
+        if (!exists) { setError('This agent action’s item is unavailable in the current Workspace. Saved work is unchanged.'); return; }
+        if (target.kind === 'task') openTask(target.id); else { setSelectedEvent(target.id); setTab('Calendar'); }
+      }} />}
     </>}
   </>;
 }

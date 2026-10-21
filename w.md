@@ -1,3 +1,41 @@
+# Native Agents checkpoint — P-WLK-6 / R22–R53
+
+21 October2026 UTC: existing draft PR120 branch, based on bcfb374/main5b21875.
+Native Connected Workspaces gains owner review/revoke of existing independent-
+Workspace agent grants and bounded confirmed actions. Exact public DTO validation
+rejects foreign resources/owners, credential fields and malformed history. Existing
+session/epoch guards fence list and DELETE. Confirmation precedes one mutation;
+exact200 acknowledgement plus current revoked readback precedes success. Uncertain
+results clear stale scopes/history and require explicit refresh, with no retry.
+Current-item navigation refreshes saved work and refuses missing/removed items.
+Task intents and authored reply buffers survive Agents navigation. Retained Personal
+points to its existing Agents view without inferring context type from its name.
+Issuance remains CLI; no backend/provider/dependency/real-access capability changed.
+
+Native types, affected lint and23 UI/API tests pass. Twelve actual-native-HTTP,
+CLI, scope/revocation/race/preservation and navigation checks pass; the existing
+native Mail HTTP flow passes for both homes (3), and real-send403/no-side-effect
+passes (1). Root types and brand32 pass in the isolated source copy. Read-only
+review found no consequential gap. Native's stricter compiler required explicit
+index guards in the shared navigation parser; existing parser semantics/tests
+remain intact. Simulator proof for this changed source is still pending.
+
+New independent proof root: /tmp/openjob-native-agents-a3tmb9zb. Fresh native npmci
+from the unchanged lockfile applied the existing Sentry patch. Build Space lease
+a36660e551508f02aa7f26a8 reserves10GiB with20GiB floor (57.5GiB observed free).
+Only its guarded fixture entry selects loopback5214; source/fixture manifests record
+the delta so existing Android5213/Metro8088 remain untouched. Prior f8830d8 iOS
+artifact and practical proof stay immutable at their recorded input checkpoint.
+
+Next: build/verify this exact source in the owned OpenJob simulator, exercise
+review/cancel/revoke and exact action links with temporary invented A/B grants,
+then verify CLI A denial/B usability and preserved authored work. Revoke passed
+fixture grants, remove their private temporary files, stop only own resources and
+release lease with actual outcome. Record final source/artifact/result in Linear
+R53 ba6592c3-b3e1-4908-b830-3532ab70aaf4 and PR120. Draft/full R22/R53/live/native
+provider/device/storage/Android-method/release gates remain open. No real Mail test
+repeated, persistent real access, deployment or publication.
+
 # Current native Mail delivery — P-WLK-6 / R32–R53
 
 21 October2026 UTC: source f8830d805d5cdf5d7a669676fe57d5cae462584f is pushed on

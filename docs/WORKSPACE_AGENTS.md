@@ -63,6 +63,16 @@ Action buttons open the corresponding Task or block when it still exists. This
 bounded history records operation, item ID, agent and time; it is not a complete
 audit log and contains no Task notes, Mail references or reply text.
 
+Native Connected Workspaces also has an **Agents** tab for this owner review.
+It shows last-check time, exact grants and confirmed actions. Item links refresh
+current Workspace work before opening a retained Task or block. Confirm revocation
+to deny future access; the screen requires an exact acknowledgement and observed
+revoked state before reporting success. An uncertain result hides stale grant and
+action data until explicit refresh, without retrying the mutation. Authored Mail
+Task requests and reply buffers survive Agents navigation. Retained Personal uses
+its existing **Personal → Agents** screen; no name-based context inference or
+substitute grants are used. Credentials remain in the existing CLI flow.
+
 The same human operations are available through the CLI:
 
 ```sh
@@ -95,6 +105,7 @@ remained valid; Calendar-only access and a second human stayed isolated. All
 synthetic credentials were revoked and their private files removed after proof.
 
 This is bounded Tasks/Calendar owner-pilot delivery, not full R22 acceptance.
-Mailbox-set delegation, multi-person sponsoring rights/lifecycle, broader policy,
-native agent controls and integrated live acceptance remain separate. No real
+Mailbox-set delegation, multi-person sponsoring rights/lifecycle, broader policy
+and integrated live acceptance remain separate. Native review/revocation follows
+the same existing contracts; its checkpoint evidence is in `w.md`. No real
 grant, credential activation, provider effect, deployment or release was performed.

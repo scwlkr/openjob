@@ -2,6 +2,7 @@ import { OpenJobApiError, ProviderSignInError } from './auth/coordinator';
 import { validateWorkspace, validateOwnedSnapshot, WORKSPACE_ID } from '../../shared/owned-workspaces';
 import { validReplyPlan, validateConnectedReplyDraft, validateReplySave } from '../../shared/connected-reply';
 import { mailReadWindow } from '../../shared/connected-mail-freshness';
+import { WORKSPACE_AGENT_ID, parseWorkspaceAgentActions, validateWorkspaceAgent } from '../../shared/owned-workspace-agents';
 import type { NativeConnectedWorkspaceApi, ProviderMessage, ProviderMessageSummary, OwnedWorkspaceSnapshot, GoogleConnectionCatalog, ConnectedMail, ConnectedSource, ReplyPreparation } from './connected-workspaces-contracts';
 
 function invalid(): never { throw new OpenJobApiError(502, 'invalid_response', 'OpenJob returned invalid Workspace data.'); }
@@ -21,10 +22,10 @@ function summary(value: unknown): ProviderMessageSummary {
 }
 export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementation = fetch }: { apiBaseUrl: string; fetchImplementation?: typeof fetch }): NativeConnectedWorkspaceApi {
   const base = apiBaseUrl.replace(/\/+$/, '');
-  async function request(token: string, owner: string, path: string, input?: unknown): Promise<unknown> {
+  async function request(token: string, owner: string, path: string, input?: unknown, method?: 'DELETE'): Promise<unknown> {
     if (!/^user_[a-f0-9]{32}$/.test(owner)) throw new OpenJobApiError(400, 'invalid_input');
     let response: Response, raw: string;
-    try { response = await fetchImplementation(base + path, { method: input === undefined ? 'GET' : 'POST', headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(input === undefined ? {} : { 'content-type': 'application/json' }) }, ...(input === undefined ? {} : { body: JSON.stringify(input) }), cache: 'no-store', redirect: 'error' }); raw = await response.text(); }
+    try { response = await fetchImplementation(base + path, { method: method ?? (input === undefined ? 'GET' : 'POST'), headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(input === undefined ? {} : { 'content-type': 'application/json' }) }, ...(input === undefined ? {} : { body: JSON.stringify(input) }), cache: 'no-store', redirect: 'error' }); raw = await response.text(); }
     catch { throw new ProviderSignInError('offline'); }
     if (raw.length > 2_000_000) invalid();
     let body: Record<string, unknown>;
@@ -47,6 +48,23 @@ export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementat
     async personal(token, owner) { return snapshot(await request(token, owner, '/workspaces/personal-context', {}), owner); },
     async read(token, owner, id) { return snapshot(await request(token, owner, `/workspaces/${workspaceId(id)}`), owner, id); },
     async command(token, owner, id, input) { return snapshot(await request(token, owner, `/workspaces/${workspaceId(id)}/commands`, input), owner, id); },
+    async agentGrants(token, owner, workspace) {
+      const target = validateWorkspace(workspace);
+      if (target.ownerUserId !== owner) throw new OpenJobApiError(400, 'invalid_input');
+      const value = await request(token, owner, `/workspaces/${workspaceId(target.workspaceId)}/agent-grants`);
+      if (!object(value) || Object.keys(value).sort().join(',') !== 'actions,agents' || !Array.isArray(value.agents) || value.agents.length > 100 || !Array.isArray(value.actions)) invalid();
+      try {
+        const agents = value.agents.map(row => validateWorkspaceAgent(target, row));
+        if (new Set(agents.map(row => row.id)).size !== agents.length) invalid();
+        return { agents, actions: parseWorkspaceAgentActions(JSON.stringify(value.actions)) };
+      } catch { return invalid(); }
+    },
+    async revokeAgent(token, owner, id, agentId) {
+      if (!WORKSPACE_AGENT_ID.test(agentId)) throw new OpenJobApiError(400, 'invalid_input');
+      const value = await request(token, owner, `/workspaces/${workspaceId(id)}/agent-grants/${agentId}`, undefined, 'DELETE');
+      if (!object(value) || Object.keys(value).sort().join(',') !== 'id,revoked' || value.id !== agentId || value.revoked !== true) invalid();
+      return { id: agentId, revoked: true };
+    },
     async connections(token, owner) {
       const value = await request(token, owner, '/connections') as GoogleConnectionCatalog;
       if (!object(value) || Object.keys(value).sort().join(',') !== 'bindings,homes,mailAvailable,mode' || !mode(value.mode) || typeof value.mailAvailable !== 'boolean' || !Array.isArray(value.bindings) || value.bindings.length > 50 || !Array.isArray(value.homes) || value.homes.length > 51) invalid();
