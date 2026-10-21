@@ -428,3 +428,30 @@ The new browser path and Task creation request metadata from Gmail; Task creatio
 longer loads a body as a side effect. Existing full-read clients remain eager until
 their own controls move to explicit reads. Bodies stay transient; this fixture proof
 does not establish sync, metadata expiry, live integrated or native lazy acceptance.
+
+
+## Configured Mail freshness and pending work (P-WLK-6 / R32)
+
+Metadata-view responses include freshness.observedAt/staleAt/expiresAt. Observation
+starts before the provider scan; stale is at most60seconds and expiry at most5minutes,
+capped by current credential expiry. These bounds describe observations, not access.
+Every body/Task/refresh request still checks current authority. Full Mail/native and
+standalone-session DTOs remain unchanged. CLI --metadata-only prints the same bounds.
+
+The web shows Last read and stale/unavailable state. Keep the first page refreshed
+checks only the visible first page, sequentially at most once per minute, and pauses
+while hidden/offline, reading a body, confirming a Task or viewing a later page.
+Uncheck it to stop. Any failed read stops automatic refresh and hides content; Refresh
+Mail is an explicit retry using applied search/folder. Invalid cursors restart page
+one. A deleted folder offers Read All Mail while preserving the applied search.
+Metadata and opened bodies expire on either elapsed wall or monotonic time; checks
+also run on interaction/visibility restoration. No body or metadata disk cache.
+
+Pending Mail Tasks keeps only reviewed titles, target references, exact request IDs
+and receipts in the current owner’s Connections memory. Refresh remains available
+during uncertainty, and retry keeps the same frozen title/request. Confirmed retries
+clear pending state. Check Workspace opens another tab so Connections can stay open.
+If access/source cannot recover, Stop retrying this request asks for explicit Forget:
+a Task may already exist, no saved work is undone, and the reviewed title remains.
+Leaving Connections, reloading or signing out clears this ephemeral authoring state.
+This is fixture/browser proof, not complete sync, live integrated or native acceptance.

@@ -1,3 +1,50 @@
+# P-WLK-6 / R32 — bounded Mail freshness and retained Task requests
+
+20October2026: source1d041d5dd6d2afaff478e493647a6b9882e9f84d follows PR124/main
+ff1815be682a03e031295334ab0539836609c1dc. Metadata-view responses add conservative
+observedAt/staleAt/expiresAt bounds: observation starts before the scan, stale after
+at most60seconds, expiry at most5minutes and capped by the current credential.
+Final current-access checks run on success/failure. Full/native, exact-body and
+standalone response shapes stay unchanged. Freshness never authorizes access.
+
+Web keeps one transient metadata page and one explicitly opened body; no parent
+copy or disk cache. Request-start monotonic and elapsed wall-time limits prevent
+transit, clock rollback or sleeping timers from extending the view. Expiry clears
+messages/folders/cursors/body and stops automatic reads. Visible first-page polling
+is sequential and at most once per minute; it pauses while hidden/offline, reading,
+confirming a Task or viewing later pages. Any failure clears content and latches a
+stop until explicit action. Synchronous current-window/pause guards reject old timer
+callbacks. Refresh Mail retains applied filters; invalid cursor restarts page one;
+missing folders have an explicit Read All Mail recovery preserving search. Provider
+401/scope/policy errors remain fixed redacted blocked categories.
+
+Reviewed titles, exact additional request IDs and receipts now live above disposable
+Mail pages in owner-epoch Connections memory, without provider summaries/bodies or
+untouched subject defaults. Pending cards survive expiry/refresh/disconnect, never
+auto-retry, and can check Workspace in a new tab. Explicit two-step Forget warns a
+Task may already exist, retains the title and frees navigation. Leaving Connections,
+reload, identity change or sign-out clears this memory; no durability claim.
+
+25 focused API/domain/CLI/source/reply checks pass; final freshness3 rerun plus14
+standalone checks pass (overlapping groups). Final types/affected lint, OpenAPI39/55,
+generated CLI types, brand generation/check32 and secret scan pass. Four review P2s
+were fixed and confirmed. Browser caught a fifth stale-pending-fields bug on a200
+retry: normalized target IDs now prevent old draft fields entering a confirmed row.
+Fresh final fixture proved503 -> expiry -> explicit refresh -> same UUID/title ->200
+and a clean confirmed UI. It also proved open-body expiry/clearing, explicit Forget,
+disconnect and Sam isolation. Earlier same-source logic proved bounded auto reads,
+no reads after blocked403 even after121seconds of controlled time, and missing-folder
+All Mail recovery retaining search. Phone width390, checkbox label target46px; no
+overflow. Synthetic screenshots/receipt/CLI history: output/playwright/r32-freshness/.
+
+No additional real read, provider effect, persistent access, deployment or release.
+Original26 files hash-match. Native PR120/build inputs remain untouched and Android
+UI-method authorization is still pending; current-main integration remains necessary
+before its eventual delivery. R32 still needs global/history sync and tombstones,
+integrated live acceptance and native freshness/lazy controls. Current-page polling
+is not a complete mailbox sync. Continue the existing Linear R32 thread845d4c0c-
+61a1-4a62-b9c3-96d0b5e3473a and roadmap; do not repeat the completed alternate-only read.
+
 # P-WLK-6 / R32 — explicitly requested connected Gmail bodies
 
 20October: source f4226dae06c14d93bd1cd2e1ba36bc2959e87aa9 follows merged search

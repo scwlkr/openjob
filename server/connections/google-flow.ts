@@ -1,3 +1,4 @@
+import { mailReadFreshness } from '../../shared/connected-mail-freshness.ts';
 import { connectionFail } from '../../shared/connection-onboarding.ts';
 import { oauthHash, oauthRandom } from '../providers/provider-oauth-types.ts';
 import { createGoogleOAuthAdapter, type GoogleConsentBinding } from '../providers/google-oauth-adapter.ts';
@@ -171,8 +172,12 @@ export function createGoogleConnectionsFlow(options: Options) {
     async mail(owner: string, id: string, cursor?: string, folderId?: string, search?: string, view?: 'metadata') {
       if (view !== undefined && view !== 'metadata') connectionFail('invalid_input');
       const { before, current, reader } = await mailReader(owner, id);
-      const page = await (view === 'metadata' ? reader.listMessageSummaries : reader.listMessages)({ ownerId: owner, accountId: before.accountId, cursor, folderId, search });
-      await current(); return { mode: evidenceMode, workspaceId: before.workspaceId, page };
+      const observedAt = Date.now();
+      const page = await (view === 'metadata' ? reader.listMessageSummaries : reader.listMessages)({ ownerId: owner, accountId: before.accountId, cursor, folderId, search }).finally(current);
+      if (view !== 'metadata') return { mode: evidenceMode, workspaceId: before.workspaceId, page };
+      const freshness = mailReadFreshness(observedAt, before.grant!.entry.credential.expiresAt);
+      if (Date.parse(freshness.expiresAt) <= Date.now()) connectionFail('mail_view_expired');
+      return { mode: evidenceMode, workspaceId: before.workspaceId, page, freshness };
     },
   };
 }
