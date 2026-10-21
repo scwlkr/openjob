@@ -15,6 +15,7 @@ import {
 import { OpenJobNativeApp } from "../App";
 import { resolveAppearanceKey } from "../src/appearance-keyboard";
 import type { NativeAuthController } from "../src/auth/AuthGate";
+import type { NativeConnectedWorkspaceController } from '../src/connected-workspaces-contracts';
 import * as authDependencies from "../src/auth/dependencies";
 import {
   OpenJobApiError,
@@ -264,6 +265,27 @@ test("opens personal workspace through the authenticated app and preserves its e
   await fireEvent.press(screen.getByRole("button", { name: "Personal workspace" }));
   expect(screen.getByLabelText("New task")).toHaveDisplayValue("Keep my native draft");
   expect(personal.commandPersonalWorkspace).not.toHaveBeenCalled();
+});
+
+test('connected session recovery reopens only after a verified same-owner restore', async () => {
+  const list = jest.fn().mockRejectedValueOnce(new ProviderSignInError('revoked')).mockResolvedValue([]);
+  const personal = {
+    readPersonalWorkspace: jest.fn(async () => ({ accounts: [], messages: [], tasks: [], calendars: [], events: [], drafts: [], sent: [], agents: [], activity: [] })),
+    commandPersonalWorkspace: jest.fn(async () => undefined), listPersonalAgents: jest.fn(async () => []), revokePersonalAgent: jest.fn(async () => undefined),
+    connected: { list } as unknown as NativeConnectedWorkspaceController,
+  };
+  const restore = jest.fn(async () => signedIn);
+  await renderNativeApp(previewConfig, authController({ restore, getPersonalWorkspaceController: () => personal }));
+  await screen.findByRole('header', { name: 'Personal workspace' });
+  await fireEvent.press(screen.getByRole('button', { name: 'Connected Workspaces' }));
+  await screen.findByText('Connected Workspace session ended. Private screen data was cleared.');
+  let finish!: (value: typeof signedIn) => void;
+  restore.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Restore connected session' }));
+  expect(screen.queryByText('Your owned Workspaces')).toBeNull();
+  await act(() => finish(signedIn));
+  await screen.findByText('Your owned Workspaces');
+  expect(list).toHaveBeenCalledTimes(2); expect(restore).toHaveBeenCalledTimes(2);
 });
 
 test("offers Retry and sign out when bootstrap fails fatally", async () => {

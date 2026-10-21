@@ -12,12 +12,12 @@ export function mailReadFreshness(observedAt: number, credentialExpiresAt: numbe
 export function mailReadWindow(value: unknown, requestedAt: number, wallRequestedAt: number): MailReadWindow {
   const raw = value as MailReadFreshness;
   if (!raw || typeof raw !== 'object' || Object.keys(raw).sort().join(',') !== 'expiresAt,observedAt,staleAt' || !Number.isFinite(requestedAt) || requestedAt < 0 || !Number.isFinite(wallRequestedAt)) throw new Error('Invalid Mail observation.');
-  const times = [raw.observedAt, raw.staleAt, raw.expiresAt].map(value => {
+  const timestamp = (value: unknown) => {
     const time = typeof value === 'string' ? Date.parse(value) : NaN;
     if (!Number.isFinite(time) || new Date(time).toISOString() !== value) throw new Error('Invalid Mail observation.');
     return time;
-  });
-  const [observedAt, staleAt, expiresAt] = times;
+  };
+  const observedAt = timestamp(raw.observedAt), staleAt = timestamp(raw.staleAt), expiresAt = timestamp(raw.expiresAt);
   if (staleAt < observedAt || staleAt > expiresAt || staleAt - observedAt > MAIL_REFRESH_MS || expiresAt <= observedAt || expiresAt - observedAt > MAIL_VIEW_TTL_MS) throw new Error('Invalid Mail observation.');
   return { ...raw, staleDeadline: requestedAt + staleAt - observedAt, expiryDeadline: requestedAt + expiresAt - observedAt, staleWallDeadline: wallRequestedAt + staleAt - observedAt, expiryWallDeadline: wallRequestedAt + expiresAt - observedAt };
 }

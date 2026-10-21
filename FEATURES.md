@@ -10,6 +10,43 @@ synthetic operation receipts. Normal/portable runtimes have no send dispatcher;
 read-only OAuth consent and actual-send denial remain. No live sending or full
 R41 acceptance is claimed. [Protocol and limits](docs/providers/GMAIL_REPLY.md).
 
+## Native connected owner Workspaces (P-WLK-6 / R53)
+
+The signed-in native shell has a separate online Connected Workspaces surface.
+Open or create an owner Workspace, or explicitly map retained Personal work. The
+configured Mail view uses that Workspace's real connection contracts and never
+substitutes examples for an empty or unavailable account. Review a message's Task
+title, create/find its source Task, save notes, plan/complete it, open its Calendar
+block and return to fresh source Mail. Reply/Reply all shows From/To/Cc/subject and
+saves authored OpenJob drafts with the same revision/address review as web/CLI.
+Unfinished reply text survives module/context switches and blocks Task deletion
+until saved or discarded. Source bodies are transient; saved reply work stays in
+the authoritative server envelope. Session changes fence requests and private UI.
+
+Connected native Mail now browses metadata-only First/Next pages with Gmail folder
+selection and submitted search. Plain-text bodies load only after Read message and
+clear on close, navigation, background, offline or expiry. Last-read/stale state,
+bounded visible-first-page refresh, Pause and manual recovery share the API's
+freshness limits. Reviewed Task titles and exact uncertain request inputs stay in
+Workspace memory across module switches. Explicit two-step Stop retrying releases
+an unavailable request while preserving its title and previous receipt; it warns
+that a Task may already exist. No automatic mutation retry or navigation occurs.
+
+Workspace Agents reviews existing independent-Workspace grants, exact scopes and
+resources, last-checked expiry/revocation and bounded confirmed actions. Revoke
+requires confirmation and a current acknowledgement/readback. Unconfirmed results
+hide stale access data and require manual refresh. Item links refresh current
+Workspace work before opening an existing Task or block. Mail intents and reply
+buffers survive Agents navigation. Retained Personal uses its existing Agents
+view; credential issuance stays in the CLI. No credential is displayed here.
+
+The existing Personal/offline and Groups surfaces remain available. Configure
+provider consent in the existing Connections app. No native consent flow, offline
+Mail, provider Calendar writes or real sending is added. Rendered and loopback
+HTTP fixtures and the iOS development simulator cover the bounded flow. Android UI,
+real login/provider and physical-device/release evidence remain separate gates. The opt-in development entry
+and its invented service are documented in [the simulator guide](docs/NATIVE_SIMULATOR_SMOKE.md).
+
 ## Durable frozen reply simulations (P-WLK-6 / R30)
 
 The local invented Google fixture can freeze a reviewed saved reply, queue it
@@ -43,7 +80,8 @@ view shows permissions, expiry, revocation and recent confirmed actions with lin
 to retained work. Failed revocation requires explicit inspection; current authority
 and concurrent-revoke checks fence writes. Synthetic browser/CLI/restart proof
 passed. Normal runtime remains unconfigured. Mail delegation, multi-person policy,
-native agent controls and live acceptance remain separate.
+broader policy and live acceptance remain separate. Native connected Workspaces
+provide owner review/revocation of these existing grants; issuance remains in CLI.
 [Usage](docs/WORKSPACE_AGENTS.md).
 
 ## Configured Gmail pages, folders and search (P-WLK-6 / R32)
@@ -66,8 +104,9 @@ the existing full-read contract stays available for current clients. This slice 
 fixture proof. Metadata observations now show last read/stale/expiry, with bounded
 visible-first-page refresh and explicit recovery after failure. Expiry hides provider
 content; reviewed Task requests survive in Connections memory and keep exact retries.
-Current-page polling is not complete mailbox sync. History/tombstones, native lazy/
-freshness controls and integrated live acceptance remain separate.
+Current-page polling is not complete mailbox sync. Native connected Workspaces
+share these metadata/lazy/freshness contracts. History/tombstones and integrated
+live acceptance remain separate.
 [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
 
 ## Connected authored reply drafts (WLK385)

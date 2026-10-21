@@ -1,4 +1,5 @@
 import type { NativePersonalWorkspaceApi, NativePersonalWorkspaceController } from "../personal-workspace-contracts";
+import type { NativeConnectedWorkspaceApi, NativeConnectedWorkspaceController } from '../connected-workspaces-contracts';
 import type { NativeOfflineWorkspaceCache, NativeOfflineWorkspaceRecord } from '../offline-workspace-contracts';
 import { createNativeOfflineWorkspaceController } from '../offline-workspace-controller';
 import type {
@@ -231,6 +232,7 @@ export class OpenJobApiError extends Error {
 }
 
 export type NativeAuthDependencies = Partial<NativePersonalWorkspaceApi> & {
+  connectedWorkspaces?: NativeConnectedWorkspaceApi;
   personalOfflineCache?: NativeOfflineWorkspaceCache;
   offlineRandomUUID?: () => string;
   loadPersonalOfflineCache?(owner: string, guard?: () => void): Promise<NativeOfflineWorkspaceRecord | null>;
@@ -364,6 +366,26 @@ export class NativeAuthCoordinator implements NativeTaskListController {
   };
 
   constructor(private readonly dependencies: NativeAuthDependencies) {
+    if (dependencies.connectedWorkspaces) {
+      const api = dependencies.connectedWorkspaces;
+      const connected: NativeConnectedWorkspaceController = {
+        list: owner => this.withPersonalSession(owner, token => api.list(token, owner)),
+        create: (owner, name) => this.withPersonalSession(owner, token => api.create(token, owner, name)),
+        personal: owner => this.withPersonalSession(owner, token => api.personal(token, owner)),
+        read: (owner, id) => this.withPersonalSession(owner, token => api.read(token, owner, id)),
+        command: (owner, id, input) => this.withPersonalSession(owner, token => api.command(token, owner, id, input)),
+        agentGrants: (owner, workspace) => this.withPersonalSession(owner, token => api.agentGrants(token, owner, workspace)),
+        revokeAgent: (owner, id, agentId) => this.withPersonalSession(owner, token => api.revokeAgent(token, owner, id, agentId)),
+        connections: owner => this.withPersonalSession(owner, token => api.connections(token, owner)),
+        mail: (owner, id, connection, query) => this.withPersonalSession(owner, token => api.mail(token, owner, id, connection, query)),
+        message: (owner, id, connection, messageId) => this.withPersonalSession(owner, token => api.message(token, owner, id, connection, messageId)),
+        createMailTask: (owner, id, connection, input) => this.withPersonalSession(owner, token => api.createMailTask(token, owner, id, connection, input)),
+        source: (owner, id, task) => this.withPersonalSession(owner, token => api.source(token, owner, id, task)),
+        reply: (owner, id, task) => this.withPersonalSession(owner, token => api.reply(token, owner, id, task)),
+        saveReply: (owner, id, task, input) => this.withPersonalSession(owner, token => api.saveReply(token, owner, id, task, input)),
+      };
+      this.personalWorkspaceFacade.connected = Object.freeze(connected);
+    }
     if (dependencies.personalOfflineCache && dependencies.readTaskCalendarSync && dependencies.syncTaskCalendar && dependencies.offlineRandomUUID) {
       const offline = createNativeOfflineWorkspaceController({
         cache: dependencies.personalOfflineCache, now: dependencies.now, randomUUID: dependencies.offlineRandomUUID,

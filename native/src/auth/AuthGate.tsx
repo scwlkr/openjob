@@ -60,7 +60,7 @@ export type NativeAuthController = Pick<
 
 type SignedInViewProps = {
   onManageSignInMethods?: () => void;
-  onRestoreSession: () => void;
+  onRestoreSession: () => Promise<boolean>;
   onSessionRevoked: () => void;
   onSignOut: () => void;
   onSwitchUser: () => void;
@@ -441,10 +441,12 @@ export function NativeAuthGate({
         setState(result);
         setMessage(resultMessage(result));
       }
+      return result.kind === 'signed-in' && !result.provisional;
     } catch (error) {
       if (fallback) setState(fallback);
       else setState({ kind: "signed-out" });
       setMessage(errorMessage(error));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -812,7 +814,7 @@ export function NativeAuthGate({
       return renderSignedIn({
         onManageSignInMethods:
           state.methods.length === 0 ? undefined : () => setManaging(true),
-        onRestoreSession: () => void retryRestore(),
+        onRestoreSession: () => retryRestore(),
         onSessionRevoked: () => void perform(() => auth.revokeSession()),
         onSignOut: () => void perform(() => auth.signOut()),
         onSwitchUser: () => void perform(() => auth.switchUser()),

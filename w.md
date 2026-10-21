@@ -1,3 +1,40 @@
+# Native integration of Gmail protocol main — P-WLK-6 / R41–R53
+
+21 October2026 UTC: PR130 merged main0304b6b6a0f32c41a1ff361da79d106354e0e6b5;
+reviewed final head4125a6e, source4578720. Native draft PR120 integrates that main.
+Only FEATURES.md/w.md conflicted; both native and protocol feature/history additions
+were preserved. All136 native/shared/package inputs remain byte-identical to
+c3770ae; native has no send dispatcher. Prior native Mail/Agents simulator receipts
+remain their exact source checkpoints, not new build evidence for this merge.
+
+An isolated staged-tree archive at
+/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-r41-native-integration-9h2tl_7n
+hash-matches the complete resolved source. Root/native types and12 focused native
+HTTP/agent/Google/protocol checks pass, including both Workspace home types.
+Generated CLI types and brand32 pass. Archive secret check could not run without
+Git; the canonical checkout scan passed1108. Original26 plus four newer duplicate
+files are preserved. No shared dependencies, native sources, proof artifacts,
+Android5213/Metro8088 or foreign simulator changed.
+
+PR130 source merge was nondeploying: remote main matches and only a manual
+nonpublishing artifact workflow exists; no checks/protections/rulesets/deployments
+were configured at review. Native PR120 stays Draft; full R30/R41/R22/R53 remain
+In Progress. Live outbound storage/composition, approved send account/recipients,
+exact real thread, provider Calendar, Mail delegation, native live/device/storage,
+Android UI-method answer and release gates remain open. No further real read,
+provider effect, persistent real access, deployment or publication occurred.
+Continue Linear R30 7f612b86-7725-46b1-8474-8a2a680da5eb and R53
+ba6592c3-b3e1-4908-b830-3532ab70aaf4. Next dependency-ready source outcome is R40:
+one source-linked Task selects a named invented Google Calendar, checks truthful
+availability and manages one nonrecurring/no-attendee remote planning block through
+shared API/CLI/UI. Use separate Calendar intent/receipt and typed remote PlanningLink;
+keep local offline Task/Calendar projections intact. Require account/home/scope
+isolation, all-day/timezone/expanded recurrence reads, busy-only redaction, ETag
+conflicts and durable unknown/no replay under injected fake HTTP. Actual Calendar
+scope/consent/effects remain unapproved. No earlier credential-independent live
+runtime gap was found; real activation still needs selected storage/runtime/access
+review. Do not repeat the completed bounded alt read.
+
 # Gmail reply protocol delivery — P-WLK-6 / R41
 
 21 October2026 UTC: source45787209cab42d7dd7574163417aed6162fdd966 on
@@ -74,7 +111,293 @@ nondeploying PR delivery. Full R30/R41/live/provider/native/release gates stay o
 Original26 plus four newly observed duplicate-suffix files in the primary checkout
 are preserved. Prior Android5213/Metro8088 and foreign simulator stay untouched.
 
-# Current work — R30 fixture-only durable reply operations
+# Native Agents delivery — P-WLK-6 / R22–R53
+
+21 October 2026 UTC: source `62a8fd34c364e8ce9f4ad59376c22c3e54938254` is pushed
+on draft PR120, based on main `5b21875`. This supersedes the pending simulator
+state below. Native owners can review exact independent-Workspace grants and
+confirmed actions, open current saved items, and confirm revocation. One DELETE,
+exact acknowledgement and current revoked readback precede success; uncertainty
+clears stale access data and requires manual refresh. Issuance remains CLI.
+
+Native types, affected lint and 23 UI/API checks pass, including the fresh locked
+copy. Root native-HTTP/CLI/domain/navigation (12), existing native Mail HTTP (3),
+actual-send denial/no-side-effect (1), root types, brand (32) and secret safety
+(1094 files) pass. Read-only review found no consequential issue. Original 26
+shared files hash-match. No dependency or real-account access changed.
+
+The 759-file source snapshot built in `/tmp/openjob-native-agents-a3tmb9zb`, with
+one recorded proof-only fixture-port 5213→5214 delta. Fresh npm lock and all 201
+locked Pod entries match; ExpoModulesCore/Hermes checksum differences normalize
+to absolute-root paths only. The initial Xcode call timed out while compilation
+continued; its completed log reported two SwiftCompile commands exiting 0 without
+output. One incremental build then explicitly passed in 30.3 seconds (35 warnings,
+zero errors). The verified OpenJobDev/dev.openjob.app.dev embedded Release artifact
+was reinstalled before UI checks on owned OpenJobR53Connected, iOS 27.
+
+Practical native proof passed: retained Personal shows its existing Agents route;
+A displays exact scopes/resources, expiry, last-check time and three confirmed
+actions. Action links opened the exact planned Task and standalone Calendar block.
+An unfinished human Task title survived Agents/Calendar navigation. Cancel left A
+usable through actual CLI. Confirm showed revoked/no effective access; actual CLI
+then exited 3 and HTTP returned 401 for A while independent B remained usable
+(exit 0/HTTP 200). Saved Tasks/Calendar stayed byte-equal. B's own native view showed
+only its grant and no actions; native revocation cleaned it up and HTTP then denied
+it. Both created credential files were removed. Invented-data screenshots,
+source/fixture manifests, artifact hashes and receipts: `output/r53/native-agents/`.
+
+Only the owned app/simulator and fixture 5214 service were stopped. Build Space
+lease `a36660e551508f02aa7f26a8` was released succeeded. Prior Android service 5213,
+Metro 8088, source/build artifacts and foreign simulator were preserved. R53 and
+full R22 stay In Progress; PR120 stays Draft. Android UI-method answer, native live
+login/provider/device/storage, Mail delegation, full sync and release gates remain
+open. No real Mail read was repeated and no real provider effect, persistent real
+access, security/hosting change, deployment or publication occurred.
+
+Next dependency-ready source slice: R41, a default-disabled Gmail reply protocol
+adapter exercised only through an injected fake HTTP transport and the existing
+frozen durable-operation fixture. Keep `reply.simulate` synthetic, normal runtimes
+without a dispatcher, exact read-only OAuth scopes and real `mail.send` denial.
+Continue existing Linear R53 `ba6592c3-b3e1-4908-b830-3532ab70aaf4` and R30
+`7f612b86-7725-46b1-8474-8a2a680da5eb`; do not infer real-send permission.
+
+# Native Agents checkpoint — P-WLK-6 / R22–R53
+
+21 October2026 UTC: existing draft PR120 branch, based on bcfb374/main5b21875.
+Native Connected Workspaces gains owner review/revoke of existing independent-
+Workspace agent grants and bounded confirmed actions. Exact public DTO validation
+rejects foreign resources/owners, credential fields and malformed history. Existing
+session/epoch guards fence list and DELETE. Confirmation precedes one mutation;
+exact200 acknowledgement plus current revoked readback precedes success. Uncertain
+results clear stale scopes/history and require explicit refresh, with no retry.
+Current-item navigation refreshes saved work and refuses missing/removed items.
+Task intents and authored reply buffers survive Agents navigation. Retained Personal
+points to its existing Agents view without inferring context type from its name.
+Issuance remains CLI; no backend/provider/dependency/real-access capability changed.
+
+Native types, affected lint and23 UI/API tests pass. Twelve actual-native-HTTP,
+CLI, scope/revocation/race/preservation and navigation checks pass; the existing
+native Mail HTTP flow passes for both homes (3), and real-send403/no-side-effect
+passes (1). Root types and brand32 pass in the isolated source copy. Read-only
+review found no consequential gap. Native's stricter compiler required explicit
+index guards in the shared navigation parser; existing parser semantics/tests
+remain intact. Simulator proof for this changed source is still pending.
+
+New independent proof root: /tmp/openjob-native-agents-a3tmb9zb. Fresh native npmci
+from the unchanged lockfile applied the existing Sentry patch. Build Space lease
+a36660e551508f02aa7f26a8 reserves10GiB with20GiB floor (57.5GiB observed free).
+Only its guarded fixture entry selects loopback5214; source/fixture manifests record
+the delta so existing Android5213/Metro8088 remain untouched. Prior f8830d8 iOS
+artifact and practical proof stay immutable at their recorded input checkpoint.
+
+Next: build/verify this exact source in the owned OpenJob simulator, exercise
+review/cancel/revoke and exact action links with temporary invented A/B grants,
+then verify CLI A denial/B usability and preserved authored work. Revoke passed
+fixture grants, remove their private temporary files, stop only own resources and
+release lease with actual outcome. Record final source/artifact/result in Linear
+R53 ba6592c3-b3e1-4908-b830-3532ab70aaf4 and PR120. Draft/full R22/R53/live/native
+provider/device/storage/Android-method/release gates remain open. No real Mail test
+repeated, persistent real access, deployment or publication.
+
+# Current native Mail delivery — P-WLK-6 / R32–R53
+
+21 October2026 UTC: source f8830d805d5cdf5d7a669676fe57d5cae462584f is pushed on
+draft PR120, based on main5b21875. This supersedes the pending simulator state in
+the checkpoint below. Native metadata paging/folders/search, explicit transient
+bodies, freshness/Pause and retained exact Task recovery controls are implemented.
+Two read-only review findings were fixed and confirmed resolved. Native types,
+affected lint,14 UI/API tests,12 native HTTP/freshness/Google isolation checks,
+real-send403/no-side-effect, root types, brand32 and secret1090 pass. Original26
+shared files hash-match; dependencies and real-account sessions were preserved.
+
+The exact755-file snapshot (one recorded fixture-port5213→5214 delta) built as
+OpenJobDev / dev.openjob.app.dev / embedded Release on owned OpenJobR53Connected,
+iOS27. Locked npm inputs and all201 Pod entries match; two Pod checksums change
+only absolute paths. Initial deployment-mode Pod install rejected those paths;
+normal no-repo-update install passed. XcodeBuildMCP's first call timed out300s
+while the compiler continued. Its process finished; a subsequent incremental
+build explicitly passed in70.8s with35 warnings/zero errors. The verified artifact
+was reinstalled before UI proof; binary/bundle/plist hashes and logs are recorded.
+
+Actual simulator proof passed: metadata before Read message, body open/close,
+Pause, Next page, submitted search, folder selection and empty result; authored
+title retained across filters/pages. Explicit receipt opened the reviewed Task;
+schedule21October14:00–14:30UTC linked Calendar to that exact Task, then completion
+retained the block. Current source and reviewed Reply all saved54 authored
+characters at revision1. Text survived Calendar navigation/authority refresh;
+stop/relaunch reopened exact body/mode/account/recipients. Disconnecting only the
+invented5214 account made Refresh Mail hide metadata/body and stop auto refresh,
+while retaining the authored title and denying create. Authenticated HTTP confirmed
+saved Task/Calendar/reply, and saved work stayed byte-equal across disconnect.
+
+Device Hub AX setValue corrected ineffective Xcode replacement input; no keyboard
+setting changed. A receipt-script assertion initially used nonexistent plannedStart;
+corrected to scheduledSlot and rerun. These automation mistakes are not app passes.
+Practical evidence, source/fixture manifests and two invented-data screenshots:
+output/r53/r32-native-mail/. Snapshot/build: /var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-native-r32-jkx3l0kk.
+Owned simulator shut down, own5214 service stopped after disconnect, Build Space
+lease60fb2b0fa7739f6dcc186c67 released succeeded. Existing Android5213/Metro8088
+sessions, artifacts and foreign simulator were preserved.
+
+PR120 stays Draft and R53 stays In Progress. Android method answer, native live
+login/provider/device/storage/release gates and full sync remain open. No repeated
+real Mail read, real provider effect, persistent real access, deployment or publication.
+Next bounded slice: native review/revoke of existing independent-Workspace agent
+grants and recent confirmed actions, using delivered R22 contracts; issuance stays
+in CLI. Continue R53 discussion ba6592c3-b3e1-4908-b830-3532ab70aaf4, linked to R22
+266d9fdf-fa1e-4e9d-9d03-7b234821a591 / receipt33d528ea-e2a8-4dfd-9e9f-759a3cba5c2e.
+
+# Native Mail follow-up — P-WLK-6 / R32–R53
+
+21 October 2026: native source checkpoint on the existing draft PR120 branch,
+based on 84c502d4af39da53bcd0f03c8d6c4218db84d4b1 and main5b21875.
+Connected Workspaces now use metadata-only First/Next pages, bounded Gmail folder
+selection and submitted search, explicit transient plain-text bodies, last-read/
+stale/expiry state and at-most-minute visible-first-page refresh. Hidden, offline,
+expired or changed contexts discard provider details and late responses; recovery
+is explicit. Pause also fences an already queued refresh callback.
+
+Authored Task titles, immutable uncertain create inputs and receipts remain above
+the disposable reader. Navigation does not auto-open a completed mutation. Exact
+retry preserves an additional Task UUID. Two-step Stop retrying warns about an
+existing Task, drops only that uncertain request and keeps title/previous receipt,
+so deleted sources do not permanently lock folder/search/page controls. Existing
+source/reply editors and normal native authentication remain in place. No package,
+consent, provider Calendar, sending or persistent real-access capability changed.
+
+Native typecheck, affected lint and14 focused rendered UI/API tests pass. Actual
+native HTTP/coordinator, shared freshness and Google scope/revocation/isolation
+checks pass (12), including metadata query-bound cursors and explicit body reads.
+A targeted actual-send403/no-side-effect check passes. Root npm run typecheck and
+brand32 pass in the exact isolated copy. The initial test typecheck caught global
+vs globalThis in the timer test; corrected and rerun. Original26 shared files are
+preserved. Simulator proof is In Progress, not implied by these tests.
+
+Fresh locked native dependencies and development iOS prebuild are in
+/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-native-r32-jkx3l0kk.
+Only that proof's fixture entry changes loopback5213 to5214 to preserve the existing
+Android fixture/Metro; the delta/hash is recorded there. Build Space lease
+60fb2b0fa7739f6dcc186c67 reserves10GiB with20GiB floor. CocoaPods deployment mode
+first rejected absolute-path-derived checksums for ExpoModulesCore and Hermes;
+podspec comparison showed path-only changes. Normal no-repo-update install and
+locked-version comparison follow. No shared dependency tree was repaired.
+
+Next: verify the exact source in the owned iOS simulator, record its artifact and
+practical result, then update this handoff/Linear/PR120. Android UI-method answer,
+real native/provider/device/storage acceptance, full sync and release/distribution
+remain separate. No extra real Mail read or deployment/publication occurred.
+
+# Current native integration — durable operation main
+
+21 October 2026: draft PR120 integrates PR129/main
+`5b218755605120c4c734aec7f1db6862b077bdc2` at merge source
+`b26fcc01fdc7cfeb73751ea21a18a9291a375ec4`. Only FEATURES.md and this handoff
+conflicted; both feature/history records are preserved. The new main adds the
+bounded fixture Operation/service/API/CLI/web flow. Native files, packages and
+identity configuration are byte-identical to prior native `8c8b4f3`; its controls
+do not gain a dispatcher.
+
+All 750 tracked files at that merge source hash-match a fresh isolated archive.
+Native types and 16 focused actual-native-HTTP/source/reply/operation checks pass,
+including independent and retained Personal homes. Root npm run typecheck passes
+after its normal Cloudflare declaration generation; an initial raw tsc attempt
+failed because the archive had no ignored generated Cloudflare types. Shared
+primary dependencies/sessions were not changed. PR129's 47 focused tests, explicit
+real-send denial and practical browser/CLI proof cover identical operation source;
+no redundant full test suite or native build was run. Secret scan 1085 passes.
+
+Original 26 files hash-match. Of 25 recorded build-source hashes, 23 match; the
+previously extended HTTP regression and shared/connected-reply.ts differ. The
+latter only adds sameReplyPlan, unused by the native client; all functions it
+imports are unchanged. Prior iOS/Android binary/runtime evidence remains at its
+recorded checkpoint, not a new current-hash native build. Existing APK, Metro,
+fixture sessions and simulator evidence are preserved.
+
+PR120 stays Draft. Android UI-method answer, native Mail/agent controls, integrated
+live/native/provider/device acceptance and release/distribution remain open.
+No extra real read, provider effect, persistent access or deployment/publication.
+Receipts: output/r53/r30-main-integration/ and native-integration-receipt.json.
+Continue the existing Linear/roadmap queue; the broader R30/R31 policy/runtime/
+cleanup and live-send gates remain open after its bounded fixture foundation.
+
+# Native integration history — Workspace Mail main
+
+21October2026: draft PR120 integrates PR128/main e483988b9b92ecfbb7ab644f1b871d559d3433bd
+(web sourcec4e5f09e7e093714899c98e890f96835101b58e7, reviewed PR head
+8e244a3382a89cc87e1f8953a69a334e5e1a138c). Only FEATURES.md and this handoff
+conflicted; both histories are preserved. Native/db/server/package bytes are
+unchanged relative to prior native927668d; the neutral catalog type extraction
+was already identical. The integration adds web Mail composition, its four
+boundary tests and usage/history records, with no native behavior change.
+
+All739 tracked source files hash-match the existing isolated proof environment.
+Root/native types and four new Mail boundary tests pass; secret1074 passes.
+PR128's15 tests/practical web flow/brand32/lint evidence remains at the same web
+source; prior native17 actual-HTTP/source/reply/agent checks cover the unchanged
+backend/native runtime. No repeat native build or wider suite is warranted by this
+web-only integration. Primary root dependencies remain incomplete as previously
+recorded; exact-source isolated checks supply compile evidence.
+
+All24 app runtime/package/identity input hashes and original26 shared files still
+match, with only the previously expanded recorded HTTP test differing from its
+build manifest. Existing iOS fixture journey and Android APK/Metro/fake5213 proof
+remain intact. PR120 stays Draft: Android UI-method answer, native Mail controls,
+live/provider/device and release/distribution evidence remain open. No further
+real read, persistent access, provider effect, deployment or publication. Exact
+pushed head and receipt live in Linear R53 and output/r53/native-integration-receipt.json.
+
+# Native integration history — owned Workspace agent main
+
+21October01:27UTC: draft PR120 integrates PR127/main4263b46bab3564f1369dce829b40d30eae1dbb95
+(R22 source7b59ba0414d8a9378c65d56486ff1cb7d40c68b9, reviewed head
+aee7f4f439168429404d27ba70bf476e61f3beaf). Only FEATURES.md and this handoff
+conflicted; both feature/history records are preserved. Native runtime/package/
+identity bytes remain unchanged. Human connected snapshots retain their shape;
+new agent sidecars remain private and survive native/human edits.
+
+The exact734 tracked source files were hash-verified in the existing isolated
+proof directory openjob-native-current-main-iv1yv0rr. Root/native types and17
+focused native actual-HTTP, Task-source/reply and agent isolation/race/sidecar
+checks pass there. The native HTTP flow covers both independent and retained
+Personal homes, including provider401 reconnect409 and retained saved drafts.
+OpenAPI43/60, generated CLI types, brand32 and secret1069 pass. Primary native
+types pass too; primary root types/tests failed on missing imports because its
+existing node_modules lacks google-auth-library/email-addresses. No root install
+or shared dependency/session change was made. The isolated pass uses the exact
+merged source rather than treating that dependency failure as a pass.
+
+All24 recorded app runtime/package/identity input hashes and original26 shared
+files still match. Only the recorded HTTP test differs from the original build
+manifest, as documented previously. Existing iOS fixture proof and Android APK
+remain evidence at their recorded unchanged app inputs; no Android UI pass is
+inferred. PR120 remains Draft pending Android UI-method answer and its separate
+live native/provider/device/release gates. Native agent controls and R32 native
+search/paging/lazy/freshness controls remain unavailable. R22's bounded owner
+Tasks/Calendar milestone is delivered; its broader policy/Mail acceptance remains
+In Progress. Exact PR head/receipt and next action are recorded in Linear R53.
+No further real read, provider effect, persistent access, deployment or release.
+
+# Native integration checkpoint — PR126 history
+
+21October00:44UTC: PR126 merged as4eb212f65cadc3d7190305e755bba60a4ab10303
+(source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65, head
+a180375256228a66877c8e99abd37a09bddb6a02). Main includes PR125 freshness and the
+provider-auth correction. Draft PR120 now integrates that main; the final merge
+changes only this handoff relative to reviewed integration314752e. All code bytes
+match the isolated final HTTP proof. No additional build/test rerun is necessary
+for this documentation-only ancestry reconciliation. Exact remote head/merge are
+recorded in Linear and the ignored local integration receipt.
+
+Native runtime/package/identity inputs remain unchanged; one recorded HTTP test
+was extended. Original26 files hash-match. Android SDK UI-method authorization,
+live native/provider/device and release gates remain open; PR120 stays Draft.
+No additional real read, provider effect, persistent access or deployment.
+Next source implementation is the accepted owner-only Tasks/Calendar agent-grant
+slice in Linear R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591. Its initial empty
+branch was made from7dc3d02; integrate current main before implementation. Keep
+Personal/Groups grants independent and Mail delegation unavailable.
+
+# R30 fixture foundation — delivery history
 
 21 October 2026: source `7bb253352485723abc0bd0fc8cd3fe810640e566` in
 [PR129](https://github.com/scwlkr/openjob/pull/129) follows main `e483988`.
@@ -225,6 +548,29 @@ effect, persistent access, deployment or publication. Continue Linear R32 thread
 845d4c0c-61a1-4a62-b9c3-96d0b5e3473a. The next source-only product slice is owned
 Workspace Tasks/Calendar agent grants in R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591;
 its empty branch starts at main7dc3d02 and source implementation has not begun.
+
+# Native draft integration — current Mail read contracts
+
+21October00:35UTC: integrate main7dc3d023939080ebe92023066c5656589109c3aa
+(landed PR123 search, PR124 lazy bodies and PR125 freshness) into draft PR120.
+Only FEATURES.md and this handoff conflicted; both product/delivery records are
+retained, with the provider-auth correction described below. This supersedes the older integration
+records below. The native full-read contract stays exact; native paging/search,
+metadata/lazy controls and freshness remain separate. R32 current-page polling is
+bounded, not complete mailbox history sync; integrated live acceptance remains open.
+Original build artifacts/services and the completed bounded real read are preserved.
+Android SDK UI-method authorization remains pending and PR120 stays Draft.
+All24 recorded runtime/package/identity input hashes and original26 shared files
+match; only the recorded native HTTP test expands for the regression below. The
+isolated merged source passes root/native types, actual authenticated native HTTP
+flow for both home types (3tests), OpenAPI39/55, generated CLI types, brand32 and
+secret1059. Initial direct tsc lacked ignored Cloudflare runtime declarations; the
+normal npm typecheck generated them and passed. A review P2 was fixed: provider auth failure becomes409reconnect_required, keeping
+401 for OpenJob authentication. Final actual HTTP3 regression checks Mail/source/
+reply/save plus retained Tasks and unchanged saved draft after provider recovery.
+Review confirms no remaining findings. No native runtime or installed build changed;
+prior native suites/platform evidence retain their exact recorded app inputs. No
+Android/live/device/release pass is inferred.
 
 # P-WLK-6 / R32 — bounded Mail freshness and retained Task requests
 
@@ -1917,3 +2263,110 @@ Features: [FEATURES.md](FEATURES.md)
 Terms: [GLOSSARY.md](GLOSSARY.md)
 CLI: `npm run`
 <!-- wstack:end setup -->
+
+---
+
+# Native draft integration — landed R32 pages and folders
+
+20October23:29UTC: integrating main8156b492d219544b6bf3141726af666746fd877e
+(PR121/122) into native draft PR120. Only FEATURES.md and this handoff conflicted;
+both native and Mail records are retained. This supersedes the earlier continuation
+note below that says the native branch still has its old main base. Current R32
+gaps are search, lazy bodies, sync/stale metadata and integrated live acceptance.
+Native paging/folder controls remain separate. All21 R53 source files plus its
+recorded package/lock/identity inputs hash-match a8a4b3e. The existing proof snapshot,
+installed Android APK, Metro and fake5213 service are untouched. Integration root
+and native types pass; six native suites pass160 tests; actual API/native HTTP group
+passes13 checks across both home types and current R32 contracts. Counts overlap
+earlier runs. Android UI-method authorization is still required before its UI journey. Do not repeat the standalone real read or infer approval from its old answer.
+
+# Continuation — R32 paging landed separately from native R53
+
+20October23:12UTC: PR121 merged on main as
+bf4bcd4c69ddb0dac885d6e8b20de97f339bcfda (source d36cd95, reviewed head d3fdeaf).
+Configured API/CLI/web Mail now reaches later pages, retains authored titles,
+blocks paging during uncertain Task confirmation, and recovers from invalid cursors.
+Thirty focused checks and actual fixture browser proof passed; canonical evidence
+is in main's w.md and Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
+This native branch still has its earlier main base; no native or proof inputs changed.
+R32 search/folders, lazy bodies, sync metadata and integrated live work remain open.
+R53 still awaits the separate Android SDK UI-method answer; the older Google
+unverified-app approval does not answer it. Preserve its installed APK, own emulator,
+loopback5213/8088 fixture services and original26 files. Do not repeat the real read.
+
+# P-WLK-6 / R53 — native connected Workspace journey
+
+20October: sole local implementation owner. Linear issue creation hit the free
+issue limit; execution continues in the existing OpenJob project discussion
+ba6592c3-b3e1-4908-b830-3532ab70aaf4, without changing the plan or creating another
+queue. Source a8a4b3ed98f704d821b49d790452ef5f7213164e is pushed in draft
+[PR120](https://github.com/scwlkr/openjob/pull/120), branch
+codex/p-wlk-6-native-connected-workspaces. Source-only draft; practical native gates
+are pending and R53 is not complete.
+
+Native Connected Workspaces uses the existing identity/session fence and shared
+HTTP routes for catalog/create/retained Personal mapping, configured Mail ->
+reviewed source Task -> normal Today/Tasks/Calendar -> complete -> fresh source ->
+reviewed authored OpenJob reply. Source bodies remain transient; per-context reply
+buffers survive module switches; unsaved replies block Task deletion. Guarded
+notes retain their original base. Verified session restoration is required before
+reopening ended connected access. Existing Personal/offline and Groups remain.
+Consent is still in the existing Connections app; no provider Calendar, sending,
+offline Mail or persistent provider access was enabled.
+
+Isolated root/native types, affected lint (existing warnings only), OpenAPI38paths /
+54operations, brand32 and root secret1051 pass. Six native suites pass100 tests;
+12 targeted API/native loopback HTTP checks pass (earlier groups overlap). These
+exercise both Owned and retained Personal homes, notes/draft stale writes, late
+identity responses, foreign-owner denial, redaction and disconnect denial. Final
+read-only source review has no findings; two earlier P2s were fixed and covered.
+All21 changed source files match the isolated build snapshot. Original26 untracked
+files remain byte-identical; shared dependencies and existing sessions preserved.
+
+iOS practical fixture proof passed from source a8a4b3e on the owned iPhone18 Pro /
+iOS27 simulator. Fresh locked native dependencies and all201 locked Pod entries
+match. First Xcode call exceeded the tool's300s response limit; the original build
+continued to completion. The unchanged incremental invocation then recorded a
+successful54.8s result and an embedded development-identity Release app. Actual UI:
+reviewed source Task title, authored notes, saved20October23:00–23:30UTC plan,
+Calendar exact Task, complete, fresh source and reviewed Reply all. Authored text
+survived Calendar and independent owner-Workspace creation/context switches. That
+new Workspace correctly had no Mail connection. Saved revision1 reopened after
+stop/relaunch with exact body/mode/account/recipients. Fixture disconnect denied
+native save and fresh-source access; completed Task/block remained. Synthetic
+screenshots/receipt are in output/r53. Owned simulator shut down; temporary keyboard
+routing restored. iOS build lease42be431e909e74377380242a released succeeded.
+
+Android work in progress: /tmp/openjob-r53-ji537fxd is the outside-sync proof copy.
+Only its native package main selects the committed simulator-connected-smoke entry;
+the actual checkout's normal index.ts entry is unchanged. Development debug build
+session2017 passed in25m33s (571tasks); the verified development APK is installed
+on owned AVD OpenJob_R53_Connected / emulator-5580. Existing debug networking was
+used; no existing Bubba AVD was reused. Android build lease
+aa96892ca56c7c57fe60b7e2 released succeeded. APK SHA256
+cda191317268d87ba205fab616004cb7c5db4e672f2a400d2e96e0fc7bee2be9;
+sanitized build receipt: output/r53/android-build-receipt.json. Its build automatically installed the required NDK using
+the SDK's existing accepted license; source lockfiles were unchanged. Local fake
+service PID5910/session60283 uses /tmp/openjob-r53-native-state.json on5213; it is
+disconnected after the iOS denial test. Use a fresh dedicated Android state next.
+No real Mail read was repeated; key-free Timothy launcher remains disconnected.
+The Android fixture service session97374 now uses fresh dedicated
+/tmp/openjob-r53-android-state.json on5213; the disconnected iOS service was stopped.
+The emulator is online. CUA cannot bind its raw SDK window (not exposed as a supported
+app); alternative Android SDK UI automation needs explicit method authorization
+before input actions. The build is complete; no Android UI input has run. Method authorization was
+requested through the current chat; do not infer approval from the earlier bounded
+Google notice authorization. Metro is
+loopback-only/offline on8088 with the committed fixture main selected only in the
+proof copy; Metro PID45723/session90405. Initial --offline/--host combination was
+rejected by locked Expo; EXPO_OFFLINE=1 plus --host localhost works and lsof confirms
+127.0.0.1:8088. Manifest200 selects the committed fixture entry and dev identity.
+Bounded SDK UI helper prepared at /tmp/openjob-r53-android-ui.py (syntax checked,
+not executed). It refuses other AVDs, apps and non-fixture services.
+
+Next: finish the Android written journey under ADR0017, record
+exact artifact inputs/results, update this receipt and Linear, then review the
+exact final PR head for an authorized nondeploying merge. Real native login,
+provider/device/storage/release gates and full R33/R53 acceptance remain separate.
+
+---

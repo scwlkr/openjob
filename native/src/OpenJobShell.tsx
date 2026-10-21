@@ -7,7 +7,7 @@ import {
   createNativeStackNavigator,
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -29,6 +29,7 @@ import {
 } from "./appearance-keyboard";
 import { ReadOnlyTaskList } from "./ReadOnlyTaskList";
 import { NativePersonalWorkspace } from "./personal-workspace/NativePersonalWorkspace";
+import { ConnectedWorkspaces } from './connected-workspaces/ConnectedWorkspaces';
 import type { NativePersonalWorkspaceController } from "./personal-workspace-contracts";
 import type { OpenJobRuntimeConfig } from "./runtime-config";
 import type { NativeTaskListController } from "./task-list-contracts";
@@ -46,7 +47,7 @@ type RootStackParamList = {
 };
 
 type ShellProps = NativeStackScreenProps<RootStackParamList, "Shell"> & {
-  onRestoreSession: () => void;
+  onRestoreSession: () => void | Promise<boolean>;
   ownerUserId: string;
   reducedMotion: boolean;
   restoreReason?: "offline" | "unavailable";
@@ -152,7 +153,17 @@ function ShellScreen({
   const { palette } = useOpenJobTheme();
   const compactHeader = width < 520;
   const largeTextHeader = compactHeader && fontScale >= 1.2;
-  const [surface, setSurface] = useState<"personal" | "groups">(personalWorkspaceController ? "personal" : "groups");
+  const [surface, setSurface] = useState<"personal" | "connected" | "groups">(personalWorkspaceController ? "personal" : "groups");
+  const [connectedEnded, setConnectedEnded] = useState(false);
+  const onSessionRevoked = signedInUser.onSessionRevoked;
+  const onConnectedAccessEnded = useCallback((error: unknown) => {
+    const issue = error as { status?: number; code?: string };
+    if (issue.status === 401 || issue.status === 410 || issue.code === 'revoked') {
+      setConnectedEnded(true);
+      if (issue.status === 401 || issue.status === 410) onSessionRevoked();
+    }
+  }, [onSessionRevoked]);
+  async function restoreConnected() { if (await onRestoreSession() === true) setConnectedEnded(false); }
 
   return (
     <SafeAreaView
@@ -212,10 +223,13 @@ function ShellScreen({
         </View>
       </View>
       {personalWorkspaceController ? <View style={[styles.surfaceTabs, { borderBottomColor: palette.line }]} accessibilityLabel="Workspace selection">
-        {(["personal", "groups"] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={value === "personal" ? "Personal workspace" : "Existing Groups"} accessibilityState={{ selected: surface === value }} onPress={() => setSurface(value)} style={[styles.surfaceTab, { backgroundColor: surface === value ? palette.selected : palette.card, borderColor: palette.controlLine }]}>
-          <Text style={{ color: surface === value ? palette.selectedText : palette.ink, fontFamily: "Inter_600SemiBold" }}>{value === "personal" ? "Personal workspace" : "Existing Groups"}</Text>
+        {(["personal", ...(personalWorkspaceController.connected ? ['connected' as const] : []), "groups"] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={value === "personal" ? "Personal workspace" : value === 'connected' ? 'Connected Workspaces' : "Existing Groups"} accessibilityState={{ selected: surface === value }} onPress={() => setSurface(value)} style={[styles.surfaceTab, { backgroundColor: surface === value ? palette.selected : palette.card, borderColor: palette.controlLine }]}>
+          <Text style={{ color: surface === value ? palette.selectedText : palette.ink, fontFamily: "Inter_600SemiBold" }}>{value === "personal" ? "Personal workspace" : value === 'connected' ? 'Connected Workspaces' : "Existing Groups"}</Text>
         </Pressable>)}
       </View> : null}
+      {personalWorkspaceController?.connected && <View style={{ flex: 1, display: surface === 'connected' ? 'flex' : 'none' }} accessibilityElementsHidden={surface !== 'connected'} importantForAccessibility={surface === 'connected' ? 'auto' : 'no-hide-descendants'}>
+        {connectedEnded ? <View style={{ padding: 16 }}><Text style={{ color: palette.ink }}>Connected Workspace session ended. Private screen data was cleared.</Text><IconButton accessibilityLabel="Restore connected session" icon="refresh-cw" onPress={() => void restoreConnected()} /></View> : <ConnectedWorkspaces key={`${ownerUserId}:${sessionReady ? 'ready' : 'restoring'}`} controller={personalWorkspaceController.connected} owner={ownerUserId} active={surface === 'connected'} sessionReady={sessionReady} onAccessEnded={onConnectedAccessEnded} />}
+      </View>}
       {personalWorkspaceController ? <View style={{ flex: 1, display: surface === "personal" ? "flex" : "none" }} accessibilityElementsHidden={surface !== "personal"} importantForAccessibility={surface === "personal" ? "auto" : "no-hide-descendants"}>
         <NativePersonalWorkspace key={`${ownerUserId}:${sessionReady ? "ready" : "restoring"}`} controller={personalWorkspaceController} ownerUserId={ownerUserId} sessionReady={sessionReady} onRestoreSession={onRestoreSession} onSessionRevoked={signedInUser.onSessionRevoked} />
       </View> : null}
@@ -545,7 +559,7 @@ export function OpenJobShell({
 }: {
   diagnostics: DiagnosticsSettings;
   initialState: Parameters<typeof NavigationContainer>[0]["initialState"];
-  onRestoreSession: () => void;
+  onRestoreSession: () => void | Promise<boolean>;
   ownerUserId: string;
   reducedMotion: boolean;
   restoreReason?: "offline" | "unavailable";

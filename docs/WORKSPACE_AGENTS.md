@@ -63,6 +63,16 @@ Action buttons open the corresponding Task or block when it still exists. This
 bounded history records operation, item ID, agent and time; it is not a complete
 audit log and contains no Task notes, Mail references or reply text.
 
+Native Connected Workspaces also has an **Agents** tab for this owner review.
+It shows last-check time, exact grants and confirmed actions. Item links refresh
+current Workspace work before opening a retained Task or block. Confirm revocation
+to deny future access; the screen requires an exact acknowledgement and observed
+revoked state before reporting success. An uncertain result hides stale grant and
+action data until explicit refresh, without retrying the mutation. Authored Mail
+Task requests and reply buffers survive Agents navigation. Retained Personal uses
+its existing **Personal → Agents** screen; no name-based context inference or
+substitute grants are used. Credentials remain in the existing CLI flow.
+
 The same human operations are available through the CLI:
 
 ```sh
@@ -94,7 +104,17 @@ injected revoke failure, revoke, restart and verify denial. An independent grant
 remained valid; Calendar-only access and a second human stayed isolated. All
 synthetic credentials were revoked and their private files removed after proof.
 
+On 21 October 2026, native source `62a8fd34c364e8ce9f4ad59376c22c3e54938254`
+passed an embedded Release fixture build and practical iOS 27 simulator checks.
+The owner reviewed scopes/resources and confirmed actions, opened the exact Task
+and standalone Calendar block, retained an unfinished Task title, canceled then
+confirmed revocation and observed no effective access. Actual CLI/HTTP denied A
+while B remained usable; saved work stayed byte-equal. Both invented grants were
+then revoked and their private files removed. Local evidence is in
+`output/r53/native-agents/`; source inputs and limits are recorded in `w.md`.
+
 This is bounded Tasks/Calendar owner-pilot delivery, not full R22 acceptance.
-Mailbox-set delegation, multi-person sponsoring rights/lifecycle, broader policy,
-native agent controls and integrated live acceptance remain separate. No real
+Mailbox-set delegation, multi-person sponsoring rights/lifecycle, broader policy
+and integrated live acceptance remain separate. Native review/revocation follows
+the same existing contracts. No real
 grant, credential activation, provider effect, deployment or release was performed.

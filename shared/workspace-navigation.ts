@@ -4,11 +4,13 @@ export type WorkspaceDestination = { workspaceId: string; item?: WorkspaceItemTa
 export function parseWorkspaceFragment(hash: string): WorkspaceDestination | null {
   if (!hash || hash === '#' || hash === '#home') return { workspaceId: '' };
   const parts = hash.slice(1).split('/');
-  if (!WORKSPACE_ID.test(parts[0]) || ![1, 3].includes(parts.length)) return null;
-  if (parts.length === 1) return { workspaceId: parts[0] };
-  let id: string; try { id = decodeURIComponent(parts[2]); } catch { return null; }
-  if (!['task', 'block'].includes(parts[1]) || !id.trim() || id.length > 500 || /[\u0000-\u001f\u007f]/.test(id)) return null;
-  return { workspaceId: parts[0], item: { kind: parts[1] as WorkspaceItemTarget['kind'], id } };
+  const workspaceId = parts[0], kind = parts[1], encodedId = parts[2];
+  if (!workspaceId || !WORKSPACE_ID.test(workspaceId) || ![1, 3].includes(parts.length)) return null;
+  if (parts.length === 1) return { workspaceId };
+  if (kind !== 'task' && kind !== 'block' || encodedId === undefined) return null;
+  let id: string; try { id = decodeURIComponent(encodedId); } catch { return null; }
+  if (!id.trim() || id.length > 500 || /[\u0000-\u001f\u007f]/.test(id)) return null;
+  return { workspaceId, item: { kind, id } };
 }
 export function workspaceFragment(destination: WorkspaceDestination) {
   if (!destination.workspaceId) return '#home';
