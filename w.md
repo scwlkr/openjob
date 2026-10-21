@@ -1,3 +1,108 @@
+# Native integration of Gmail protocol main — P-WLK-6 / R41–R53
+
+21 October2026 UTC: PR130 merged main0304b6b6a0f32c41a1ff361da79d106354e0e6b5;
+reviewed final head4125a6e, source4578720. Native draft PR120 integrates that main.
+Only FEATURES.md/w.md conflicted; both native and protocol feature/history additions
+were preserved. All136 native/shared/package inputs remain byte-identical to
+c3770ae; native has no send dispatcher. Prior native Mail/Agents simulator receipts
+remain their exact source checkpoints, not new build evidence for this merge.
+
+An isolated staged-tree archive at
+/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-r41-native-integration-9h2tl_7n
+hash-matches the complete resolved source. Root/native types and12 focused native
+HTTP/agent/Google/protocol checks pass, including both Workspace home types.
+Generated CLI types and brand32 pass. Archive secret check could not run without
+Git; the canonical checkout scan passed1108. Original26 plus four newer duplicate
+files are preserved. No shared dependencies, native sources, proof artifacts,
+Android5213/Metro8088 or foreign simulator changed.
+
+PR130 source merge was nondeploying: remote main matches and only a manual
+nonpublishing artifact workflow exists; no checks/protections/rulesets/deployments
+were configured at review. Native PR120 stays Draft; full R30/R41/R22/R53 remain
+In Progress. Live outbound storage/composition, approved send account/recipients,
+exact real thread, provider Calendar, Mail delegation, native live/device/storage,
+Android UI-method answer and release gates remain open. No further real read,
+provider effect, persistent real access, deployment or publication occurred.
+Continue Linear R30 7f612b86-7725-46b1-8474-8a2a680da5eb and R53
+ba6592c3-b3e1-4908-b830-3532ab70aaf4; reconcile the next dependency-ready source
+slice against the existing roadmap. Do not repeat the completed bounded alt read.
+
+# Gmail reply protocol delivery — P-WLK-6 / R41
+
+21 October2026 UTC: source45787209cab42d7dd7574163417aed6162fdd966 on
+codex/p-wlk-6-gmail-reply-protocol, based on main5b21875. Native PR120 stays
+separate at c3770ae until main integration. This supersedes pending proof below.
+
+The default-disabled, unbound Gmail reply adapter validates exact owned binding,
+verified subject/From and separate gmail.send scope before one POST through a
+mandatory injected transport. It serializes frozen reviewed Unicode text, exact
+To/Cc/subject/threading and saved timestamp into bounded MIME/base64url. Wrong
+binding/scope/alias, malformed headers/threading and invalid Unicode cause no POST.
+Known rejection is distinct from unknown; no automatic retry. The fixture's
+invented send credential/fake HTTP are inseparable. Only its own sim_ receipts enter
+reply.simulate operations. Current read OAuth, default/portable absence of a
+dispatcher, provider capability gates and actual mail.send denial remain intact.
+
+40 focused checks pass: new protocol/durable8, related CLI/reply/Google22,
+OAuth readonly/lifecycle9 and actual-send403/no-side-effect1. Root types, affected
+lint, generated CLI types, brand32 and secret749 pass. Independent read-only review
+found no consequential issue. Shared draft validation extraction matches native
+PR120's helper. No package, native code, real consent or provider setup changed.
+
+Actual browser proof on source4578720: create source Task; review Reply all;
+save88 Unicode characters at revision1; queue; save77-character revision2; stop and
+restart the saved fixture; reopen exact revision2 and queued revision1; execute.
+UI reports Simulation confirmed / Nothing was sent. Fake provider's single durable
+request hash exactly matches frozen revision1 MIME, with unchanged payload hash.
+Three further actual API run requests return confirmed, keep POST count1 and leave
+saved Tasks/Calendar byte-equal. Actual CLI tests cross the same fake boundary for
+normal and accepted-but-lost provider responses; file-backed repository/provider
+reconstruction proves unknown cannot replay. No real receipt is relabeled.
+
+Synthetic screenshot, receipt, source hashes and logs are retained on this Mac:
+/Users/shanewalker/Desktop/dev/openjob/output/r41/gmail-reply-protocol/.
+First interrupted npm parent left own lock34069; PID and5214 listener were absent,
+then only that dead lock was removed before restart. Cleanup disconnected the
+invented connection, closed own tab and stopped own5214 service. Prior5213/8088,
+foreign simulator and original26 plus four newer duplicate-suffix files remain.
+
+Full R30/R41 stay In Progress. Real send permission, outbound storage/composition,
+approved recipients/exact real-thread proof, provider Calendar, Mail delegation,
+native live/device/storage and release gates remain open. Next: reviewed
+nondeploying source PR/merge; integrate main into native draft120 with unchanged
+native input verification, then continue the existing Linear queue. R30 discussion
+7f612b86-7725-46b1-8474-8a2a680da5eb owns this bounded R41 milestone. No real Mail
+read repeated, real provider effect, persistent real access, security/hosting
+change, deployment or publication.
+
+# Gmail reply protocol checkpoint — P-WLK-6 / R41
+
+21 October2026 UTC: isolated branch codex/p-wlk-6-gmail-reply-protocol from
+main5b21875. Native PR120 stays separate at c3770ae. Prior goal turn completed
+native Agents verification; this turn adds the next provider protocol boundary.
+
+The unbound/default-disabled adapter validates exact owned binding, verified
+subject/From and separate send scope; serializes frozen text/recipients/threading;
+and performs one bounded POST through mandatory HTTP injection. The invented
+launcher uses an inseparable fake transport/credential and persistent synthetic
+acceptance ledger. reply.simulate/sim_ contracts, read OAuth and actual-send denial
+stay intact. Read-only source review found no consequential issue.
+
+Baseline11 and new8 protocol/durable checks pass; CLI/reply/Google regressions22
+pass, including actual CLI normal/lost-provider-response cases. Root types,
+affected lint and brand32 pass. Test startup caught an unsupported TS parameter
+property, then a revoke test used a nonexistent method; both corrected/rerun.
+Shared validator extraction matches the native PR120 helper and keeps semantics.
+
+Practical browser/CLI proof is in progress on own5214 with fresh state under
+/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-r41-proof-h5efrwwr.
+Next: queue revision1, save revision2, restart fixture, execute original intent,
+inspect synthetic receipt/frozen MIME hash and no replay; clean own resources.
+Continue Linear R30 7f612b86-7725-46b1-8474-8a2a680da5eb through reviewed
+nondeploying PR delivery. Full R30/R41/live/provider/native/release gates stay open.
+Original26 plus four newly observed duplicate-suffix files in the primary checkout
+are preserved. Prior Android5213/Metro8088 and foreign simulator stay untouched.
+
 # Native Agents delivery — P-WLK-6 / R22–R53
 
 21 October 2026 UTC: source `62a8fd34c364e8ce9f4ad59376c22c3e54938254` is pushed
