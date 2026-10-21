@@ -1,3 +1,70 @@
+# R40 Calendar backend checkpoint — unfinished
+
+21 October 2026 UTC: source `4ad9dc814d62418d2dcbff831028cb9df3effdac` on
+`codex/p-wlk-6-google-calendar`, from main `0304b6b`. Managed worktree:
+`/Users/shanewalker/.codex/worktrees/p-wlk-6-google-calendar/openjob`.
+Primary native draft120 remains at446162d; no merge or new native build.
+Sole implementation owner; read-only source/protocol helpers only.
+
+Provider Calendar reads and managed timed/nonrecurring/no-attendee create/update/
+delete are implemented with fixed account/home/resource bindings, separate scope
+families, default-closed approval, injected transport and no retry. Reads retain
+all-day exclusive dates, zones, moved recurrence identity and unknown ends;
+collection access is checked after CalendarList access. Busy-only FreeBusy has no
+event details, and stale/error/missing observations never mean free. Mutation
+preflight checks the full managed event, freezes original ETag and private origin,
+then rechecks current ownership/authority/lease/intent immediately before HTTP.
+
+R30's CAS/lease repository and bounded runner are extracted into shared durable
+modules; reply.simulate schemas/collections/sim_ receipts remain unchanged. The
+Calendar codec uses separate v1FixtureCalendar records and cop_ IDs. Its Task
+reservation, operation, frozen payload, job and index share one Workspace CAS.
+Local schedule/unschedule/delete and whole-projection offline sync cannot displace
+an active remote link. Personal writes now preserve sidecars. Completion, notes,
+titles and grants remain local; no provider effect is inferred from them.
+
+Canonical human-only pilot source routes expose Calendar list/events/availability,
+remote planning, Calendar operations and explicit run-fixture/review. Normal and
+portable runtimes configure no Calendar service. Only source tests compose it with
+an inseparable invented credential/fake HTTP provider. The development launcher,
+CLI and web UI are NOT wired yet. No actual Calendar account is connected.
+
+72 focused checks pass, including actual existing reply CLI regressions. Invented
+state-flow checks cover Mail Task→reservation→repository/provider reconstruction→
+create/update/delete; lost create/delete→explicit read reconciliation; provider
+edit conflict→review→new ETag intent; no replay; queued revocation recovery;
+concurrent identical intent and local-schedule CAS races; late ownership/lease
+changes with zero provider writes; Personal sidecar retention/offline exclusion.
+Root typecheck/final tsc, affected lint, brand generation/check32 and secret765
+pass. Independent read-only review found and confirmed fixes for freshness,
+unspecified ends, collection role, all-day conversion, rejected-create recovery,
+DELETE tombstones, enqueue receipt recovery and late execution fencing. Final
+review found no consequential remaining issue in this backend boundary.
+
+Evidence (synthetic only):
+`/Users/shanewalker/Desktop/dev/openjob/output/r40/calendar-backend/`.
+No browser/CLI acceptance for the NEW Calendar flow is claimed. Early test authoring
+caught invalid fixture arguments/notes and one async callback syntax error; fixed
+and included in the final passing run. Existing reply behavior remains covered.
+
+NEXT: implement explicit safe detach (leave provider event) for linked/review-required
+states, while queued/executing/unknown reservations require resolution. Document
+new routes in OpenAPI and generate CLI types; add CLI Calendar/planning operations.
+Compose fixtureCalendar and persist its provider ledger in dev-owned-workspaces.
+Wire existing Workspace Calendar and Task status UI without putting remote events
+inside the offline projection. Exercise the complete invented browser/CLI journey,
+restart, conflict and disconnect/revoke behavior; then review, push/merge the
+nondeploying completed slice and integrate native draft120 with exact-input proof.
+R40 remains In Progress, not delivered. Full goal/provider/native/release gates stay
+open. Follow existing Linear R30 discussion7f612b86-7725-46b1-8474-8a2a680da5eb;
+R40 start999c9abe-59f2-4aad-9b52-2e0a5d3bee71. Do not create a new backlog.
+
+Primary34 untracked files are hash-identical to
+`/tmp/openjob-r40-primary-untracked.json` (includes original26). Primary tracked
+files unchanged. Existing Android5213 PID45491 and Metro8088 PID45723 remain;
+no simulator, Android SDK/UI, real Mail session, Calendar consent/effect, persistent
+real access, security/hosting, deployment or publication action occurred.
+
 # Gmail reply protocol delivery — P-WLK-6 / R41
 
 21 October2026 UTC: source45787209cab42d7dd7574163417aed6162fdd966 on
