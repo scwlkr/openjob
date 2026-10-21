@@ -3413,6 +3413,1321 @@ paths:
         "429": *a7
         "500": *a8
         "503": *a9
+  /api/v1/workspaces/{workspaceId}/provider-calendars/accounts:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: listProviderCalendarAccounts
+      summary: Discover owned configured Calendar accounts without resolving provider
+        credentials
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/ProviderCalendarAccount"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/provider-calendars:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: listProviderCalendars
+      summary: List selected account Calendars
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 8192
+            minLength: 1
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderCalendarPage"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/provider-calendars/events:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: listProviderCalendarEvents
+      summary: Read one Calendar with provider-expanded occurrences
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+        - name: calendarId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 4096
+            minLength: 1
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 40
+            format: date-time
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 40
+            format: date-time
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 8192
+            minLength: 1
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderEventPage"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/provider-calendars/availability:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: getProviderCalendarAvailability
+      summary: Read bounded busy intervals without event details
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+        - name: calendarId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 4096
+            minLength: 1
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 40
+            format: date-time
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 40
+            format: date-time
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderCalendarAvailability"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/planning:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: listRemotePlanning
+      summary: Inspect owned Task provider planning relationships
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    maxItems: 500
+                    items:
+                      $ref: "#/components/schemas/RemotePlanningLink"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/planning/{taskId}/review:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+    post:
+      tags:
+        - Workspace
+      operationId: reviewRemotePlanning
+      summary: Explicitly reconcile a terminal operation by current provider read
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    maxItems: 500
+                    items:
+                      $ref: "#/components/schemas/RemotePlanningLink"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+    get:
+      tags:
+        - Workspace
+      operationId: getPlanningReviewReceipt
+      summary: Inspect a persisted provider review receipt without repeating its read
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: operationId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 68
+            pattern: ^cop_[a-f0-9]{64}$
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PlanningReviewReceipt"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/planning/{taskId}/detach:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+    post:
+      tags:
+        - Workspace
+      operationId: detachRemotePlanning
+      summary: Detach a reviewed relationship, leaving the provider event untouched
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanningDetachInput"
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PlanningDetachReceipt"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+    get:
+      tags:
+        - Workspace
+      operationId: getPlanningDetachReceipt
+      summary: Inspect exact persisted local detach receipt
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: operationId
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 68
+            pattern: ^cop_[a-f0-9]{64}$
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PlanningDetachReceipt"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/calendar-operations:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+    post:
+      tags:
+        - Workspace
+      operationId: enqueueCalendarOperation
+      summary: Accept immutable reviewed Calendar intent and reserve its Task
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarPlanInput"
+      responses:
+        "202":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CalendarPlanOperation"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+    get:
+      tags:
+        - Workspace
+      operationId: listCalendarOperations
+      summary: Inspect redacted durable Calendar operation history
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      parameters:
+        - name: taskId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 8192
+            minLength: 1
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - nextCursor
+                properties:
+                  data:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: "#/components/schemas/CalendarPlanOperation"
+                  nextCursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 8192
+                        minLength: 1
+                      - type: "null"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/calendar-operations/{operationId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+    get:
+      tags:
+        - Workspace
+      operationId: getCalendarOperation
+      summary: Inspect one durable Calendar operation
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CalendarPlanOperation"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+  /api/v1/workspaces/{workspaceId}/calendar-operations/{operationId}/run-fixture:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 36
+          pattern: ^wsp_[a-f0-9]{32}$
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+    post:
+      tags:
+        - Workspace
+      operationId: runFixtureCalendarOperation
+      summary: Run one leased invented Calendar effect
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Only the explicit invented Google Calendar fixture composes this
+        service. Normal/portable runtimes remain disabled. Current admitted human
+        and Workspace ownership are required; agents and local Calendar grants
+        confer no provider rights. Provider reads expire and do not reserve time.
+        External intent is frozen and executes at most once; unknown results
+        require explicit review, never automatic replay.
+      responses:
+        "200":
+          description: Current authorized result. Fixture configuration only; no live
+            provider permission implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CalendarPlanOperation"
+        "400":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "401":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "403":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "404":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "409":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "410":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "429":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "500":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+        "503":
+          description: Unavailable, unauthorized, conflict, invalid input or disabled fixture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarPlanningError"
+
 components:
   securitySchemes:
     workspaceAgentBearer:
@@ -8242,3 +9557,922 @@ components:
             requestId:
               type: string
               minLength: 1
+
+    ProviderCalendarAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - connectionId
+        - label
+        - available
+      properties:
+        accountId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        connectionId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        label:
+          type: string
+          maxLength: 500
+          minLength: 1
+        available:
+          type: boolean
+    ProviderTimedPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+        - timeZone
+      properties:
+        kind:
+          type: string
+          const: timed
+        at:
+          type: string
+          maxLength: 40
+          format: date-time
+        timeZone:
+          type: string
+          maxLength: 128
+          minLength: 1
+    ProviderAllDayPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - date
+        - timeZone
+      properties:
+        kind:
+          type: string
+          const: all-day
+        date:
+          type: string
+          maxLength: 10
+          format: date
+        timeZone:
+          type: string
+          maxLength: 128
+          minLength: 1
+    ProviderCalendarSpan:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - start
+            - end
+          properties:
+            start:
+              $ref: "#/components/schemas/ProviderTimedPoint"
+            end:
+              $ref: "#/components/schemas/ProviderTimedPoint"
+        - type: object
+          additionalProperties: false
+          required:
+            - start
+            - end
+          properties:
+            start:
+              $ref: "#/components/schemas/ProviderAllDayPoint"
+            end:
+              $ref: "#/components/schemas/ProviderAllDayPoint"
+    ProviderTimedSpan:
+      type: object
+      additionalProperties: false
+      required:
+        - start
+        - end
+      properties:
+        start:
+          $ref: "#/components/schemas/ProviderTimedPoint"
+        end:
+          $ref: "#/components/schemas/ProviderTimedPoint"
+    ProviderCalendar:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - upstreamId
+        - name
+        - timeZone
+        - access
+      properties:
+        id:
+          type: string
+          maxLength: 4096
+          minLength: 1
+        accountId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        upstreamId:
+          type: string
+          maxLength: 1024
+          minLength: 1
+        name:
+          type: string
+          maxLength: 500
+          minLength: 1
+        timeZone:
+          type: string
+          maxLength: 128
+          minLength: 1
+        access:
+          type: string
+          enum:
+            - busy
+            - reader
+            - writer
+            - writer-limited
+            - owner
+    ProviderCalendarEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - calendarId
+        - upstreamId
+        - etag
+        - title
+        - span
+        - transparency
+        - occurrence
+        - hasAttendees
+      properties:
+        id:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        accountId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        calendarId:
+          type: string
+          maxLength: 4096
+          minLength: 1
+        upstreamId:
+          type: string
+          maxLength: 1024
+          minLength: 1
+        etag:
+          type: string
+          maxLength: 256
+          minLength: 1
+        title:
+          type: string
+          maxLength: 4096
+        span:
+          oneOf:
+            - $ref: "#/components/schemas/ProviderCalendarSpan"
+            - type: object
+              additionalProperties: false
+              required:
+                - start
+                - end
+              properties:
+                start:
+                  oneOf:
+                    - $ref: "#/components/schemas/ProviderTimedPoint"
+                    - $ref: "#/components/schemas/ProviderAllDayPoint"
+                end:
+                  type: "null"
+        transparency:
+          type: string
+          enum:
+            - opaque
+            - transparent
+        occurrence:
+          anyOf:
+            - type: object
+              additionalProperties: false
+              required:
+                - seriesId
+                - originalStart
+              properties:
+                seriesId:
+                  type: string
+                  maxLength: 1024
+                  minLength: 1
+                originalStart:
+                  oneOf:
+                    - $ref: "#/components/schemas/ProviderTimedPoint"
+                    - $ref: "#/components/schemas/ProviderAllDayPoint"
+            - type: "null"
+        hasAttendees:
+          type: boolean
+    ProviderCalendarPage:
+      type: object
+      additionalProperties: false
+      required:
+        - calendars
+        - nextCursor
+        - observedAt
+        - expiresAt
+      properties:
+        calendars:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ProviderCalendar"
+        nextCursor:
+          anyOf:
+            - type: string
+              maxLength: 8192
+              minLength: 1
+            - type: "null"
+        observedAt:
+          type: string
+          maxLength: 40
+          format: date-time
+        expiresAt:
+          type: string
+          maxLength: 40
+          format: date-time
+    ProviderEventPage:
+      type: object
+      additionalProperties: false
+      required:
+        - calendar
+        - events
+        - nextCursor
+        - observedAt
+        - expiresAt
+      properties:
+        calendar:
+          $ref: "#/components/schemas/ProviderCalendar"
+        events:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/ProviderCalendarEvent"
+        nextCursor:
+          anyOf:
+            - type: string
+              maxLength: 8192
+              minLength: 1
+            - type: "null"
+        observedAt:
+          type: string
+          maxLength: 40
+          format: date-time
+        expiresAt:
+          type: string
+          maxLength: 40
+          format: date-time
+    ProviderCalendarAvailability:
+      type: object
+      additionalProperties: false
+      required:
+        - calendarId
+        - start
+        - end
+        - busy
+        - observedAt
+        - expiresAt
+      properties:
+        calendarId:
+          type: string
+          maxLength: 4096
+          minLength: 1
+        start:
+          type: string
+          maxLength: 40
+          format: date-time
+        end:
+          type: string
+          maxLength: 40
+          format: date-time
+        busy:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - start
+              - end
+            properties:
+              start:
+                type: string
+                maxLength: 40
+                format: date-time
+              end:
+                type: string
+                maxLength: 40
+                format: date-time
+        observedAt:
+          type: string
+          maxLength: 40
+          format: date-time
+        expiresAt:
+          type: string
+          maxLength: 40
+          format: date-time
+    RemotePlanningLink:
+      type: object
+      additionalProperties: false
+      required:
+        - targetKind
+        - taskId
+        - calendarId
+        - eventId
+        - operationId
+        - state
+        - confirmed
+      properties:
+        targetKind:
+          type: string
+          const: provider
+        taskId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        calendarId:
+          type: string
+          maxLength: 4096
+          minLength: 1
+        eventId:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        operationId:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+        state:
+          type: string
+          enum:
+            - reserved
+            - linked
+            - unknown
+            - review_required
+        confirmed:
+          anyOf:
+            - $ref: "#/components/schemas/ProviderPlanningBlock"
+            - type: "null"
+    ProviderPlanningBlock:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - etag
+        - title
+        - span
+      properties:
+        eventId:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        etag:
+          type: string
+          maxLength: 256
+          pattern: ^"[\x21\x23-\x7e]+"$
+        title:
+          type: string
+          maxLength: 500
+          minLength: 1
+        span:
+          $ref: "#/components/schemas/ProviderTimedSpan"
+    CalendarPlanInput:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - action
+            - taskId
+            - requestId
+            - accountId
+            - calendarId
+            - title
+            - span
+          properties:
+            action:
+              type: string
+              const: calendar.create
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            accountId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            calendarId:
+              type: string
+              maxLength: 4096
+              minLength: 1
+            title:
+              type: string
+              maxLength: 500
+              minLength: 1
+            span:
+              $ref: "#/components/schemas/ProviderTimedSpan"
+        - type: object
+          additionalProperties: false
+          required:
+            - action
+            - taskId
+            - requestId
+            - etag
+            - title
+            - span
+          properties:
+            action:
+              type: string
+              const: calendar.update
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            etag:
+              type: string
+              maxLength: 256
+              pattern: ^"[\x21\x23-\x7e]+"$
+            title:
+              type: string
+              maxLength: 500
+              minLength: 1
+            span:
+              $ref: "#/components/schemas/ProviderTimedSpan"
+        - type: object
+          additionalProperties: false
+          required:
+            - action
+            - taskId
+            - requestId
+            - etag
+          properties:
+            action:
+              type: string
+              const: calendar.delete
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            etag:
+              type: string
+              maxLength: 256
+              pattern: ^"[\x21\x23-\x7e]+"$
+    CalendarPlanOperation:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - workspaceId
+            - taskId
+            - action
+            - requestId
+            - calendarId
+            - eventId
+            - createdAt
+            - updatedAt
+            - dispatchBefore
+            - receiptExpiresAt
+            - mode
+            - receiptExpired
+            - state
+            - receipt
+          properties:
+            id:
+              type: string
+              maxLength: 68
+              pattern: ^cop_[a-f0-9]{64}$
+            workspaceId:
+              type: string
+              maxLength: 36
+              pattern: ^wsp_[a-f0-9]{32}$
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            action:
+              type: string
+              enum:
+                - calendar.create
+                - calendar.update
+                - calendar.delete
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            calendarId:
+              type: string
+              maxLength: 4096
+              minLength: 1
+            eventId:
+              type: string
+              maxLength: 8192
+              minLength: 1
+            createdAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            updatedAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            dispatchBefore:
+              type: string
+              maxLength: 40
+              format: date-time
+            receiptExpiresAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            mode:
+              type: string
+              const: fixture
+            receiptExpired:
+              type: boolean
+            state:
+              type: string
+              enum:
+                - queued
+                - executing
+            receipt:
+              type: "null"
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - workspaceId
+            - taskId
+            - action
+            - requestId
+            - calendarId
+            - eventId
+            - createdAt
+            - updatedAt
+            - dispatchBefore
+            - receiptExpiresAt
+            - mode
+            - receiptExpired
+            - state
+            - outcome
+            - receipt
+          properties:
+            id:
+              type: string
+              maxLength: 68
+              pattern: ^cop_[a-f0-9]{64}$
+            workspaceId:
+              type: string
+              maxLength: 36
+              pattern: ^wsp_[a-f0-9]{32}$
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            action:
+              type: string
+              enum:
+                - calendar.create
+                - calendar.update
+                - calendar.delete
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            calendarId:
+              type: string
+              maxLength: 4096
+              minLength: 1
+            eventId:
+              type: string
+              maxLength: 8192
+              minLength: 1
+            createdAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            updatedAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            dispatchBefore:
+              type: string
+              maxLength: 40
+              format: date-time
+            receiptExpiresAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            mode:
+              type: string
+              const: fixture
+            receiptExpired:
+              type: boolean
+            state:
+              type: string
+              const: confirmed
+            outcome:
+              type: string
+              const: provider_accepted
+            receipt:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - eventId
+                    - etag
+                  properties:
+                    eventId:
+                      type: string
+                      maxLength: 8192
+                      minLength: 1
+                    etag:
+                      type: string
+                      maxLength: 256
+                      pattern: ^"[\x21\x23-\x7e]+"$
+                - type: object
+                  additionalProperties: false
+                  required:
+                    - deleted
+                  properties:
+                    deleted:
+                      type: boolean
+                      const: true
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - workspaceId
+            - taskId
+            - action
+            - requestId
+            - calendarId
+            - eventId
+            - createdAt
+            - updatedAt
+            - dispatchBefore
+            - receiptExpiresAt
+            - mode
+            - receiptExpired
+            - state
+            - outcome
+            - receipt
+          properties:
+            id:
+              type: string
+              maxLength: 68
+              pattern: ^cop_[a-f0-9]{64}$
+            workspaceId:
+              type: string
+              maxLength: 36
+              pattern: ^wsp_[a-f0-9]{32}$
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            action:
+              type: string
+              enum:
+                - calendar.create
+                - calendar.update
+                - calendar.delete
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            calendarId:
+              type: string
+              maxLength: 4096
+              minLength: 1
+            eventId:
+              type: string
+              maxLength: 8192
+              minLength: 1
+            createdAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            updatedAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            dispatchBefore:
+              type: string
+              maxLength: 40
+              format: date-time
+            receiptExpiresAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            mode:
+              type: string
+              const: fixture
+            receiptExpired:
+              type: boolean
+            state:
+              type: string
+              const: rejected
+            outcome:
+              type: string
+              enum:
+                - provider_rejected
+                - provider_conflict
+                - unsupported_event
+                - authority_changed
+                - payload_invalid
+                - intent_expired
+            receipt:
+              type: "null"
+        - type: object
+          additionalProperties: false
+          required:
+            - id
+            - workspaceId
+            - taskId
+            - action
+            - requestId
+            - calendarId
+            - eventId
+            - createdAt
+            - updatedAt
+            - dispatchBefore
+            - receiptExpiresAt
+            - mode
+            - receiptExpired
+            - state
+            - outcome
+            - receipt
+          properties:
+            id:
+              type: string
+              maxLength: 68
+              pattern: ^cop_[a-f0-9]{64}$
+            workspaceId:
+              type: string
+              maxLength: 36
+              pattern: ^wsp_[a-f0-9]{32}$
+            taskId:
+              type: string
+              maxLength: 128
+              pattern: ^[A-Za-z0-9_-]{1,128}$
+            action:
+              type: string
+              enum:
+                - calendar.create
+                - calendar.update
+                - calendar.delete
+            requestId:
+              type: string
+              maxLength: 36
+              format: uuid
+            calendarId:
+              type: string
+              maxLength: 4096
+              minLength: 1
+            eventId:
+              type: string
+              maxLength: 8192
+              minLength: 1
+            createdAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            updatedAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            dispatchBefore:
+              type: string
+              maxLength: 40
+              format: date-time
+            receiptExpiresAt:
+              type: string
+              maxLength: 40
+              format: date-time
+            mode:
+              type: string
+              const: fixture
+            receiptExpired:
+              type: boolean
+            state:
+              type: string
+              const: unknown
+            outcome:
+              type: string
+              const: dispatch_unknown
+            receipt:
+              type: "null"
+    PlanningReviewReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        - taskId
+        - operationId
+        - eventId
+        - reviewedAt
+        - relationship
+      properties:
+        taskId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        operationId:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+        eventId:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        reviewedAt:
+          type: string
+          maxLength: 40
+          format: date-time
+        relationship:
+          type: string
+          enum:
+            - linked
+            - removed
+    PlanningDetachInput:
+      type: object
+      additionalProperties: false
+      required:
+        - operationId
+        - eventId
+        - etag
+        - acknowledge
+      properties:
+        operationId:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+        eventId:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        etag:
+          anyOf:
+            - type: string
+              maxLength: 256
+              pattern: ^"[\x21\x23-\x7e]+"$
+            - type: "null"
+        acknowledge:
+          type: string
+          const: leave_provider_event
+    PlanningDetachReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        - taskId
+        - operationId
+        - eventId
+        - etag
+        - detachedAt
+        - detached
+        - providerEventLeft
+      properties:
+        taskId:
+          type: string
+          maxLength: 128
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        operationId:
+          type: string
+          maxLength: 68
+          pattern: ^cop_[a-f0-9]{64}$
+        eventId:
+          type: string
+          maxLength: 8192
+          minLength: 1
+        etag:
+          anyOf:
+            - type: string
+              maxLength: 256
+              pattern: ^"[\x21\x23-\x7e]+"$
+            - type: "null"
+        detachedAt:
+          type: string
+          maxLength: 40
+          format: date-time
+        detached:
+          type: boolean
+          const: true
+        providerEventLeft:
+          type: boolean
+          const: true
+    CalendarPlanningError:
+      $ref: "#/components/schemas/ReplyOperationError"

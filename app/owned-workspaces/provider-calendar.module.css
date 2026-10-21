@@ -1,0 +1,9 @@
+.grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.section { min-width: 0; padding: 1rem; }
+.section h2 { margin-top: 0; }
+.section p, .section li { overflow-wrap: anywhere; }
+.row { padding: .75rem 0; border-top: 1px solid var(--oj-line); display: grid; gap: .4rem; }
+.row:first-child { border-top: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.confirm { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--oj-line); }
+@media (max-width: 850px) { .grid { grid-template-columns: minmax(0, 1fr); } }

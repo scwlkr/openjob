@@ -6,6 +6,8 @@ import type { createWorkspaceContextStore } from './workspace-context-store.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse } from './v1-http.ts';
 import { replyOperationsResponse } from './reply-operations-api.ts';
 import type { FixtureReplyOperations } from './reply-operations.ts';
+import { calendarPlanningResponse } from './calendar-planning-api.ts';
+import type { FixtureCalendarPlanning } from './calendar-planning.ts';
 
 /** Trusted server selection only. It does not classify personal/employer control. */
 export type WorkspacePilotAdmission = Readonly<{ userId: string; provider: 'google' | 'apple'; firebaseUid: string }>;
@@ -15,8 +17,9 @@ type Options = {
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   admission?: WorkspacePilotAdmission;
   fixtureOperations?: FixtureReplyOperations;
+  fixtureCalendar?: FixtureCalendarPlanning;
 };
-export function createWorkspacePilotApplication({ store, users, verifyIdToken, admission, fixtureOperations }: Options) {
+export function createWorkspacePilotApplication({ store, users, verifyIdToken, admission, fixtureOperations, fixtureCalendar }: Options) {
   const configured = !!admission && Object.keys(admission).sort().join(',') === 'firebaseUid,provider,userId' && /^user_[a-f0-9]{32}$/.test(admission.userId) && ['google', 'apple'].includes(admission.provider) && typeof admission.firebaseUid === 'string' && admission.firebaseUid.length > 0 && admission.firebaseUid.length <= 128;
   // Copy caller-owned selection so later mutation cannot silently widen this instance's admission.
   const selected = configured ? Object.freeze({ ...admission! }) : null;
@@ -42,6 +45,8 @@ export function createWorkspacePilotApplication({ store, users, verifyIdToken, a
       if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
       const operationResponse = await replyOperationsResponse(request, user.userId, fixtureOperations);
       if (operationResponse) return admitted(await users.resolve(identity), identity) ? operationResponse : fail('workspace_pilot_not_admitted', 403);
+      const calendarResponse = await calendarPlanningResponse(request, user.userId, fixtureCalendar);
+      if (calendarResponse) return admitted(await users.resolve(identity), identity) ? calendarResponse : fail('workspace_pilot_not_admitted', 403);
       if (url.search) return fail('invalid_input', 400);
       if (url.pathname === '/api/v1/workspaces/session') {
         if (request.method !== 'GET') return fail('not_found', 404);

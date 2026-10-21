@@ -1,0 +1,13 @@
+import * as protocol from '../cli/lib/calendar-protocol.mjs';
+import type { RemoteCalendarPage, RemoteEventPage, CalendarAvailability, CalendarWindow, ProviderCalendarAccount } from './provider-calendar.ts';
+import type { CalendarOperationView, RemotePlanningLink, CalendarPlanInput, PlanningDetachInput, PlanningDetachReceipt, PlanningReviewReceipt } from './remote-planning.ts';
+export const calendarListPage = protocol.calendarListPage as (value: unknown, account: string) => RemoteCalendarPage;
+export const calendarAccounts = protocol.calendarAccounts as (value: unknown) => ProviderCalendarAccount[];
+export const calendarEventsPage = protocol.calendarEventsPage as (value: unknown, account: string, calendar: string) => RemoteEventPage;
+export const calendarAvailability = protocol.calendarAvailability as (value: unknown, calendar: string, window: CalendarWindow) => CalendarAvailability;
+export const remotePlanningLinks = protocol.remotePlanningLinks as (value: unknown) => RemotePlanningLink[];
+export const calendarOperation = protocol.calendarOperation as (value: unknown, workspace: string, expected?: { id?: string; input?: CalendarPlanInput }) => CalendarOperationView;
+export const calendarPlanInput = protocol.calendarPlanInput as (value: unknown) => CalendarPlanInput;
+export const planningDetachInput = protocol.planningDetachInput as (value: unknown) => PlanningDetachInput;
+export const planningDetachReceipt = protocol.planningDetachReceipt as (value: unknown, task: string, operation: string, expected?: PlanningDetachInput) => PlanningDetachReceipt;
+export const planningReviewReceipt = protocol.planningReviewReceipt as (value: unknown, task: string, operation: string, expectedEvent?: string) => PlanningReviewReceipt;

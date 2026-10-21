@@ -14,6 +14,9 @@ import WorkspaceAgents from './workspace-agents';
 import WorkspaceMail from './workspace-mail';
 import { requestConnections, type ConnectionsRequest } from '../connections/connection-request';
 import ConnectedTaskSource from '../connections/connected-task-source';
+import ProviderCalendarPanel, { type ProviderCalendarHandle } from './provider-calendar-panel';
+import { remotePlanningLinks } from '../../shared/calendar-client';
+import type { RemotePlanningLink } from '../../shared/remote-planning';
 
 type Request = (path?: string, input?: unknown, method?: 'DELETE') => Promise<unknown>;
 export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/api/owned-workspaces", mode = "fixture" }: { ownerUserId: string; getToken: () => Promise<string>; apiBase?: string; mode?: "fixture" | "pilot" }) {
@@ -91,6 +94,9 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
   </div>;
 }
 function WorkspaceSession({ workspace, active, request, setBusy, navigation, onNavigate, getToken, connectionRequest }: { connectionRequest?: ConnectionsRequest; getToken?: () => Promise<string>; onNavigate: (destination: WorkspaceDestination) => void; navigation?: WorkspaceDestination; workspace: OwnedWorkspace; active: boolean; request: Request; setBusy: (value: boolean) => void }) {
+  const [providerPlans, setProviderPlans] = useState<RemotePlanningLink[]>([]), [providerStatus, setProviderStatus] = useState<'checking' | 'current' | 'unavailable'>('checking');
+  const provider = useRef<ProviderCalendarHandle>(null);
+  const acceptProviderPlans = useCallback((value: RemotePlanningLink[] | undefined) => { if (value) { setProviderPlans(value); setProviderStatus('current'); } else setProviderStatus('unavailable'); }, []);
   const [replyBuffers, setReplyBuffers] = useState<Record<string, ReplyEditorBuffer>>({});
   useEffect(() => {
     if (!Object.values(replyBuffers).some(buffer => buffer.dirty)) return;
@@ -113,13 +119,19 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     return () => { current = false; };
   }, [workspace.workspaceId, request, accept, active, navigation]);
   useEffect(() => {
+    if (!active || !getToken) return; let current = true;
+    void request(`/${workspace.workspaceId}/planning`).then(remotePlanningLinks).then(value => { if (current) acceptProviderPlans(value); }).catch(() => { if (current) acceptProviderPlans(undefined); });
+    return () => { current = false; };
+  }, [active, getToken, workspace.workspaceId, request, navigation, acceptProviderPlans]);
+  useEffect(() => {
     if (!active || !ready || !target || !snapshot) return;
     const exists = target.kind === 'task' ? snapshot.work.tasks.some(item => item.id === target.id) : snapshot.work.events.some(item => item.id === target.id);
     if (!exists) return;
     if (target.kind === 'task') tasks.current?.openTask(target.id); else calendar.current?.openEvent(target.id);
   }, [active, ready, target, snapshot]);
   async function command(input: WorkspaceCommand, success: string, expectedNotes?: string) {
-    if (input.type === 'task.delete' && replyBuffers[input.taskId]?.dirty) { setError('Save or explicitly discard this Task’s unfinished reply before deleting the Task.'); return false; }
+    if (input.type === 'task.delete' && replyBuffers[input.taskId]?.dirty) { setNotice(''); setError('Save or explicitly discard this Task’s unfinished reply before deleting the Task.'); return false; }
+    if (input.type === 'task.delete' && provider.current?.blocksDeletion(input.taskId)) { setNotice(''); setError('Resolve the pending provider request or explicitly discard this Task’s unsaved provider edits in Calendar before deleting the Task.'); return false; }
     if (busy) return false; busyState(true); setBusy(true); setError(''); setNotice('');
     try { const result = accept(await request(`/${workspace.workspaceId}/commands`, expectedNotes === undefined ? input : { ...input, expectedNotes })); if (!mounted.current) return false; setSnapshot(result); if (input.type === 'task.delete') setReplyBuffers(current => { const next = { ...current }; delete next[input.taskId]; return next; }); setNotice(success); return true; }
     catch { if (mounted.current) setError('Change unavailable in this Workspace. Your editor text is kept; refresh before retrying.'); return false; }
@@ -142,7 +154,8 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
     {connectionRequest && <WorkspaceMail workspaceId={workspace.workspaceId} request={connectionRequest} active={active && ready && currentTab === 'Mail'} onOpenTask={id => onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'task', id } })} onOpenWorkspace={() => openTab('Tasks')} />}
     {active && ready && currentTab === 'Agents' && <WorkspaceAgents key={workspace.workspaceId} workspace={workspace} request={request} onOpenItem={item => onNavigate({ workspaceId: workspace.workspaceId, item })} />}
     {view && <><div hidden={!active || !ready || currentTab !== 'Today'}><WorkspaceToday contextName={workspace.name} view={view} busy={busy} onOpenTask={openTask} onOpenEvent={id => { if (calendar.current?.openEvent(id)) onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'block', id } }); }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></div>
-    <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} buffer={replyBuffers[taskId]} onBuffer={buffer => setReplyBuffers(current => { const next = { ...current }; const value = typeof buffer === 'function' ? buffer(current[taskId]) : buffer; if (value) next[taskId] = value; else delete next[taskId]; return next; })} /> : undefined} />
-    <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} /></>}
+    <WorkspaceTasks view={view} busy={busy} command={command} providerPlanning={getToken ? { links: providerPlans, status: providerStatus, onManage: id => { if (provider.current?.openTask(id)) openTab('Calendar'); } } : undefined} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} buffer={replyBuffers[taskId]} onBuffer={buffer => setReplyBuffers(current => { const next = { ...current }; const value = typeof buffer === 'function' ? buffer(current[taskId]) : buffer; if (value) next[taskId] = value; else delete next[taskId]; return next; })} /> : undefined} />
+    {getToken && <ProviderCalendarPanel ref={provider} workspaceId={workspace.workspaceId} view={view} links={providerPlans} enabled={active && ready} active={currentTab === 'Calendar'} getToken={getToken} onPlanning={acceptProviderPlans} onOpenTask={openTask} />}
+    <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} providerTaskIds={getToken ? providerPlans.map(link => link.taskId) : undefined} /></>}
   </section>;
 }
