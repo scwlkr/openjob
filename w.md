@@ -1,3 +1,51 @@
+# Gmail reply protocol delivery — P-WLK-6 / R41
+
+21 October2026 UTC: source45787209cab42d7dd7574163417aed6162fdd966 on
+codex/p-wlk-6-gmail-reply-protocol, based on main5b21875. Native PR120 stays
+separate at c3770ae until main integration. This supersedes pending proof below.
+
+The default-disabled, unbound Gmail reply adapter validates exact owned binding,
+verified subject/From and separate gmail.send scope before one POST through a
+mandatory injected transport. It serializes frozen reviewed Unicode text, exact
+To/Cc/subject/threading and saved timestamp into bounded MIME/base64url. Wrong
+binding/scope/alias, malformed headers/threading and invalid Unicode cause no POST.
+Known rejection is distinct from unknown; no automatic retry. The fixture's
+invented send credential/fake HTTP are inseparable. Only its own sim_ receipts enter
+reply.simulate operations. Current read OAuth, default/portable absence of a
+dispatcher, provider capability gates and actual mail.send denial remain intact.
+
+40 focused checks pass: new protocol/durable8, related CLI/reply/Google22,
+OAuth readonly/lifecycle9 and actual-send403/no-side-effect1. Root types, affected
+lint, generated CLI types, brand32 and secret749 pass. Independent read-only review
+found no consequential issue. Shared draft validation extraction matches native
+PR120's helper. No package, native code, real consent or provider setup changed.
+
+Actual browser proof on source4578720: create source Task; review Reply all;
+save88 Unicode characters at revision1; queue; save77-character revision2; stop and
+restart the saved fixture; reopen exact revision2 and queued revision1; execute.
+UI reports Simulation confirmed / Nothing was sent. Fake provider's single durable
+request hash exactly matches frozen revision1 MIME, with unchanged payload hash.
+Three further actual API run requests return confirmed, keep POST count1 and leave
+saved Tasks/Calendar byte-equal. Actual CLI tests cross the same fake boundary for
+normal and accepted-but-lost provider responses; file-backed repository/provider
+reconstruction proves unknown cannot replay. No real receipt is relabeled.
+
+Synthetic screenshot, receipt, source hashes and logs are retained on this Mac:
+/Users/shanewalker/Desktop/dev/openjob/output/r41/gmail-reply-protocol/.
+First interrupted npm parent left own lock34069; PID and5214 listener were absent,
+then only that dead lock was removed before restart. Cleanup disconnected the
+invented connection, closed own tab and stopped own5214 service. Prior5213/8088,
+foreign simulator and original26 plus four newer duplicate-suffix files remain.
+
+Full R30/R41 stay In Progress. Real send permission, outbound storage/composition,
+approved recipients/exact real-thread proof, provider Calendar, Mail delegation,
+native live/device/storage and release gates remain open. Next: reviewed
+nondeploying source PR/merge; integrate main into native draft120 with unchanged
+native input verification, then continue the existing Linear queue. R30 discussion
+7f612b86-7725-46b1-8474-8a2a680da5eb owns this bounded R41 milestone. No real Mail
+read repeated, real provider effect, persistent real access, security/hosting
+change, deployment or publication.
+
 # Gmail reply protocol checkpoint — P-WLK-6 / R41
 
 21 October2026 UTC: isolated branch codex/p-wlk-6-gmail-reply-protocol from
