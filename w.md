@@ -24,8 +24,16 @@ exact real thread, provider Calendar, Mail delegation, native live/device/storag
 Android UI-method answer and release gates remain open. No further real read,
 provider effect, persistent real access, deployment or publication occurred.
 Continue Linear R30 7f612b86-7725-46b1-8474-8a2a680da5eb and R53
-ba6592c3-b3e1-4908-b830-3532ab70aaf4; reconcile the next dependency-ready source
-slice against the existing roadmap. Do not repeat the completed bounded alt read.
+ba6592c3-b3e1-4908-b830-3532ab70aaf4. Next dependency-ready source outcome is R40:
+one source-linked Task selects a named invented Google Calendar, checks truthful
+availability and manages one nonrecurring/no-attendee remote planning block through
+shared API/CLI/UI. Use separate Calendar intent/receipt and typed remote PlanningLink;
+keep local offline Task/Calendar projections intact. Require account/home/scope
+isolation, all-day/timezone/expanded recurrence reads, busy-only redaction, ETag
+conflicts and durable unknown/no replay under injected fake HTTP. Actual Calendar
+scope/consent/effects remain unapproved. No earlier credential-independent live
+runtime gap was found; real activation still needs selected storage/runtime/access
+review. Do not repeat the completed bounded alt read.
 
 # Gmail reply protocol delivery — P-WLK-6 / R41
 
