@@ -1,3 +1,4 @@
+import { WORKSPACE_AGENT_TOKEN } from '../shared/owned-workspace-agents.ts';
 import { createOwnedWorkspacesApi } from './owned-workspaces-api.ts';
 import type { FirebaseTokenIdentity } from './firebase-id-token.ts';
 import type { OpenJobUser } from './v1-identity.ts';
@@ -22,7 +23,15 @@ export function createWorkspacePilotApplication({ store, users, verifyIdToken, a
     try {
       const url = new URL(request.url);
       if (!/^\/api\/v1\/workspaces(?:\/|$)/.test(url.pathname)) return fail('not_found', 404);
-      if (/^Bearer\s+oj_/i.test(request.headers.get('authorization') ?? '')) return fail('authentication_required', 401);
+      if (/^Bearer\s+oj_/i.test(request.headers.get('authorization') ?? '')) {
+        const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
+        if (!token || !WORKSPACE_AGENT_TOKEN.test(token)) return fail('authentication_required', 401);
+        if (!selected) return fail('workspace_pilot_unconfigured', 503);
+        // The repository authenticates the agent as itself and fences its current sponsor.
+        const api = createOwnedWorkspacesApi({ requireNotesPrecondition: true, store, users, verifyIdToken, agentSponsorId: selected.userId });
+        url.pathname = url.pathname.replace('/api/v1/workspaces', '/api/owned-workspaces');
+        return api.fetch(new Request(url, request));
+      }
       const identity = await verifyIdToken(request); if (!identity) return fail('authentication_required', 401);
       const user = await users.resolve(identity); if (!user || user.deletionPending) return fail('account_unavailable', 410);
       if (!selected) return fail('workspace_pilot_unconfigured', 503);

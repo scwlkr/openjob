@@ -1088,6 +1088,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the selected owner Workspace or permission-filtered agent view
+         * @description Limited owner-pilot admission required; the normal runtime stays unconfigured until separately selected. Humans receive the existing full owned snapshot. Agents read only granted Tasks/Calendar and inaccessible cross-resource links are removed; write-only grants cannot read. No Mail sources, authored replies or grant administration is included.
+         */
+        get: operations["getOwnedWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply an authorized Task or Calendar command
+         * @description Same canonical Tasks/Calendar engine as the human app. Current scoped agents receive an opaque item receipt only, including with read scopes. Linked planning mutations require write rights in both families; task.schedule-available is human-only. Notes require expectedNotes; stale bases conflict. No automatic mutation retry or provider effects.
+         */
+        post: operations["commandOwnedWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/agent-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List owner-controlled Workspace grants and recent confirmed actions
+         * @description Human owner only. Independent owned Workspaces only; retained Personal grants stay separate. No token hashes, credentials, titles or notes in action records.
+         */
+        get: operations["listWorkspaceAgentGrants"];
+        put?: never;
+        /**
+         * Issue a 24-hour credential for exact Workspace Tasks/Calendar resources
+         * @description Human owner only. Each selected scope family requires its exact current taskSpaceId or calendarId. Grants are immutable apart from revocation; a new resource or another Workspace never expands an existing grant. Credential returned once; no automatic issuance retry.
+         */
+        post: operations["createWorkspaceAgentGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/agent-grants/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke this Workspace grant
+         * @description Human owner only. Atomic with the Workspace work-record revision; a concurrent stale agent write cannot bypass revocation. Other Workspace grants remain valid.
+         */
+        delete: operations["revokeWorkspaceAgentGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2277,8 +2370,181 @@ export interface components {
         SetTaskStateInput: {
             state: components["schemas"]["TaskState"];
         };
+        OwnedWorkspace: {
+            workspaceId: string;
+            ownerUserId: string;
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+            taskSpaceId: string;
+            calendarId: string;
+        };
+        OwnedWorkspaceTask: {
+            id: string;
+            ownerId: string;
+            title: string;
+            /** @description Optional authored plain text. No automatic Mail body or source metadata copy. */
+            notes?: string;
+            completed: boolean;
+            scheduledSlot?: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            };
+            calendarEventId?: string;
+        };
+        OwnedWorkspaceWork: {
+            tasks: components["schemas"]["OwnedWorkspaceTask"][];
+            calendars: components["schemas"]["PersonalWorkspaceCalendar"][];
+            events: components["schemas"]["PersonalWorkspaceEvent"][];
+        };
+        OwnedWorkspaceSnapshot: {
+            workspace: components["schemas"]["OwnedWorkspace"];
+            work: {
+                tasks: components["schemas"]["OwnedWorkspaceTask"][];
+                calendars: components["schemas"]["PersonalWorkspaceCalendar"][];
+                events: components["schemas"]["PersonalWorkspaceEvent"][];
+            };
+        };
+        WorkspaceAgentInput: {
+            name: string;
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
+            resourceIds: string[];
+        };
+        WorkspaceAgentGrant: {
+            name: string;
+            scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
+            resourceIds: string[];
+            id: string;
+            ownerUserId: string;
+            workspaceId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            revoked: boolean;
+        };
+        WorkspaceAgentAction: {
+            agentId: string;
+            /** @enum {string} */
+            operation: "task.create" | "task.update" | "task.notes" | "task.complete" | "task.delete" | "task.unschedule" | "task.schedule" | "calendar.create" | "calendar.update" | "calendar.delete";
+            itemId: string;
+            /** Format: date-time */
+            at: string;
+        };
+        WorkspaceAgentAccess: {
+            agents: components["schemas"]["WorkspaceAgentGrant"][];
+            actions: components["schemas"]["WorkspaceAgentAction"][];
+        };
+        WorkspaceAgentView: {
+            workspaceId: string;
+            access: {
+                scopes: ("tasks:read" | "tasks:write" | "calendar:read" | "calendar:write")[];
+                resourceIds: string[];
+            };
+            work: components["schemas"]["OwnedWorkspaceWork"];
+        };
+        WorkspaceAgentReceipt: {
+            workspaceId: string;
+            /** @enum {string} */
+            operation: "task.create" | "task.update" | "task.notes" | "task.complete" | "task.delete" | "task.unschedule" | "task.schedule" | "calendar.create" | "calendar.update" | "calendar.delete";
+            itemId: string;
+        };
+        WorkspaceAgentDelivery: {
+            agent: components["schemas"]["WorkspaceAgentGrant"];
+            /** @description Returned once to the issuing human. Store privately and send only as Authorization bearer; never log or fall back to human authentication. */
+            token: string;
+        };
+        OwnedWorkspaceCommand: {
+            /** @constant */
+            type: "task.create";
+            title: string;
+        } | {
+            /** @constant */
+            type: "task.update";
+            taskId: string;
+            title: string;
+        } | {
+            /** @constant */
+            type: "task.notes";
+            taskId: string;
+            notes: string;
+            expectedNotes: string;
+        } | {
+            /** @constant */
+            type: "task.complete";
+            taskId: string;
+            completed: boolean;
+        } | {
+            /** @constant */
+            type: "task.delete";
+            taskId: string;
+        } | {
+            /** @constant */
+            type: "task.unschedule";
+            taskId: string;
+        } | {
+            /** @constant */
+            type: "task.schedule";
+            taskId: string;
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "task.schedule-available";
+            taskId: string;
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "calendar.create";
+            calendarId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "calendar.update";
+            eventId: string;
+            title: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        } | {
+            /** @constant */
+            type: "calendar.delete";
+            eventId: string;
+        };
+        OwnedWorkspaceErrorEnvelope: {
+            error: {
+                /** @enum {string} */
+                code: "account_unavailable" | "authentication_required" | "body_too_large" | "conflict" | "forbidden" | "internal_error" | "invalid_input" | "not_found" | "schedule_conflict" | "unavailable" | "workspace_capacity" | "workspace_pilot_not_admitted" | "workspace_pilot_unconfigured";
+                message: string;
+                requestId: string;
+            };
+        };
     };
     responses: {
+        /** @description Fixed redacted error. Current authentication, owner, grant, resource and runtime checks apply. */
+        OwnedWorkspaceErrorResponse: {
+            headers: {
+                "Cache-Control": components["headers"]["NoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OwnedWorkspaceErrorEnvelope"];
+            };
+        };
         /** @description Redacted installation state without Push capability data. */
         NotificationSubscriptionResponse: {
             headers: {
@@ -4594,22 +4860,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "data": {
-                     *         "agent": {
-                     *           "agentId": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                     *           "ownerUserId": "user_fixture",
-                     *           "groupId": "grp_fixture",
-                     *           "name": "Planning assistant",
-                     *           "scope": "tasks:read",
-                     *           "createdAt": "2026-10-15T12:00:00.000Z",
-                     *           "expiresAt": "2026-10-16T12:00:00.000Z"
-                     *         },
-                     *         "token": "oj_agent_agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                     *       }
-                     *     }
-                     */
                     "application/json": {
                         data: {
                             agent: {
@@ -5160,28 +5410,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "data": {
-                     *         "agent": {
-                     *           "id": "agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                     *           "ownerUserId": "user_example",
-                     *           "name": "Personal planner",
-                     *           "scopes": [
-                     *             "tasks:read",
-                     *             "tasks:write"
-                     *           ],
-                     *           "resourceIds": [
-                     *             "tasks:personal"
-                     *           ],
-                     *           "createdAt": "2026-10-16T03:00:00.000Z",
-                     *           "expiresAt": "2026-10-17T03:00:00.000Z",
-                     *           "revoked": false
-                     *         },
-                     *         "token": "oj_personal_user_example.agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                     *       }
-                     *     }
-                     */
                     "application/json": {
                         data: {
                             agent: components["schemas"]["PersonalAgentGrant"];
@@ -5950,6 +6178,189 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+        };
+    };
+    getOwnedWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized result; no provider credentials or source sidecars. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OwnedWorkspaceSnapshot"] | components["schemas"]["WorkspaceAgentView"];
+                    };
+                };
+            };
+            400: components["responses"]["OwnedWorkspaceErrorResponse"];
+            401: components["responses"]["OwnedWorkspaceErrorResponse"];
+            403: components["responses"]["OwnedWorkspaceErrorResponse"];
+            409: components["responses"]["OwnedWorkspaceErrorResponse"];
+            410: components["responses"]["OwnedWorkspaceErrorResponse"];
+            413: components["responses"]["OwnedWorkspaceErrorResponse"];
+            415: components["responses"]["OwnedWorkspaceErrorResponse"];
+            500: components["responses"]["OwnedWorkspaceErrorResponse"];
+            503: components["responses"]["OwnedWorkspaceErrorResponse"];
+        };
+    };
+    commandOwnedWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnedWorkspaceCommand"];
+            };
+        };
+        responses: {
+            /** @description Authorized result; no provider credentials or source sidecars. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OwnedWorkspaceSnapshot"] | components["schemas"]["WorkspaceAgentReceipt"];
+                    };
+                };
+            };
+            400: components["responses"]["OwnedWorkspaceErrorResponse"];
+            401: components["responses"]["OwnedWorkspaceErrorResponse"];
+            403: components["responses"]["OwnedWorkspaceErrorResponse"];
+            409: components["responses"]["OwnedWorkspaceErrorResponse"];
+            410: components["responses"]["OwnedWorkspaceErrorResponse"];
+            413: components["responses"]["OwnedWorkspaceErrorResponse"];
+            415: components["responses"]["OwnedWorkspaceErrorResponse"];
+            500: components["responses"]["OwnedWorkspaceErrorResponse"];
+            503: components["responses"]["OwnedWorkspaceErrorResponse"];
+        };
+    };
+    listWorkspaceAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized result; no provider credentials or source sidecars. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WorkspaceAgentAccess"];
+                    };
+                };
+            };
+            400: components["responses"]["OwnedWorkspaceErrorResponse"];
+            401: components["responses"]["OwnedWorkspaceErrorResponse"];
+            403: components["responses"]["OwnedWorkspaceErrorResponse"];
+            409: components["responses"]["OwnedWorkspaceErrorResponse"];
+            410: components["responses"]["OwnedWorkspaceErrorResponse"];
+            413: components["responses"]["OwnedWorkspaceErrorResponse"];
+            415: components["responses"]["OwnedWorkspaceErrorResponse"];
+            500: components["responses"]["OwnedWorkspaceErrorResponse"];
+            503: components["responses"]["OwnedWorkspaceErrorResponse"];
+        };
+    };
+    createWorkspaceAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceAgentInput"];
+            };
+        };
+        responses: {
+            /** @description Authorized result; no provider credentials or source sidecars. */
+            201: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WorkspaceAgentDelivery"];
+                    };
+                };
+            };
+            400: components["responses"]["OwnedWorkspaceErrorResponse"];
+            401: components["responses"]["OwnedWorkspaceErrorResponse"];
+            403: components["responses"]["OwnedWorkspaceErrorResponse"];
+            409: components["responses"]["OwnedWorkspaceErrorResponse"];
+            410: components["responses"]["OwnedWorkspaceErrorResponse"];
+            413: components["responses"]["OwnedWorkspaceErrorResponse"];
+            415: components["responses"]["OwnedWorkspaceErrorResponse"];
+            500: components["responses"]["OwnedWorkspaceErrorResponse"];
+            503: components["responses"]["OwnedWorkspaceErrorResponse"];
+        };
+    };
+    revokeWorkspaceAgentGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized result; no provider credentials or source sidecars. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            id: string;
+                            /** @constant */
+                            revoked: true;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["OwnedWorkspaceErrorResponse"];
+            401: components["responses"]["OwnedWorkspaceErrorResponse"];
+            403: components["responses"]["OwnedWorkspaceErrorResponse"];
+            409: components["responses"]["OwnedWorkspaceErrorResponse"];
+            410: components["responses"]["OwnedWorkspaceErrorResponse"];
+            413: components["responses"]["OwnedWorkspaceErrorResponse"];
+            415: components["responses"]["OwnedWorkspaceErrorResponse"];
+            500: components["responses"]["OwnedWorkspaceErrorResponse"];
+            503: components["responses"]["OwnedWorkspaceErrorResponse"];
         };
     };
 }

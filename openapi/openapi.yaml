@@ -5,7 +5,7 @@ info:
   summary: Shared backend contract for equal web and CLI clients
   description: |
     OpenJob exposes one versioned JSON API. Firebase Authentication issues human
-    identities; owner-issued agent credentials permit scoped Task reads only.
+    identities; owner-issued agent credentials permit explicitly scoped access to supported resources.
     Every request is authorized against current service state. The web and CLI are presentation clients; validation, authorization,
     ordering, privacy, and domain transitions live in this service.
   license:
@@ -1313,10 +1313,6 @@ paths:
                       agent: *a1
                       token:
                         type: string
-              example:
-                data:
-                  agent: *a2
-                  token: oj_agent_agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         "400":
           $ref: "#/components/responses/ValidationErrorResponse"
         "401": *a3
@@ -1797,21 +1793,6 @@ paths:
                         type: string
                         pattern: ^oj_personal_[A-Za-z0-9_-]{1,128}\.agt_[a-f0-9]{32}\.[A-Za-z0-9_-]{43}$
                         description: One-time private personal workspace credential. Store in a private file; never log it.
-              example:
-                data:
-                  agent:
-                    id: agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-                    ownerUserId: user_example
-                    name: Personal planner
-                    scopes:
-                      - tasks:read
-                      - tasks:write
-                    resourceIds:
-                      - tasks:personal
-                    createdAt: 2026-10-16T03:00:00.000Z
-                    expiresAt: 2026-10-17T03:00:00.000Z
-                    revoked: false
-                  token: oj_personal_user_example.agt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
         "400":
           description: Invalid bounded JSON command or fields.
           content:
@@ -2927,8 +2908,306 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/workspaces/{workspaceId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+        - Agents
+      x-openjob-authorization: current-owner-or-scoped-workspace-agent
+      operationId: getOwnedWorkspace
+      summary: Read the selected owner Workspace or permission-filtered agent view
+      description: Limited owner-pilot admission required; the normal runtime stays unconfigured until separately selected. Humans receive the existing full owned snapshot. Agents read only granted Tasks/Calendar and inaccessible cross-resource links are removed; write-only grants cannot read. No Mail sources, authored replies or grant administration is included.
+      security:
+        - firebaseBearer: []
+        - workspaceAgentBearer: []
+      x-openjob-retryable: true
+      responses:
+        "200":
+          description: Authorized result; no provider credentials or source sidecars.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: "#/components/schemas/OwnedWorkspaceSnapshot"
+                      - $ref: "#/components/schemas/WorkspaceAgentView"
+        "400":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "401":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "403":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "409":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "410":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "413":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "415":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "500":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "503":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+  /api/v1/workspaces/{workspaceId}/commands:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+    post:
+      tags:
+        - Workspace
+        - Agents
+      x-openjob-authorization: current-owner-or-scoped-workspace-agent
+      operationId: commandOwnedWorkspace
+      summary: Apply an authorized Task or Calendar command
+      description: Same canonical Tasks/Calendar engine as the human app. Current scoped agents receive an opaque item receipt only, including with read scopes. Linked planning mutations require write rights in both families; task.schedule-available is human-only. Notes require expectedNotes; stale bases conflict. No automatic mutation retry or provider effects.
+      security:
+        - firebaseBearer: []
+        - workspaceAgentBearer: []
+      x-openjob-retryable: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OwnedWorkspaceCommand"
+      responses:
+        "200":
+          description: Authorized result; no provider credentials or source sidecars.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: "#/components/schemas/OwnedWorkspaceSnapshot"
+                      - $ref: "#/components/schemas/WorkspaceAgentReceipt"
+        "400":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "401":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "403":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "409":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "410":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "413":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "415":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "500":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "503":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+  /api/v1/workspaces/{workspaceId}/agent-grants:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+        - Agents
+      x-openjob-authorization: current-human-owner
+      operationId: listWorkspaceAgentGrants
+      summary: List owner-controlled Workspace grants and recent confirmed actions
+      description: Human owner only. Independent owned Workspaces only; retained Personal grants stay separate. No token hashes, credentials, titles or notes in action records.
+      security:
+        - firebaseBearer: []
+      x-openjob-retryable: true
+      responses:
+        "200":
+          description: Authorized result; no provider credentials or source sidecars.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WorkspaceAgentAccess"
+        "400":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "401":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "403":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "409":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "410":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "413":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "415":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "500":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "503":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+    post:
+      tags:
+        - Workspace
+        - Agents
+      x-openjob-authorization: current-human-owner
+      operationId: createWorkspaceAgentGrant
+      summary: Issue a 24-hour credential for exact Workspace Tasks/Calendar resources
+      description: Human owner only. Each selected scope family requires its exact current taskSpaceId or calendarId. Grants are immutable apart from revocation; a new resource or another Workspace never expands an existing grant. Credential returned once; no automatic issuance retry.
+      security:
+        - firebaseBearer: []
+      x-openjob-retryable: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceAgentInput"
+      responses:
+        "201":
+          description: Authorized result; no provider credentials or source sidecars.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WorkspaceAgentDelivery"
+        "400":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "401":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "403":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "409":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "410":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "413":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "415":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "500":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "503":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+  /api/v1/workspaces/{workspaceId}/agent-grants/{agentId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^agt_[a-f0-9]{32}$
+    delete:
+      tags:
+        - Workspace
+        - Agents
+      x-openjob-authorization: current-human-owner
+      operationId: revokeWorkspaceAgentGrant
+      summary: Revoke this Workspace grant
+      description: Human owner only. Atomic with the Workspace work-record revision; a concurrent stale agent write cannot bypass revocation. Other Workspace grants remain valid.
+      security:
+        - firebaseBearer: []
+      x-openjob-retryable: false
+      responses:
+        "200":
+          description: Authorized result; no provider credentials or source sidecars.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - id
+                      - revoked
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^agt_[a-f0-9]{32}$
+                      revoked:
+                        type: boolean
+                        const: true
+        "400":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "401":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "403":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "409":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "410":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "413":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "415":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "500":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+        "503":
+          $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
+
 components:
   securitySchemes:
+    workspaceAgentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: OpenJobWorkspaceAgent
+      description: Distinct oj_workspace_<workspace>.<agent>.<secret> credential. Exact current owned Tasks/Calendar resource grants, 24-hour expiry and revocation. Never a human identity, Personal/Group grant, Mail authority or refresh capability.
     personalWorkspaceAgentBearer:
       type: http
       scheme: bearer
@@ -3230,6 +3509,15 @@ components:
             state: done
 
   responses:
+    OwnedWorkspaceErrorResponse:
+      description: Fixed redacted error. Current authentication, owner, grant, resource and runtime checks apply.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OwnedWorkspaceErrorEnvelope"
     NotificationSubscriptionResponse:
       description: Redacted installation state without Push capability data.
       content:
@@ -7026,3 +7314,602 @@ components:
       properties:
         state:
           $ref: "#/components/schemas/TaskState"
+    OwnedWorkspace:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - ownerUserId
+        - name
+        - createdAt
+        - taskSpaceId
+        - calendarId
+      properties:
+        workspaceId:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+        ownerUserId:
+          type: string
+          pattern: ^user_[a-f0-9]{32}$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        createdAt:
+          type: string
+          format: date-time
+        taskSpaceId:
+          type: string
+          pattern: ^tsp_[a-f0-9]{32}$
+        calendarId:
+          type: string
+          pattern: ^cal_[a-f0-9]{32}$
+    OwnedWorkspaceTask:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - ownerId
+        - title
+        - completed
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        ownerId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 20000
+          description: Optional authored plain text. No automatic Mail body or source metadata copy.
+        completed:
+          type: boolean
+        scheduledSlot:
+          type: object
+          additionalProperties: false
+          required:
+            - start
+            - end
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        calendarEventId:
+          type: string
+          minLength: 1
+          maxLength: 128
+      dependentRequired:
+        scheduledSlot:
+          - calendarEventId
+        calendarEventId:
+          - scheduledSlot
+    OwnedWorkspaceWork:
+      type: object
+      additionalProperties: false
+      required:
+        - tasks
+        - calendars
+        - events
+      properties:
+        tasks:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/OwnedWorkspaceTask"
+        calendars:
+          type: array
+          maxItems: 1
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceCalendar"
+        events:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/PersonalWorkspaceEvent"
+    OwnedWorkspaceSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - workspace
+        - work
+      properties:
+        workspace:
+          $ref: "#/components/schemas/OwnedWorkspace"
+        work:
+          type: object
+          additionalProperties: false
+          required:
+            - tasks
+            - calendars
+            - events
+          properties:
+            tasks:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: "#/components/schemas/OwnedWorkspaceTask"
+            calendars:
+              type: array
+              maxItems: 1
+              items:
+                $ref: "#/components/schemas/PersonalWorkspaceCalendar"
+              minItems: 1
+            events:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: "#/components/schemas/PersonalWorkspaceEvent"
+    WorkspaceAgentInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - scopes
+        - resourceIds
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - tasks:read
+              - tasks:write
+              - calendar:read
+              - calendar:write
+        resourceIds:
+          type: array
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^(tsp|cal)_[a-f0-9]{32}$
+    WorkspaceAgentGrant:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - scopes
+        - resourceIds
+        - id
+        - ownerUserId
+        - workspaceId
+        - createdAt
+        - expiresAt
+        - revoked
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - tasks:read
+              - tasks:write
+              - calendar:read
+              - calendar:write
+        resourceIds:
+          type: array
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^(tsp|cal)_[a-f0-9]{32}$
+        id:
+          type: string
+          pattern: ^agt_[a-f0-9]{32}$
+        ownerUserId:
+          type: string
+          pattern: ^user_[a-f0-9]{32}$
+        workspaceId:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        revoked:
+          type: boolean
+    WorkspaceAgentAction:
+      type: object
+      additionalProperties: false
+      required:
+        - agentId
+        - operation
+        - itemId
+        - at
+      properties:
+        agentId:
+          type: string
+          pattern: ^agt_[a-f0-9]{32}$
+        operation:
+          type: string
+          enum:
+            - task.create
+            - task.update
+            - task.notes
+            - task.complete
+            - task.delete
+            - task.unschedule
+            - task.schedule
+            - calendar.create
+            - calendar.update
+            - calendar.delete
+        itemId:
+          type: string
+          pattern: ^offline_[a-f0-9-]{36}$
+        at:
+          type: string
+          format: date-time
+    WorkspaceAgentAccess:
+      type: object
+      additionalProperties: false
+      required:
+        - agents
+        - actions
+      properties:
+        agents:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/WorkspaceAgentGrant"
+        actions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/WorkspaceAgentAction"
+    WorkspaceAgentView:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - access
+        - work
+      properties:
+        workspaceId:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+        access:
+          type: object
+          additionalProperties: false
+          required:
+            - scopes
+            - resourceIds
+          properties:
+            scopes:
+              type: array
+              minItems: 1
+              maxItems: 4
+              uniqueItems: true
+              items:
+                type: string
+                enum:
+                  - tasks:read
+                  - tasks:write
+                  - calendar:read
+                  - calendar:write
+            resourceIds:
+              type: array
+              minItems: 1
+              maxItems: 2
+              uniqueItems: true
+              items:
+                type: string
+                pattern: ^(tsp|cal)_[a-f0-9]{32}$
+        work:
+          $ref: "#/components/schemas/OwnedWorkspaceWork"
+    WorkspaceAgentReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        - workspaceId
+        - operation
+        - itemId
+      properties:
+        workspaceId:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+        operation:
+          type: string
+          enum:
+            - task.create
+            - task.update
+            - task.notes
+            - task.complete
+            - task.delete
+            - task.unschedule
+            - task.schedule
+            - calendar.create
+            - calendar.update
+            - calendar.delete
+        itemId:
+          type: string
+          pattern: ^offline_[a-f0-9-]{36}$
+    WorkspaceAgentDelivery:
+      type: object
+      additionalProperties: false
+      required:
+        - agent
+        - token
+      properties:
+        agent:
+          $ref: "#/components/schemas/WorkspaceAgentGrant"
+        token:
+          type: string
+          pattern: ^oj_workspace_wsp_[a-f0-9]{32}\.agt_[a-f0-9]{32}\.[A-Za-z0-9_-]{43}$
+          description: Returned once to the issuing human. Store privately and send only as Authorization bearer; never log or fall back to human authentication.
+    OwnedWorkspaceCommand:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - title
+          properties:
+            type:
+              type: string
+              const: task.create
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - title
+          properties:
+            type:
+              type: string
+              const: task.update
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - notes
+            - expectedNotes
+          properties:
+            type:
+              type: string
+              const: task.notes
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            notes:
+              type: string
+              maxLength: 20000
+            expectedNotes:
+              type: string
+              maxLength: 20000
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - completed
+          properties:
+            type:
+              type: string
+              const: task.complete
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            completed:
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+          properties:
+            type:
+              type: string
+              const: task.delete
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+          properties:
+            type:
+              type: string
+              const: task.unschedule
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - calendarId
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: task.schedule
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - taskId
+            - calendarId
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: task.schedule-available
+            taskId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - calendarId
+            - title
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: calendar.create
+            calendarId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - eventId
+            - title
+            - start
+            - end
+          properties:
+            type:
+              type: string
+              const: calendar.update
+            eventId:
+              type: string
+              minLength: 1
+              maxLength: 128
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        - type: object
+          additionalProperties: false
+          required:
+            - type
+            - eventId
+          properties:
+            type:
+              type: string
+              const: calendar.delete
+            eventId:
+              type: string
+              minLength: 1
+              maxLength: 128
+    OwnedWorkspaceErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+            - requestId
+          properties:
+            code:
+              type: string
+              enum:
+                - account_unavailable
+                - authentication_required
+                - body_too_large
+                - conflict
+                - forbidden
+                - internal_error
+                - invalid_input
+                - not_found
+                - schedule_conflict
+                - unavailable
+                - workspace_capacity
+                - workspace_pilot_not_admitted
+                - workspace_pilot_unconfigured
+            message:
+              type: string
+              minLength: 1
+            requestId:
+              type: string
+              minLength: 1

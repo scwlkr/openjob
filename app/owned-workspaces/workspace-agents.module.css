@@ -1,0 +1,9 @@
+.access { display: grid; gap: 16px; min-width: 0; overflow-wrap: anywhere; }
+.access h2, .access h3, .access p { margin: 0; }
+.access > button { justify-self: start; }
+.guide { border-top: 1px solid var(--oj-line); border-bottom: 1px solid var(--oj-line); padding: 0 0 12px; }
+.guide summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
+.guide[open] > :not(summary) { margin-top: 12px; }
+.command { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--oj-panel); border: 1px solid var(--oj-line); }
+.access .grant { margin-bottom: 0; }
+.actions { display: grid; gap: 12px; padding-left: 20px; margin: 0; }
