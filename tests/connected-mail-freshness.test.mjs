@@ -44,7 +44,9 @@ test('configured metadata observation is conservative, capped by credential expi
 
 test('fixed provider access errors remain blocked categories and a concurrent disconnect overrides provider failure', async () => {
   const f = await googleFlowFixture(), start = await f.begin(); await f.complete(start);
-  for (const [status, reason, code, expected] of [[401, 'authError', 'authentication_required', 401], [403, 'insufficientPermissions', 'consent_required', 409], [403, 'domainPolicy', 'provider_forbidden', 403]]) {
+  const signedOut = await f.request(`/${start.connectionId}/mail?view=metadata`, undefined, 'unknown-session');
+  assert.equal(signedOut.status, 401); assert.equal((await signedOut.json()).error.code, 'authentication_required');
+  for (const [status, reason, code, expected] of [[401, 'authError', 'reconnect_required', 409], [403, 'insufficientPermissions', 'consent_required', 409], [403, 'domainPolicy', 'provider_forbidden', 403]]) {
     let calls = 0;
     f.hooks.response = () => { calls++; return Response.json({ error: { message: 'SECRET_PROVIDER_BODY', errors: [{ reason }] } }, { status }); };
     const response = await f.request(`/${start.connectionId}/mail?view=metadata`);

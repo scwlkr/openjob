@@ -76,7 +76,10 @@ export function createConnectionsApi({ users, verifyIdToken, onboarding, google,
     } catch (error) {
       if (isInactiveUserError(error)) return accountDeletionPendingResponse(defaultRequestId);
       const code = (error as { code?: string })?.code;
-      if (code && ['authentication_required', 'consent_required', 'execution_disabled', 'provider_forbidden', 'mail_view_expired', 'not_configured', 'invalid_input', 'invalid_cursor', 'search_rejected', 'folder_unavailable', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'message_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : code === 'authentication_required' ? 401 : ['consent_required', 'execution_disabled', 'mail_view_expired'].includes(code) ? 409 : ['source_unavailable', 'folder_unavailable', 'message_unavailable'].includes(code) ? 404 : code === 'workspace_capacity' ? 413 : ['forbidden', 'provider_forbidden'].includes(code) ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
+      // OpenJob authentication is checked above. Upstream Google auth failures must
+      // reconnect Mail without revoking the still-valid OpenJob session/editors.
+      if (code === 'authentication_required') return fail('reconnect_required', 409);
+      if (code && ['consent_required', 'execution_disabled', 'provider_forbidden', 'mail_view_expired', 'not_configured', 'invalid_input', 'invalid_cursor', 'search_rejected', 'folder_unavailable', 'forbidden', 'conflict', 'capacity', 'workspace_capacity', 'source_unavailable', 'message_unavailable', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code)) return fail(code, code === 'not_configured' ? 503 : ['consent_required', 'execution_disabled', 'mail_view_expired'].includes(code) ? 409 : ['source_unavailable', 'folder_unavailable', 'message_unavailable'].includes(code) ? 404 : code === 'workspace_capacity' ? 413 : ['forbidden', 'provider_forbidden'].includes(code) ? 403 : ['conflict', 'consent_failed', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(code) ? 409 : 400);
       return internalErrorResponse(defaultRequestId);
     }
   } };
