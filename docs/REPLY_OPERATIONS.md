@@ -18,6 +18,13 @@ send. Save unfinished authored edits before reloading. The selected fixture file
 contains invented credentials and authored test work, without encryption; use no
 real correspondence in it. Restart with the same file and `--google-fixture`.
 
+The launcher crosses the Gmail reply MIME/HTTP adapter through an inseparable fake
+provider transport and separate invented send credential. Read OAuth scopes stay
+unchanged. The fake provider persists synthetic acceptance IDs, thread IDs and
+MIME request hashes in `fixtureGmailProtocol.attempts` before acknowledgement;
+it never opens a network connection. Public outcomes stay `simulated_accepted`
+with `sim_` receipts. See the [Gmail reply boundary](providers/GMAIL_REPLY.md).
+
 The existing CLI shares the Workspace API. Use an authenticated selected human
 profile and an explicit Workspace; no agent credential or human fallback is
 accepted by these commands:
@@ -61,6 +68,6 @@ The launcher saves every operation commit before acknowledging it to the runner,
 including dispatch entry. Restarts keep the original invented connection identity.
 The seven-day receipt-expired flag does not delete records or reopen execution.
 After provider disconnect, use CLI/API history even if the source reader cannot
-open. There is no automatic retry, background scheduler, production queue, live
-send adapter, durable cleanup/retention policy or broader permission policy here.
+open. There is no automatic retry, background scheduler, production queue,
+configured live send dispatcher, durable cleanup/retention policy or broader permission policy here.
 Those remaining R30/R31 and provider/release gates stay open in Linear.

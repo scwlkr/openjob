@@ -18,11 +18,16 @@ const fail = (code = 'invalid_state'): never => { throw Object.assign(new Error(
 const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.length <= max && !/[\u0000\r\n\u007f]/.test(value);
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value: object, allowed: string[]) => Object.keys(value).every(key => allowed.includes(key));
-function validPlan(plan: ReplyPlan) {
+export function validReplyPlan(plan: ReplyPlan) {
   return record(plan) && keys(plan, ['from', 'to', 'cc', 'subject', 'inReplyTo', 'references']) && text(plan.from, 320) && !!plan.from && text(plan.subject, 4096)
     && Array.isArray(plan.to) && plan.to.length > 0 && plan.to.length <= 50 && plan.to.every(item => text(item, 320) && !!item)
     && Array.isArray(plan.cc) && plan.cc.length <= 50 && plan.cc.every(item => text(item, 320) && !!item)
     && (plan.inReplyTo === undefined || text(plan.inReplyTo, 998)) && Array.isArray(plan.references) && plan.references.length <= 100 && plan.references.every(item => text(item, 998));
+}
+export function validateConnectedReplyDraft(value: unknown): ConnectedReplyDraft {
+  const draft = value as ConnectedReplyDraft;
+  if (!record(draft) || !keys(draft, ['storageKind', 'mode', 'plan', 'body', 'revision', 'updatedAt']) || draft.storageKind !== 'openjob' || !['reply', 'reply-all'].includes(draft.mode) || !validReplyPlan(draft.plan) || typeof draft.body !== 'string' || draft.body.length > 20000 || /\u0000/.test(draft.body) || !Number.isSafeInteger(draft.revision) || draft.revision < 1 || draft.revision > 1_000_000 || !text(draft.updatedAt, 64) || !Number.isFinite(Date.parse(draft.updatedAt))) fail();
+  return draft;
 }
 export function validateReplySave(input: ReplySaveInput) {
   if (!record(input) || !keys(input, ['mode', 'body', 'expectedRevision', 'reviewToken']) || !['reply', 'reply-all'].includes(input.mode) || typeof input.body !== 'string' || input.body.length > 20000 || /\u0000/.test(input.body) || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 || input.expectedRevision >= 1_000_000 || !/^[a-f0-9]{64}$/.test(input.reviewToken)) fail('invalid_input');
@@ -37,7 +42,7 @@ export function parseConnectedReplies(encoded?: string): StoredConnectedReply[] 
     if (!record(row) || !keys(row, ['source', 'draft']) || !record(row.source) || !keys(row.source, ['workspaceId', 'connectionId', 'accountId', 'messageId', 'threadId'])) fail();
     const source = row.source, draft = row.draft;
     if (!/^wsp_[a-f0-9]{32}$/.test(source.workspaceId) || !/^con_[a-f0-9]{32}$/.test(source.connectionId) || !/^gmail_[a-f0-9]{32}$/.test(source.accountId) || !/^[A-Za-z0-9_-]{1,128}$/.test(source.messageId) || !/^[A-Za-z0-9_-]{1,128}$/.test(source.threadId)) fail();
-    if (!record(draft) || !keys(draft, ['storageKind', 'mode', 'plan', 'body', 'revision', 'updatedAt']) || draft.storageKind !== 'openjob' || !['reply', 'reply-all'].includes(draft.mode) || !validPlan(draft.plan) || typeof draft.body !== 'string' || draft.body.length > 20000 || /\u0000/.test(draft.body) || !Number.isSafeInteger(draft.revision) || draft.revision < 1 || draft.revision > 1_000_000 || !text(draft.updatedAt, 64) || !Number.isFinite(Date.parse(draft.updatedAt))) fail();
+    validateConnectedReplyDraft(draft);
     const key = JSON.stringify(replySource(source)); if (seen.has(key)) fail(); seen.add(key);
   }
   return rows;

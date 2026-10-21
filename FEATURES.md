@@ -1,3 +1,15 @@
+## Gmail reply protocol boundary (P-WLK-6 / R41)
+
+An unbound, default-disabled adapter serializes a frozen reviewed text reply into
+Gmail MIME with exact From/To/Cc and thread headers. Separate send scope, current
+server approval and verified owner/Workspace/account/subject bindings gate one
+POST through a required injected transport. Known rejection is distinct from
+uncertain acceptance; ambiguity never retries. The local invented fixture now
+exercises this boundary with a fake provider and durable attempt hashes, retaining
+synthetic operation receipts. Normal/portable runtimes have no send dispatcher;
+read-only OAuth consent and actual-send denial remain. No live sending or full
+R41 acceptance is claimed. [Protocol and limits](docs/providers/GMAIL_REPLY.md).
+
 ## Durable frozen reply simulations (P-WLK-6 / R30)
 
 The local invented Google fixture can freeze a reviewed saved reply, queue it
