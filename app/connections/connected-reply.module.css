@@ -8,3 +8,5 @@
 .addressing dd { margin: 0; overflow-wrap: anywhere; }
 .editor details { border: 1px solid var(--oj-control-line); border-radius: 7px; padding: 12px; }
 .editor summary { min-height: 44px; cursor: pointer; }
+.operations, .operations article { display: grid; gap: 12px; min-width: 0; }
+.operations article { padding: 12px; border: 1px solid var(--oj-control-line); border-radius: 7px; }

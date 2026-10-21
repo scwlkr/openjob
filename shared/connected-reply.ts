@@ -7,6 +7,7 @@ export type ReplySource = Pick<MailTaskSource, 'workspaceId' | 'connectionId' | 
 export type StoredConnectedReply = { source: ReplySource; draft: ConnectedReplyDraft };
 export type ReplyPreparation = { workspaceId: string; taskId: string; storageKind: 'openjob'; plans: { reply: ReplyPlan; replyAll: ReplyPlan }; reviewToken: string; draft: ConnectedReplyDraft | null };
 export type ReplySaveInput = { mode: ReplyMode; body: string; expectedRevision: number; reviewToken: string };
+export const sameReplyPlan = (a: ReplyPlan, b: ReplyPlan) => a.from === b.from && a.subject === b.subject && a.inReplyTo === b.inReplyTo && JSON.stringify([a.to, a.cc, a.references]) === JSON.stringify([b.to, b.cc, b.references]);
 export type ConnectedReplyStore = {
   connectedReply(owner: string, source: MailTaskSource): Promise<ConnectedReplyDraft | undefined>;
   saveConnectedReply(owner: string, source: MailTaskSource, input: Pick<ConnectedReplyDraft, 'mode' | 'plan' | 'body'>, expectedRevision: number, current: () => Promise<void>): Promise<ConnectedReplyDraft>;

@@ -1,3 +1,14 @@
+## Durable frozen reply simulations (P-WLK-6 / R30)
+
+The local invented Google fixture can freeze a reviewed saved reply, queue it
+durably, run one bounded simulation and inspect redacted status in the reply UI
+or existing CLI. Exact request retries recover the original intent; changed input
+conflicts. Current authority and CAS claims fence execution; uncertain execution
+becomes unknown and cannot replay. Later authored edits keep their own revision.
+Normal runtime has no dispatcher and real sending remains disabled. Live effects,
+production scheduling, cleanup and broader policy remain separate.
+[Usage](docs/REPLY_OPERATIONS.md).
+
 ## Connected Mail inside its Workspace (P-WLK-6 / R20–R33)
 
 The signed-in owner shell has a Mail module showing only accounts assigned to that

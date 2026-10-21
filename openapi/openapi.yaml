@@ -3201,6 +3201,218 @@ paths:
         "503":
           $ref: "#/components/responses/OwnedWorkspaceErrorResponse"
 
+  /api/v1/workspaces/{workspaceId}/operations:
+    parameters:
+      - &a10
+        name: workspaceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+    get:
+      tags:
+        - Workspace
+      operationId: listReplyOperations
+      summary: Inspect redacted reply simulation history
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the local synthetic Google fixture configures this API. Normal
+        and portable runtimes supply no dispatcher. No real sending or extra
+        provider consent. Current owner, Workspace, source and connection
+        authority are rechecked. Agents are denied.
+      parameters:
+        - name: taskId
+          in: query
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,128}$
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Newest first; at most 50 rows, cursor bound to owner/Workspace/Task.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - nextCursor
+                properties:
+                  data:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: "#/components/schemas/ReplyOperation"
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+        "400": &a1
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "401": &a2
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "403": &a3
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "404": &a4
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "409": &a5
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "410": &a6
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "429": &a7
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "500": &a8
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+        "503": &a9
+          description: Redacted operation/admission error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyOperationError"
+    post:
+      tags:
+        - Workspace
+      operationId: enqueueReplyOperation
+      summary: Accept one frozen saved reply simulation
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Only the local synthetic Google fixture configures this API. Normal
+        and portable runtimes supply no dispatcher. No real sending or extra
+        provider consent. Current owner, Workspace, source and connection
+        authority are rechecked. Agents are denied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplyOperationInput"
+      responses:
+        "202":
+          description: Accepted intent; this does not mean a provider effect or successful
+            simulation. Retain the same requestId and exact input for retry;
+            changed input conflicts.
+          content:
+            application/json:
+              schema: &a11
+                $ref: "#/components/schemas/ReplyOperationResponse"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404": *a4
+        "409": *a5
+        "410": *a6
+        "429": *a7
+        "500": *a8
+        "503": *a9
+  /api/v1/workspaces/{workspaceId}/operations/{operationId}:
+    parameters:
+      - *a10
+      - &a12
+        name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^op_[a-f0-9]{64}$
+    get:
+      tags:
+        - Workspace
+      operationId: getReplyOperation
+      summary: Inspect one durable reply simulation
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: true
+      description: Only the local synthetic Google fixture configures this API. Normal
+        and portable runtimes supply no dispatcher. No real sending or extra
+        provider consent. Current owner, Workspace, source and connection
+        authority are rechecked. Agents are denied.
+      responses:
+        "200":
+          description: Expired execution becomes unknown and can never execute again.
+          content:
+            application/json:
+              schema: *a11
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404": *a4
+        "409": *a5
+        "410": *a6
+        "429": *a7
+        "500": *a8
+        "503": *a9
+  /api/v1/workspaces/{workspaceId}/operations/{operationId}/run-fixture:
+    parameters:
+      - *a10
+      - *a12
+    post:
+      tags:
+        - Workspace
+      operationId: runFixtureReplyOperation
+      summary: Run one claimed synthetic reply operation
+      x-openjob-authorization: admitted-current-human-workspace-owner
+      x-openjob-retryable: false
+      description: Explicit empty-body fixture scheduler entry point. Claims one
+        queued operation and records executing before the injected bounded
+        synthetic dispatcher. A pre-execution claim may be reclaimed after 30
+        seconds; execution timeout/crash is unknown and never replayed. Intents
+        expire after 15 minutes. A terminal receipt expires after seven days
+        without reopening execution. Fresh authority is required; later authored
+        draft edits do not alter the frozen payload. No real provider dispatcher
+        is composed.
+      responses:
+        "200":
+          description: "Inspect state: confirmed is simulated success; rejected is a known
+            refusal; queued/executing/unknown is not confirmed success."
+          content:
+            application/json:
+              schema: *a11
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404": *a4
+        "409": *a5
+        "410": *a6
+        "429": *a7
+        "500": *a8
+        "503": *a9
 components:
   securitySchemes:
     workspaceAgentBearer:
@@ -7907,6 +8119,123 @@ components:
                 - workspace_capacity
                 - workspace_pilot_not_admitted
                 - workspace_pilot_unconfigured
+            message:
+              type: string
+              minLength: 1
+            requestId:
+              type: string
+              minLength: 1
+
+    ReplyOperationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - taskId
+        - requestId
+        - draftRevision
+        - reviewToken
+      properties:
+        action: &a2
+          type: string
+          const: reply.simulate
+        taskId: &a1
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        requestId: &a3
+          type: string
+          format: uuid
+        draftRevision: &a4
+          type: integer
+          minimum: 1
+          maximum: 1000000
+        reviewToken:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+    ReplyOperation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspaceId
+        - taskId
+        - action
+        - requestId
+        - draftRevision
+        - state
+        - createdAt
+        - updatedAt
+        - dispatchBefore
+        - receiptExpiresAt
+        - mode
+        - receiptExpired
+      properties:
+        id:
+          type: string
+          pattern: ^op_[a-f0-9]{64}$
+        workspaceId:
+          type: string
+          pattern: ^wsp_[a-f0-9]{32}$
+        taskId: *a1
+        action: *a2
+        requestId: *a3
+        draftRevision: *a4
+        state:
+          type: string
+          enum:
+            - queued
+            - executing
+            - confirmed
+            - rejected
+            - unknown
+        createdAt: &a5
+          type: string
+          format: date-time
+        updatedAt: *a5
+        dispatchBefore: *a5
+        receiptExpiresAt: *a5
+        mode:
+          type: string
+          const: fixture
+        receiptExpired:
+          type: boolean
+        outcome:
+          type: string
+          enum:
+            - simulated_accepted
+            - synthetic_rejected
+            - authority_changed
+            - payload_invalid
+            - intent_expired
+            - dispatch_unknown
+        receiptId:
+          type: string
+          pattern: ^sim_[a-f0-9]{32}$
+    ReplyOperationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: "#/components/schemas/ReplyOperation"
+    ReplyOperationError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+            - requestId
+          properties:
+            code:
+              type: string
+              minLength: 1
             message:
               type: string
               minLength: 1

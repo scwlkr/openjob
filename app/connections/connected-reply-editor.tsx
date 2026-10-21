@@ -3,14 +3,17 @@ import { useEffect, useRef, useState } from 'react';
 import type { ConnectedReplyDraft, ReplyMode, ReplyPlan, ReplyPreparation } from '../../shared/connected-reply';
 import styles from '../workspace/workspace.module.css';
 import replyStyles from './connected-reply.module.css';
+import ReplyOperations from './reply-operations';
+import type { ReplyOperationInput } from '../../shared/reply-operation';
 
-export type ReplyEditorBuffer = { body: string; mode: ReplyMode; revision: number; reviewToken: string; plan: ReplyPlan; dirty: boolean };
-type Props = { workspaceId: string; taskId: string; getToken(): Promise<string>; buffer?: ReplyEditorBuffer; onBuffer(buffer?: ReplyEditorBuffer): void; onUnavailable(): void };
+export type ReplyEditorBuffer = { body: string; mode: ReplyMode; revision: number; reviewToken: string; plan: ReplyPlan; dirty: boolean; operationRequest?: ReplyOperationInput };
+export type ReplyBufferUpdate = ReplyEditorBuffer | undefined | ((current?: ReplyEditorBuffer) => ReplyEditorBuffer | undefined);
+type Props = { workspaceId: string; taskId: string; getToken(): Promise<string>; buffer?: ReplyEditorBuffer; onBuffer(buffer: ReplyBufferUpdate): void; onUnavailable(): void; fixture?: boolean };
 const planFor = (value: ReplyPreparation, mode: ReplyMode) => mode === 'reply' ? value.plans.reply : value.plans.replyAll;
 function Addressing({ plan }: { plan: ReplyPlan }) {
   return <dl className={replyStyles.addressing}><dt>From</dt><dd>{plan.from}</dd><dt>To</dt><dd>{plan.to.join(', ')}</dd>{plan.cc.length > 0 && <><dt>Cc</dt><dd>{plan.cc.join(', ')}</dd></>}<dt>Subject</dt><dd>{plan.subject || '(No subject)'}</dd></dl>;
 }
-export default function ConnectedReplyEditor({ workspaceId, taskId, getToken, buffer, onBuffer, onUnavailable }: Props) {
+export default function ConnectedReplyEditor({ workspaceId, taskId, getToken, buffer, onBuffer, onUnavailable, fixture }: Props) {
   const [prepared, setPrepared] = useState<ReplyPreparation>(), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   const lease = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => lease.current?.abort(), []);
@@ -23,7 +26,7 @@ export default function ConnectedReplyEditor({ workspaceId, taskId, getToken, bu
   }
   function loadBuffer(value: ReplyPreparation) {
     const draft = value.draft, mode = draft?.mode ?? 'reply';
-    onBuffer({ body: draft?.body ?? '', mode, revision: draft?.revision ?? 0, reviewToken: draft && JSON.stringify(draft.plan) !== JSON.stringify(planFor(value, mode)) ? '' : value.reviewToken, plan: draft?.plan ?? planFor(value, mode), dirty: false });
+    onBuffer(current => ({ body: draft?.body ?? '', mode, revision: draft?.revision ?? 0, reviewToken: draft && JSON.stringify(draft.plan) !== JSON.stringify(planFor(value, mode)) ? '' : value.reviewToken, plan: draft?.plan ?? planFor(value, mode), dirty: false, operationRequest: current?.operationRequest }));
   }
   async function prepare() {
     lease.current?.abort(); const controller = new AbortController(); lease.current = controller;
@@ -53,7 +56,7 @@ export default function ConnectedReplyEditor({ workspaceId, taskId, getToken, bu
       }
       const data = (await response.json() as { data: { workspaceId: string; taskId: string; draft: ConnectedReplyDraft } }).data; controller.signal.throwIfAborted();
       if (data.workspaceId !== workspaceId || data.taskId !== taskId || data.draft.body !== submitted.body || data.draft.mode !== submitted.mode || JSON.stringify(data.draft.plan) !== JSON.stringify(submitted.plan)) throw new Error();
-      onBuffer({ ...submitted, revision: data.draft.revision, dirty: false }); setPrepared({ ...prepared, draft: data.draft }); setNotice('OpenJob draft saved. Nothing has been sent.');
+      onBuffer(current => ({ ...submitted, revision: data.draft.revision, dirty: false, operationRequest: current?.operationRequest })); setPrepared({ ...prepared, draft: data.draft }); setNotice('OpenJob draft saved. Nothing has been sent.');
     } catch { if (!controller.signal.aborted) { setPrepared(undefined); setNotice('Save unavailable. Your authored text is kept. Refresh the reply before retrying.'); onUnavailable(); } }
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
@@ -72,5 +75,6 @@ export default function ConnectedReplyEditor({ workspaceId, taskId, getToken, bu
       {conflict && <button disabled={busy} onClick={() => { onBuffer({ ...buffer, revision: prepared.draft?.revision ?? 0, dirty: true }); setNotice('Your text is kept for an explicit save over the reviewed version.'); }}>Keep my text over reviewed version</button>}
     </>}
     {buffer && <><label>Your reply<textarea aria-label="Your reply" rows={8} maxLength={20000} disabled={busy} value={buffer.body} onChange={event => onBuffer({ ...buffer, body: event.target.value, dirty: true })} /></label><p className={styles.small}>{buffer.body.length.toLocaleString()} / 20,000 characters · {buffer.dirty ? 'Unsaved edits' : 'Editor ready'}. Unfinished text stays while switching Workspace modules. Save before leaving this page.</p><button className={styles.primary} disabled={busy || !prepared || reviewRequired || conflict} onClick={() => void save()}>Save OpenJob draft</button>{buffer.dirty && <button disabled={busy} onClick={() => { onBuffer(undefined); setPrepared(undefined); setNotice('Unsaved reply edits discarded. Any saved draft is kept.'); }}>Discard unsaved reply edits</button>}</>}
+    {fixture && <ReplyOperations workspaceId={workspaceId} taskId={taskId} getToken={getToken} buffer={buffer} onBuffer={onBuffer} ready={!busy && !!prepared && !!buffer && !buffer.dirty && !!buffer.body.trim() && buffer.revision > 0 && !reviewRequired && !conflict} />}
   </section>;
 }
