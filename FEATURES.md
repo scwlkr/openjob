@@ -1,3 +1,16 @@
+## Scoped agents in owned Workspaces (P-WLK-6 / R22)
+
+The owner can issue 24-hour, revocable access to exact Tasks and OpenJob Calendar
+resources through the existing API/CLI. Agents use their own credential, receive
+only granted reads and write receipts, and cannot fall back to human access.
+Linked planning changes require both relevant write scopes. The Workspace Agents
+view shows permissions, expiry, revocation and recent confirmed actions with links
+to retained work. Failed revocation requires explicit inspection; current authority
+and concurrent-revoke checks fence writes. Synthetic browser/CLI/restart proof
+passed. Normal runtime remains unconfigured. Mail delegation, multi-person policy,
+native agent controls and live acceptance remain separate.
+[Usage](docs/WORKSPACE_AGENTS.md).
+
 ## Configured Gmail pages, folders and search (P-WLK-6 / R32)
 
 Configured Connections provides bounded Next/First pages, an account-qualified

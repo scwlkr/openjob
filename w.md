@@ -1,3 +1,45 @@
+# P-WLK-6 / R22 — scoped owned Workspace Tasks/Calendar agents
+
+21October01:20UTC: source7b59ba0414d8a9378c65d56486ff1cb7d40c68b9 follows merged
+PR126/main4eb212f65cadc3d7190305e755bba60a4ab10303. The previously empty R22 branch
+now implements exact owned Workspace Tasks/Calendar grants through shared API,
+existing CLI and the Workspace Agents UI. Human owners issue24-hour credentials
+into a new private0600 file; service stores only a hash. Agents receive filtered
+read families and minimal write receipts, with no human-session fallback. Current
+owner/sponsor, grant/expiry/hash and exact resources/operations fence each call;
+same-document CAS and active-User fences prevent stale writes beating revocation.
+Linked Task/Calendar mutations require both writes. Normal runtime stays disabled
+without existing explicit pilot admission; no real access was activated.
+
+The UI reviews exact scopes/resources/expiry/revocation and200 bounded confirmed
+actions, linking retained Tasks/blocks. A failed revoke clears stale metadata and
+requires explicit refresh. Mail/source/reply sidecars survive human and agent work.
+Mail delegation, administration, Home/catalog and availability planning are denied
+to these credentials. Source review found one authorization-annotation mismatch,
+fixed before delivery; final review reported no findings. The secret scanner now
+rejects all three agent credential formats without printing them; two old fake
+credential-shaped response examples were removed while preserving their schemas.
+
+36 focused domain/API/CLI/secret tests pass, plus final root types, affected lint,
+OpenAPI43paths/60operations, generated CLI types and brand generation/check32.
+Actual CLI + headed browser proof used only synthetic Alex/Sam: created Task,
+notes and planning; created a Calendar-only block; followed exact work links;
+injected revoke503, explicitly recovered and revoked. After restarting the same
+saved fixture, the revoked credential returned401, an independent Family grant
+still returned200, Calendar-only reads excluded Tasks/notes/Task IDs, and its Tasks
+CLI was denied. Sam saw neither Workspace. Width390/768/1200 fits; action targets
+are44px. Evidence: output/playwright/r22-agents/. Own5214 fixture/browser stopped;
+all synthetic grants revoked/private token files removed, authored fixture work
+retained. Original26 untracked files hash-match; native PR120/builds/sessions intact.
+
+Usage: docs/WORKSPACE_AGENTS.md. Continue existing Linear R22 discussion266d9fdf-
+fa1e-4e9d-9d03-7b234821a591. This closes only its bounded Tasks/Calendar owner-pilot
+milestone; Mailbox-set delegation, multi-person sponsoring rights/lifecycle,
+broader policy, native controls and integrated live acceptance remain. R53's
+Android UI-method answer is still pending. Native PR120 needs this new main
+integrated before eventual delivery; no device/live/release claim follows from
+web checks. Do not repeat the completed standalone real alternate Gmail read.
+
 # P-WLK-6 — Mail reconnect preserves OpenJob authentication
 
 21October00:40UTC: source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65 corrects a cross-client P2
