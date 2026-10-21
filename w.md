@@ -1,3 +1,29 @@
+# P-WLK-6 — Mail reconnect preserves OpenJob authentication
+
+21October00:40UTC: source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65 corrects a cross-client P2
+found while integrating PR125/main7dc3d023939080ebe92023066c5656589109c3aa into
+native draft PR120. Configured Gmail authentication failures returned401, which
+native treats as an ended OpenJob session. The Connections boundary now returns
+reconnect_required409 for upstream authentication_required. Invalid/missing OpenJob
+identity still returns401; current-access checks and provider denial remain intact.
+No native runtime/package or response-shape change was needed.
+
+10 focused freshness/flow/runtime-CLI checks pass, plus root types and affected
+lint. The integrated native HTTP regression passes both independent and retained
+Personal homes (3tests), checking provider401 during Mail/source/reply/save becomes
+409, Task access remains and the unchanged saved reply reopens after recovery.
+That regression lives in draft PR120, which owns the native feature. Read-only
+review confirmed the P2 resolved with no new findings. The original26 files and
+native app build inputs are preserved; only the HTTP test expands. Android UI-method
+approval remains pending; no native/live/device/release pass is inferred.
+
+PR125 freshness/browser evidence remains valid apart from its superseded assertion
+that an upstream auth failure should return401. No additional real read, provider
+effect, persistent access, deployment or publication. Continue Linear R32 thread
+845d4c0c-61a1-4a62-b9c3-96d0b5e3473a. The next source-only product slice is owned
+Workspace Tasks/Calendar agent grants in R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591;
+its empty branch starts at main7dc3d02 and source implementation has not begun.
+
 # P-WLK-6 / R32 — bounded Mail freshness and retained Task requests
 
 20October2026: source1d041d5dd6d2afaff478e493647a6b9882e9f84d follows PR124/main
