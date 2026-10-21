@@ -33,6 +33,19 @@ function Fixture() {
           if (!active) throw new Error('Fixture session ended'); return result;
         };
         const guarded: NativeConnectedWorkspaceController = {
+      calendarAccounts: (owner, id, signal) => guard(owner, () => api.calendarAccounts(value.token, owner, id, signal)),
+      calendars: (owner, id, account, cursor, signal) => guard(owner, () => api.calendars(value.token, owner, id, account, cursor, signal)),
+      calendarEvents: (owner, id, account, calendar, window, cursor, signal) => guard(owner, () => api.calendarEvents(value.token, owner, id, account, calendar, window, cursor, signal)),
+      calendarAvailability: (owner, id, account, calendar, window, signal) => guard(owner, () => api.calendarAvailability(value.token, owner, id, account, calendar, window, signal)),
+      planning: (owner, id, signal) => guard(owner, () => api.planning(value.token, owner, id, signal)),
+      calendarHistory: (owner, id, task, cursor, signal) => guard(owner, () => api.calendarHistory(value.token, owner, id, task, cursor, signal)),
+      queueCalendar: (owner, id, input) => guard(owner, () => api.queueCalendar(value.token, owner, id, input)),
+      runCalendar: (owner, id, operation) => guard(owner, () => api.runCalendar(value.token, owner, id, operation)),
+      readCalendarOperation: (owner, id, operation, signal) => guard(owner, () => api.readCalendarOperation(value.token, owner, id, operation, signal)),
+      reviewCalendar: (owner, id, task) => guard(owner, () => api.reviewCalendar(value.token, owner, id, task)),
+      calendarReviewReceipt: (owner, id, task, operation, event, signal) => guard(owner, () => api.calendarReviewReceipt(value.token, owner, id, task, operation, event, signal)),
+      detachCalendar: (owner, id, task, input) => guard(owner, () => api.detachCalendar(value.token, owner, id, task, input)),
+      calendarDetachReceipt: (owner, id, task, input, signal) => guard(owner, () => api.calendarDetachReceipt(value.token, owner, id, task, input, signal)),
           list: owner => guard(owner, () => api.list(value.token, owner)), create: (owner, name) => guard(owner, () => api.create(value.token, owner, name)), personal: owner => guard(owner, () => api.personal(value.token, owner)),
           read: (owner, id) => guard(owner, () => api.read(value.token, owner, id)), command: (owner, id, input) => guard(owner, () => api.command(value.token, owner, id, input)), connections: owner => guard(owner, () => api.connections(value.token, owner)),
           agentGrants: (owner, workspace) => guard(owner, () => api.agentGrants(value.token, owner, workspace)), revokeAgent: (owner, id, agentId) => guard(owner, () => api.revokeAgent(value.token, owner, id, agentId)),

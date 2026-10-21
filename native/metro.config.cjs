@@ -11,5 +11,5 @@ module.exports = getSentryExpoConfig(__dirname, {
 });
 
 // Native Tasks/Calendar sync uses the same pure runtime validation as the API.
-module.exports.watchFolders = [path.resolve(__dirname, "../shared")];
+module.exports.watchFolders = [path.resolve(__dirname, "../shared"), path.resolve(__dirname, "../cli/lib")];
 module.exports.resolver.nodeModulesPaths = [path.resolve(__dirname, "node_modules")];

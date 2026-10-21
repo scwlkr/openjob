@@ -1,12 +1,36 @@
-# R40 native Calendar integration — in progress
+# R40 native provider Calendar — source checkpoint, runtime pending
 
-21 October 2026 UTC: isolated codex/p-wlk-6-native-calendar integrates native
-PR120 source446162d with delivered main e0451e8. Both handoff histories below are
-preserved. Root/native TypeScript and 21 focused integration checks pass;
-no native files changed in this merge. The native provider Calendar flow and its
-runtime proof are pending; prior receipts do not prove this integrated source. Primary checkout and
-all34 recorded untracked files remain untouched. No live Calendar/Android/release
-authority is inferred.
+21 October 2026 UTC: `codex/p-wlk-6-native-calendar` integrates native
+PR120 source `446162d` with delivered main `e0451e8` at merge `70542d2`.
+The native owner Workspace now has account/Calendar names, bounded availability
+and faithful event reads, retained precise planning fields/frozen requests,
+explicit fixture enqueue/run/history, provider review/version acceptance,
+separate detach/deletion and durable receipt inspection. Task completion stays
+local; Task/source/reply navigation remains available. Local scheduling/deletion
+is guarded by provider links, unavailable planning and unresolved requests.
+
+Shared validators and intent-resolution rules are reused. Metro explicitly sees
+`cli/lib`; the installed CLI keeps its package path. UTF-16 validation works
+without Hermes `String.isWellFormed`. Reader aborts clear observations on hidden,
+background and offline transitions; authored requests stay in the owner/Workspace
+session. Confirmation targets and late queue/detach acknowledgements are fenced
+against newer retained work. Initial Workspace planning reads cannot overwrite
+a newer provider-reader result. Read-only source review found no remaining
+consequential issue before this final initial-read fence.
+
+Checks: root/native TypeScript, native lint, 27 affected native UI/API checks,
+5 shared editor/actual CLI checks, and 32 brand assets pass. Secret safety passes for 799 files. Its first probe encountered the reused
+native dependency symlink as an untracked file; a private Git exclude for that
+setup symlink restored the normal dependency exclusion before the passing scan. The first native Jest run failed because
+an overridden Babel transform lost Expo's preset; preserving its transform fixed
+it. The first shared-editor run failed from a missing explicit `.ts` extension;
+that import is corrected. These failed setup probes are not runtime proof.
+
+Next: commit this source, make an exact isolated snapshot and build/exercise the
+connected iOS Calendar journey. New native runtime proof is pending. PR120 stays
+Draft. Primary checkout and all 34 recorded untracked files remain untouched.
+Android UI/SDK, live Calendar, real sending, physical-device and release gates stay
+open. No deployment, persistent access or production setting changed.
 
 # R40 connected Calendar fixture source — reviewed
 

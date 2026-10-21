@@ -1,17 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import type { CalendarOperationView, CalendarPlanInput, PlanningDetachInput, PlanningDetachReceipt, RemotePlanningLink } from '../../shared/remote-planning';
-import type { WorkspaceTask } from '../../shared/workspace-contracts';
-export type ProviderEditor = { title: string; start: string; end: string; baseEtag: string | null; dirty: boolean };
-export type ProviderIntent = { input: CalendarPlanInput; calendarId: string; eventId?: string; operation?: CalendarOperationView; rejected?: boolean; reviewedRemoval?: string };
-export function canStartProviderIntent(intent: ProviderIntent | undefined, link?: RemotePlanningLink) {
-  return !!intent && (intent.rejected || !!intent.operation && ['confirmed', 'rejected'].includes(intent.operation.state) || intent.operation?.state === 'unknown' && (link?.state === 'linked' && link.operationId === intent.operation.id || intent.reviewedRemoval === intent.operation.id));
-}
-const day = () => new Date().toISOString().slice(0, 10);
-export const providerUtc = (value: string) => new Date(value + 'Z').toISOString();
-export function initialProviderEditor(task: WorkspaceTask, link?: RemotePlanningLink): ProviderEditor {
-  const block = link?.confirmed;
-  return { title: block?.title ?? task.title, start: block?.span.start.kind === 'timed' ? block.span.start.at.slice(0, -1) : day() + 'T14:00', end: block?.span.end.kind === 'timed' ? block.span.end.at.slice(0, -1) : day() + 'T14:30', baseEtag: block?.etag ?? null, dirty: false };
-}
+import type { PlanningDetachInput, PlanningDetachReceipt } from '../../shared/remote-planning';
+import { type ProviderEditor, type ProviderIntent } from '../../shared/provider-planning-editor.ts';
+export { canStartProviderIntent, providerUtc, initialProviderEditor } from '../../shared/provider-planning-editor.ts';
+export type { ProviderEditor, ProviderIntent } from '../../shared/provider-planning-editor.ts';
 type Entries = { editors: Record<string, ProviderEditor>; intents: Record<string, ProviderIntent>; detaches: Record<string, PlanningDetachInput>; receipts: Record<string, PlanningDetachReceipt> };
 /** Authored fields and immutable requests outlive the disposable provider reader. */
 export function useProviderPlanningDrafts() {

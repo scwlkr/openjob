@@ -369,6 +369,19 @@ export class NativeAuthCoordinator implements NativeTaskListController {
     if (dependencies.connectedWorkspaces) {
       const api = dependencies.connectedWorkspaces;
       const connected: NativeConnectedWorkspaceController = {
+        calendarAccounts: (owner, id, signal) => this.withPersonalSession(owner, token => api.calendarAccounts(token, owner, id, signal)),
+        calendars: (owner, id, account, cursor, signal) => this.withPersonalSession(owner, token => api.calendars(token, owner, id, account, cursor, signal)),
+        calendarEvents: (owner, id, account, calendar, window, cursor, signal) => this.withPersonalSession(owner, token => api.calendarEvents(token, owner, id, account, calendar, window, cursor, signal)),
+        calendarAvailability: (owner, id, account, calendar, window, signal) => this.withPersonalSession(owner, token => api.calendarAvailability(token, owner, id, account, calendar, window, signal)),
+        planning: (owner, id, signal) => this.withPersonalSession(owner, token => api.planning(token, owner, id, signal)),
+        calendarHistory: (owner, id, task, cursor, signal) => this.withPersonalSession(owner, token => api.calendarHistory(token, owner, id, task, cursor, signal)),
+        queueCalendar: (owner, id, input) => this.withPersonalSession(owner, token => api.queueCalendar(token, owner, id, input)),
+        runCalendar: (owner, id, operation) => this.withPersonalSession(owner, token => api.runCalendar(token, owner, id, operation)),
+        readCalendarOperation: (owner, id, operation, signal) => this.withPersonalSession(owner, token => api.readCalendarOperation(token, owner, id, operation, signal)),
+        reviewCalendar: (owner, id, task) => this.withPersonalSession(owner, token => api.reviewCalendar(token, owner, id, task)),
+        calendarReviewReceipt: (owner, id, task, operation, event, signal) => this.withPersonalSession(owner, token => api.calendarReviewReceipt(token, owner, id, task, operation, event, signal)),
+        detachCalendar: (owner, id, task, input) => this.withPersonalSession(owner, token => api.detachCalendar(token, owner, id, task, input)),
+        calendarDetachReceipt: (owner, id, task, input, signal) => this.withPersonalSession(owner, token => api.calendarDetachReceipt(token, owner, id, task, input, signal)),
         list: owner => this.withPersonalSession(owner, token => api.list(token, owner)),
         create: (owner, name) => this.withPersonalSession(owner, token => api.create(token, owner, name)),
         personal: owner => this.withPersonalSession(owner, token => api.personal(token, owner)),

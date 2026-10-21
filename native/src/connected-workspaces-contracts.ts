@@ -1,3 +1,5 @@
+import type { ProviderCalendarAccount, RemoteCalendarPage, RemoteEventPage, CalendarAvailability, CalendarWindow } from '../../shared/provider-calendar';
+import type { RemotePlanningLink, CalendarOperationView, CalendarPlanInput, PlanningDetachInput, PlanningDetachReceipt, PlanningReviewReceipt } from '../../shared/remote-planning';
 import type { OwnedWorkspace, OwnedWorkspaceSnapshot } from '../../shared/owned-workspaces';
 import type { TaskCalendarCommand } from '../../shared/task-calendar-sync';
 import type { MailTaskResult } from '../../shared/mail-task-source';
@@ -17,6 +19,19 @@ export type MailTaskInput = { messageId: string; title: string; requestId?: stri
 export type ConnectedAgents = { agents: WorkspaceAgentGrant[]; actions: WorkspaceAgentAction[] };
 /** Same API contracts as web/CLI. No credential access in presentation code. */
 export type NativeConnectedWorkspaceApi = {
+  calendarAccounts(token: string, owner: string, workspace: string, signal?: AbortSignal): Promise<ProviderCalendarAccount[]>;
+  calendars(token: string, owner: string, workspace: string, account: string, cursor?: string, signal?: AbortSignal): Promise<RemoteCalendarPage>;
+  calendarEvents(token: string, owner: string, workspace: string, account: string, calendar: string, window: CalendarWindow, cursor?: string, signal?: AbortSignal): Promise<RemoteEventPage>;
+  calendarAvailability(token: string, owner: string, workspace: string, account: string, calendar: string, window: CalendarWindow, signal?: AbortSignal): Promise<CalendarAvailability>;
+  planning(token: string, owner: string, workspace: string, signal?: AbortSignal): Promise<RemotePlanningLink[]>;
+  calendarHistory(token: string, owner: string, workspace: string, task: string, cursor?: string, signal?: AbortSignal): Promise<{ items: CalendarOperationView[]; nextCursor: string | null }>;
+  queueCalendar(token: string, owner: string, workspace: string, input: CalendarPlanInput): Promise<CalendarOperationView>;
+  runCalendar(token: string, owner: string, workspace: string, operation: string): Promise<CalendarOperationView>;
+  readCalendarOperation(token: string, owner: string, workspace: string, operation: string, signal?: AbortSignal): Promise<CalendarOperationView>;
+  reviewCalendar(token: string, owner: string, workspace: string, task: string): Promise<RemotePlanningLink[]>;
+  calendarReviewReceipt(token: string, owner: string, workspace: string, task: string, operation: string, event: string, signal?: AbortSignal): Promise<PlanningReviewReceipt>;
+  detachCalendar(token: string, owner: string, workspace: string, task: string, input: PlanningDetachInput): Promise<PlanningDetachReceipt>;
+  calendarDetachReceipt(token: string, owner: string, workspace: string, task: string, input: PlanningDetachInput, signal?: AbortSignal): Promise<PlanningDetachReceipt>;
   list(token: string, owner: string): Promise<OwnedWorkspace[]>;
   create(token: string, owner: string, name: string): Promise<OwnedWorkspaceSnapshot>;
   personal(token: string, owner: string): Promise<OwnedWorkspaceSnapshot>;

@@ -1,8 +1,17 @@
-// Shared response boundary for the installed CLI and the typed web facade.
+// Shared response boundary for CLI, web and native clients.
 const fail = () => { throw Object.assign(new Error('Provider Calendar response unavailable. Inspect saved planning before retrying.'), { code: 'invalid_response' }); };
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, expected) => object(value) && Object.keys(value).sort().join(',') === [...expected].sort().join(',');
-const text = (value, max = 512) => typeof value === 'string' && value.length <= max && value.isWellFormed() && !/[\u0000-\u001f\u007f]/.test(value);
+// Hermes does not provide String.isWellFormed. Reject unpaired UTF-16 surrogates.
+function wellFormed(value) {
+  for (let i = 0; i < value.length; i++) {
+    const unit = value.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) { const next = value.charCodeAt(++i); if (!(next >= 0xdc00 && next <= 0xdfff)) return false; }
+    else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+  }
+  return true;
+}
+const text = (value, max = 512) => typeof value === 'string' && value.length <= max && wellFormed(value) && !/[\u0000-\u001f\u007f]/.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const iso = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const cop = value => typeof value === 'string' && /^cop_[a-f0-9]{64}$/.test(value);
