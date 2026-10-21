@@ -4,6 +4,8 @@ import type { FirebaseTokenIdentity } from './firebase-id-token.ts';
 import type { OpenJobUser } from './v1-identity.ts';
 import type { createWorkspaceContextStore } from './workspace-context-store.ts';
 import { defaultRequestId, errorResponse, internalErrorResponse, jsonResponse } from './v1-http.ts';
+import { replyOperationsResponse } from './reply-operations-api.ts';
+import type { FixtureReplyOperations } from './reply-operations.ts';
 
 /** Trusted server selection only. It does not classify personal/employer control. */
 export type WorkspacePilotAdmission = Readonly<{ userId: string; provider: 'google' | 'apple'; firebaseUid: string }>;
@@ -12,8 +14,9 @@ type Options = {
   users: { resolve(identity: FirebaseTokenIdentity): Promise<OpenJobUser | null> };
   verifyIdToken(request: Request): Promise<FirebaseTokenIdentity | null>;
   admission?: WorkspacePilotAdmission;
+  fixtureOperations?: FixtureReplyOperations;
 };
-export function createWorkspacePilotApplication({ store, users, verifyIdToken, admission }: Options) {
+export function createWorkspacePilotApplication({ store, users, verifyIdToken, admission, fixtureOperations }: Options) {
   const configured = !!admission && Object.keys(admission).sort().join(',') === 'firebaseUid,provider,userId' && /^user_[a-f0-9]{32}$/.test(admission.userId) && ['google', 'apple'].includes(admission.provider) && typeof admission.firebaseUid === 'string' && admission.firebaseUid.length > 0 && admission.firebaseUid.length <= 128;
   // Copy caller-owned selection so later mutation cannot silently widen this instance's admission.
   const selected = configured ? Object.freeze({ ...admission! }) : null;
@@ -36,7 +39,10 @@ export function createWorkspacePilotApplication({ store, users, verifyIdToken, a
       const user = await users.resolve(identity); if (!user || user.deletionPending) return fail('account_unavailable', 410);
       if (!selected) return fail('workspace_pilot_unconfigured', 503);
       if (!admitted(user, identity)) return fail('workspace_pilot_not_admitted', 403);
-      if (url.search || request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
+      if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return fail('invalid_input', 400);
+      const operationResponse = await replyOperationsResponse(request, user.userId, fixtureOperations);
+      if (operationResponse) return admitted(await users.resolve(identity), identity) ? operationResponse : fail('workspace_pilot_not_admitted', 403);
+      if (url.search) return fail('invalid_input', 400);
       if (url.pathname === '/api/v1/workspaces/session') {
         if (request.method !== 'GET') return fail('not_found', 404);
         if (!admitted(await users.resolve(identity), identity)) return fail('workspace_pilot_not_admitted', 403);

@@ -1,4 +1,15 @@
-# Current native integration — Workspace Mail main
+# Current native integration — durable operation main
+
+21 October 2026: draft PR120 integrates PR129/main
+`5b218755605120c4c734aec7f1db6862b077bdc2`. Only FEATURES.md and this handoff
+conflicted; both feature/history records are preserved. This adds the bounded
+fixture-only durable reply service/API/CLI/web surface. Native controls are
+unchanged and do not gain a dispatcher. Exact-source root/native compile and
+actual HTTP boundary checks are next; prior native evidence stays at its recorded
+app inputs. Android UI-method answer and live/provider/device/release gates remain
+open. No additional real read, persistent access, deployment or publication.
+
+# Native integration history — Workspace Mail main
 
 21October2026: draft PR120 integrates PR128/main e483988b9b92ecfbb7ab644f1b871d559d3433bd
 (web sourcec4e5f09e7e093714899c98e890f96835101b58e7, reviewed PR head
@@ -74,6 +85,48 @@ Next source implementation is the accepted owner-only Tasks/Calendar agent-grant
 slice in Linear R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591. Its initial empty
 branch was made from7dc3d02; integrate current main before implementation. Keep
 Personal/Groups grants independent and Mail delegation unavailable.
+
+# R30 fixture foundation — delivery history
+
+21 October 2026: source `7bb253352485723abc0bd0fc8cd3fe810640e566` in
+[PR129](https://github.com/scwlkr/openjob/pull/129) follows main `e483988`.
+Linear execution discussion: `7f612b86-7725-46b1-8474-8a2a680da5eb`.
+
+The invented Google launcher now freezes a reviewed saved reply into private
+payload, redacted operation and leased job records. Shared Workspace API/CLI and
+the existing reply UI enqueue accepted intent, explicitly run a bounded injected
+simulation and inspect confirmed/rejected/unknown outcomes. The launcher persists
+every operation commit before runner acknowledgment and restores the original
+invented connection across process restarts. Normal/portable runtimes receive no
+dispatcher; Google consent and real-send denial are unchanged. Usage and limits:
+[docs/REPLY_OPERATIONS.md](docs/REPLY_OPERATIONS.md).
+
+Verification: 47 focused tests plus one existing real-send HTTP 403 case; root
+types, affected lint, OpenAPI 46 paths/64 operations, generated CLI types, brand
+32 and secret scan. Source review fixed an editor race, confirmed resolved.
+Actual headed browser recovered exactly one queued operation after a deliberately
+lost accepted response. It reopened saved draft revision 2 after process restart,
+then confirmed the original frozen revision 1 with identical hash/body/addressing.
+A forced overlapping queue/save response kept the newest text and did not restore
+a cleared request ID. Three simulations confirmed; final authored revision 4 kept.
+Sam was denied without Alex's content. Layouts fit at 390/768/1200; operation
+controls are at least 44px. Only expected injected failure/admission console errors.
+Evidence: `output/playwright/r30-operations/` (local, invented content only).
+Own synthetic connection disconnected and own browser/5214 stopped; authored
+fixture state retained at `/tmp/openjob-r30-reply-state.json`.
+
+This closes only the bounded synthetic foundation. R30 still needs production
+scheduler/cleanup and selected runtime/data policy; R31/live send, provider
+Calendar and broader permission policy remain separate. The receipt-expired flag
+does not delete records; the pilot index is capped at 100 operations per owner.
+Continue the existing roadmap/Linear queue from this delivered foundation.
+
+Native draft PR120 was preserved at `8c8b4f394d6213eff1e18635904d965949b2057f`
+during this work. Integrate the eventual merged main and verify its affected
+boundary before claiming current-head native coverage. Installed app inputs,
+Android APK/Metro/fixture sessions and the original 26 files are preserved; the
+26 hashes match. Android UI-method answer remains pending. Do not repeat the
+completed real Timothy read or infer new real access/release authorization.
 
 # P-WLK-6 / R20–R33 — Mail inside its assigned Workspace
 

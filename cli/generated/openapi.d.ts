@@ -1181,6 +1181,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect redacted reply simulation history
+         * @description Only the local synthetic Google fixture configures this API. Normal and portable runtimes supply no dispatcher. No real sending or extra provider consent. Current owner, Workspace, source and connection authority are rechecked. Agents are denied.
+         */
+        get: operations["listReplyOperations"];
+        put?: never;
+        /**
+         * Accept one frozen saved reply simulation
+         * @description Only the local synthetic Google fixture configures this API. Normal and portable runtimes supply no dispatcher. No real sending or extra provider consent. Current owner, Workspace, source and connection authority are rechecked. Agents are denied.
+         */
+        post: operations["enqueueReplyOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/operations/{operationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect one durable reply simulation
+         * @description Only the local synthetic Google fixture configures this API. Normal and portable runtimes supply no dispatcher. No real sending or extra provider consent. Current owner, Workspace, source and connection authority are rechecked. Agents are denied.
+         */
+        get: operations["getReplyOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/operations/{operationId}/run-fixture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one claimed synthetic reply operation
+         * @description Explicit empty-body fixture scheduler entry point. Claims one queued operation and records executing before the injected bounded synthetic dispatcher. A pre-execution claim may be reclaimed after 30 seconds; execution timeout/crash is unknown and never replayed. Intents expire after 15 minutes. A terminal receipt expires after seven days without reopening execution. Fresh authority is required; later authored draft edits do not alter the frozen payload. No real provider dispatcher is composed.
+         */
+        post: operations["runFixtureReplyOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2529,6 +2601,51 @@ export interface components {
             error: {
                 /** @enum {string} */
                 code: "account_unavailable" | "authentication_required" | "body_too_large" | "conflict" | "forbidden" | "internal_error" | "invalid_input" | "not_found" | "schedule_conflict" | "unavailable" | "workspace_capacity" | "workspace_pilot_not_admitted" | "workspace_pilot_unconfigured";
+                message: string;
+                requestId: string;
+            };
+        };
+        ReplyOperationInput: {
+            /** @constant */
+            action: "reply.simulate";
+            taskId: string;
+            /** Format: uuid */
+            requestId: string;
+            draftRevision: number;
+            reviewToken: string;
+        };
+        ReplyOperation: {
+            id: string;
+            workspaceId: string;
+            taskId: string;
+            /** @constant */
+            action: "reply.simulate";
+            /** Format: uuid */
+            requestId: string;
+            draftRevision: number;
+            /** @enum {string} */
+            state: "queued" | "executing" | "confirmed" | "rejected" | "unknown";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dispatchBefore: string;
+            /** Format: date-time */
+            receiptExpiresAt: string;
+            /** @constant */
+            mode: "fixture";
+            receiptExpired: boolean;
+            /** @enum {string} */
+            outcome?: "simulated_accepted" | "synthetic_rejected" | "authority_changed" | "payload_invalid" | "intent_expired" | "dispatch_unknown";
+            receiptId?: string;
+        };
+        ReplyOperationResponse: {
+            data: components["schemas"]["ReplyOperation"];
+        };
+        ReplyOperationError: {
+            error: {
+                code: string;
                 message: string;
                 requestId: string;
             };
@@ -6361,6 +6478,430 @@ export interface operations {
             415: components["responses"]["OwnedWorkspaceErrorResponse"];
             500: components["responses"]["OwnedWorkspaceErrorResponse"];
             503: components["responses"]["OwnedWorkspaceErrorResponse"];
+        };
+    };
+    listReplyOperations: {
+        parameters: {
+            query?: {
+                taskId?: string;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first; at most 50 rows, cursor bound to owner/Workspace/Task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReplyOperation"][];
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+        };
+    };
+    enqueueReplyOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyOperationInput"];
+            };
+        };
+        responses: {
+            /** @description Accepted intent; this does not mean a provider effect or successful simulation. Retain the same requestId and exact input for retry; changed input conflicts. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationResponse"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+        };
+    };
+    getReplyOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Expired execution becomes unknown and can never execute again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationResponse"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+        };
+    };
+    runFixtureReplyOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inspect state: confirmed is simulated success; rejected is a known refusal; queued/executing/unknown is not confirmed success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationResponse"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+            /** @description Redacted operation/admission error. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
         };
     };
 }
