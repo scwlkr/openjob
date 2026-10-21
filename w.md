@@ -1,4 +1,30 @@
-# Current native integration — owned Workspace agent main
+# Current native integration — Workspace Mail main
+
+21October2026: draft PR120 integrates PR128/main e483988b9b92ecfbb7ab644f1b871d559d3433bd
+(web sourcec4e5f09e7e093714899c98e890f96835101b58e7, reviewed PR head
+8e244a3382a89cc87e1f8953a69a334e5e1a138c). Only FEATURES.md and this handoff
+conflicted; both histories are preserved. Native/db/server/package bytes are
+unchanged relative to prior native927668d; the neutral catalog type extraction
+was already identical. The integration adds web Mail composition, its four
+boundary tests and usage/history records, with no native behavior change.
+
+All739 tracked source files hash-match the existing isolated proof environment.
+Root/native types and four new Mail boundary tests pass; secret1074 passes.
+PR128's15 tests/practical web flow/brand32/lint evidence remains at the same web
+source; prior native17 actual-HTTP/source/reply/agent checks cover the unchanged
+backend/native runtime. No repeat native build or wider suite is warranted by this
+web-only integration. Primary root dependencies remain incomplete as previously
+recorded; exact-source isolated checks supply compile evidence.
+
+All24 app runtime/package/identity input hashes and original26 shared files still
+match, with only the previously expanded recorded HTTP test differing from its
+build manifest. Existing iOS fixture journey and Android APK/Metro/fake5213 proof
+remain intact. PR120 stays Draft: Android UI-method answer, native Mail controls,
+live/provider/device and release/distribution evidence remain open. No further
+real read, persistent access, provider effect, deployment or publication. Exact
+pushed head and receipt live in Linear R53 and output/r53/native-integration-receipt.json.
+
+# Native integration history — owned Workspace agent main
 
 21October01:27UTC: draft PR120 integrates PR127/main4263b46bab3564f1369dce829b40d30eae1dbb95
 (R22 source7b59ba0414d8a9378c65d56486ff1cb7d40c68b9, reviewed head
@@ -48,6 +74,48 @@ Next source implementation is the accepted owner-only Tasks/Calendar agent-grant
 slice in Linear R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591. Its initial empty
 branch was made from7dc3d02; integrate current main before implementation. Keep
 Personal/Groups grants independent and Mail delegation unavailable.
+
+# P-WLK-6 / R20–R33 — Mail inside its assigned Workspace
+
+21October2026: sourcec4e5f09e7e093714899c98e890f96835101b58e7 follows merged
+PR127/main4263b46bab3564f1369dce829b40d30eae1dbb95. The owner-pilot shell now has
+Mail beside Today/Tasks/Calendar/Agents, scoped to the connection's fixed home.
+It reuses the existing metadata/folder/search/page/lazy-body/freshness reader and
+shared API. Optional exact-Task callbacks keep source creation inside /workspaces;
+Connections retains its existing links. Setup/consent/refresh/disconnect remains
+central. No new provider capability or admission/access activation.
+
+Reviewed Task intents live in retained owner/Workspace memory above disposable
+provider views. Module/context switches clear reader content and timers, preserving
+authored titles/receipts/pending UUIDs and existing reply buffers. The shared signed
+Connections request keeps session abort fences, public error codes and no mutation
+retry. Public catalog types move to a neutral shared file identically to native
+PR120's pending extraction; private Google state remains server-owned.
+
+15 focused scope/request/freshness/source/reply tests pass, root types, affected
+lint, brand generation/check32 and secret732. Read-only source review has no
+findings. Actual390px browser completed retained Personal Mail→reviewedTask→notes→
+OpenJob plan→complete→freshsource→correctlyaddressed saved Reply all in /workspaces.
+A→B→A kept authored title and unsaved reply; refreshed address review retained text
+before saving revision1. B showed no account. Injected additionalTask503 kept one
+UUID/title across switches; explicit confirmation sent the exact same input, yielded
+two total Tasks and cleared pending.65seconds hidden produced zero Mail reads.
+Delayed body could not restore into B. Central Connections disconnect then blocked
+Mail/source while Task/notes/block and saved reply remained; no provider body on
+disk or reply text in public work. Sam was denied admission without Alex content.
+Final390/768/1200 layouts fit with44px Mail buttons. One Playwright check() reported
+before asynchronous completion settled; the observed checkbox and saved fixture
+confirmed completion, with no second click. Expected503/409/403 network faults are
+recorded, with no unexpected JavaScript errors. Evidence: output/playwright/r33-
+workspace-mail/. Own5214/browser stopped after disconnect; fake authored work kept.
+
+Continue Linear project discussion779e97e0-bebf-48ff-9e10-5775355c00a5. This closes
+only the bounded web shell follow-up; R33 live integrated acceptance, full R32 sync,
+provider Calendar/send and native/provider/device/release gates remain. Do not
+repeat the completed standalone real alternate read. Native draft PR120 is at
+927668df5513a9d8d035e3ac302948faa3f6db65 with PR127 included and unchanged build
+inputs; integrate this new main before eventual delivery. Android UI-method answer
+remains pending. Original26 files and existing native proof sessions are preserved.
 
 # P-WLK-6 / R22 — scoped owned Workspace Tasks/Calendar agents
 

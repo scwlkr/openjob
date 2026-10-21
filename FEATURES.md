@@ -18,6 +18,18 @@ HTTP fixtures cover the bounded flow; simulator/emulator, real login/provider an
 physical-device/release evidence are separate gates. The opt-in development entry
 and its invented service are documented in [the simulator guide](docs/NATIVE_SIMULATOR_SMOKE.md).
 
+## Connected Mail inside its Workspace (P-WLK-6 / R20–R33)
+
+The signed-in owner shell has a Mail module showing only accounts assigned to that
+Workspace. Existing folder/search/page, explicit body and freshness controls feed
+source Tasks, local planning/completion and authored replies without leaving the
+shell. Reviewed titles and uncertain request IDs survive module/Workspace switches;
+provider views and hidden polling do not. Connection management stays central.
+Synthetic phone/browser proof covers the full saved-reply journey, pending recovery,
+context/owner isolation and disconnect retention. Integrated live/native acceptance,
+full sync, provider Calendar and sending remain separate.
+[Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#read-mail-inside-a-workspace-p-wlk-6--r20r33).
+
 ## Scoped agents in owned Workspaces (P-WLK-6 / R22)
 
 The owner can issue 24-hour, revocable access to exact Tasks and OpenJob Calendar
