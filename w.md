@@ -1,13 +1,35 @@
 # Current native integration — durable operation main
 
 21 October 2026: draft PR120 integrates PR129/main
-`5b218755605120c4c734aec7f1db6862b077bdc2`. Only FEATURES.md and this handoff
-conflicted; both feature/history records are preserved. This adds the bounded
-fixture-only durable reply service/API/CLI/web surface. Native controls are
-unchanged and do not gain a dispatcher. Exact-source root/native compile and
-actual HTTP boundary checks are next; prior native evidence stays at its recorded
-app inputs. Android UI-method answer and live/provider/device/release gates remain
-open. No additional real read, persistent access, deployment or publication.
+`5b218755605120c4c734aec7f1db6862b077bdc2` at merge source
+`b26fcc01fdc7cfeb73751ea21a18a9291a375ec4`. Only FEATURES.md and this handoff
+conflicted; both feature/history records are preserved. The new main adds the
+bounded fixture Operation/service/API/CLI/web flow. Native files, packages and
+identity configuration are byte-identical to prior native `8c8b4f3`; its controls
+do not gain a dispatcher.
+
+All 750 tracked files at that merge source hash-match a fresh isolated archive.
+Native types and 16 focused actual-native-HTTP/source/reply/operation checks pass,
+including independent and retained Personal homes. Root npm run typecheck passes
+after its normal Cloudflare declaration generation; an initial raw tsc attempt
+failed because the archive had no ignored generated Cloudflare types. Shared
+primary dependencies/sessions were not changed. PR129's 47 focused tests, explicit
+real-send denial and practical browser/CLI proof cover identical operation source;
+no redundant full test suite or native build was run. Secret scan 1085 passes.
+
+Original 26 files hash-match. Of 25 recorded build-source hashes, 23 match; the
+previously extended HTTP regression and shared/connected-reply.ts differ. The
+latter only adds sameReplyPlan, unused by the native client; all functions it
+imports are unchanged. Prior iOS/Android binary/runtime evidence remains at its
+recorded checkpoint, not a new current-hash native build. Existing APK, Metro,
+fixture sessions and simulator evidence are preserved.
+
+PR120 stays Draft. Android UI-method answer, native Mail/agent controls, integrated
+live/native/provider/device acceptance and release/distribution remain open.
+No extra real read, provider effect, persistent access or deployment/publication.
+Receipts: output/r53/r30-main-integration/ and native-integration-receipt.json.
+Continue the existing Linear/roadmap queue; the broader R30/R31 policy/runtime/
+cleanup and live-send gates remain open after its bounded fixture foundation.
 
 # Native integration history — Workspace Mail main
 
