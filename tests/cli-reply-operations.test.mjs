@@ -8,11 +8,18 @@ import { join } from 'node:path';
 import { replyOperationFixture } from './support/reply-operations.mjs';
 import { createWorkspacePilotApplication } from '../server/workspace-pilot-application.ts';
 import { createOpenApiResponseValidator } from './support/openapi-response.mjs';
-async function harness(t) {
+import { createFixtureGmailReplyDispatch } from './support/gmail-reply-transport.mjs';
+import { BINDING } from './support/google-oauth-transport.mjs';
+async function harness(t, protocolOptions) {
   const f = await replyOperationFixture(), directory = await mkdtemp(join(tmpdir(), 'openjob-operation-cli-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const credential = join(directory, 'human-refresh'); await writeFile(credential, 'invented-refresh', { mode: 0o600 });
   const input = join(directory, 'input.json'); await writeFile(input, JSON.stringify(f.input));
-  const api = createWorkspacePilotApplication({ store: f.owned, users: f.users, verifyIdToken: f.verifyIdToken, admission: { userId: f.owner, provider: 'google', firebaseUid: 'alex' }, fixtureOperations: f.service(undefined, { timeoutMs: 5 }) });
+  let gmail;
+  if (protocolOptions) {
+    const { payload } = await f.authority.freeze(f.owner, f.home, f.input);
+    gmail = createFixtureGmailReplyDispatch({ binding: { ownerId: f.owner, workspaceId: f.home, accountId: payload.source.accountId, subject: BINDING.subject, address: BINDING.address }, ...protocolOptions });
+  }
+  const api = createWorkspacePilotApplication({ store: f.owned, users: f.users, verifyIdToken: f.verifyIdToken, admission: { userId: f.owner, provider: 'google', firebaseUid: 'alex' }, fixtureOperations: f.service(undefined, { timeoutMs: gmail ? 100 : 5, ...(gmail ? { dispatch: gmail.dispatch } : {}) }) });
   const requests = [], failures = [], validate = await createOpenApiResponseValidator(); let fault;
   const server = createServer(async (incoming, outgoing) => {
     try {
@@ -30,7 +37,7 @@ async function harness(t) {
     const child = spawn(process.execPath, ['cli/openjob.mjs', 'operation', ...args, '--format', 'json'], { env: { ...process.env, NODE_ENV: 'test', OPENJOB_API_URL: base + '/api/v1', OPENJOB_TEST_AUTH_URL: base, OPENJOB_TEST_FIREBASE_API_KEY: 'fixture', OPENJOB_TEST_GOOGLE_CLIENT_ID: 'fixture.apps.googleusercontent.com', OPENJOB_TEST_CREDENTIAL_FILE: credential }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = ''; child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; }); child.once('error', reject); child.once('close', status => resolve({ status, stdout, stderr }));
   });
-  return { ...f, inputFile: input, run, requests, failures, fault(value) { fault = value; } };
+  return { ...f, gmail, inputFile: input, run, requests, failures, fault(value) { fault = value; } };
 }
 test('actual CLI queues accepted intent, inspects durable history, runs once and validates shared API', async t => {
   const f = await harness(t), scope = ['--workspace', f.home];
@@ -42,6 +49,18 @@ test('actual CLI queues accepted intent, inspects durable history, runs once and
   const shown = await f.run(['show', op.id, ...scope]); assert.equal(shown.status, 0, shown.stderr); assert.doesNotMatch(shown.stdout, /reviewed work|example.invalid|payloadHash/);
   f.fault('extra'); const extra = await f.run(['show', op.id, ...scope]); assert.equal(extra.status, 8); assert.equal(extra.stdout.includes('must not print'), false);
   assert.equal(f.failures.length, 0);
+});
+test('actual CLI crosses fake Gmail protocol, distinguishes confirmed/unknown and never replays accepted lost response', async t => {
+  for (const lost of [false, true]) {
+    const f = await harness(t, { afterAccept: async () => { if (lost) throw new Error('Fake provider response lost after acceptance.'); } }), scope = ['--workspace', f.home];
+    const queued = await f.run(['enqueue', ...scope, '--input', f.inputFile]); assert.equal(queued.status, 0); const op = JSON.parse(queued.stdout).data;
+    const result = await f.run(['run-fixture', op.id, ...scope]); assert.equal(result.status, lost ? 8 : 0, result.stderr);
+    const view = JSON.parse(result.stdout).data; assert.equal(view.state, lost ? 'unknown' : 'confirmed'); assert.equal(view.mode, 'fixture');
+    if (!lost) { assert.equal(view.outcome, 'simulated_accepted'); assert.match(view.receiptId, /^sim_/); }
+    await f.run(['show', op.id, ...scope]); await f.run(['run-fixture', op.id, ...scope]);
+    assert.equal(f.gmail.state().attempts.length, 1); assert.equal(f.gmail.observed[0].body, f.saved.draft.body);
+    assert.doesNotMatch(result.stdout, /example.invalid|invented_gmail_send|payloadHash|reviewed work/); assert.equal(f.failures.length, 0);
+  }
 });
 test('CLI requires explicit Workspace, rejects agent fallback, and reports unknown as non-success', async t => {
   const f = await harness(t), scope = ['--workspace', f.home];
