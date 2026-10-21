@@ -455,3 +455,41 @@ If access/source cannot recover, Stop retrying this request asks for explicit Fo
 a Task may already exist, no saved work is undone, and the reviewed title remains.
 Leaving Connections, reloading or signing out clears this ephemeral authoring state.
 This is fixture/browser proof, not complete sync, live integrated or native acceptance.
+
+## Read Mail inside a Workspace (P-WLK-6 / R20–R33)
+
+21October2026, sourcec4e5f09e7e093714899c98e890f96835101b58e7: the signed-in owner
+pilot has a **Mail** module inside each opened Workspace. Open Mail, then explicitly
+open one of that Workspace's assigned accounts. An account with another fixed
+resource home does not appear. Empty, disconnected, expired and unavailable states
+remain honest; no example messages replace a real empty or blocked account.
+Manage Connections remains the place for setup, consent, refresh and disconnect.
+This adds no provider capability, real-account admission or persistent access.
+
+Use the same folder/search/page controls and explicit Read message action described
+above. Review a title, create/find its source Task, then choose Open created/existing
+Task to stay in `/workspaces`. Save notes, plan and complete it, open its fresh source,
+review the verified Reply/Reply all addresses, and save an authored OpenJob draft.
+No message is sent and planning creates only an OpenJob Calendar block.
+
+In this surface, reviewed titles, receipts and uncertain additional-Task request
+IDs stay in the retained owner/Workspace session through module and Workspace
+switches. Pending Mail Tasks belongs only to that Workspace. Check this Workspace
+opens its Tasks in the same shell; confirm keeps the frozen title and request ID.
+No retry is automatic. Leaving Workspaces, reloading, changing identity or signing
+out clears this memory. This is not durable draft storage; saved Tasks and OpenJob
+replies still use their existing authoritative repositories.
+
+Switching away disposes the Mail reader and its provider metadata/body/timers.
+Returning checks connection status again and requires opening the assigned account.
+Authored reply text survives and requires fresh source/address review before saving
+after a switch. A late Mail response cannot restore another context's view.
+
+Synthetic headed browser proof completed Mail→Task→notes→plan→complete→fresh source→
+saved Reply all without leaving `/workspaces`. It verified A→B→A authoring retention,
+the same uncertain request UUID/title on explicit retry, an empty other Workspace,
+no hidden polling over65seconds, delayed-body suppression, central disconnect and
+denied source reads with Task/block/reply retained, plus second-owner denial.
+Phone390/half768/desktop1200 fit; Mail buttons are at least44px tall. Evidence:
+`output/playwright/r33-workspace-mail/`. This does not close integrated live or
+native acceptance, full sync, provider Calendar or sending.

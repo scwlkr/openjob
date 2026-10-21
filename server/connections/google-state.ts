@@ -1,6 +1,7 @@
 import type { PrivateGoogleGrant, GoogleConsentBinding } from '../providers/google-oauth-adapter.ts';
 import type { ConnectionStatus } from '../../shared/connection-onboarding.ts';
 import { connectionFail } from '../../shared/connection-onboarding.ts';
+export type { GoogleConnectionCatalog } from '../../shared/google-connection-catalog.ts';
 
 export type GooglePending = { stateHash: string; verifier: string; nonce: string; callbackUri: string; clientId: string; expiresAt: number };
 /** PRIVATE atomic envelope. Never store this in ordinary connection metadata. */
@@ -14,12 +15,6 @@ export type GoogleConnection = {
 export type PrivateGoogleConnections = {
   read(owner: string): Promise<GoogleConnection[]>;
   change(owner: string, apply: (rows: GoogleConnection[]) => GoogleConnection[]): Promise<GoogleConnection[]>;
-};
-export type GoogleConnectionCatalog = {
-  mode: 'google' | 'google-fixture';
-  homes: { workspaceId: string; name: string }[];
-  bindings: { id: string; workspaceId: string; address: string; status: ConnectionStatus; operation?: 'exchange' | 'refresh'; expired: boolean }[];
-  mailAvailable: boolean;
 };
 export const uuid = () => crypto.randomUUID().replaceAll('-', '');
 export const validAddress = (value: unknown): value is string => typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
