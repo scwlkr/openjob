@@ -7,7 +7,7 @@ import ConnectedMailTask from './connected-mail-task';
 import styles from '../workspace/workspace.module.css';
 
 type Snapshot = { page: ProviderMessageSummaryPage; window: MailReadWindow; cursor?: string; number: number };
-type Props = { connectionId: string; workspaceId: string; taskDrafts: ConnectedMailDrafts; fixture: boolean; request(path?: string, input?: object): Promise<unknown> };
+type Props = { withinWorkspace?: boolean; onOpenTask?(taskId: string): void; connectionId: string; workspaceId: string; taskDrafts: ConnectedMailDrafts; fixture: boolean; request(path?: string, input?: object): Promise<unknown> };
 async function requestPage(request: Props['request'], connectionId: string, workspaceId: string, cursor: string | undefined, number: number, folder: string, search: string): Promise<Snapshot> {
   const requestedAt = performance.now(), wallRequestedAt = Date.now(), params = new URLSearchParams({ view: 'metadata' });
   if (cursor !== undefined) params.set('cursor', cursor); if (folder) params.set('folderId', folder); if (search) params.set('search', search);
@@ -17,7 +17,7 @@ async function requestPage(request: Props['request'], connectionId: string, work
   if (mailWindowExpired(window, performance.now(), Date.now())) throw new Error('Mail observation expired in transit.');
   return { page: result.page, window, cursor, number };
 }
-export default function ConnectedGoogleMail({ connectionId, workspaceId, taskDrafts, fixture, request }: Props) {
+export default function ConnectedGoogleMail({ connectionId, workspaceId, taskDrafts, fixture, request, withinWorkspace = false, onOpenTask }: Props) {
   const [searchInput, setSearchInput] = useState(''), [search, setSearch] = useState(''), [folder, setFolder] = useState('');
   const [snapshot, setSnapshot] = useState<Snapshot>(), [lastRead, setLastRead] = useState('');
   const [error, setError] = useState(''), [busy, setBusy] = useState(true), [halted, setHalted] = useState(false), [missingFolder, setMissingFolder] = useState(false);
@@ -96,7 +96,7 @@ export default function ConnectedGoogleMail({ connectionId, workspaceId, taskDra
   const paused = !foreground || !online || hasPending || !!opened || !!visible && visible.number !== 1;
   return <section className={styles.panel} aria-label="Connected Mail">
     <h2>{fixture ? 'Invented Mail' : 'Read-only Mail'}</h2>
-    <p>Browse message details, then choose Read message to load its plain text. Reviewed Task titles and requests stay while Connections is open.</p>
+    <p>Browse message details, then choose Read message to load its plain text. Reviewed Task titles and requests stay while {withinWorkspace ? 'this Workspace session' : 'Connections'} is open.</p>
     {lastRead && <p>Last read: <time dateTime={lastRead}>{new Date(lastRead).toLocaleString()}</time>. {visible ? mailWindowStale(visible.window, clock.mono, clock.wall) ? 'These details may be out of date.' : 'Recent observation; access is checked again for each action.' : 'No message details are available.'}</p>}
     <div className={styles.actions}><button disabled={busy} onClick={() => void read(visible?.cursor, visible?.number ?? 1, folder, search, true)}>Refresh Mail</button><label><input type="checkbox" checked={autoRefresh} onChange={event => { automaticWanted.current = event.target.checked; setAutoRefresh(event.target.checked); }} />Keep the first page refreshed</label></div>
     <p>{halted ? 'Automatic refresh stopped. Use Refresh Mail to retry.' : !autoRefresh ? 'Automatic refresh is off.' : paused ? 'Automatic refresh is paused while hidden, offline, reading a message, confirming a Task or viewing a later page.' : 'The visible first page is checked at most once per minute. This is a bounded page read, not a complete mailbox sync.'}</p>
@@ -119,7 +119,7 @@ export default function ConnectedGoogleMail({ connectionId, workspaceId, taskDra
       <h3>{message.subject}</h3><p>From: {message.from || '(Unavailable)'} · To: {message.to || '(Unavailable)'}</p>
       <button disabled={busy || hasPending} aria-expanded={opened?.id === message.id} onClick={() => void open(message)}>{opened?.id === message.id ? 'Close message' : 'Read message'}</button>
       {opened?.id === message.id && <div>{opened.error ? <p role="alert">{opened.error}</p> : opened.body !== undefined ? <><p>Plain text only. HTML, attachments and remote images are not loaded.</p><p className={styles.body}>{opened.body || '(This message has an empty plain-text body.)'}</p></> : <p role="status">Reading message…</p>}</div>}
-      <ConnectedMailTask target={{ connectionId, workspaceId, messageId: message.upstreamId }} defaultTitle={message.subject.slice(0, 500)} drafts={taskDrafts} canUse={canUse} />
+      <ConnectedMailTask target={{ connectionId, workspaceId, messageId: message.upstreamId }} defaultTitle={message.subject.slice(0, 500)} drafts={taskDrafts} canUse={canUse} onOpenTask={onOpenTask} />
     </article>)}</>}
   </section>;
 }

@@ -1,0 +1,4 @@
+.mail { display: grid; gap: 16px; min-width: 0; }
+.mail > section { display: grid; gap: 16px; padding: 16px; min-width: 0; }
+.mail > section > article { display: grid; gap: 10px; min-width: 0; }
+.mailbox { display: grid; gap: 8px; padding: 16px; min-width: 0; }

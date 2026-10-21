@@ -1,5 +1,6 @@
 'use client';
 import GoogleConnections from './google-connections';
+import { requestConnections } from './connection-request';
 import SessionGmail from './session-gmail';
 import { useConnectedMailDrafts } from './connected-mail-drafts';
 import { PendingConnectedMailTasks } from './connected-mail-task';
@@ -17,15 +18,7 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
   const [catalog, setCatalog] = useState<ConnectionCatalog | GoogleConnectionCatalog>(); const [error, setError] = useState('');
   const [choice, setChoice] = useState(''); const [home, setHome] = useState('');
   const [busy, setBusy] = useState(false); const [mail, setMail] = useState<Mail>();
-  const request = useCallback(async (path = '', input?: object) => {
-    signal.throwIfAborted(); const token = await session.getIdToken(); signal.throwIfAborted();
-    const response = await fetch(`/api/v1/connections${path}`, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
-    if (!response.ok) {
-      const value = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code && ['invalid_cursor', 'folder_unavailable', 'search_rejected', 'message_unavailable', 'authentication_required', 'consent_required', 'execution_disabled', 'provider_forbidden', 'mail_view_expired', 'forbidden', 'reconnect_required'].includes(value.error.code) ? value.error.code : 'connection_unavailable' });
-    }
-    return (await response.json() as { data: ConnectionCatalog | GoogleConnectionCatalog | Mail }).data;
-  }, [session, signal]);
+  const request = useCallback((path = '', input?: object) => requestConnections(() => session.getIdToken(), signal, path, input), [session, signal]);
   const taskDrafts = useConnectedMailDrafts(request);
   const refresh = useCallback(async () => { setMail(undefined); try { const value = await request(); if (!signal.aborted) setCatalog(value as ConnectionCatalog | GoogleConnectionCatalog); } catch (error) { if (!signal.aborted) setCatalog(undefined); throw error; } }, [request, signal]);
   const completion = useRef<Promise<unknown> | null>(null);
