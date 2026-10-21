@@ -1,3 +1,51 @@
+# Current native Mail delivery — P-WLK-6 / R32–R53
+
+21 October2026 UTC: source f8830d805d5cdf5d7a669676fe57d5cae462584f is pushed on
+draft PR120, based on main5b21875. This supersedes the pending simulator state in
+the checkpoint below. Native metadata paging/folders/search, explicit transient
+bodies, freshness/Pause and retained exact Task recovery controls are implemented.
+Two read-only review findings were fixed and confirmed resolved. Native types,
+affected lint,14 UI/API tests,12 native HTTP/freshness/Google isolation checks,
+real-send403/no-side-effect, root types, brand32 and secret1090 pass. Original26
+shared files hash-match; dependencies and real-account sessions were preserved.
+
+The exact755-file snapshot (one recorded fixture-port5213→5214 delta) built as
+OpenJobDev / dev.openjob.app.dev / embedded Release on owned OpenJobR53Connected,
+iOS27. Locked npm inputs and all201 Pod entries match; two Pod checksums change
+only absolute paths. Initial deployment-mode Pod install rejected those paths;
+normal no-repo-update install passed. XcodeBuildMCP's first call timed out300s
+while the compiler continued. Its process finished; a subsequent incremental
+build explicitly passed in70.8s with35 warnings/zero errors. The verified artifact
+was reinstalled before UI proof; binary/bundle/plist hashes and logs are recorded.
+
+Actual simulator proof passed: metadata before Read message, body open/close,
+Pause, Next page, submitted search, folder selection and empty result; authored
+title retained across filters/pages. Explicit receipt opened the reviewed Task;
+schedule21October14:00–14:30UTC linked Calendar to that exact Task, then completion
+retained the block. Current source and reviewed Reply all saved54 authored
+characters at revision1. Text survived Calendar navigation/authority refresh;
+stop/relaunch reopened exact body/mode/account/recipients. Disconnecting only the
+invented5214 account made Refresh Mail hide metadata/body and stop auto refresh,
+while retaining the authored title and denying create. Authenticated HTTP confirmed
+saved Task/Calendar/reply, and saved work stayed byte-equal across disconnect.
+
+Device Hub AX setValue corrected ineffective Xcode replacement input; no keyboard
+setting changed. A receipt-script assertion initially used nonexistent plannedStart;
+corrected to scheduledSlot and rerun. These automation mistakes are not app passes.
+Practical evidence, source/fixture manifests and two invented-data screenshots:
+output/r53/r32-native-mail/. Snapshot/build: /var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-native-r32-jkx3l0kk.
+Owned simulator shut down, own5214 service stopped after disconnect, Build Space
+lease60fb2b0fa7739f6dcc186c67 released succeeded. Existing Android5213/Metro8088
+sessions, artifacts and foreign simulator were preserved.
+
+PR120 stays Draft and R53 stays In Progress. Android method answer, native live
+login/provider/device/storage/release gates and full sync remain open. No repeated
+real Mail read, real provider effect, persistent real access, deployment or publication.
+Next bounded slice: native review/revoke of existing independent-Workspace agent
+grants and recent confirmed actions, using delivered R22 contracts; issuance stays
+in CLI. Continue R53 discussion ba6592c3-b3e1-4908-b830-3532ab70aaf4, linked to R22
+266d9fdf-fa1e-4e9d-9d03-7b234821a591 / receipt33d528ea-e2a8-4dfd-9e9f-759a3cba5c2e.
+
 # Native Mail follow-up — P-WLK-6 / R32–R53
 
 21 October 2026: native source checkpoint on the existing draft PR120 branch,

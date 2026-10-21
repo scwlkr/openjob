@@ -23,8 +23,8 @@ that a Task may already exist. No automatic mutation retry or navigation occurs.
 The existing Personal/offline and Groups surfaces remain available. Configure
 provider consent in the existing Connections app. No native consent flow, offline
 Mail, provider Calendar writes or real sending is added. Rendered and loopback
-HTTP fixtures cover the bounded flow; simulator/emulator, real login/provider and
-physical-device/release evidence are separate gates. The opt-in development entry
+HTTP fixtures and the iOS development simulator cover the bounded flow. Android UI,
+real login/provider and physical-device/release evidence remain separate gates. The opt-in development entry
 and its invented service are documented in [the simulator guide](docs/NATIVE_SIMULATOR_SMOKE.md).
 
 ## Durable frozen reply simulations (P-WLK-6 / R30)

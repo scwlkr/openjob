@@ -33,6 +33,15 @@ This composition has no provider Calendar or sending. Native consent remains in
 the existing Connections app; the fixture does not prove real native login,
 provider consent, device encryption or release acceptance.
 
+The connected reader browses metadata-only pages with First/Next, a bounded Gmail
+folder picker and submitted search. Read message fetches one plain-text body;
+Close, navigation, background, offline and expiry discard provider details. Last
+read/stale state and Pause expose the bounded visible-first-page refresh. Recover
+manually after access failure. Reviewed Task titles and uncertain request inputs
+stay in Workspace memory separately from that disposable reader. Retry keeps the
+exact request; two-step Stop retrying warns that a Task may exist and preserves
+the title and previous receipt. This is not full mailbox/history sync.
+
 Before a heavy phase, coordinate the shared Mac lane and reserve headroom with
 Build Space. Use a fresh exact Git source snapshot under `/tmp`, outside synchronized
 Desktop/Documents paths. Install `native` dependencies with `npm ci` from the
