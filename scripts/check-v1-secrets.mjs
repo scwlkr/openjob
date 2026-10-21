@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const secretPatterns = [
+  ["OpenJob agent credential", /\boj_(?:agent_agt_[a-f0-9]{32}|personal_[A-Za-z0-9_-]{1,128}\.agt_[a-f0-9]{32}|workspace_wsp_[a-f0-9]{32}\.agt_[a-f0-9]{32})\.[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/],
   [
     "private key",
     /-----BEGIN (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----\s+(?:[A-Za-z0-9+/=]\s*){40,}-----END (?:DSA |EC |ENCRYPTED |OPENSSH |RSA )?PRIVATE KEY-----/,

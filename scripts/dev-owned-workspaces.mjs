@@ -95,7 +95,7 @@ try {
         const chunks = []; let length = 0; for await (const chunk of incoming) { length += chunk.length; if (length > 250000) { outgoing.writeHead(413); outgoing.end(); return; } chunks.push(chunk); }
         const before = db.exportState(); const request = new Request(url, { method: incoming.method, headers: incoming.headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
         const response = await (url.pathname.startsWith('/api/v1/connections') ? connectionsApi : url.pathname.startsWith('/api/v1/workspaces') ? pilot : url.pathname.startsWith('/api/v1/workspace/') ? personalApi : api).fetch(request);
-        if (incoming.method === 'POST' && (response.ok || url.pathname.startsWith('/api/v1/connections'))) { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
+        if (['POST', 'DELETE'].includes(incoming.method) && (response.ok || url.pathname.startsWith('/api/v1/connections'))) { try { await persist(); } catch { db.restoreState(before); throw new Error('Save failed.'); } }
         outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()));
       } catch { outgoing.writeHead(500, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: { code: 'fixture_unavailable' } })); }
     };

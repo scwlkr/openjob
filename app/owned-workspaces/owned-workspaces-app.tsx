@@ -10,9 +10,10 @@ import WorkspaceTasks, { type WorkspaceTasksHandle } from '../workspace/workspac
 import WorkspaceCalendar, { type WorkspaceCalendarHandle } from '../workspace/workspace-calendar';
 import WorkspaceToday from '../workspace/workspace-today';
 import styles from '../workspace/workspace.module.css';
+import WorkspaceAgents from './workspace-agents';
 import ConnectedTaskSource from '../connections/connected-task-source';
 
-type Request = (path?: string, input?: unknown) => Promise<unknown>;
+type Request = (path?: string, input?: unknown, method?: 'DELETE') => Promise<unknown>;
 export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/api/owned-workspaces", mode = "fixture" }: { ownerUserId: string; getToken: () => Promise<string>; apiBase?: string; mode?: "fixture" | "pilot" }) {
   const [catalog, setCatalog] = useState<OwnedWorkspace[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
@@ -22,9 +23,9 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
   const [eligibility, setEligibility] = useState('Real onboarding unavailable. Identity eligibility policy is pending.');
   const [name, setName] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const lease = useRef(new AbortController());
-  const request: Request = useCallback(async (path = '', input) => {
+  const request: Request = useCallback(async (path = '', input, method) => {
     const signal = lease.current.signal; signal.throwIfAborted(); const token = await getToken(); signal.throwIfAborted();
-    const response = await fetch(`${apiBase}${path}`, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
+    const response = await fetch(`${apiBase}${path}`, { method: method ?? (input ? 'POST' : 'GET'), headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
     const raw = await response.text(); signal.throwIfAborted();
     if (!response.ok || raw.length > 1000000) throw new Error('Workspace unavailable. Refresh to inspect saved work before retrying.');
     const body = JSON.parse(raw); if (!body || !('data' in body)) throw new Error('Workspace unavailable.'); return body.data;
@@ -72,7 +73,7 @@ export default function OwnedWorkspacesApp({ ownerUserId, getToken, apiBase = "/
   }
   return <div className={styles.workspace}>
     <header className={styles.header}><OpenJobBrand /><strong>{mode === "fixture" ? "Independent Workspaces · fixture pilot" : "Workspaces · owner pilot"}</strong></header>
-    <p className={styles.banner}>{mode === "fixture" ? "Synthetic identity and local test database. No real accounts or providers are connected." : "Limited owner pilot using your existing OpenJob identity. Configured Mail is available through Connections."} Each Workspace has its own Tasks and Calendar. Invitations and agent grants are unavailable. Retained Personal work stays in its existing authority.</p>
+    <p className={styles.banner}>{mode === "fixture" ? "Synthetic identity and local test database. No real accounts or providers are connected." : "Limited owner pilot using your existing OpenJob identity. Configured Mail is available through Connections."} Each Workspace has its own Tasks and Calendar. Invitations are unavailable. Independent Workspace agent grants cover Tasks and Calendar. Retained Personal work stays in its existing authority.</p>
     <p className={styles.banner} role="status">{mode === "fixture" ? eligibility + " This fixture cannot grant real-account access." : "Limited admission is not a classification of independent personal control or a guarantee of employer isolation."}</p>
     <div className={styles.layout}><aside className={styles.sidebar}>
       <button disabled={busy} aria-current={!selected ? "page" : undefined} onClick={() => choose({ workspaceId: '' })}>Home</button>
@@ -132,9 +133,10 @@ function WorkspaceSession({ workspace, active, request, setBusy, navigation, onN
   const openTab = (name: string) => { onNavigate({ workspaceId: workspace.workspaceId }); setTab(name); };
   const missingTarget = ready && !!target && !!snapshot && !(target.kind === 'task' ? snapshot.work.tasks : snapshot.work.events).some(item => item.id === target.id);
   return <section hidden={!active} aria-label={`Workspace ${workspace.name}`}><h1>{workspace.name}</h1><button disabled={busy} onClick={refreshWork}>Refresh work</button><p>Owner-only Workspace · online. Work and unfinished editors stay in this context when switching.</p>
-    <nav className={styles.folders} aria-label="Workspace modules">{['Today', 'Tasks', 'Calendar'].map(name => <button key={name} disabled={busy} aria-current={currentTab === name ? 'page' : undefined} onClick={() => openTab(name)}>{name}</button>)}</nav>
+    <nav className={styles.folders} aria-label="Workspace modules">{['Today', 'Tasks', 'Calendar', 'Agents'].map(name => <button key={name} disabled={busy} aria-current={currentTab === name ? 'page' : undefined} onClick={() => openTab(name)}>{name}</button>)}</nav>
     {active && !ready && !error && <p role="status">Loading Workspace…</p>}{missingTarget && <p role="alert" className={styles.error}>Unavailable in this context.</p>}
 {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.success}>{notice}</p>}
+    {active && ready && currentTab === 'Agents' && <WorkspaceAgents key={workspace.workspaceId} workspace={workspace} request={request} onOpenItem={item => onNavigate({ workspaceId: workspace.workspaceId, item })} />}
     {view && <><div hidden={!active || !ready || currentTab !== 'Today'}><WorkspaceToday contextName={workspace.name} view={view} busy={busy} onOpenTask={openTask} onOpenEvent={id => { if (calendar.current?.openEvent(id)) onNavigate({ workspaceId: workspace.workspaceId, item: { kind: 'block', id } }); }} onTasks={() => openTab('Tasks')} onCalendar={() => openTab('Calendar')} /></div>
     <WorkspaceTasks view={view} busy={busy} command={command} onSaveNotes={(taskId, notes, expectedNotes) => command({ type: 'task.notes', taskId, notes }, 'Task notes saved', expectedNotes)} active={active && ready && currentTab === 'Tasks'} ref={tasks} connectedSource={getToken ? taskId => <ConnectedTaskSource key={taskId} workspaceId={workspace.workspaceId} taskId={taskId} getToken={getToken} buffer={replyBuffers[taskId]} onBuffer={buffer => setReplyBuffers(current => { const next = { ...current }; if (buffer) next[taskId] = buffer; else delete next[taskId]; return next; })} /> : undefined} />
     <WorkspaceCalendar ref={calendar} view={view} busy={busy} command={command} active={active && ready && currentTab === 'Calendar'} onOpenTask={source => openTask(source.taskId)} /></>}

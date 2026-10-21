@@ -2,6 +2,7 @@ import { CliError } from "./errors.mjs";
 
 const VALUE_OPTIONS = new Set([
   "--agent-token-file",
+  "--workspace",
   "--account",
   "--cursor",
   "--folder",

@@ -33,6 +33,12 @@ export function createWorkspaceContextStore({ owned, personal, contexts }: { own
   };
   return {
     ...connected,
+    // Independent Workspace grants never adapt retained Personal credentials/resources.
+    createAgent: owned.createAgent,
+    listAgents: owned.listAgents,
+    revokeAgent: owned.revokeAgent,
+    snapshotForAgent: owned.snapshotForAgent,
+    commandForAgent: owned.commandForAgent,
     async list(owner: string) { const items = await owned.list(owner); const context = await contexts.find(owner); return context ? [context, ...items] : items; },
     create: owned.create,
     async createMailTask(owner: string, title: string, source: MailTaskReference, current: () => Promise<void>) {

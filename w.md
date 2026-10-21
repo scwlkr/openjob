@@ -1,4 +1,35 @@
-# Current native integration and source delivery checkpoint
+# Current native integration — owned Workspace agent main
+
+21October01:27UTC: draft PR120 integrates PR127/main4263b46bab3564f1369dce829b40d30eae1dbb95
+(R22 source7b59ba0414d8a9378c65d56486ff1cb7d40c68b9, reviewed head
+aee7f4f439168429404d27ba70bf476e61f3beaf). Only FEATURES.md and this handoff
+conflicted; both feature/history records are preserved. Native runtime/package/
+identity bytes remain unchanged. Human connected snapshots retain their shape;
+new agent sidecars remain private and survive native/human edits.
+
+The exact734 tracked source files were hash-verified in the existing isolated
+proof directory openjob-native-current-main-iv1yv0rr. Root/native types and17
+focused native actual-HTTP, Task-source/reply and agent isolation/race/sidecar
+checks pass there. The native HTTP flow covers both independent and retained
+Personal homes, including provider401 reconnect409 and retained saved drafts.
+OpenAPI43/60, generated CLI types, brand32 and secret1069 pass. Primary native
+types pass too; primary root types/tests failed on missing imports because its
+existing node_modules lacks google-auth-library/email-addresses. No root install
+or shared dependency/session change was made. The isolated pass uses the exact
+merged source rather than treating that dependency failure as a pass.
+
+All24 recorded app runtime/package/identity input hashes and original26 shared
+files still match. Only the recorded HTTP test differs from the original build
+manifest, as documented previously. Existing iOS fixture proof and Android APK
+remain evidence at their recorded unchanged app inputs; no Android UI pass is
+inferred. PR120 remains Draft pending Android UI-method answer and its separate
+live native/provider/device/release gates. Native agent controls and R32 native
+search/paging/lazy/freshness controls remain unavailable. R22's bounded owner
+Tasks/Calendar milestone is delivered; its broader policy/Mail acceptance remains
+In Progress. Exact PR head/receipt and next action are recorded in Linear R53.
+No further real read, provider effect, persistent access, deployment or release.
+
+# Native integration checkpoint — PR126 history
 
 21October00:44UTC: PR126 merged as4eb212f65cadc3d7190305e755bba60a4ab10303
 (source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65, head
@@ -17,6 +48,48 @@ Next source implementation is the accepted owner-only Tasks/Calendar agent-grant
 slice in Linear R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591. Its initial empty
 branch was made from7dc3d02; integrate current main before implementation. Keep
 Personal/Groups grants independent and Mail delegation unavailable.
+
+# P-WLK-6 / R22 — scoped owned Workspace Tasks/Calendar agents
+
+21October01:20UTC: source7b59ba0414d8a9378c65d56486ff1cb7d40c68b9 follows merged
+PR126/main4eb212f65cadc3d7190305e755bba60a4ab10303. The previously empty R22 branch
+now implements exact owned Workspace Tasks/Calendar grants through shared API,
+existing CLI and the Workspace Agents UI. Human owners issue24-hour credentials
+into a new private0600 file; service stores only a hash. Agents receive filtered
+read families and minimal write receipts, with no human-session fallback. Current
+owner/sponsor, grant/expiry/hash and exact resources/operations fence each call;
+same-document CAS and active-User fences prevent stale writes beating revocation.
+Linked Task/Calendar mutations require both writes. Normal runtime stays disabled
+without existing explicit pilot admission; no real access was activated.
+
+The UI reviews exact scopes/resources/expiry/revocation and200 bounded confirmed
+actions, linking retained Tasks/blocks. A failed revoke clears stale metadata and
+requires explicit refresh. Mail/source/reply sidecars survive human and agent work.
+Mail delegation, administration, Home/catalog and availability planning are denied
+to these credentials. Source review found one authorization-annotation mismatch,
+fixed before delivery; final review reported no findings. The secret scanner now
+rejects all three agent credential formats without printing them; two old fake
+credential-shaped response examples were removed while preserving their schemas.
+
+36 focused domain/API/CLI/secret tests pass, plus final root types, affected lint,
+OpenAPI43paths/60operations, generated CLI types and brand generation/check32.
+Actual CLI + headed browser proof used only synthetic Alex/Sam: created Task,
+notes and planning; created a Calendar-only block; followed exact work links;
+injected revoke503, explicitly recovered and revoked. After restarting the same
+saved fixture, the revoked credential returned401, an independent Family grant
+still returned200, Calendar-only reads excluded Tasks/notes/Task IDs, and its Tasks
+CLI was denied. Sam saw neither Workspace. Width390/768/1200 fits; action targets
+are44px. Evidence: output/playwright/r22-agents/. Own5214 fixture/browser stopped;
+all synthetic grants revoked/private token files removed, authored fixture work
+retained. Original26 untracked files hash-match; native PR120/builds/sessions intact.
+
+Usage: docs/WORKSPACE_AGENTS.md. Continue existing Linear R22 discussion266d9fdf-
+fa1e-4e9d-9d03-7b234821a591. This closes only its bounded Tasks/Calendar owner-pilot
+milestone; Mailbox-set delegation, multi-person sponsoring rights/lifecycle,
+broader policy, native controls and integrated live acceptance remain. R53's
+Android UI-method answer is still pending. Native PR120 needs this new main
+integrated before eventual delivery; no device/live/release claim follows from
+web checks. Do not repeat the completed standalone real alternate Gmail read.
 
 # P-WLK-6 — Mail reconnect preserves OpenJob authentication
 
