@@ -11,7 +11,7 @@ type Options = Omit<Parameters<typeof createWorkspacePilotApplication>[0], 'stor
   transport?: typeof fetch;
 };
 /** Both normal runtimes call this without admission. Later owner-assisted setup must select it explicitly. */
-export function createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, admission, fixtureOperations, transport = fetch }: Options) {
+export function createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, admission, fixtureOperations, fixtureCalendar, transport = fetch }: Options) {
   const store = createWorkspaceContextStore({ owned: createOwnedWorkspaceStore(config, transport), personal, contexts: createPersonalWorkspaceContextStore(config, transport) });
-  return createWorkspacePilotApplication({ store, users, verifyIdToken, admission, fixtureOperations });
+  return createWorkspacePilotApplication({ store, users, verifyIdToken, admission, fixtureOperations, fixtureCalendar });
 }

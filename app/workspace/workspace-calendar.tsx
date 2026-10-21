@@ -9,7 +9,7 @@ import { linkedTask, type CalendarTaskSource } from "./workspace-links";
 
 type CalendarMode = "Agenda" | "Day" | "Week";
 export type WorkspaceCalendarHandle = { openEvent: (id: string) => boolean };
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; active?: boolean; onOpenTask?: (source: CalendarTaskSource) => void; ref?: Ref<WorkspaceCalendarHandle> };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, success: string) => Promise<boolean>; active?: boolean; onOpenTask?: (source: CalendarTaskSource) => void; ref?: Ref<WorkspaceCalendarHandle>; providerTaskIds?: string[] };
 const dayKey = (date: Date) => date.toISOString().slice(0, 10);
 const asDate = (value: string) => new Date(`${value}T00:00:00Z`);
 const shift = (value: string, days: number) => { const next = asDate(value); next.setUTCDate(next.getUTCDate() + days); return dayKey(next); };
@@ -17,7 +17,7 @@ const formatDay = (value: string) => asDate(value).toLocaleDateString("en-US", {
 const formatTime = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 const iso = (value: string) => new Date(`${value}:00Z`).toISOString();
 
-export default function WorkspaceCalendar({ view, busy, command, active = true, onOpenTask, ref }: Props) {
+export default function WorkspaceCalendar({ view, busy, command, active = true, onOpenTask, ref, providerTaskIds }: Props) {
   const [mode, setMode] = useState<CalendarMode>("Agenda");
   const [selectedDate, setSelectedDate] = useState(() => dayKey(new Date()));
   const [filter, setFilter] = useState("");
@@ -71,7 +71,7 @@ export default function WorkspaceCalendar({ view, busy, command, active = true, 
 
   if (!active) return null;
   return <>
-    <WorkspaceFindTime view={view} busy={busy} command={command} />
+    <WorkspaceFindTime view={view} busy={busy} command={command} providerTaskIds={providerTaskIds} />
     <section className={`${styles.panel} ${calendarStyles.toolbar}`} aria-label="Calendar navigation">
       <div className={calendarStyles.controls}><div role="group" aria-label="Calendar view">{(["Agenda", "Day", "Week"] as CalendarMode[]).map(value => <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>{value}</button>)}</div>
         <label>Show calendar<select aria-label="Show calendar" value={filter} onChange={event => setFilter(event.target.value)}><option value="">All calendars</option>{view.calendars.map(calendar => <option key={calendar.id} value={calendar.id}>{calendar.name}</option>)}</select></label>

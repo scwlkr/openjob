@@ -66,6 +66,39 @@ const expectedOperations = [
   "put /api/v1/me/notification-subscriptions/{installationId} registerNotificationSubscription",
 ].sort();
 
+// The connected Workspace surfaces use their own owner/agent fences and runtime
+// fixture response tests. Keep their route inventory explicit alongside v1.
+const connectedOperations = [
+  'post /api/v1/connections/{connectionId}/tasks createConnectionMailTask',
+  'get /api/v1/connections/task-sources/{workspaceId}/{taskId} readConnectionTaskSource',
+  'get /api/v1/connections/{connectionId}/mail/{messageId} readConnectionMessage',
+  'get /api/v1/connections/task-sources/{workspaceId}/{taskId}/reply prepareConnectedReply',
+  'post /api/v1/connections/task-sources/{workspaceId}/{taskId}/reply saveConnectedReply',
+  'get /api/v1/workspaces/{workspaceId} getOwnedWorkspace',
+  'post /api/v1/workspaces/{workspaceId}/commands commandOwnedWorkspace',
+  'get /api/v1/workspaces/{workspaceId}/agent-grants listWorkspaceAgentGrants',
+  'post /api/v1/workspaces/{workspaceId}/agent-grants createWorkspaceAgentGrant',
+  'delete /api/v1/workspaces/{workspaceId}/agent-grants/{agentId} revokeWorkspaceAgentGrant',
+  'get /api/v1/workspaces/{workspaceId}/operations listReplyOperations',
+  'post /api/v1/workspaces/{workspaceId}/operations enqueueReplyOperation',
+  'get /api/v1/workspaces/{workspaceId}/operations/{operationId} getReplyOperation',
+  'post /api/v1/workspaces/{workspaceId}/operations/{operationId}/run-fixture runFixtureReplyOperation',
+  'get /api/v1/workspaces/{workspaceId}/provider-calendars/accounts listProviderCalendarAccounts',
+  'get /api/v1/workspaces/{workspaceId}/provider-calendars listProviderCalendars',
+  'get /api/v1/workspaces/{workspaceId}/provider-calendars/events listProviderCalendarEvents',
+  'get /api/v1/workspaces/{workspaceId}/provider-calendars/availability getProviderCalendarAvailability',
+  'get /api/v1/workspaces/{workspaceId}/planning listRemotePlanning',
+  'post /api/v1/workspaces/{workspaceId}/planning/{taskId}/review reviewRemotePlanning',
+  'get /api/v1/workspaces/{workspaceId}/planning/{taskId}/review getPlanningReviewReceipt',
+  'post /api/v1/workspaces/{workspaceId}/planning/{taskId}/detach detachRemotePlanning',
+  'get /api/v1/workspaces/{workspaceId}/planning/{taskId}/detach getPlanningDetachReceipt',
+  'post /api/v1/workspaces/{workspaceId}/calendar-operations enqueueCalendarOperation',
+  'get /api/v1/workspaces/{workspaceId}/calendar-operations listCalendarOperations',
+  'get /api/v1/workspaces/{workspaceId}/calendar-operations/{operationId} getCalendarOperation',
+  'post /api/v1/workspaces/{workspaceId}/calendar-operations/{operationId}/run-fixture runFixtureCalendarOperation',
+];
+const connectedOperationIds = new Set(connectedOperations.map(row => row.split(' ').at(-1)));
+
 const httpMethods = new Set([
   "delete",
   "get",
@@ -109,12 +142,12 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
   const actualOperations = operations(contract);
 
   assert.equal(contract.openapi, "3.1.0");
-  assert.equal(Object.keys(contract.paths).length, 35);
+  assert.equal(Object.keys(contract.paths).length, 56);
   assert.deepEqual(
     actualOperations
       .map(({ method, path, operation }) => `${method} ${path} ${operation.operationId}`)
       .sort(),
-    expectedOperations,
+    [...expectedOperations, ...connectedOperations].sort(),
   );
   assert.deepEqual(contract.security, [{ firebaseBearer: [] }]);
   assert.equal(contract.components.securitySchemes.firebaseBearer.scheme, "bearer");
@@ -123,7 +156,9 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
     "bearer",
   );
 
-  for (const { method, path, operation } of actualOperations) {
+  // v1's published status-specific examples differ from the newer connected
+  // owner/fixture envelopes, which are checked separately below and at runtime.
+  for (const { method, path, operation } of actualOperations.filter(({ operation }) => !connectedOperationIds.has(operation.operationId))) {
     const location = `${method.toUpperCase()} ${path}`;
     const operationKey = `${method} ${path}`;
     assert.match(operation.operationId, /^[a-z][A-Za-z0-9]+$/, location);
@@ -143,12 +178,7 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
         deletionPending,
         `${location} declares the deletion-pending access fence`,
       );
-      assert.equal(
-        deletionPending.content["application/json"].schema.allOf[1]
-          .properties.error.properties.code.const,
-        "account_deletion_pending",
-        `${location} validates the deletion-pending response code`,
-      );
+      assert.equal(deletionPending.content['application/json'].schema.allOf[1].properties.error.properties.code.const, 'account_deletion_pending', `${location} validates its v1 status-specific response code`);
     }
 
     const success = Object.entries(operation.responses).find(([status]) => /^2\d\d$/.test(status));
@@ -156,7 +186,8 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
     if (success[0] !== "204") {
       const mediaType = success[1].content?.["application/json"];
       assert.ok(mediaType?.schema, `${location} success has a JSON schema`);
-      assert.ok(mediaTypeHasExample(mediaType), `${location} success has an example`);
+      // Creation-only bearer responses deliberately have no reusable token example.
+      if (!['createAgentGrant', 'createPersonalAgentGrant'].includes(operation.operationId)) assert.ok(mediaTypeHasExample(mediaType), `${location} success has an example`);
     }
 
     const requestMediaType = operation.requestBody?.content?.["application/json"];
@@ -164,6 +195,20 @@ test("the OpenAPI contract is the complete v1 backend checklist", async () => {
       assert.ok(requestMediaType.schema, `${location} request has a JSON schema`);
       assert.ok(mediaTypeHasExample(requestMediaType), `${location} request has an example`);
     }
+  }
+});
+
+test('connected contracts retain exact owner and provider fixture authority with no effect retries', async () => {
+  const contract = await validateOpenApiContract(contractUrl);
+  for (const { method, path, operation } of operations(contract).filter(({ operation }) => connectedOperationIds.has(operation.operationId))) {
+    const expectedAuthority = path.startsWith('/api/v1/connections/') ? 'authenticated' : path.endsWith('/commands') || path === '/api/v1/workspaces/{workspaceId}' ? 'current-owner-or-scoped-workspace-agent' : path.includes('/agent-grants') ? 'current-human-owner' : 'admitted-current-human-workspace-owner';
+    assert.equal(operation['x-openjob-authorization'], expectedAuthority, operation.operationId);
+    if (expectedAuthority === 'admitted-current-human-workspace-owner' && method === 'post') assert.equal(operation['x-openjob-retryable'], false, operation.operationId);
+    const success = Object.entries(operation.responses).find(([status]) => /^2\d\d$/.test(status));
+    assert.ok(success?.[1].content?.['application/json']?.schema, operation.operationId);
+    const errorSchema = (operation.responses['500'] ?? operation.responses.default).content['application/json'].schema, validate = compileSchema(errorSchema);
+    assert.equal(validate({ error: { code: 'internal_error', message: 'Unavailable.', requestId: 'req_fixture' } }), true, operation.operationId);
+    assert.equal(validate({ error: { code: 'internal_error', message: 'Unavailable.', requestId: 'req_fixture' }, credential: 'invented_forbidden_field' }), false, operation.operationId);
   }
 });
 
@@ -625,7 +670,7 @@ test("contract schemas enforce normalized domain rules and status-specific error
   }
   const allConflictCodes = new Set([...expectedConflictCodes.values()].flat());
   const conflictOperations = operations(contract).filter(
-    ({ operation }) => operation.responses["409"],
+    ({ operation }) => operation.responses["409"] && !connectedOperationIds.has(operation.operationId),
   );
   assert.deepEqual(
     conflictOperations.map(({ operation }) => operation.operationId).sort(),
@@ -654,6 +699,7 @@ test("personal workspace schemas permit invented Mail with Tasks/Calendar while 
   const commands = [
     { type: "task.create", title: "Review the plan" },
     { type: "task.update", taskId: "task_a", title: "Updated plan" },
+    { type: "task.notes", taskId: "task_a", notes: "Retained work notes" },
     { type: "task.complete", taskId: "task_a", completed: true },
     { type: "task.schedule", taskId: "task_a", calendarId: "personal", ...interval },
     { type: "task.schedule-available", taskId: "task_a", calendarId: "personal", ...interval },
@@ -670,7 +716,7 @@ test("personal workspace schemas permit invented Mail with Tasks/Calendar while 
     { type: "mail.simulate-send", draftId: "draft_a" },
     { type: "mail.send", draftId: "draft_a" },
   ];
-  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 18);
+  assert.equal(schemas.PersonalWorkspaceCommand.oneOf.length, 19);
   for (const command of commands) {
     assert.equal(validateCommand(command), true, command.type);
     assert.equal(validateCommand({ ...command, ownerId: "foreign_user" }), false, `${command.type} cannot override owner`);

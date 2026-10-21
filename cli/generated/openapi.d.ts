@@ -1253,6 +1253,242 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/provider-calendars/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Discover owned configured Calendar accounts without resolving provider credentials
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["listProviderCalendarAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/provider-calendars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List selected account Calendars
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["listProviderCalendars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/provider-calendars/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one Calendar with provider-expanded occurrences
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["listProviderCalendarEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/provider-calendars/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read bounded busy intervals without event details
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["getProviderCalendarAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/planning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect owned Task provider planning relationships
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["listRemotePlanning"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/planning/{taskId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect a persisted provider review receipt without repeating its read
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["getPlanningReviewReceipt"];
+        put?: never;
+        /**
+         * Explicitly reconcile a terminal operation by current provider read
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        post: operations["reviewRemotePlanning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/planning/{taskId}/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect exact persisted local detach receipt
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["getPlanningDetachReceipt"];
+        put?: never;
+        /**
+         * Detach a reviewed relationship, leaving the provider event untouched
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        post: operations["detachRemotePlanning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/calendar-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect redacted durable Calendar operation history
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["listCalendarOperations"];
+        put?: never;
+        /**
+         * Accept immutable reviewed Calendar intent and reserve its Task
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        post: operations["enqueueCalendarOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/calendar-operations/{operationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Inspect one durable Calendar operation
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        get: operations["getCalendarOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/calendar-operations/{operationId}/run-fixture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one leased invented Calendar effect
+         * @description Only the explicit invented Google Calendar fixture composes this service. Normal/portable runtimes remain disabled. Current admitted human and Workspace ownership are required; agents and local Calendar grants confer no provider rights. Provider reads expire and do not reserve time. External intent is frozen and executes at most once; unknown results require explicit review, never automatic replay.
+         */
+        post: operations["runFixtureCalendarOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2650,6 +2886,281 @@ export interface components {
                 requestId: string;
             };
         };
+        ProviderCalendarAccount: {
+            accountId: string;
+            connectionId: string;
+            label: string;
+            available: boolean;
+        };
+        ProviderTimedPoint: {
+            /** @constant */
+            kind: "timed";
+            /** Format: date-time */
+            at: string;
+            timeZone: string;
+        };
+        ProviderAllDayPoint: {
+            /** @constant */
+            kind: "all-day";
+            /** Format: date */
+            date: string;
+            timeZone: string;
+        };
+        ProviderCalendarSpan: {
+            start: components["schemas"]["ProviderTimedPoint"];
+            end: components["schemas"]["ProviderTimedPoint"];
+        } | {
+            start: components["schemas"]["ProviderAllDayPoint"];
+            end: components["schemas"]["ProviderAllDayPoint"];
+        };
+        ProviderTimedSpan: {
+            start: components["schemas"]["ProviderTimedPoint"];
+            end: components["schemas"]["ProviderTimedPoint"];
+        };
+        ProviderCalendar: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            name: string;
+            timeZone: string;
+            /** @enum {string} */
+            access: "busy" | "reader" | "writer" | "writer-limited" | "owner";
+        };
+        ProviderCalendarEvent: {
+            id: string;
+            accountId: string;
+            calendarId: string;
+            upstreamId: string;
+            etag: string;
+            title: string;
+            span: components["schemas"]["ProviderCalendarSpan"] | {
+                start: components["schemas"]["ProviderTimedPoint"] | components["schemas"]["ProviderAllDayPoint"];
+                end: null;
+            };
+            /** @enum {string} */
+            transparency: "opaque" | "transparent";
+            occurrence: {
+                seriesId: string;
+                originalStart: components["schemas"]["ProviderTimedPoint"] | components["schemas"]["ProviderAllDayPoint"];
+            } | null;
+            hasAttendees: boolean;
+        };
+        ProviderCalendarPage: {
+            calendars: components["schemas"]["ProviderCalendar"][];
+            nextCursor: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ProviderEventPage: {
+            calendar: components["schemas"]["ProviderCalendar"];
+            events: components["schemas"]["ProviderCalendarEvent"][];
+            nextCursor: string | null;
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ProviderCalendarAvailability: {
+            calendarId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            busy: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            }[];
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        RemotePlanningLink: {
+            /** @constant */
+            targetKind: "provider";
+            taskId: string;
+            calendarId: string;
+            eventId: string;
+            operationId: string;
+            /** @enum {string} */
+            state: "reserved" | "linked" | "unknown" | "review_required";
+            confirmed: components["schemas"]["ProviderPlanningBlock"] | null;
+        };
+        ProviderPlanningBlock: {
+            eventId: string;
+            etag: string;
+            title: string;
+            span: components["schemas"]["ProviderTimedSpan"];
+        };
+        CalendarPlanInput: {
+            /** @constant */
+            action: "calendar.create";
+            taskId: string;
+            /** Format: uuid */
+            requestId: string;
+            accountId: string;
+            calendarId: string;
+            title: string;
+            span: components["schemas"]["ProviderTimedSpan"];
+        } | {
+            /** @constant */
+            action: "calendar.update";
+            taskId: string;
+            /** Format: uuid */
+            requestId: string;
+            etag: string;
+            title: string;
+            span: components["schemas"]["ProviderTimedSpan"];
+        } | {
+            /** @constant */
+            action: "calendar.delete";
+            taskId: string;
+            /** Format: uuid */
+            requestId: string;
+            etag: string;
+        };
+        CalendarPlanOperation: {
+            id: string;
+            workspaceId: string;
+            taskId: string;
+            /** @enum {string} */
+            action: "calendar.create" | "calendar.update" | "calendar.delete";
+            /** Format: uuid */
+            requestId: string;
+            calendarId: string;
+            eventId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dispatchBefore: string;
+            /** Format: date-time */
+            receiptExpiresAt: string;
+            /** @constant */
+            mode: "fixture";
+            receiptExpired: boolean;
+            /** @enum {string} */
+            state: "queued" | "executing";
+            receipt: null;
+        } | {
+            id: string;
+            workspaceId: string;
+            taskId: string;
+            /** @enum {string} */
+            action: "calendar.create" | "calendar.update" | "calendar.delete";
+            /** Format: uuid */
+            requestId: string;
+            calendarId: string;
+            eventId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dispatchBefore: string;
+            /** Format: date-time */
+            receiptExpiresAt: string;
+            /** @constant */
+            mode: "fixture";
+            receiptExpired: boolean;
+            /** @constant */
+            state: "confirmed";
+            /** @constant */
+            outcome: "provider_accepted";
+            receipt: {
+                eventId: string;
+                etag: string;
+            } | {
+                /** @constant */
+                deleted: true;
+            };
+        } | {
+            id: string;
+            workspaceId: string;
+            taskId: string;
+            /** @enum {string} */
+            action: "calendar.create" | "calendar.update" | "calendar.delete";
+            /** Format: uuid */
+            requestId: string;
+            calendarId: string;
+            eventId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dispatchBefore: string;
+            /** Format: date-time */
+            receiptExpiresAt: string;
+            /** @constant */
+            mode: "fixture";
+            receiptExpired: boolean;
+            /** @constant */
+            state: "rejected";
+            /** @enum {string} */
+            outcome: "provider_rejected" | "provider_conflict" | "unsupported_event" | "authority_changed" | "payload_invalid" | "intent_expired";
+            receipt: null;
+        } | {
+            id: string;
+            workspaceId: string;
+            taskId: string;
+            /** @enum {string} */
+            action: "calendar.create" | "calendar.update" | "calendar.delete";
+            /** Format: uuid */
+            requestId: string;
+            calendarId: string;
+            eventId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dispatchBefore: string;
+            /** Format: date-time */
+            receiptExpiresAt: string;
+            /** @constant */
+            mode: "fixture";
+            receiptExpired: boolean;
+            /** @constant */
+            state: "unknown";
+            /** @constant */
+            outcome: "dispatch_unknown";
+            receipt: null;
+        };
+        PlanningReviewReceipt: {
+            taskId: string;
+            operationId: string;
+            eventId: string;
+            /** Format: date-time */
+            reviewedAt: string;
+            /** @enum {string} */
+            relationship: "linked" | "removed";
+        };
+        PlanningDetachInput: {
+            operationId: string;
+            eventId: string;
+            etag: string | null;
+            /** @constant */
+            acknowledge: "leave_provider_event";
+        };
+        PlanningDetachReceipt: {
+            taskId: string;
+            operationId: string;
+            eventId: string;
+            etag: string | null;
+            /** Format: date-time */
+            detachedAt: string;
+            /** @constant */
+            detached: true;
+            /** @constant */
+            providerEventLeft: true;
+        };
+        CalendarPlanningError: components["schemas"]["ReplyOperationError"];
     };
     responses: {
         /** @description Fixed redacted error. Current authentication, owner, grant, resource and runtime checks apply. */
@@ -6900,6 +7411,1407 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReplyOperationError"];
+                };
+            };
+        };
+    };
+    listProviderCalendarAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProviderCalendarAccount"][];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    listProviderCalendars: {
+        parameters: {
+            query: {
+                accountId: string;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProviderCalendarPage"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    listProviderCalendarEvents: {
+        parameters: {
+            query: {
+                accountId: string;
+                calendarId: string;
+                start: string;
+                end: string;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProviderEventPage"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    getProviderCalendarAvailability: {
+        parameters: {
+            query: {
+                accountId: string;
+                calendarId: string;
+                start: string;
+                end: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProviderCalendarAvailability"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    listRemotePlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RemotePlanningLink"][];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    getPlanningReviewReceipt: {
+        parameters: {
+            query: {
+                operationId: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PlanningReviewReceipt"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    reviewRemotePlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RemotePlanningLink"][];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    getPlanningDetachReceipt: {
+        parameters: {
+            query: {
+                operationId: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PlanningDetachReceipt"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    detachRemotePlanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanningDetachInput"];
+            };
+        };
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PlanningDetachReceipt"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    listCalendarOperations: {
+        parameters: {
+            query?: {
+                taskId?: string;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CalendarPlanOperation"][];
+                        nextCursor: string | null;
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    enqueueCalendarOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalendarPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CalendarPlanOperation"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    getCalendarOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CalendarPlanOperation"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+        };
+    };
+    runFixtureCalendarOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: string;
+                operationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized result. Fixture configuration only; no live provider permission implied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CalendarPlanOperation"];
+                    };
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
+                };
+            };
+            /** @description Unavailable, unauthorized, conflict, invalid input or disabled fixture. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarPlanningError"];
                 };
             };
         };

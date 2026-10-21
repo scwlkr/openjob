@@ -27,6 +27,9 @@ import { googleRows } from '../server/connections/google-state.ts';
 import { createReplyOperationRepository } from '../db/reply-operations.ts';
 import { createFixtureReplyOperations } from '../server/reply-operations.ts';
 import { createFixtureGmailReplyDispatch, fixtureGmailState } from '../tests/support/gmail-reply-transport.mjs';
+import { createFixtureGoogleCalendar, fixtureCalendarState } from '../tests/support/google-calendar-transport.mjs';
+import { createCalendarPlanningRepository } from '../db/calendar-planning.ts';
+import { createFixtureCalendarPlanning } from '../server/calendar-planning.ts';
 import { fixture as googleProtocolFixture, CLIENT, BINDING, ACCESS, REFRESH } from '../tests/support/google-oauth-transport.mjs';
 const options = new Map(); const args = process.argv.slice(2);
 while (args.length) { const key = args.shift(); if (key === '--google-fixture' && !options.has(key)) { options.set(key, true); continue; } if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH] [--google-fixture].'); options.set(key, args.shift()); }
@@ -42,12 +45,14 @@ async function close() { if (stopping) return; stopping = true; await queue.catc
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { void close().then(() => process.exit(0)); });
 try {
   const db = createFakeFirestore();
-  const envelopes = new Map(); let gmailProtocol = fixtureGmailState();
+  const envelopes = new Map(); let gmailProtocol = fixtureGmailState(), calendarProtocol = fixtureCalendarState();
   try {
     const raw = await readFile(statePath); if (raw.length > 32 * 1024 * 1024) throw new Error('Oversized fixture.');
     const value = JSON.parse(raw.toString('utf8'));
     if (value.fixtureGmailProtocol !== undefined) { if (!options.has('--google-fixture')) throw new Error('Restart this invented Google fixture with --google-fixture.'); gmailProtocol = fixtureGmailState(value.fixtureGmailProtocol); }
-    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 500 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces|v1ConnectionOnboarding|v1FixtureOperations|v1FixtureOutboundPayloads|v1FixtureIntegrationJobs|v1FixtureOperationIndexes)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
+    if (value.fixtureGoogleCalendar !== undefined) { if (!options.has('--google-fixture')) throw new Error('Restart this invented Google fixture with --google-fixture.'); calendarProtocol = fixtureCalendarState(value.fixtureGoogleCalendar); }
+    if (value.kind !== 'openjob-owned-workspace-fixture' || value.version !== 1 || !Number.isSafeInteger(value.state?.revision) || !Array.isArray(value.state.documents) || value.state.documents.length > 500 || value.state.documents.some(row => !Array.isArray(row) || row.length !== 2 || !/^projects\/openjob-dev\/databases\/\(default\)\/documents\/(v1UserDirectory|v1SignInMethods|v1UserSignInMethods|v1OwnedWorkspaceCatalogs|v1OwnedWorkspaces|v1PersonalWorkspaceContexts|v1PersonalWorkspaces|v1ConnectionOnboarding|v1FixtureOperations|v1FixtureOutboundPayloads|v1FixtureIntegrationJobs|v1FixtureOperationIndexes|v1FixtureCalendarOperations|v1FixtureCalendarOutboundPayloads|v1FixtureCalendarIntegrationJobs|v1FixtureCalendarOperationIndexes)\//.test(row[0]) || row[1]?.name !== row[0])) throw new Error('Invalid fixture; preserve original.');
+    if (value.fixtureGoogleCalendar === undefined && value.state.documents.some(([name]) => name.includes('/v1FixtureCalendar'))) throw new Error('Missing invented Calendar ledger; preserve original.');
     if (value.fixtureGoogleRows !== undefined) {
       if (!options.has('--google-fixture') || !Array.isArray(value.fixtureGoogleRows) || value.fixtureGoogleRows.length > 1) throw new Error('Restart this invented Google fixture with --google-fixture.');
       for (const [owner, rows] of value.fixtureGoogleRows) {
@@ -59,7 +64,7 @@ try {
     }
     db.restoreState(value.state);
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  async function persist() { const raw = JSON.stringify({ kind: 'openjob-owned-workspace-fixture', version: 1, state: db.exportState(), ...(options.has('--google-fixture') ? { fixtureGoogleRows: [...envelopes], fixtureGmailProtocol: gmailProtocol } : {}) }); if (Buffer.byteLength(raw) > 32 * 1024 * 1024) throw new Error('Fixture capacity.'); const temporary = statePath + `.tmp-${process.pid}`; await writeFile(temporary, raw, { mode: 0o600, flag: 'wx' }); await rename(temporary, statePath); }
+  async function persist() { const raw = JSON.stringify({ kind: 'openjob-owned-workspace-fixture', version: 1, state: db.exportState(), ...(options.has('--google-fixture') ? { fixtureGoogleRows: [...envelopes], fixtureGmailProtocol: gmailProtocol, fixtureGoogleCalendar: calendarProtocol } : {}) }); if (Buffer.byteLength(raw) > 32 * 1024 * 1024) throw new Error('Fixture capacity.'); const temporary = statePath + `.tmp-${process.pid}`; await writeFile(temporary, raw, { mode: 0o600, flag: 'wx' }); await rename(temporary, statePath); }
   // Persist every operation commit before acknowledging it to the runner, including executing.
   const durableFixtureTransport = async (input, init) => { const response = await db.fetch(input, init); if (String(input).endsWith('/documents:commit') && response.ok) await persist(); return response; };
   const now = new Date().toISOString(), authority = await createTestFirebaseAuthority({ now });
@@ -70,7 +75,7 @@ try {
   await persist(); const api = createOwnedWorkspacesApi({ store, users, verifyIdToken });
   const consentFixture = createConsentFixture({ config, isOwnerActive: async owner => { await store.list(owner); return true; } });
   const onboarding = createConnectionsApplication({ store: createConnectionOnboardingStore(config, db.fetch), homes: store, consent: consentFixture.adapter, choices: fixtureChoices });
-  let google, gmailReplyDispatch;
+  let google, gmailReplyDispatch, fixtureCalendar;
   if (options.has('--google-fixture')) {
     const protocol = googleProtocolFixture(), owner = sessions.get('alex').userId;
     const home = await store.personalContext(owner);
@@ -105,9 +110,15 @@ try {
     if (!connection) throw new Error('Invented Google connection unavailable.');
     gmailReplyDispatch = createFixtureGmailReplyDispatch({ binding: { ownerId: owner, workspaceId: home.workspace.workspaceId, accountId: connection.accountId, subject: BINDING.subject, address: BINDING.address }, state: gmailProtocol,
       persist: async value => { gmailProtocol = value; await persist(); } }).dispatch;
+    const binding = { ownerId: owner, workspaceId: home.workspace.workspaceId, accountId: connection.accountId, connectionId: connection.id, subject: BINDING.subject, revision: connection.attemptId, calendarIds: ['planning@example.invalid'] };
+    const calendar = createFixtureGoogleCalendar({ binding, state: calendarProtocol, persist: async value => { calendarProtocol = value; await persist(); }, active: async () => {
+      const row = (envelopes.get(owner) ?? []).find(item => item.id === binding.connectionId);
+      return !!row && row.status === 'connected' && !row.operation && !row.pending && !!row.grant && row.workspaceId === binding.workspaceId && row.accountId === binding.accountId && row.subject === binding.subject && row.attemptId === binding.revision;
+    } });
+    fixtureCalendar = createFixtureCalendarPlanning({ repository: createCalendarPlanningRepository(config, durableFixtureTransport), ...calendar });
   }
   const fixtureOperations = google ? createFixtureReplyOperations({ repository: createReplyOperationRepository(config, durableFixtureTransport), authority: google.fixtureReplyAuthority(), dispatch: gmailReplyDispatch }) : undefined;
-  const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, fixtureOperations, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
+  const pilot = createWorkspacePilotRuntime({ config, personal, users, verifyIdToken, fixtureOperations, fixtureCalendar, transport: db.fetch, admission: { userId: sessions.get('alex').userId, provider: 'google', firebaseUid: 'owned_fixture_alex' } });
   const connectionsApi = createConnectionsApi({ onboarding: google ? undefined : onboarding, google, users, verifyIdToken });
   const personalApi = createV1PersonalWorkspaceApi({ workspace: personal, users, verifyIdToken });
   const plugin = { name: 'owned-workspaces-fixture', configureServer(vite) { vite.middlewares.use((incoming, outgoing, next) => {

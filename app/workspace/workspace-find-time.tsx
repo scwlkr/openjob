@@ -5,11 +5,11 @@ import type { WorkspaceCommand, WorkspaceView } from "../../shared/workspace-con
 import { findAvailableTaskSlots, type TaskSlot } from "../../shared/workspace-availability";
 import styles from "./workspace.module.css";
 
-type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, notice: string) => Promise<boolean> };
+type Props = { view: WorkspaceView; busy: boolean; command: (input: WorkspaceCommand, notice: string) => Promise<boolean>; providerTaskIds?: string[] };
 const utc = (value: string) => new Date(`${value}:00Z`).toISOString();
 const time = (value: string) => new Date(value).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " UTC";
 
-export default function WorkspaceFindTime({ view, busy, command }: Props) {
+export default function WorkspaceFindTime({ view, busy, command, providerTaskIds = [] }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [task, setTask] = useState("");
   const [calendar, setCalendar] = useState("");
@@ -18,7 +18,7 @@ export default function WorkspaceFindTime({ view, busy, command }: Props) {
   const [duration, setDuration] = useState(30);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<{ view: WorkspaceView; key: string; slots: TaskSlot[] } | null>(null);
-  const tasks = view.tasks.filter(item => !item.completed);
+  const tasks = view.tasks.filter(item => !item.completed && !providerTaskIds.includes(item.id));
   const taskId = tasks.some(item => item.id === task) ? task : tasks[0]?.id || "";
   const calendarId = view.calendars.some(item => item.id === calendar) ? calendar : view.calendars[0]?.id || "";
   const key = JSON.stringify([taskId, calendarId, start, end, duration]);
@@ -30,6 +30,7 @@ export default function WorkspaceFindTime({ view, busy, command }: Props) {
   }
   async function schedule(slot: TaskSlot) {
     setPreview(null); setError("");
+    if (providerTaskIds.includes(taskId)) { setError("Manage this Task’s provider plan before scheduling a local block."); return; }
     const success = await command({ type: "task.schedule-available", taskId, calendarId, ...slot }, "Task scheduled in open saved Calendar time. No provider calendar was changed.");
     if (!success) setError("Scheduling was not confirmed. Refresh the workspace, then find time again before retrying.");
   }
@@ -37,7 +38,8 @@ export default function WorkspaceFindTime({ view, busy, command }: Props) {
     <h2 className={styles.sectionHeading}>Find time for a task</h2>
     <div className={styles.form}>
       <p>Find open time across all your saved OpenJob calendars, including imported blocks. Live provider calendars are not checked. A scheduled Task’s own linked block is excluded when moving it.</p>
-      {!tasks.length && <p>Add an open Task first, or reopen a completed one.</p>}
+      {providerTaskIds.length > 0 && <p>Tasks with a provider relationship are managed in Connected Calendar planning above.</p>}
+      {!tasks.length && <p>Add an open Task without a provider relationship, or reopen a completed one.</p>}
       <label>Task to schedule<select aria-label="Task to schedule" value={taskId} disabled={busy || !tasks.length} onChange={event => setTask(event.target.value)}>{!tasks.length && <option value="">No open Tasks</option>}{tasks.map(item => <option key={item.id} value={item.id}>{item.title}{item.scheduledSlot ? " · move existing plan" : ""}</option>)}</select></label>
       <label>Save time on calendar<select aria-label="Save time on calendar" value={calendarId} disabled={busy} onChange={event => setCalendar(event.target.value)}>{view.calendars.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Find after (UTC)<input aria-label="Find after (UTC)" type="datetime-local" value={start} disabled={busy} onChange={event => setStart(event.target.value)} /></label>
