@@ -5,6 +5,8 @@ import { prepareAgentGrant, deliverAgentGrant, preparePrivateTokenOutput } from 
 import { findAvailableTaskSlots } from "./lib/workspace-availability.mjs";
 import { parseCalendarIcal, previewCalendarIcalImport } from "./lib/calendar-ical.mjs";
 import { openSync, fstatSync, closeSync, readSync } from "node:fs";
+import { readWorkspaceAgentToken } from "./lib/owned-workspace-agents.mjs";
+import { runOwnedWorkspace } from "./lib/owned-workspace.mjs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
@@ -98,16 +100,16 @@ const COMMAND_OPTIONS = new Map([
   ["connections source", new Set(OUTPUT_OPTIONS)],
   ["connections reply", new Set(OUTPUT_OPTIONS)],
   ["connections reply-save", new Set([...OUTPUT_OPTIONS, "--input"])],
-  ["workspace snapshot", new Set([...OUTPUT_OPTIONS, "--agent-token-file"])],
+  ["workspace snapshot", new Set(["--workspace", ...OUTPUT_OPTIONS, "--agent-token-file"])],
   ["workspace availability", new Set([...OUTPUT_OPTIONS, "--task", "--schedule-start", "--schedule-end", "--minutes"])],
-  ["workspace tasks", new Set([...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
+  ["workspace tasks", new Set(["--workspace", ...OUTPUT_OPTIONS, "--agent-token-file", "--status", "--search", "--scheduled-on"])],
   ["workspace providers", new Set([...OUTPUT_OPTIONS, "--account", "--cursor"])],
-  ["workspace command", new Set([...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
+  ["workspace command", new Set(["--workspace", ...OUTPUT_OPTIONS, "--input", "--agent-token-file"])],
   ["workspace calendar export", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--calendar", "--file", "--agent-token-file"])],
   ["workspace calendar import", new Set([...OUTPUT_OPTIONS, "--calendar", "--file", "--agent-token-file", "--dry-run", "--yes"])],
-  ["workspace agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
-  ["workspace agent list", new Set(OUTPUT_OPTIONS)],
-  ["workspace agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
+  ["workspace agent grant", new Set(["--workspace", ...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--name", "--scopes", "--resources", "--token-out"])],
+  ["workspace agent list", new Set(["--workspace", ...OUTPUT_OPTIONS])],
+  ["workspace agent revoke", new Set(["--workspace", ...OUTPUT_OPTIONS, "--yes"])],
   ["agent grant", new Set([...OUTPUT_OPTIONS.filter(option => option !== "--force"), "--group", "--name", "--token-out"])],
   ["agent list", new Set(OUTPUT_OPTIONS)],
   ["agent revoke", new Set([...OUTPUT_OPTIONS, "--yes"])],
@@ -205,6 +207,11 @@ Normal runtime remains unconfigured; no CLI token input or automatic consent.`,
   openjob workspace agent revoke <agent-id> [--yes]
 
 Uses the selected profile's personal Tasks, Calendar and invented Mail API.
+Add --workspace <wsp_id> to snapshot/tasks/command and agent grant/list/revoke for
+an independent owned Workspace. Its grants accept only exact tsp_/cal_ resources
+and Tasks/Calendar read/write scopes; linked planning changes need both writes.
+Owned notes commands require expectedNotes. Workspace credentials must use the
+same explicit --workspace with --agent-token-file; no human refresh fallback.
 Commands are strict JSON task.create/update/notes/complete/schedule/unschedule/delete
 or calendar.create/update/delete objects. Invented Mail supports mail.examples.add,
 mail.read/draft/compose/draft.update/simulate-send. Real mail.send is always denied.
@@ -525,7 +532,7 @@ async function main(raw) {
   if (typeof agentTokenFile === "string") {
     if (resource === "workspace") {
       if (agentTokenFile === "-" && parsed.options.get("--input") === "-") throw new CliError("usage_error", "The personal credential and command input cannot both use stdin.", 2);
-      agentToken = readPersonalAgentToken(agentTokenFile);
+      agentToken = parsed.options.has("--workspace") ? readWorkspaceAgentToken(agentTokenFile, parsed.options.get("--workspace")) : readPersonalAgentToken(agentTokenFile);
     } else {
       if (!parsed.options.has("--group")) throw new CliError("usage_error", "Agent reads require explicit --group.", 2);
       agentToken = readTextSource(agentTokenFile);
@@ -588,6 +595,9 @@ async function main(raw) {
   preflightOutput(parsed.options);
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
+  if (resource === "workspace" && parsed.options.has("--workspace")) {
+    await runOwnedWorkspace({ command, rest, options: parsed.options, apiRequest, writeResult, confirmDestructiveAction }); return;
+  }
   if (resource === "workspace" && command === "calendar" && rest.length === 1 && ["export", "import"].includes(rest[0])) {
     const calendarId = parsed.options.get("--calendar"), file = parsed.options.get("--file");
     if (!calendarId || !/^[A-Za-z0-9:_-]{1,128}$/.test(calendarId) || !file || file === "-") throw new CliError("usage_error", "Calendar import/export requires --calendar <id> and --file <path> (not stdin/stdout).", 2);

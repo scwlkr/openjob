@@ -1,3 +1,5 @@
+import { WORKSPACE_AGENT_TOKEN, WORKSPACE_AGENT_ID, WORKSPACE_AGENT_LIFETIME_MS, parseWorkspaceAgents, parseWorkspaceAgentActions, publicWorkspaceAgent, validateWorkspaceAgentInput, workspaceAgentView, authorizeWorkspaceAgentCommand, type StoredWorkspaceAgent, type WorkspaceAgentReceipt, type WorkspaceAgentOperation } from '../shared/owned-workspace-agents.ts';
+import { agentTokenHash, agentTokenHashEqual, newAgentSecret } from '../server/agent-grants.ts';
 import { assertTaskNotesBase } from '../shared/task-notes-precondition.ts';
 import { createFirestoreRestClient, FirestoreRequestError, type FirebaseConfig, type FirestoreDocument } from './firestore-rest.ts';
 import { activeUserHistoryWrite, assertActiveUser } from './user-history.ts';
@@ -8,7 +10,7 @@ import { parseMailTaskSources, retainMailTaskSources, existingMailTask, type Mai
 import { parseConnectedReplies, sameReplySource, upsertConnectedReply, type ConnectedReplyStore } from '../shared/connected-reply.ts';
 
 /** New owner-only Workspace repository; never reads/migrates Personal Mail aggregates. */
-export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typeof fetch = fetch) {
+export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typeof fetch = fetch, { now = Date.now }: { now?: () => number } = {}) {
   const db = createFirestoreRestClient(config, transport);
   const uuid = () => crypto.randomUUID().replaceAll('-', '');
   const ownerId = (owner: string) => { if (!/^user_[a-f0-9]{32}$/.test(owner)) workspaceFail(); };
@@ -45,10 +47,47 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
     if (result.some(row => row.source.workspaceId !== id)) workspaceFail('invalid_state');
     return result;
   }
-  async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }, mail?: { source: MailTaskReference; current: () => Promise<void> }) {
+  const agentRows = (doc: FirestoreDocument, snapshot: OwnedWorkspaceSnapshot) => parseWorkspaceAgents(snapshot.workspace, doc.fields?.workspaceAgentsJson?.stringValue);
+  type AgentCredential = { token: string; hash: string; workspaceId: string; agentId: string; sponsor?: string };
+  async function credential(token: string, id: string, sponsor?: string): Promise<AgentCredential> {
+    const match = WORKSPACE_AGENT_TOKEN.exec(token);
+    if (!match || match[1] !== id) workspaceFail('authentication_required');
+    return { token, hash: await agentTokenHash(token), workspaceId: id, agentId: match[2], sponsor };
+  }
+  function authorized(doc: FirestoreDocument, snapshot: OwnedWorkspaceSnapshot, auth: AgentCredential) {
+    if (snapshot.workspace.workspaceId !== auth.workspaceId || auth.sponsor !== undefined && snapshot.workspace.ownerUserId !== auth.sponsor) workspaceFail('forbidden');
+    const grant = agentRows(doc, snapshot).find(row => row.id === auth.agentId);
+    if (!grant || grant.revoked || Date.parse(grant.expiresAt) <= now() || !agentTokenHashEqual(grant.tokenHash, auth.hash)) workspaceFail('authentication_required');
+    return grant;
+  }
+  async function agentEnvelope(auth: AgentCredential) {
+    const doc = await read(workPath(auth.workspaceId));
+    const owner = doc?.fields?.ownerUserId?.stringValue;
+    if (!owner) workspaceFail('authentication_required');
+    ownerId(owner); const snapshot = decode(doc, owner);
+    await assertActiveUser(db, owner);
+    const grant = authorized(doc!, snapshot, auth);
+    return { doc: doc!, snapshot, grant, owner };
+  }
+  async function editAgents<T>(owner: string, id: string, apply: (rows: StoredWorkspaceAgent[], snapshot: OwnedWorkspaceSnapshot) => { rows: StoredWorkspaceAgent[]; result: T }) {
+    ownerId(owner);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assertActiveUser(db, owner); const previous = await read(workPath(id)), snapshot = decode(previous, owner);
+      const next = apply(agentRows(previous!, snapshot), snapshot);
+      const rows = parseWorkspaceAgents(snapshot.workspace, JSON.stringify(next.rows));
+      const fields = { ...previous!.fields, workspaceAgentsJson: { stringValue: JSON.stringify(rows) } };
+      if (new TextEncoder().encode(JSON.stringify(fields)).length > 898000) workspaceFail('workspace_capacity');
+      try { await commit(owner, [update(workPath(id), fields, previous)]); return next.result; }
+      catch (error) { if (!retryable(error)) throw error; }
+    }
+    return workspaceFail('conflict');
+  }
+  async function change(owner: string, id: string, input: unknown, guard?: { expectedNotes: unknown }, mail?: { source: MailTaskReference; current: () => Promise<void> }, agent?: AgentCredential) {
     ownerId(owner);
     for (let attempt = 0; attempt < 3; attempt++) {
       await assertActiveUser(db, owner); const previous = await read(workPath(id)); const snapshot = decode(previous, owner);
+      const grant = agent ? authorized(previous!, snapshot, agent) : undefined;
+      if (grant) authorizeWorkspaceAgentCommand(snapshot, publicWorkspaceAgent(grant), input);
       const sources = retainMailTaskSources(parseMailTaskSources(previous?.fields?.mailSourcesJson?.stringValue), snapshot.work.tasks);
       if (sources.some(source => source.workspaceId !== id)) workspaceFail('invalid_state');
       if (mail) {
@@ -66,9 +105,21 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
       const result = validateOwnedSnapshot({ workspace: snapshot.workspace, work });
       const receipt: MailTaskResult | undefined = mail ? { workspaceId: id, taskId: work.tasks.at(-1)!.id, created: true } : undefined;
       const nextSources = parseMailTaskSources(JSON.stringify(retainMailTaskSources([...sources, ...(mail ? [{ ...mail.source, taskId: receipt!.taskId }] : [])], work.tasks)));
-      const fields = { ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) }, mailSourcesJson: { stringValue: JSON.stringify(nextSources) }, connectedRepliesJson: { stringValue: JSON.stringify(replies(previous, id)) } };
+      const fields = { ...previous!.fields, ownerUserId: { stringValue: owner }, snapshotJson: { stringValue: JSON.stringify(result) }, mailSourcesJson: { stringValue: JSON.stringify(nextSources) }, connectedRepliesJson: { stringValue: JSON.stringify(replies(previous, id)) } };
+      let agentReceipt: WorkspaceAgentReceipt | undefined;
+      if (agent) {
+        const command = input as TaskCalendarCommand;
+        const itemId = command.type === 'task.create' ? work.tasks.at(-1)!.id : command.type === 'calendar.create' ? work.events.at(-1)!.id : 'taskId' in command ? command.taskId : 'eventId' in command ? command.eventId : workspaceFail();
+        agentReceipt = { workspaceId: id, operation: command.type as WorkspaceAgentOperation, itemId };
+        const actions = parseWorkspaceAgentActions(previous?.fields?.workspaceAgentActionsJson?.stringValue);
+        Object.assign(fields, { workspaceAgentActionsJson: { stringValue: JSON.stringify([...actions, { agentId: agent.agentId, operation: command.type, itemId, at: new Date(now()).toISOString() }].slice(-200)) } });
+      }
       if (new TextEncoder().encode(JSON.stringify(fields)).length > 898000) workspaceFail('workspace_capacity');
-      try { await commit(owner, [update(workPath(id), fields, previous)], mail?.current); return { snapshot: result, receipt }; }
+      try {
+        await commit(owner, [update(workPath(id), fields, previous)], async () => { await mail?.current(); if (agent) authorized(previous!, snapshot, agent); });
+        if (agent) await agentEnvelope(agent);
+        return { snapshot: result, receipt, agentReceipt };
+      }
       catch (error) { if (!retryable(error)) throw error; }
     }
     return workspaceFail('conflict');
@@ -99,6 +150,39 @@ export function createOwnedWorkspaceStore(config: FirebaseConfig, transport: typ
   };
   return {
     ...connected,
+    async createAgent(owner: string, id: string, input: unknown) {
+      const agentId = `agt_${uuid()}`, token = `oj_workspace_${id}.${agentId}.${newAgentSecret()}`, hash = await agentTokenHash(token), issued = now();
+      if (!WORKSPACE_AGENT_TOKEN.test(token)) workspaceFail();
+      return editAgents(owner, id, (rows, snapshot) => {
+        const validated = validateWorkspaceAgentInput(snapshot.workspace, input);
+        if (rows.length >= 100) workspaceFail('workspace_capacity');
+        if (rows.some(row => row.id === agentId)) workspaceFail('conflict');
+        const grant: StoredWorkspaceAgent = { ...validated, id: agentId, ownerUserId: owner, workspaceId: id, createdAt: new Date(issued).toISOString(), expiresAt: new Date(issued + WORKSPACE_AGENT_LIFETIME_MS).toISOString(), revoked: false, tokenHash: hash };
+        return { rows: [...rows, grant], result: { agent: publicWorkspaceAgent(grant), token } };
+      });
+    },
+    async listAgents(owner: string, id: string) {
+      ownerId(owner); await assertActiveUser(db, owner); const previous = await read(workPath(id)), snapshot = decode(previous, owner);
+      const result = { agents: agentRows(previous!, snapshot).map(publicWorkspaceAgent), actions: parseWorkspaceAgentActions(previous?.fields?.workspaceAgentActionsJson?.stringValue) };
+      await assertActiveUser(db, owner); decode(await read(workPath(id)), owner); return result;
+    },
+    async revokeAgent(owner: string, id: string, agentId: string) {
+      if (!WORKSPACE_AGENT_ID.test(agentId)) workspaceFail();
+      return editAgents(owner, id, rows => { const grant = rows.find(row => row.id === agentId); if (!grant) workspaceFail('forbidden'); grant.revoked = true; return { rows, result: { id: agentId, revoked: true as const } }; });
+    },
+    async snapshotForAgent(token: string, id: string, sponsor?: string) {
+      const auth = await credential(token, id, sponsor), current = await agentEnvelope(auth);
+      const result = workspaceAgentView(current.snapshot, publicWorkspaceAgent(current.grant));
+      await agentEnvelope(auth); return result;
+    },
+    async commandForAgent(token: string, id: string, input: unknown, sponsor?: string) {
+      const auth = await credential(token, id, sponsor), current = await agentEnvelope(auth);
+      let command = input, guard;
+      if (input && typeof input === 'object' && !Array.isArray(input) && (input as { type?: unknown }).type === 'task.notes' && Object.hasOwn(input, 'expectedNotes')) {
+        const { expectedNotes, ...rest } = input as Record<string, unknown>; command = rest; guard = { expectedNotes };
+      }
+      return (await change(current.owner, id, command, guard, undefined, auth)).agentReceipt!;
+    },
     async list(owner: string) { await assertActiveUser(db, owner); const result = catalog(await read(catalogPath(owner)), owner); await assertActiveUser(db, owner); return result; },
     async create(owner: string, name: unknown) {
       ownerId(owner);

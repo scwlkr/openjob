@@ -39,3 +39,10 @@ export function newAgentSecret() {
 }
 
 export class AgentAccessDenied extends Error {}
+
+/** Compare fixed-size stored credential hashes without an early mismatch exit. */
+export function agentTokenHashEqual(left: string, right: string) {
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < left.length; index++) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return difference === 0;
+}
