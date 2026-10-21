@@ -9,6 +9,8 @@ import { validateOperationJob } from '../shared/reply-operation.ts';
 import { validateOwnedSnapshot, validateWorkspace } from '../shared/owned-workspaces.ts';
 import { validatePersonalWorkspace } from '../shared/personal-workspace.ts';
 import { projectTaskCalendar } from '../shared/task-calendar-sync.ts';
+import { planningDetachInput, parsePlanningDetaches, parsePlanningReviews, type PlanningDetachReceipt, type PlanningReviewReceipt } from '../shared/remote-planning.ts';
+import { taskIdentifier } from '../shared/reply-operation.ts';
 
 type Db = ReturnType<typeof createFirestoreRestClient>;
 async function read(db: Db, path: string) {
@@ -38,8 +40,8 @@ async function home(db: Db, owner: string, workspace: string) {
   assertRemotePlanningProjection(links, work);
   return { doc, work, links, fences };
 }
-function update(doc: FirestoreDocument, links: StoredRemotePlanningLink[]): AtomicWrite {
-  const rows = parseRemotePlanningLinks(JSON.stringify(links)), fields = { ...doc.fields, remotePlanningJson: { stringValue: JSON.stringify(rows) } };
+function update(doc: FirestoreDocument, links: StoredRemotePlanningLink[], detaches?: PlanningDetachReceipt[], reviews?: PlanningReviewReceipt[]): AtomicWrite {
+  const rows = parseRemotePlanningLinks(JSON.stringify(links)), fields = { ...doc.fields, remotePlanningJson: { stringValue: JSON.stringify(rows) }, ...(detaches ? { remotePlanningDetachesJson: { stringValue: JSON.stringify(parsePlanningDetaches(JSON.stringify(detaches))) } } : {}), ...(reviews ? { remotePlanningReviewsJson: { stringValue: JSON.stringify(parsePlanningReviews(JSON.stringify(reviews))) } } : {}) };
   if (new TextEncoder().encode(JSON.stringify(fields)).length > 898_000) calendarFail('workspace_capacity');
   return { update: { name: doc.name, fields }, currentDocument: { updateTime: doc.updateTime } };
 }
@@ -91,11 +93,51 @@ export function createCalendarPlanningRepository(config: FirebaseConfig, transpo
       return [...contextFences, update(current.doc, [...others, link])];
     },
   }, { now });
+  function detaches(doc: FirestoreDocument) {
+    if (doc.fields?.remotePlanningDetachesJson && typeof doc.fields.remotePlanningDetachesJson.stringValue !== 'string') calendarFail('invalid_state');
+    return parsePlanningDetaches(doc.fields?.remotePlanningDetachesJson?.stringValue);
+  }
+  function reviews(doc: FirestoreDocument) {
+    if (doc.fields?.remotePlanningReviewsJson && typeof doc.fields.remotePlanningReviewsJson.stringValue !== 'string') calendarFail('invalid_state');
+    return parsePlanningReviews(doc.fields?.remotePlanningReviewsJson?.stringValue);
+  }
   return {
     ...operations,
     async assertOwned(owner: string, workspace: string) { await assertActiveUser(db, owner); await home(db, owner, workspace); await assertActiveUser(db, owner); },
     async planning(owner: string, workspace: string) { await assertActiveUser(db, owner); const current = await home(db, owner, workspace); await assertActiveUser(db, owner); return current.links.map(remotePlanningView); },
     async selectedLink(owner: string, workspace: string, task: string) { await assertActiveUser(db, owner); const current = await home(db, owner, workspace); await assertActiveUser(db, owner); return current.links.find(row => row.taskId === task); },
+    async reviewReceipt(owner: string, workspace: string, task: string, operationId: string) {
+      if (!taskIdentifier(task) || !CALENDAR_OPERATION_ID.test(operationId)) calendarFail();
+      await assertActiveUser(db, owner); const current = await home(db, owner, workspace), receipt = reviews(current.doc).find(row => row.taskId === task && row.operationId === operationId);
+      if (!receipt) calendarFail('not_found'); await assertActiveUser(db, owner); return receipt;
+    },
+    async detachReceipt(owner: string, workspace: string, task: string, operationId: string) {
+      if (!taskIdentifier(task) || !CALENDAR_OPERATION_ID.test(operationId)) calendarFail();
+      await assertActiveUser(db, owner); const current = await home(db, owner, workspace), receipt = detaches(current.doc).find(row => row.taskId === task && row.operationId === operationId);
+      if (!receipt) calendarFail('not_found'); await assertActiveUser(db, owner); return receipt;
+    },
+    async detach(owner: string, workspace: string, task: string, raw: unknown) {
+      if (!taskIdentifier(task)) calendarFail(); const input = planningDetachInput(raw);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await assertActiveUser(db, owner); const current = await home(db, owner, workspace), receipts = detaches(current.doc), existing = receipts.find(row => row.operationId === input.operationId);
+        if (existing) {
+          if (existing.taskId !== task || existing.eventId !== input.eventId || existing.etag !== input.etag) calendarFail('conflict');
+          await assertActiveUser(db, owner); return existing;
+        }
+        const link = current.links.find(row => row.taskId === task);
+        if (!link || link.operationId !== input.operationId || remoteCalendarEventRef(link.payload.calendarId, link.payload.upstreamEventId) !== input.eventId || (link.confirmed?.etag ?? null) !== input.etag) calendarFail('conflict');
+        if (!['linked', 'review_required'].includes(link.state)) calendarFail('review_required');
+        const operation = await operations.get(owner, workspace, input.operationId); if (['queued', 'executing'].includes(operation.state)) calendarFail('review_required');
+        if (receipts.length >= 100) calendarFail('workspace_capacity');
+        const receipt: PlanningDetachReceipt = { taskId: task, operationId: input.operationId, eventId: input.eventId, etag: input.etag, detachedAt: new Date(now()).toISOString(), detached: true, providerEventLeft: true };
+        const write = update(current.doc, current.links.filter(row => row !== link), [...receipts, receipt]), fences = current.fences.filter(fence => fence.verify !== current.doc.name);
+        try {
+          await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [await activeUserHistoryWrite(db, owner), ...fences, write] }) });
+          await assertActiveUser(db, owner); await home(db, owner, workspace); return receipt;
+        } catch (error) { if (!(error instanceof FirestoreRequestError) || !['ABORTED', 'FAILED_PRECONDITION'].includes(error.code ?? '')) throw error; }
+      }
+      return calendarFail('conflict');
+    },
     async review(owner: string, workspace: string, task: string, operationId: string, receipt: CalendarOperationReceipt, currentAuthority: () => Promise<void>) {
       const checked = calendarOperationReceipt(receipt);
       const operation = await operations.get(owner, workspace, operationId);
@@ -106,7 +148,10 @@ export function createCalendarPlanningRepository(config: FirebaseConfig, transpo
         if ('block' in checked && checked.block.eventId !== remoteCalendarEventRef(row.payload.calendarId, row.payload.upstreamEventId)) calendarFail('invalid_state');
         const links = current.links.filter(item => item !== row);
         if ('block' in checked) links.push({ ...row, state: 'linked', confirmed: checked.block });
-        const write = update(current.doc, links), fences = current.fences.filter(fence => fence.verify !== current.doc.name);
+        const savedReviews = reviews(current.doc).filter(item => item.operationId !== operationId);
+        if (savedReviews.length >= 100) calendarFail('workspace_capacity');
+        const reviewed: PlanningReviewReceipt = { taskId: task, operationId, eventId: operation.eventId, reviewedAt: new Date(now()).toISOString(), relationship: 'block' in checked ? 'linked' : 'removed' };
+        const write = update(current.doc, links, undefined, [...savedReviews, reviewed]), fences = current.fences.filter(fence => fence.verify !== current.doc.name);
         try { await currentAuthority(); await db.request(':commit', { method: 'POST', body: JSON.stringify({ writes: [await activeUserHistoryWrite(db, owner), ...fences, write] }) }); return links.map(remotePlanningView); }
         catch (error) { if (!(error instanceof FirestoreRequestError) || !['ABORTED', 'FAILED_PRECONDITION'].includes(error.code ?? '')) throw error; }
       }

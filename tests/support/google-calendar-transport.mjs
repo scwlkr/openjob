@@ -53,6 +53,7 @@ export function createFixtureGoogleCalendar({ binding, state, persist = async ()
   const adapter = createGoogleCalendarAdapter({ bindings: [binding], transport, approveExecution: async () => active(), resolveCredential: async () => credential, now });
   return {
     adapter, calls, state: () => fixtureCalendarState(ledger),
+    async accounts(owner, workspace) { if (owner !== binding.ownerId || workspace !== binding.workspaceId) return []; return [{ accountId: binding.accountId, connectionId: binding.connectionId, label: 'Invented Google account', available: await active() }]; },
     async binding(owner, workspace, account) { assert.equal(owner, binding.ownerId); assert.equal(workspace, binding.workspaceId); assert.equal(account, binding.accountId); assert.equal(await active(), true); return structuredClone(binding); },
     async currentAuthority(payload) {
       assert.equal(await active(), true);

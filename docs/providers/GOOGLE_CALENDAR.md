@@ -1,10 +1,10 @@
 # Google Calendar integration — R40 in progress
 
-The backend checkpoint implements a provider boundary, durable remote planning and
-canonical pilot API source. Only tests compose the service with an inseparable
-invented credential/fake HTTP provider. Normal/portable runtimes configure no
-Calendar service. The development launcher, OpenAPI, CLI and web flow remain
-unfinished. R40 is not delivered and no real Calendar access is authorized here.
+The provider boundary, durable planning, canonical API, shared CLI/web validation
+and connected web fixture flow are implemented. The explicit development fixture
+and tests compose an inseparable invented credential/fake HTTP provider. Normal
+and portable runtimes configure no Calendar service. R40's live-provider and
+native acceptance remain open; no real Calendar access is authorized here.
 
 The adapter requires explicit owner/Workspace/account/connection/subject/revision
 bindings and a concrete reviewed Calendar-ID set. `primary` is not a frozen
@@ -49,23 +49,50 @@ review. Queued/executing/unknown links stay reserved. Explicit review reads curr
 provider state and updates the link without rewriting operation history or replaying
 its write. An exact cancelled tombstone proves deletion; 404 remains ambiguous.
 Successful explicit delete releases the relationship. Local completion/title edits
-never write remotely. Safe explicit detach while leaving a provider event is still
-a required next step before UI delivery.
+never write remotely. Explicit detach permits linked/review-required terminal
+relationships and leaves the provider event untouched. The exact operation/event/
+ETag and `acknowledge: leave_provider_event` must match. Queued, executing and
+unresolved unknown reservations cannot detach. Review and detach each persist
+their own receipt atomically with the relationship change, recoverable after a
+lost acknowledgement or restart. Neither changes the original operation history.
 
 Source routes under `/api/v1/workspaces/{workspaceId}`:
 
+- GET `provider-calendars/accounts` without resolving provider credentials.
 - GET `provider-calendars` (accountId, optional cursor).
 - GET `provider-calendars/events` (accountId, calendarId, start, end, optional cursor).
 - GET `provider-calendars/availability` (accountId, calendarId, start, end).
 - GET `planning`; POST `planning/{taskId}/review` with an empty body.
+- GET `planning/{taskId}/review?operationId=...` reads the saved review receipt.
+- POST `planning/{taskId}/detach`; GET the same path with operationId reads its receipt.
 - GET/POST `calendar-operations`; GET `calendar-operations/{operationId}`.
 - POST `calendar-operations/{operationId}/run-fixture` with an empty body.
 
 Every route requires current human pilot admission and owned Workspace authority.
 Existing local calendar:write agent grants acquire no provider write rights.
 Enqueue returns accepted intent, not completion. Operation views omit frozen content,
-private binding and request/payload hashes. New OpenAPI/CLI/UI contracts and actual
-browser acceptance are pending; see w.md for the exact source/evidence checkpoint.
+private binding and request/payload hashes. OpenAPI and generated CLI types cover
+the source contract. `openjob help calendar`, `openjob help planning` and
+`openjob help calendar-operation` describe explicit Workspace selection, reviewed
+JSON input, separate enqueue/execution and receipt inspection. CLI mutations never
+automatically retry. Run-fixture exits 0 only for confirmed, 4 for rejected, and 8
+for unknown/pending/unavailable; enqueue success only confirms accepted intent.
+
+The web Tasks list distinguishes provider relationships from local blocks and
+opens the connected Calendar editor. Authored fields and immutable requests stay
+in their owner/Workspace session across module/Workspace navigation. Disposable
+readers abort and drop provider observations when hidden. Timestamp precision is
+retained; accepting a reviewed ETag keeps authored edits. Unsaved provider edits
+or unresolved requests guard Task deletion, and explicit editor discard leaves
+frozen intents intact. Provider events never enter the Personal offline projection.
+
+For a new invented local state file, run `npm run dev:owned-workspaces --
+--google-fixture --port 5214 --state-file /absolute/temporary/state.json`, then open
+`/pilot`. Inspect the port and preserve existing sessions first. The launcher
+persists each operation commit and provider ledger before acknowledging it, and
+fails closed if Calendar operation records exist without that ledger. It does not
+install credentials or call Google. See w.md for exact browser/CLI evidence and
+remaining live/native delivery gates.
 
 Primary protocol references:
 

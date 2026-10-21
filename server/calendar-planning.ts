@@ -1,5 +1,5 @@
 import type { CalendarPlanningRepository } from '../db/calendar-planning.ts';
-import { calendarFail, remoteCalendarId, remoteCalendarEventRef } from '../shared/provider-calendar.ts';
+import { calendarFail, remoteCalendarId, remoteCalendarEventRef, type ProviderCalendarAccount } from '../shared/provider-calendar.ts';
 import { managedCalendarEventId, validateFrozenCalendarMutation, type FrozenCalendarMutation } from '../shared/calendar-mutation.ts';
 import { calendarPlanIdentity, calendarPlanInput, calendarOperationReceipt, type CalendarOperationView, type CalendarOperationReceipt } from '../shared/remote-planning.ts';
 import { createGoogleCalendarAdapter, type CalendarBinding } from './providers/google-calendar-adapter.ts';
@@ -8,9 +8,10 @@ import { operationHash } from '../shared/reply-operation.ts';
 
 type Adapter = ReturnType<typeof createGoogleCalendarAdapter>;
 /** Only the invented Calendar fixture composes this service. No real consent/storage path. */
-export function createFixtureCalendarPlanning({ repository, adapter, binding, currentAuthority, timeoutMs = 5000, now = Date.now }: {
+export function createFixtureCalendarPlanning({ repository, adapter, binding, currentAuthority, accounts: accountCatalog = async () => [], timeoutMs = 5000, now = Date.now }: {
   repository: CalendarPlanningRepository; adapter: Adapter;
   binding(owner: string, workspace: string, account: string): Promise<CalendarBinding>;
+  accounts?(owner: string, workspace: string): Promise<ProviderCalendarAccount[]>;
   currentAuthority(payload: FrozenCalendarMutation): Promise<void>; timeoutMs?: number; now?: () => number;
 }) {
   const run = createDurableOperationRunner<FrozenCalendarMutation, CalendarOperationView, CalendarOperationReceipt>({ repository, current: currentAuthority, dispatch: (payload, signal, beforeEffect) => adapter.execute(payload, signal, beforeEffect), timeoutMs,
@@ -34,6 +35,8 @@ export function createFixtureCalendarPlanning({ repository, adapter, binding, cu
   }
   return {
     get: repository.get.bind(repository), list: repository.list.bind(repository), planning: repository.planning.bind(repository), run,
+    detach: repository.detach.bind(repository), detachReceipt: repository.detachReceipt.bind(repository),
+    async accounts(owner: string, workspace: string) { await repository.assertOwned(owner, workspace); const rows = await accountCatalog(owner, workspace); await repository.assertOwned(owner, workspace); return structuredClone(rows); },
     calendars: (input: Parameters<Adapter['list']>[0], signal: AbortSignal) => read(input.ownerId, input.workspaceId, signal, () => adapter.list(input, signal)),
     events: (input: Parameters<Adapter['events']>[0], signal: AbortSignal) => read(input.ownerId, input.workspaceId, signal, () => adapter.events(input, signal)),
     availability: (input: Parameters<Adapter['availability']>[0], signal: AbortSignal) => read(input.ownerId, input.workspaceId, signal, () => adapter.availability(input, signal)),
@@ -61,6 +64,7 @@ export function createFixtureCalendarPlanning({ repository, adapter, binding, cu
       // Persist a current read as the link's reviewed truth; the original operation stays immutable.
       return repository.review(owner, workspace, task, link.operationId, receipt, () => currentAuthority(link.payload));
     },
+    reviewReceipt: (owner: string, workspace: string, task: string, operationId: string) => repository.reviewReceipt(owner, workspace, task, operationId),
   };
 }
 export type FixtureCalendarPlanning = ReturnType<typeof createFixtureCalendarPlanning>;

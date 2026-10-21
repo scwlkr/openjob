@@ -4,15 +4,16 @@ import { defaultRequestId, errorResponse, jsonResponse } from './v1-http.ts';
 
 /** Canonical human-only Workspace routes; normal runtimes configure no Calendar service. */
 export async function calendarPlanningResponse(request: Request, owner: string, service?: FixtureCalendarPlanning) {
-  const url = new URL(request.url), match = /^\/api\/v1\/workspaces\/(wsp_[a-f0-9]{32})\/(provider-calendars(?:\/(events|availability))?|planning(?:\/([A-Za-z0-9_-]{1,128})\/review)?|calendar-operations(?:\/(cop_[a-f0-9]{64})(\/run-fixture)?)?)$/.exec(url.pathname);
+  const url = new URL(request.url), match = /^\/api\/v1\/workspaces\/(wsp_[a-f0-9]{32})\/(provider-calendars(?:\/(accounts|events|availability))?|planning(?:\/([A-Za-z0-9_-]{1,128})\/(review|detach))?|calendar-operations(?:\/(cop_[a-f0-9]{64})(\/run-fixture)?)?)$/.exec(url.pathname);
   if (!match) return undefined;
-  const [, workspaceId, route, read, taskId, operationId, run] = match;
+  const [, workspaceId, route, read, taskId, planningAction, operationId, run] = match;
   try {
     if (!service) calendarFail('not_configured');
     let data: unknown, nextCursor: string | null | undefined, status = 200;
     const only = (names: string[]) => { if ([...url.searchParams.keys()].some(key => !names.includes(key) || url.searchParams.getAll(key).length !== 1)) calendarFail(); };
     const required = (name: string) => { const value = url.searchParams.get(name); if (!value) calendarFail(); return value; };
-    if (route.startsWith('provider-calendars') && request.method === 'GET') {
+    if (read === 'accounts' && request.method === 'GET') { only([]); data = await service.accounts(owner, workspaceId); }
+    else if (route.startsWith('provider-calendars') && request.method === 'GET') {
       only(read ? ['accountId', 'calendarId', 'start', 'end', ...(read === 'events' ? ['cursor'] : [])] : ['accountId', 'cursor']);
       const input = { ownerId: owner, workspaceId, accountId: required('accountId') }, cursor = url.searchParams.get('cursor') ?? undefined;
       if (!read) data = await service.calendars({ ...input, cursor }, request.signal);
@@ -21,7 +22,13 @@ export async function calendarPlanningResponse(request: Request, owner: string, 
         data = read === 'events' ? await service.events({ ...selection, cursor }, request.signal) : await service.availability(selection, request.signal);
       }
     } else if (route === 'planning' && request.method === 'GET') { only([]); data = await service.planning(owner, workspaceId); }
-    else if (taskId && request.method === 'POST') { only([]); if ((await request.text()).length) calendarFail(); data = await service.review(owner, workspaceId, taskId, request.signal); }
+    else if (taskId && planningAction === 'review' && request.method === 'POST') { only([]); if ((await request.text()).length) calendarFail(); data = await service.review(owner, workspaceId, taskId, request.signal); }
+    else if (taskId && planningAction === 'review' && request.method === 'GET') { only(['operationId']); data = await service.reviewReceipt(owner, workspaceId, taskId, required('operationId')); }
+    else if (taskId && planningAction === 'detach' && request.method === 'GET') { only(['operationId']); data = await service.detachReceipt(owner, workspaceId, taskId, required('operationId')); }
+    else if (taskId && planningAction === 'detach' && request.method === 'POST') {
+      only([]); if (!request.headers.get('content-type')?.startsWith('application/json')) calendarFail(); const raw = await request.text(); if (raw.length > 16384) calendarFail(); let input; try { input = JSON.parse(raw); } catch { calendarFail(); }
+      data = await service.detach(owner, workspaceId, taskId, input);
+    }
     else if (route === 'calendar-operations' && request.method === 'GET') {
       only(['taskId', 'cursor']); const page = await service.list(owner, workspaceId, url.searchParams.get('taskId') ?? undefined, url.searchParams.get('cursor') ?? undefined); data = page.items; nextCursor = page.nextCursor;
     } else if (route === 'calendar-operations' && request.method === 'POST') {

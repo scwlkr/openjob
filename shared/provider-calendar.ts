@@ -1,6 +1,7 @@
 /** Provider-owned Calendar records stay outside the offline Task/block projection. */
 export type CalendarPoint = { kind: 'timed'; at: string; timeZone: string } | { kind: 'all-day'; date: string; timeZone: string };
 export type CalendarSpan = { start: CalendarPoint; end: CalendarPoint };
+export type ProviderCalendarAccount = { accountId: string; connectionId: string; label: string; available: boolean };
 export type RemoteCalendar = { id: string; accountId: string; upstreamId: string; name: string; timeZone: string; access: 'busy' | 'reader' | 'writer' | 'writer-limited' | 'owner' };
 export type RemoteCalendarEvent = {
   id: string; accountId: string; calendarId: string; upstreamId: string; etag: string; title: string;

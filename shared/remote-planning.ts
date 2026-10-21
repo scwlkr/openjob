@@ -24,6 +24,9 @@ export type StoredRemotePlanningLink = {
   state: 'reserved' | 'linked' | 'unknown' | 'review_required'; confirmed: CalendarBlockReceipt | null;
 };
 export type RemotePlanningLink = { targetKind: 'provider'; taskId: string; calendarId: string; eventId: string; operationId: string; state: StoredRemotePlanningLink['state']; confirmed: CalendarBlockReceipt | null };
+export type PlanningDetachInput = { operationId: string; eventId: string; etag: string | null; acknowledge: 'leave_provider_event' };
+export type PlanningDetachReceipt = { taskId: string; operationId: string; eventId: string; etag: string | null; detachedAt: string; detached: true; providerEventLeft: true };
+export type PlanningReviewReceipt = { taskId: string; operationId: string; eventId: string; reviewedAt: string; relationship: 'linked' | 'removed' };
 const keys = (value: object, expected: string[]) => Object.keys(value).sort().join(',') === [...expected].sort().join(',');
 const iso = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const digest = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -89,4 +92,31 @@ export function assertRemotePlanningProjection(links: StoredRemotePlanningLink[]
 }
 export function assertRemotePlanningCommand(links: StoredRemotePlanningLink[], command: unknown) {
   if (calendarRecord(command) && ['task.schedule', 'task.schedule-available', 'task.unschedule', 'task.delete'].includes(String(command.type)) && links.some(row => row.taskId === command.taskId)) calendarFail('remote_plan_active');
+}
+export function planningDetachInput(value: unknown): PlanningDetachInput {
+  if (!calendarRecord(value) || !keys(value, ['operationId', 'eventId', 'etag', 'acknowledge']) || typeof value.operationId !== 'string' || !CALENDAR_OPERATION_ID.test(value.operationId) || !calendarText(value.eventId, 8192) || value.acknowledge !== 'leave_provider_event') calendarFail();
+  if (value.etag !== null) calendarEtag(value.etag);
+  return { operationId: value.operationId, eventId: value.eventId as string, etag: value.etag as string | null, acknowledge: 'leave_provider_event' };
+}
+export function parsePlanningDetaches(encoded?: string): PlanningDetachReceipt[] {
+  if (encoded === undefined) return [];
+  let value: unknown; try { value = JSON.parse(encoded); } catch { return calendarFail('invalid_state'); }
+  if (!Array.isArray(value) || value.length > 100) calendarFail('invalid_state');
+  const rows = value.map(row => {
+    if (!calendarRecord(row) || !keys(row, ['taskId', 'operationId', 'eventId', 'etag', 'detachedAt', 'detached', 'providerEventLeft']) || !taskIdentifier(row.taskId) || !iso(row.detachedAt) || row.detached !== true || row.providerEventLeft !== true) calendarFail('invalid_state');
+    planningDetachInput({ operationId: row.operationId, eventId: row.eventId, etag: row.etag, acknowledge: 'leave_provider_event' });
+    return structuredClone(row) as PlanningDetachReceipt;
+  });
+  if (new Set(rows.map(row => row.operationId)).size !== rows.length) calendarFail('invalid_state'); return rows;
+}
+export function parsePlanningReviews(encoded?: string): PlanningReviewReceipt[] {
+  if (encoded === undefined) return [];
+  let value: unknown; try { value = JSON.parse(encoded); } catch { return calendarFail('invalid_state'); }
+  if (!Array.isArray(value) || value.length > 100) calendarFail('invalid_state');
+  const rows = value.map(row => {
+    if (!calendarRecord(row) || !keys(row, ['taskId', 'operationId', 'eventId', 'reviewedAt', 'relationship']) || !taskIdentifier(row.taskId) || !iso(row.reviewedAt) || !['linked', 'removed'].includes(String(row.relationship))) calendarFail('invalid_state');
+    planningDetachInput({ operationId: row.operationId, eventId: row.eventId, etag: null, acknowledge: 'leave_provider_event' });
+    return structuredClone(row) as PlanningReviewReceipt;
+  });
+  if (new Set(rows.map(row => row.operationId)).size !== rows.length) calendarFail('invalid_state'); return rows;
 }

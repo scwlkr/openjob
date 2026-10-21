@@ -37,7 +37,7 @@ function WorkspaceMailView({ workspaceId, request, onOpenTask, onOpenWorkspace, 
     <PendingConnectedMailTasks drafts={drafts} workspaceId={workspaceId} onOpenTask={onOpenTask} onOpenWorkspace={onOpenWorkspace} />
     {busy && <p role="status">Checking this Workspace’s Mail connections…</p>}{error && <p role="alert">{error}</p>}
     {loaded && !catalog && <p>No configured Mail reader is available for this Workspace.</p>}
-    {catalog && <><p>{catalog.mode === 'google-fixture' ? 'Invented Google protocol Mail · no live provider calls.' : 'Read-only Google Mail.'} Tasks and Calendar planning stay in this Workspace. No sending or provider Calendar access.</p>
+    {catalog && <><p>{catalog.mode === 'google-fixture' ? 'Invented Google protocol Mail · no live provider calls.' : 'Read-only Google Mail.'} Tasks stay in this Workspace. Mail consent grants no sending or Calendar access; Calendar planning requires separate configuration.</p>
       {!catalog.bindings.length && <p>No Mail account is assigned to this Workspace. Choose its resource home in Connections.</p>}
       {catalog.bindings.map(item => <div key={item.id} className={`${styles.panel} ${mailStyles.mailbox}`}><h3>{item.address}</h3><p>{labels[item.status]}{item.expired ? ' · read access expired' : ''}{item.operation ? ' · connection operation in progress' : ''}</p><button disabled={!catalog.mailAvailable || item.status !== 'connected' || item.expired || !!item.operation} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>Open read-only Mail for {item.address}</button></div>)}
       {!catalog.mailAvailable && <p>Mail reads are unavailable in this configuration.</p>}

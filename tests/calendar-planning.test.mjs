@@ -1,24 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replyOperationFixture } from './support/reply-operations.mjs';
 import { createFixtureGoogleCalendar } from './support/google-calendar-transport.mjs';
-import { createCalendarPlanningRepository } from '../db/calendar-planning.ts';
 import { createFixtureCalendarPlanning } from '../server/calendar-planning.ts';
 import { createFirestorePersonalWorkspaceStore } from '../db/personal-workspace.ts';
 import { createPersonalWorkspaceContextStore } from '../db/personal-workspace-context.ts';
 import { createWorkspaceContextStore } from '../server/workspace-context-store.ts';
 import { createWorkspacePilotApplication } from '../server/workspace-pilot-application.ts';
 
-const span = { start: { kind: 'timed', at: '2026-11-01T06:30:00.000Z', timeZone: 'America/Chicago' }, end: { kind: 'timed', at: '2026-11-01T07:30:00.000Z', timeZone: 'America/Chicago' } };
-async function fixture(options = {}) {
-  const f = await replyOperationFixture(); let time = Date.now(), allowed = true, state;
-  const row = f.envelopes.get(f.owner)[0], binding = { ownerId: f.owner, workspaceId: f.home, accountId: row.accountId, connectionId: row.id, subject: row.subject, revision: row.attemptId, calendarIds: ['planning@example.invalid'] };
-  const repo = (transport = f.db.fetch) => createCalendarPlanningRepository(f.config, transport, { now: () => time });
-  const protocol = () => createFixtureGoogleCalendar({ binding, state, persist: async value => { state = value; }, active: async () => allowed && f.envelopes.get(f.owner)[0]?.status === 'connected', now: () => time, ...options });
-  let provider = protocol(); const service = (repository = repo(), extra = {}) => createFixtureCalendarPlanning({ repository, ...provider, now: () => time, ...extra });
-  const input = { action: 'calendar.create', taskId: f.task.taskId, requestId: crypto.randomUUID(), accountId: binding.accountId, calendarId: binding.accountId + ':calendar:' + encodeURIComponent(binding.calendarIds[0]), title: 'Finish the review', span };
-  return { ...f, binding, repo, service, input, state: () => state, provider: () => provider, editProvider(apply) { state = provider.state(); apply(state); provider = protocol(); }, restart() { const saved = f.db.exportState(); f.db.restoreState(saved); provider = protocol(); }, advance(ms) { time += ms; }, revoke() { allowed = false; } };
-}
+import { calendarPlanningFixture as fixture, calendarPlanningSpan as span } from './support/calendar-planning.mjs';
 test('Mail Task → atomic remote reservation → restart → create/update/delete; local completion stays local', async () => {
   const f = await fixture(), ops = f.service(), before = await f.owned.snapshot(f.owner, f.home), queued = await ops.enqueue(f.owner, f.home, f.input);
   assert.equal(queued.state, 'queued'); assert.equal((await ops.planning(f.owner, f.home))[0].state, 'reserved'); assert.deepEqual(await f.owned.snapshot(f.owner, f.home), before);
@@ -138,4 +127,39 @@ test('ownership change or lease expiry during Calendar preflight prevents the ac
   let expire = () => {}; const g = await fixture({ beforeRead: async () => expire() }), op = await g.service().enqueue(g.owner, g.home, g.input);
   expire = () => g.advance(30_001);
   assert.equal((await g.service().run(g.owner, g.home, op.id)).state, 'unknown'); assert.equal(g.state(), undefined); assert.equal(g.provider().calls.filter(row => row.method !== 'GET').length, 0);
+});
+test('explicit detach leaves the provider event and recovers its exact local receipt after a lost commit response', async () => {
+  const f = await fixture(), queued = await f.service().enqueue(f.owner, f.home, f.input); await f.service().run(f.owner, f.home, queued.id);
+  const link = (await f.service().planning(f.owner, f.home))[0], input = { operationId: link.operationId, eventId: link.eventId, etag: link.confirmed.etag, acknowledge: 'leave_provider_event' }, before = f.provider().state();
+  await assert.rejects(() => f.service().detach(f.owner, f.home, f.task.taskId, { ...input, acknowledge: 'delete_event' }), e => e.code === 'invalid_input');
+  let lose = true; const transport = async (url, init) => { const response = await f.db.fetch(url, init); if (lose && String(url).endsWith('/documents:commit') && String(init?.body).includes('remotePlanningDetachesJson') && response.ok) { lose = false; throw new Error('Lost detach acknowledgement'); } return response; };
+  await assert.rejects(() => f.service(f.repo(transport)).detach(f.owner, f.home, f.task.taskId, input)); assert.equal(lose, false);
+  f.restart(); const receipt = await f.service().detachReceipt(f.owner, f.home, f.task.taskId, input.operationId); assert.equal(receipt.detached, true); assert.equal(receipt.providerEventLeft, true);
+  assert.deepEqual(await f.service().detach(f.owner, f.home, f.task.taskId, input), receipt); assert.deepEqual(f.provider().state(), before); assert.deepEqual(await f.service().planning(f.owner, f.home), []);
+  await assert.rejects(() => f.service().detachReceipt(f.sessions.sam.user.userId, f.home, f.task.taskId, input.operationId), e => e.code === 'forbidden');
+  await f.owned.command(f.owner, f.home, { type: 'task.delete', taskId: f.task.taskId }); assert.deepEqual(f.provider().state(), before);
+});
+test('queued and unknown reservations cannot detach; explicit successful review permits leaving the known event', async () => {
+  const f = await fixture({ afterAccept: async () => { throw new Error('Lost response'); } }), queued = await f.service().enqueue(f.owner, f.home, f.input);
+  let link = (await f.service().planning(f.owner, f.home))[0], input = { operationId: link.operationId, eventId: link.eventId, etag: null, acknowledge: 'leave_provider_event' };
+  await assert.rejects(() => f.service().detach(f.owner, f.home, f.task.taskId, input), e => e.code === 'review_required');
+  assert.equal((await f.service().run(f.owner, f.home, queued.id)).state, 'unknown'); await assert.rejects(() => f.service().detach(f.owner, f.home, f.task.taskId, input), e => e.code === 'review_required');
+  await f.service().review(f.owner, f.home, f.task.taskId, new AbortController().signal); link = (await f.service().planning(f.owner, f.home))[0]; input = { ...input, etag: link.confirmed.etag };
+  assert.equal((await f.service().detach(f.owner, f.home, f.task.taskId, input)).detached, true); assert.equal(f.state().attempts.length, 1); assert.equal(f.state().events[0].status, 'confirmed');
+  assert.equal((await f.service().get(f.owner, f.home, queued.id)).state, 'unknown');
+});
+test('a lost review acknowledgement recovers exact removed relationship after restart without changing unknown operation history', async () => {
+  const f = await fixture({ afterAccept: async () => { throw new Error('Lost provider response'); } }), create = await f.service().enqueue(f.owner, f.home, f.input);
+  assert.equal((await f.service().run(f.owner, f.home, create.id)).state, 'unknown');
+  const [linked] = await f.service().review(f.owner, f.home, f.task.taskId, new AbortController().signal);
+  const queued = await f.service().enqueue(f.owner, f.home, { action: 'calendar.delete', taskId: f.task.taskId, requestId: crypto.randomUUID(), etag: linked.confirmed.etag });
+  assert.equal((await f.service().run(f.owner, f.home, queued.id)).state, 'unknown');
+  let lose = true; const transport = async (url, init) => { const response = await f.db.fetch(url, init); if (lose && String(url).endsWith('/documents:commit') && String(init?.body).includes('remotePlanningReviewsJson') && response.ok) { lose = false; throw new Error('Lost review acknowledgement'); } return response; };
+  await assert.rejects(() => f.service(f.repo(transport)).review(f.owner, f.home, f.task.taskId, new AbortController().signal)); assert.equal(lose, false);
+  f.restart(); const receipt = await f.service().reviewReceipt(f.owner, f.home, f.task.taskId, queued.id);
+  assert.equal(receipt.relationship, 'removed'); assert.equal(receipt.eventId, queued.eventId); assert.equal(receipt.operationId, queued.id);
+  assert.deepEqual(await f.service().planning(f.owner, f.home), []); assert.equal((await f.service().get(f.owner, f.home, queued.id)).state, 'unknown');
+  await assert.rejects(() => f.service().reviewReceipt(f.sessions.sam.user.userId, f.home, f.task.taskId, queued.id), e => e.code === 'forbidden');
+  assert.equal((await f.service().run(f.owner, f.home, queued.id)).state, 'unknown'); assert.equal(f.state().attempts.length, 2);
+  await f.service().enqueue(f.owner, f.home, { ...f.input, requestId: crypto.randomUUID() }); assert.equal(f.state().attempts.length, 2);
 });

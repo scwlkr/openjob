@@ -8,6 +8,7 @@ import { openSync, fstatSync, closeSync, readSync } from "node:fs";
 import { readWorkspaceAgentToken } from "./lib/owned-workspace-agents.mjs";
 import { runOwnedWorkspace } from "./lib/owned-workspace.mjs";
 import { runReplyOperation } from "./lib/reply-operations.mjs";
+import { runProviderCalendar } from "./lib/provider-calendar.mjs";
 import { preparePersonalAgentGrant, deliverPersonalAgentGrant, publicPersonalAgent, readPersonalAgentToken } from "./lib/personal-agent-grant.mjs";
 import { normalizeWorkspaceTaskQuery, filterWorkspaceTasks } from "./lib/workspace-task-query.mjs";
 import { parseArguments } from "./lib/arguments.mjs";
@@ -92,6 +93,19 @@ const TASK_OPTIONS = new Map([
   ["delete", new Set([...TASK_COMMON_OPTIONS, "--yes"])],
 ]);
 const COMMAND_OPTIONS = new Map([
+  ["calendar accounts", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["calendar list", new Set([...OUTPUT_OPTIONS, "--workspace", "--account", "--cursor"])],
+  ["calendar events", new Set([...OUTPUT_OPTIONS, "--workspace", "--account", "--calendar", "--schedule-start", "--schedule-end", "--cursor"])],
+  ["calendar availability", new Set([...OUTPUT_OPTIONS, "--workspace", "--account", "--calendar", "--schedule-start", "--schedule-end"])],
+  ["calendar-operation list", new Set([...OUTPUT_OPTIONS, "--workspace", "--task", "--cursor"])],
+  ["calendar-operation show", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["calendar-operation enqueue", new Set([...OUTPUT_OPTIONS, "--workspace", "--input"])],
+  ["calendar-operation run-fixture", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["planning list", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["planning review", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["planning detach", new Set([...OUTPUT_OPTIONS, "--workspace", "--input"])],
+  ["planning detach-receipt", new Set([...OUTPUT_OPTIONS, "--workspace"])],
+  ["planning review-receipt", new Set([...OUTPUT_OPTIONS, "--workspace"])],
   ["operation list", new Set([...OUTPUT_OPTIONS, "--workspace", "--task", "--cursor"])],
   ["operation show", new Set([...OUTPUT_OPTIONS, "--workspace"])],
   ["operation enqueue", new Set([...OUTPUT_OPTIONS, "--workspace", "--input"])],
@@ -159,6 +173,9 @@ Local app and updates:
 
 Resources:
   operation    Inspect/queue/run fixture reply operations in an explicit Workspace
+  calendar     Read a selected provider Calendar and its availability
+  planning     Inspect/review/detach Task provider planning links
+  calendar-operation  Queue/inspect/run fixture Calendar operations
   connections  List, begin, action or read Mail; normal runtime closed
   workspace  Personal Tasks, Calendar and invented Mail through the shared API
   auth       Sign in, inspect authentication, or sign out
@@ -184,6 +201,31 @@ Global options:
 
 /** @type {Record<string, string>} */
 const RESOURCE_HELP = {
+  calendar: `Usage:
+  openjob calendar accounts --workspace <wsp_id>
+  openjob calendar list --workspace <wsp_id> --account <account_id> [--cursor <cursor>]
+  openjob calendar events --workspace <wsp_id> --account <account_id> --calendar <qualified_id> --schedule-start <ISO> --schedule-end <ISO> [--cursor <cursor>]
+  openjob calendar availability --workspace <wsp_id> --account <account_id> --calendar <qualified_id> --schedule-start <ISO> --schedule-end <ISO>
+
+Provider reads require separately configured Calendar consent. Normal runtimes stay disabled.
+Availability is an expiring observation, never an atomic reservation.`,
+  planning: `Usage:
+  openjob planning list --workspace <wsp_id>
+  openjob planning review <task_id> --workspace <wsp_id>
+  openjob planning detach <task_id> --workspace <wsp_id> --input <path|->
+  openjob planning detach-receipt <task_id> <cop_id> --workspace <wsp_id>
+  openjob planning review-receipt <task_id> <cop_id> --workspace <wsp_id>
+
+Detach input: operationId, eventId, etag (or null), acknowledge: "leave_provider_event".
+Detach leaves the provider event untouched. Queued/unknown reservations must resolve first.`,
+  'calendar-operation': `Usage:
+  openjob calendar-operation list --workspace <wsp_id> [--task <task_id>] [--cursor <cursor>]
+  openjob calendar-operation show <cop_id> --workspace <wsp_id>
+  openjob calendar-operation enqueue --workspace <wsp_id> --input <path|->
+  openjob calendar-operation run-fixture <cop_id> --workspace <wsp_id>
+
+Retain the exact reviewed input/requestId after a lost response. Accepted intent is not completion.
+Only the synthetic launcher configures execution. Unknown operations cannot execute again.`,
   connections: `Usage:
   openjob connections list
   openjob connections begin --input <json-file>
@@ -612,6 +654,7 @@ async function main(raw) {
   /** @param {unknown} envelope */
   const writeResult = (envelope) => writeEnvelope(envelope, format, parsed.options);
   if (resource === 'operation') { await runReplyOperation({ command, rest, options: parsed.options, apiRequest, writeResult }); return; }
+  if (['calendar', 'planning', 'calendar-operation'].includes(resource)) { await runProviderCalendar({ resource, command, rest, options: parsed.options, apiRequest, writeResult }); return; }
   if (resource === "workspace" && parsed.options.has("--workspace")) {
     await runOwnedWorkspace({ command, rest, options: parsed.options, apiRequest, writeResult, confirmDestructiveAction }); return;
   }
