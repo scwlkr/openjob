@@ -1,3 +1,23 @@
+# Current work — R30 fixture-only durable reply operations
+
+21October2026: PR127 merged4263b46 (scoped owned Workspace agents); PR128 merged
+e483988b9b92ecfbb7ab644f1b871d559d3433bd (in-Workspace web Mail journey). Native
+draft PR120 is pushed/current/clean at8c8b4f394d6213eff1e18635904d965949b2057f;
+its24 app input hashes and original26 files still match. Native integration proof:
+output/r53/native-integration-receipt.json. Android UI-method answer remains pending.
+
+Next active source milestone: existing ROADMAP R30, Linear execution discussion
+7f612b86-7725-46b1-8474-8a2a680da5eb. Branch codex/p-wlk-6-durable-reply-operations
+starts at main e483988. Implementation has not begun. Freeze one reviewed authored
+reply into a durable fixture-only operation, then claim/execute through a bounded
+injected synthetic runner and inspect confirmed/rejected/unknown outcomes. Reuse
+current source/home/binding/active-owner authority and existing Firestore CAS/lease
+patterns; prove restart, deduplication, competing claims, revocation and no replay
+after uncertain dispatch. Normal runtime gets no dispatcher; real mail.send403 and
+read-only Google consent remain intact. No live effect, new persistent access,
+provider Calendar, deployment or release. Keep the completed real alternate read
+closed; preserve existing native proof sessions and shared files.
+
 # P-WLK-6 / R20–R33 — Mail inside its assigned Workspace
 
 21October2026: sourcec4e5f09e7e093714899c98e890f96835101b58e7 follows merged
