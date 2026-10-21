@@ -22,6 +22,7 @@ Reads use fixed Gmail HTTPS endpoints, GET requests and denied redirects:
 | Profile | Check the mailbox address against the server binding. |
 | Labels list | Account-qualified folder references and original label IDs. |
 | Messages list | Bounded page of message/thread IDs and an owner/account-bound next cursor. |
+| Message get, metadata | Header/identity summaries without body or snippet; Subject/From/To only. |
 | Message get, full | Match the requested ID; retain thread/labels, headers, provider timestamp and plain-text body. |
 
 Gmail's [list method](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list)
@@ -59,3 +60,32 @@ server credential store, active-owner/connection bindings and cloud runtime
 verification. A future reviewed integration must bind that approved connection
 to this adapter and verify provider behavior. Existing Firebase sign-in is not
 mailbox consent. No setup, credential creation or live execution occurred here.
+
+
+## Explicit configured body reads (P-WLK-6 / R32)
+
+The configured web chooses metadata summaries, then requests one body explicitly.
+The adapter exposes separate listMessageSummaries/getMessageSummary methods while
+retaining existing listMessages/getMessage full DTOs for current consumers. Metadata
+mapping never invokes MIME decoding and never returns provider snippets. Creating a
+source Task uses metadata; explicit Task-source/reply reads keep their full-message
+contracts. A missing exact message maps to fixed message_unavailable404.
+
+The body decoder descends only through multipart containers, omits attached/nested
+message payloads, and rejects non-ASCII text labeled US-ASCII. The web renders plain
+text as inert text, keeps one body transiently, and clears it on close/navigation/
+disconnect. Existing full-read native/client consumers remain eager. Synthetic
+adapter/API/CLI/browser proof does not close real connected, native lazy, sync,
+metadata lifetime or release acceptance.
+
+
+## Metadata observation lifetime
+
+Configured metadata responses describe a conservative pre-scan observation with
+stale/expiry bounds capped by current credential expiry. Fresh current checks run
+after both successful and failed scans. The web uses elapsed monotonic and wall
+bounds anchored at request start, clears expired content, and polls only a visible
+first page at a bounded interval. It stops on the first failure. HTTP remains no-store;
+no durable metadata/body cache, history cursor or global deletion feed is introduced.
+Sleeping clocks are covered by synthetic elapsed-time checks, not a physical sleep
+qualification. See [browser clock behavior](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now#ticking_during_sleep).

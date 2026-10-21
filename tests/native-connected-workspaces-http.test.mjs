@@ -74,6 +74,18 @@ test('native connected client/coordinator use actual authenticated HTTP Workspac
     assert.deepEqual(await controller.saveReply(f.owner, home, task.taskId, input), saved);
     await assert.rejects(controller.saveReply(f.owner, home, task.taskId, { ...input, body: 'Different stale text' }), error => error.code === 'conflict');
     assert.doesNotMatch(JSON.stringify(await controller.read(f.owner, home)), /connectedReplies|replies@example|Native work reviewed|Invented connected message/);
+    // Upstream Gmail authentication failure is Mail reconnect, not OpenJob logout.
+    // The native shell revokes its OpenJob session on HTTP401, so preserve409 here.
+    f.hooks.response = () => Response.json({ error: { errors: [{ reason: 'authError' }], message: 'SECRET_PROVIDER_BODY' } }, { status: 401 });
+    for (const operation of [
+      () => controller.mail(f.owner, home, begin.connectionId),
+      () => controller.source(f.owner, home, task.taskId),
+      () => controller.reply(f.owner, home, task.taskId),
+      () => controller.saveReply(f.owner, home, task.taskId, { ...input, expectedRevision: 1, body: 'Must not save during reconnect' }),
+    ]) await assert.rejects(operation(), error => error.status === 409 && error.code === 'reconnect_required' && !JSON.stringify(error).includes('SECRET_PROVIDER_BODY'));
+    assert.equal((await controller.read(f.owner, home)).work.tasks.find(item => item.id === task.taskId).completed, true);
+    f.hooks.response = undefined;
+    assert.deepEqual((await controller.reply(f.owner, home, task.taskId)).draft, saved.draft);
     const readStarted = new Promise(resolve => { pause = resolve; }); const reading = controller.source(f.owner, home, task.taskId); await readStarted;
     await coordinator.signOut(); who = 'sam'; await coordinator.signIn('google'); release();
     await assert.rejects(reading, error => error.code === 'revoked');

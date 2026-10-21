@@ -9,10 +9,13 @@ export type ProviderAccount = {
   sync: { state: "synthetic_ready" | "provider_ready" | "blocked"; asOf: string | null; reason: string };
 };
 export type ProviderMessage = { id: string; accountId: string; upstreamId: string; upstreamThreadId: string; threadId: string; folderIds: string[]; subject: string; from: string; to: string; body: string; receivedAt: string; read: boolean };
+/** Browsing metadata deliberately omits bodies and provider snippets. */
+export type ProviderMessageSummary = Omit<ProviderMessage, 'body'>;
 export type ProviderFolder = { id: string; accountId: string; upstreamId: string; name: string };
 export type ProviderCalendar = { id: string; accountId: string; upstreamId: string; name: string; color: string };
 export type ProviderEvent = { id: string; accountId: string; upstreamId: string; calendarId: string; title: string; start: string; end: string };
 export type ProviderMessagePage = { messages: ProviderMessage[]; folders: ProviderFolder[]; calendars: ProviderCalendar[]; events: ProviderEvent[]; nextCursor: string | null; syncCursor: string | null };
+export type ProviderMessageSummaryPage = Omit<ProviderMessagePage, 'messages'> & { messages: ProviderMessageSummary[] };
 export type ProviderConnectorStatus = ({ provider: "gmail"; adapter: "gmail-rest-read" } | { provider: "outlook"; adapter: "outlook-graph-read" } | { provider: "imap"; adapter: "imap-inbox-read" }) & { status: "not_connected"; consent: "required"; liveExecutionEnabled: false; implementedOperations: string[]; unsupportedOperations: string[]; message: string };
 export type ProviderPreview = ProviderMessagePage & { connectors: ProviderConnectorStatus[]; mode: "synthetic" | "mock"; accounts: ProviderAccount[]; selectedAccountId: string };
 export type ProviderChange = { kind: "message"; value: ProviderMessage } | { kind: "event"; value: ProviderEvent };

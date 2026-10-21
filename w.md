@@ -1,107 +1,190 @@
-# Native draft integration — landed R32 pages and folders
+# P-WLK-6 — Mail reconnect preserves OpenJob authentication
 
-20October23:29UTC: integrating main8156b492d219544b6bf3141726af666746fd877e
-(PR121/122) into native draft PR120. Only FEATURES.md and this handoff conflicted;
-both native and Mail records are retained. This supersedes the earlier continuation
-note below that says the native branch still has its old main base. Current R32
-gaps are search, lazy bodies, sync/stale metadata and integrated live acceptance.
-Native paging/folder controls remain separate. All21 R53 source files plus its
-recorded package/lock/identity inputs hash-match a8a4b3e. The existing proof snapshot,
-installed Android APK, Metro and fake5213 service are untouched. Integration root
-and native types pass; six native suites pass160 tests; actual API/native HTTP group
-passes13 checks across both home types and current R32 contracts. Counts overlap
-earlier runs. Android UI-method authorization is still required before its UI journey. Do not repeat the standalone real read or infer approval from its old answer.
+21October00:40UTC: source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65 corrects a cross-client P2
+found while integrating PR125/main7dc3d023939080ebe92023066c5656589109c3aa into
+native draft PR120. Configured Gmail authentication failures returned401, which
+native treats as an ended OpenJob session. The Connections boundary now returns
+reconnect_required409 for upstream authentication_required. Invalid/missing OpenJob
+identity still returns401; current-access checks and provider denial remain intact.
+No native runtime/package or response-shape change was needed.
 
-# Continuation — R32 paging landed separately from native R53
+10 focused freshness/flow/runtime-CLI checks pass, plus root types and affected
+lint. The integrated native HTTP regression passes both independent and retained
+Personal homes (3tests), checking provider401 during Mail/source/reply/save becomes
+409, Task access remains and the unchanged saved reply reopens after recovery.
+That regression lives in draft PR120, which owns the native feature. Read-only
+review confirmed the P2 resolved with no new findings. The original26 files and
+native app build inputs are preserved; only the HTTP test expands. Android UI-method
+approval remains pending; no native/live/device/release pass is inferred.
 
-20October23:12UTC: PR121 merged on main as
-bf4bcd4c69ddb0dac885d6e8b20de97f339bcfda (source d36cd95, reviewed head d3fdeaf).
-Configured API/CLI/web Mail now reaches later pages, retains authored titles,
-blocks paging during uncertain Task confirmation, and recovers from invalid cursors.
-Thirty focused checks and actual fixture browser proof passed; canonical evidence
-is in main's w.md and Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
-This native branch still has its earlier main base; no native or proof inputs changed.
-R32 search/folders, lazy bodies, sync metadata and integrated live work remain open.
-R53 still awaits the separate Android SDK UI-method answer; the older Google
-unverified-app approval does not answer it. Preserve its installed APK, own emulator,
-loopback5213/8088 fixture services and original26 files. Do not repeat the real read.
+PR125 freshness/browser evidence remains valid apart from its superseded assertion
+that an upstream auth failure should return401. No additional real read, provider
+effect, persistent access, deployment or publication. Continue Linear R32 thread
+845d4c0c-61a1-4a62-b9c3-96d0b5e3473a. The next source-only product slice is owned
+Workspace Tasks/Calendar agent grants in R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591;
+its empty branch starts at main7dc3d02 and source implementation has not begun.
 
-# P-WLK-6 / R53 — native connected Workspace journey
+# Native draft integration — current Mail read contracts
 
-20October: sole local implementation owner. Linear issue creation hit the free
-issue limit; execution continues in the existing OpenJob project discussion
-ba6592c3-b3e1-4908-b830-3532ab70aaf4, without changing the plan or creating another
-queue. Source a8a4b3ed98f704d821b49d790452ef5f7213164e is pushed in draft
-[PR120](https://github.com/scwlkr/openjob/pull/120), branch
-codex/p-wlk-6-native-connected-workspaces. Source-only draft; practical native gates
-are pending and R53 is not complete.
+21October00:35UTC: integrate main7dc3d023939080ebe92023066c5656589109c3aa
+(landed PR123 search, PR124 lazy bodies and PR125 freshness) into draft PR120.
+Only FEATURES.md and this handoff conflicted; both product/delivery records are
+retained without custom source changes. This supersedes the older integration
+records below. The native full-read contract stays exact; native paging/search,
+metadata/lazy controls and freshness remain separate. R32 current-page polling is
+bounded, not complete mailbox history sync; integrated live acceptance remains open.
+Original build artifacts/services and the completed bounded real read are preserved.
+Android SDK UI-method authorization remains pending and PR120 stays Draft.
+All24 recorded runtime/package/identity input hashes and original26 shared files
+match; only the recorded native HTTP test expands for the regression below. The
+isolated merged source passes root/native types, actual authenticated native HTTP
+flow for both home types (3tests), OpenAPI39/55, generated CLI types, brand32 and
+secret1059. Initial direct tsc lacked ignored Cloudflare runtime declarations; the
+normal npm typecheck generated them and passed. A review P2 was fixed: provider auth failure becomes409reconnect_required, keeping
+401 for OpenJob authentication. Final actual HTTP3 regression checks Mail/source/
+reply/save plus retained Tasks and unchanged saved draft after provider recovery.
+Review confirms no remaining findings. No native runtime or installed build changed;
+prior native suites/platform evidence retain their exact recorded app inputs. No
+Android/live/device/release pass is inferred.
 
-Native Connected Workspaces uses the existing identity/session fence and shared
-HTTP routes for catalog/create/retained Personal mapping, configured Mail ->
-reviewed source Task -> normal Today/Tasks/Calendar -> complete -> fresh source ->
-reviewed authored OpenJob reply. Source bodies remain transient; per-context reply
-buffers survive module switches; unsaved replies block Task deletion. Guarded
-notes retain their original base. Verified session restoration is required before
-reopening ended connected access. Existing Personal/offline and Groups remain.
-Consent is still in the existing Connections app; no provider Calendar, sending,
-offline Mail or persistent provider access was enabled.
+# P-WLK-6 / R32 — bounded Mail freshness and retained Task requests
 
-Isolated root/native types, affected lint (existing warnings only), OpenAPI38paths /
-54operations, brand32 and root secret1051 pass. Six native suites pass100 tests;
-12 targeted API/native loopback HTTP checks pass (earlier groups overlap). These
-exercise both Owned and retained Personal homes, notes/draft stale writes, late
-identity responses, foreign-owner denial, redaction and disconnect denial. Final
-read-only source review has no findings; two earlier P2s were fixed and covered.
-All21 changed source files match the isolated build snapshot. Original26 untracked
-files remain byte-identical; shared dependencies and existing sessions preserved.
+20October2026: source1d041d5dd6d2afaff478e493647a6b9882e9f84d follows PR124/main
+ff1815be682a03e031295334ab0539836609c1dc. Metadata-view responses add conservative
+observedAt/staleAt/expiresAt bounds: observation starts before the scan, stale after
+at most60seconds, expiry at most5minutes and capped by the current credential.
+Final current-access checks run on success/failure. Full/native, exact-body and
+standalone response shapes stay unchanged. Freshness never authorizes access.
 
-iOS practical fixture proof passed from source a8a4b3e on the owned iPhone18 Pro /
-iOS27 simulator. Fresh locked native dependencies and all201 locked Pod entries
-match. First Xcode call exceeded the tool's300s response limit; the original build
-continued to completion. The unchanged incremental invocation then recorded a
-successful54.8s result and an embedded development-identity Release app. Actual UI:
-reviewed source Task title, authored notes, saved20October23:00–23:30UTC plan,
-Calendar exact Task, complete, fresh source and reviewed Reply all. Authored text
-survived Calendar and independent owner-Workspace creation/context switches. That
-new Workspace correctly had no Mail connection. Saved revision1 reopened after
-stop/relaunch with exact body/mode/account/recipients. Fixture disconnect denied
-native save and fresh-source access; completed Task/block remained. Synthetic
-screenshots/receipt are in output/r53. Owned simulator shut down; temporary keyboard
-routing restored. iOS build lease42be431e909e74377380242a released succeeded.
+Web keeps one transient metadata page and one explicitly opened body; no parent
+copy or disk cache. Request-start monotonic and elapsed wall-time limits prevent
+transit, clock rollback or sleeping timers from extending the view. Expiry clears
+messages/folders/cursors/body and stops automatic reads. Visible first-page polling
+is sequential and at most once per minute; it pauses while hidden/offline, reading,
+confirming a Task or viewing later pages. Any failure clears content and latches a
+stop until explicit action. Synchronous current-window/pause guards reject old timer
+callbacks. Refresh Mail retains applied filters; invalid cursor restarts page one;
+missing folders have an explicit Read All Mail recovery preserving search. Provider
+401/scope/policy errors remain fixed redacted blocked categories.
 
-Android work in progress: /tmp/openjob-r53-ji537fxd is the outside-sync proof copy.
-Only its native package main selects the committed simulator-connected-smoke entry;
-the actual checkout's normal index.ts entry is unchanged. Development debug build
-session2017 passed in25m33s (571tasks); the verified development APK is installed
-on owned AVD OpenJob_R53_Connected / emulator-5580. Existing debug networking was
-used; no existing Bubba AVD was reused. Android build lease
-aa96892ca56c7c57fe60b7e2 released succeeded. APK SHA256
-cda191317268d87ba205fab616004cb7c5db4e672f2a400d2e96e0fc7bee2be9;
-sanitized build receipt: output/r53/android-build-receipt.json. Its build automatically installed the required NDK using
-the SDK's existing accepted license; source lockfiles were unchanged. Local fake
-service PID5910/session60283 uses /tmp/openjob-r53-native-state.json on5213; it is
-disconnected after the iOS denial test. Use a fresh dedicated Android state next.
-No real Mail read was repeated; key-free Timothy launcher remains disconnected.
-The Android fixture service session97374 now uses fresh dedicated
-/tmp/openjob-r53-android-state.json on5213; the disconnected iOS service was stopped.
-The emulator is online. CUA cannot bind its raw SDK window (not exposed as a supported
-app); alternative Android SDK UI automation needs explicit method authorization
-before input actions. The build is complete; no Android UI input has run. Method authorization was
-requested through the current chat; do not infer approval from the earlier bounded
-Google notice authorization. Metro is
-loopback-only/offline on8088 with the committed fixture main selected only in the
-proof copy; Metro PID45723/session90405. Initial --offline/--host combination was
-rejected by locked Expo; EXPO_OFFLINE=1 plus --host localhost works and lsof confirms
-127.0.0.1:8088. Manifest200 selects the committed fixture entry and dev identity.
-Bounded SDK UI helper prepared at /tmp/openjob-r53-android-ui.py (syntax checked,
-not executed). It refuses other AVDs, apps and non-fixture services.
+Reviewed titles, exact additional request IDs and receipts now live above disposable
+Mail pages in owner-epoch Connections memory, without provider summaries/bodies or
+untouched subject defaults. Pending cards survive expiry/refresh/disconnect, never
+auto-retry, and can check Workspace in a new tab. Explicit two-step Forget warns a
+Task may already exist, retains the title and frees navigation. Leaving Connections,
+reload, identity change or sign-out clears this memory; no durability claim.
 
-Next: finish the Android written journey under ADR0017, record
-exact artifact inputs/results, update this receipt and Linear, then review the
-exact final PR head for an authorized nondeploying merge. Real native login,
-provider/device/storage/release gates and full R33/R53 acceptance remain separate.
+25 focused API/domain/CLI/source/reply checks pass; final freshness3 rerun plus14
+standalone checks pass (overlapping groups). Final types/affected lint, OpenAPI39/55,
+generated CLI types, brand generation/check32 and secret scan pass. Four review P2s
+were fixed and confirmed. Browser caught a fifth stale-pending-fields bug on a200
+retry: normalized target IDs now prevent old draft fields entering a confirmed row.
+Fresh final fixture proved503 -> expiry -> explicit refresh -> same UUID/title ->200
+and a clean confirmed UI. It also proved open-body expiry/clearing, explicit Forget,
+disconnect and Sam isolation. Earlier same-source logic proved bounded auto reads,
+no reads after blocked403 even after121seconds of controlled time, and missing-folder
+All Mail recovery retaining search. Phone width390, checkbox label target46px; no
+overflow. Synthetic screenshots/receipt/CLI history: output/playwright/r32-freshness/.
 
----
+No additional real read, provider effect, persistent access, deployment or release.
+Original26 files hash-match. Native PR120/build inputs remain untouched and Android
+UI-method authorization is still pending; current-main integration remains necessary
+before its eventual delivery. R32 still needs global/history sync and tombstones,
+integrated live acceptance and native freshness/lazy controls. Current-page polling
+is not a complete mailbox sync. Continue the existing Linear R32 thread845d4c0c-
+61a1-4a62-b9c3-96d0b5e3473a and roadmap; do not repeat the completed alternate-only read.
+
+# P-WLK-6 / R32 — explicitly requested connected Gmail bodies
+
+20October: source f4226dae06c14d93bd1cd2e1ba36bc2959e87aa9 follows merged search
+PR123/main161538dec4fd5ee791325c89cca235e45026a5e0. Configured web browsing now uses
+GET Mail?view=metadata: summaries contain headers/identity/labels/date/read state,
+with no body or snippet. Gmail requests format=metadata and only Subject/From/To
+headers. The existing full Mail response remains exact for current native/clients;
+standalone one-read behavior is unchanged. This is an explicit representation
+choice, not a provider permission or a new credential path.
+
+Read message uses GET /connections/{id}/mail/{upstreamId} for one fresh full read.
+Account/home derive from the connection, current owner/binding/expiry/consent/profile
+checks fence provider calls, and current access is checked on both success/failure
+before disclosure. Queries and malformed/foreign routes fail closed. Deleted Mail
+returns redacted message_unavailable404 and leaves authored Tasks. Exact Task-source
+and reply reads remain full/filter-independent; Task creation now verifies metadata
+without fetching a body. CLI: mail --metadata-only and message <id> <upstream-id>.
+
+The web holds one opened body in component memory, clears it on close/navigation,
+and keeps the Task form/title/receipt mounted through open/close/failure. Pending
+additional Task confirmation blocks body opening/search/navigation. Plain text uses
+inert React rendering, bounded existing MIME/base64/UTF-8 decoding and explicit
+HTML/attachment-unavailable fallback. No attachment requests or remote-image fetches.
+Decoder tightening skips nested message containers and rejects non-ASCII content
+that declares US-ASCII. The official metadata read contract was checked:
+https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/get.
+
+43 focused adapter/API/CLI/source/reply checks and14 standalone-session checks pass
+(overlapping groups, not cumulative). Types, affected lint (two existing warnings),
+OpenAPI39paths/55operations, generated CLI types, brand32 and secret safety pass.
+Independent source review found no issues. Practical headed390px browser proved
+metadata response without body, explicit first/second-page reads, edited title and
+created-Task receipt retained through close, injected unavailable-body recovery,
+uncertain additional Task blocks body opening then confirms, paging clears bodies
+and retains title, delayed full response cannot restore Mail after disconnect, and
+Sam sees no Alex connection. Body control44px, document/viewport390px. Synthetic
+screenshots/receipt/CLI history: output/playwright/r32-bodies/.
+
+No additional real read, provider effect, persistent access, deployment or release.
+Original26 files hash-match. Native PR120/build inputs remain separate and unchanged;
+its existing full-read consumer remains eager, and Android UI-method authorization
+is still pending. R32 still needs sync/metadata lifetime/stale state and integrated
+live acceptance. Native metadata/body controls and eventual default-contract
+convergence remain open. Continue the same Linear R32 thread845d4c0c-61a1-4a62-b9c3-
+96d0b5e3473a; do not repeat the completed alternate-only real read.
+
+# P-WLK-6 / R32 — connected Gmail search
+
+20October: source d923fd0a2185f8a5c0dce3411646747f3ce2fecd adds submitted Gmail
+search through the configured adapter/API/existing CLI/web. Search is scoped to
+the verified account and selected Gmail label; outer whitespace is trimmed while
+operators, case, internal spaces and Unicode are forwarded unchanged as Gmail q.
+Input is nonblank, at most512 JavaScript characters, with no control characters.
+Canonical gm3 cursors bind a SHA-256 query fingerprint plus folder, owner, account
+and Google subject. Old or mismatched cursors require page one. Query text is not
+stored in cursors or connection persistence. Provider400 on the first search page
+returns redacted search_rejected; a later-page400 remains invalid_cursor. Neither
+retries silently nor falls back to unfiltered results.
+
+Web editing and applied search are separate: Next/First/folder changes use the
+submitted query; Search Mail and Clear search reset page one. Bodies replace per
+page. Authored titles survive query changes. Pending/unconfirmed additional Task
+requests block search, folder and paging until confirmed. Exact saved source/reply
+identity stays independent of filters. The existing client accepts --search along
+with --folder and a matching --cursor; other Connections routes and the standalone
+one-read route retain their query prohibition.
+
+Thirty-nine focused adapter/flow/source/reply/API/CLI checks and fourteen standalone
+session checks pass (overlapping groups, not cumulative). These cover exact Unicode
+query forwarding, maximum bounded cursors, denial before provider/credential access,
+owner/folder/query binding, redacted errors, empty results, unchanged exact Task
+source, query nonpersistence, disconnect and real-send denial. Root types, affected
+lint (two pre-existing warnings), OpenAPI38paths/54operations, generated CLI types,
+brand32 and secret safety pass. Independent source review found no issues.
+
+Practical headed fixture browser: unsent edited input leaves Next on the applied
+query; submit gives empty results; Clear restores browsing and authored title;
+rejected query clears bodies and offers edit/clear; injected cursor error recovers
+first page with query retained; Review retains query and resets page one; additional
+Task uncertainty disables search/folder/page controls, then retry confirms it;
+disconnect clears Mail and Sam sees no Alex connection. At390px, search height44px
+and document/viewport widths390px. Screenshots/receipt: output/playwright/r32-search/.
+The fixture recognizes only explicit invented queries; it does not emulate Gmail's
+full search parser. This is connected-flow fixture proof, not live Gmail acceptance.
+
+No additional real read, provider effect, persistent access, deployment or release.
+The original26 files remain byte-identical. Native PR120 and its unchanged build
+inputs remain separate; Android UI-method authorization is still pending. R32 still
+needs lazy bodies, sync/stale metadata and integrated live acceptance; native
+search/folder/paging controls remain separate. Continue the existing roadmap in
+Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a; do not repeat the completed real read.
 
 # P-WLK-6 / R32 — configured Gmail folder selection
 
@@ -1655,3 +1738,110 @@ Features: [FEATURES.md](FEATURES.md)
 Terms: [GLOSSARY.md](GLOSSARY.md)
 CLI: `npm run`
 <!-- wstack:end setup -->
+
+---
+
+# Native draft integration — landed R32 pages and folders
+
+20October23:29UTC: integrating main8156b492d219544b6bf3141726af666746fd877e
+(PR121/122) into native draft PR120. Only FEATURES.md and this handoff conflicted;
+both native and Mail records are retained. This supersedes the earlier continuation
+note below that says the native branch still has its old main base. Current R32
+gaps are search, lazy bodies, sync/stale metadata and integrated live acceptance.
+Native paging/folder controls remain separate. All21 R53 source files plus its
+recorded package/lock/identity inputs hash-match a8a4b3e. The existing proof snapshot,
+installed Android APK, Metro and fake5213 service are untouched. Integration root
+and native types pass; six native suites pass160 tests; actual API/native HTTP group
+passes13 checks across both home types and current R32 contracts. Counts overlap
+earlier runs. Android UI-method authorization is still required before its UI journey. Do not repeat the standalone real read or infer approval from its old answer.
+
+# Continuation — R32 paging landed separately from native R53
+
+20October23:12UTC: PR121 merged on main as
+bf4bcd4c69ddb0dac885d6e8b20de97f339bcfda (source d36cd95, reviewed head d3fdeaf).
+Configured API/CLI/web Mail now reaches later pages, retains authored titles,
+blocks paging during uncertain Task confirmation, and recovers from invalid cursors.
+Thirty focused checks and actual fixture browser proof passed; canonical evidence
+is in main's w.md and Linear thread845d4c0c-61a1-4a62-b9c3-96d0b5e3473a.
+This native branch still has its earlier main base; no native or proof inputs changed.
+R32 search/folders, lazy bodies, sync metadata and integrated live work remain open.
+R53 still awaits the separate Android SDK UI-method answer; the older Google
+unverified-app approval does not answer it. Preserve its installed APK, own emulator,
+loopback5213/8088 fixture services and original26 files. Do not repeat the real read.
+
+# P-WLK-6 / R53 — native connected Workspace journey
+
+20October: sole local implementation owner. Linear issue creation hit the free
+issue limit; execution continues in the existing OpenJob project discussion
+ba6592c3-b3e1-4908-b830-3532ab70aaf4, without changing the plan or creating another
+queue. Source a8a4b3ed98f704d821b49d790452ef5f7213164e is pushed in draft
+[PR120](https://github.com/scwlkr/openjob/pull/120), branch
+codex/p-wlk-6-native-connected-workspaces. Source-only draft; practical native gates
+are pending and R53 is not complete.
+
+Native Connected Workspaces uses the existing identity/session fence and shared
+HTTP routes for catalog/create/retained Personal mapping, configured Mail ->
+reviewed source Task -> normal Today/Tasks/Calendar -> complete -> fresh source ->
+reviewed authored OpenJob reply. Source bodies remain transient; per-context reply
+buffers survive module switches; unsaved replies block Task deletion. Guarded
+notes retain their original base. Verified session restoration is required before
+reopening ended connected access. Existing Personal/offline and Groups remain.
+Consent is still in the existing Connections app; no provider Calendar, sending,
+offline Mail or persistent provider access was enabled.
+
+Isolated root/native types, affected lint (existing warnings only), OpenAPI38paths /
+54operations, brand32 and root secret1051 pass. Six native suites pass100 tests;
+12 targeted API/native loopback HTTP checks pass (earlier groups overlap). These
+exercise both Owned and retained Personal homes, notes/draft stale writes, late
+identity responses, foreign-owner denial, redaction and disconnect denial. Final
+read-only source review has no findings; two earlier P2s were fixed and covered.
+All21 changed source files match the isolated build snapshot. Original26 untracked
+files remain byte-identical; shared dependencies and existing sessions preserved.
+
+iOS practical fixture proof passed from source a8a4b3e on the owned iPhone18 Pro /
+iOS27 simulator. Fresh locked native dependencies and all201 locked Pod entries
+match. First Xcode call exceeded the tool's300s response limit; the original build
+continued to completion. The unchanged incremental invocation then recorded a
+successful54.8s result and an embedded development-identity Release app. Actual UI:
+reviewed source Task title, authored notes, saved20October23:00–23:30UTC plan,
+Calendar exact Task, complete, fresh source and reviewed Reply all. Authored text
+survived Calendar and independent owner-Workspace creation/context switches. That
+new Workspace correctly had no Mail connection. Saved revision1 reopened after
+stop/relaunch with exact body/mode/account/recipients. Fixture disconnect denied
+native save and fresh-source access; completed Task/block remained. Synthetic
+screenshots/receipt are in output/r53. Owned simulator shut down; temporary keyboard
+routing restored. iOS build lease42be431e909e74377380242a released succeeded.
+
+Android work in progress: /tmp/openjob-r53-ji537fxd is the outside-sync proof copy.
+Only its native package main selects the committed simulator-connected-smoke entry;
+the actual checkout's normal index.ts entry is unchanged. Development debug build
+session2017 passed in25m33s (571tasks); the verified development APK is installed
+on owned AVD OpenJob_R53_Connected / emulator-5580. Existing debug networking was
+used; no existing Bubba AVD was reused. Android build lease
+aa96892ca56c7c57fe60b7e2 released succeeded. APK SHA256
+cda191317268d87ba205fab616004cb7c5db4e672f2a400d2e96e0fc7bee2be9;
+sanitized build receipt: output/r53/android-build-receipt.json. Its build automatically installed the required NDK using
+the SDK's existing accepted license; source lockfiles were unchanged. Local fake
+service PID5910/session60283 uses /tmp/openjob-r53-native-state.json on5213; it is
+disconnected after the iOS denial test. Use a fresh dedicated Android state next.
+No real Mail read was repeated; key-free Timothy launcher remains disconnected.
+The Android fixture service session97374 now uses fresh dedicated
+/tmp/openjob-r53-android-state.json on5213; the disconnected iOS service was stopped.
+The emulator is online. CUA cannot bind its raw SDK window (not exposed as a supported
+app); alternative Android SDK UI automation needs explicit method authorization
+before input actions. The build is complete; no Android UI input has run. Method authorization was
+requested through the current chat; do not infer approval from the earlier bounded
+Google notice authorization. Metro is
+loopback-only/offline on8088 with the committed fixture main selected only in the
+proof copy; Metro PID45723/session90405. Initial --offline/--host combination was
+rejected by locked Expo; EXPO_OFFLINE=1 plus --host localhost works and lsof confirms
+127.0.0.1:8088. Manifest200 selects the committed fixture entry and dev identity.
+Bounded SDK UI helper prepared at /tmp/openjob-r53-android-ui.py (syntax checked,
+not executed). It refuses other AVDs, apps and non-fixture services.
+
+Next: finish the Android written journey under ADR0017, record
+exact artifact inputs/results, update this receipt and Linear, then review the
+exact final PR head for an authorized nondeploying merge. Real native login,
+provider/device/storage/release gates and full R33/R53 acceptance remain separate.
+
+---

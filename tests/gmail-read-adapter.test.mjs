@@ -200,3 +200,61 @@ test('messages moved into Spam/Trash during an ordinary folder read stay exclude
     assert.equal((await f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' })).body, 'Hello café 日本語');
   }
 });
+
+test('Gmail search forwards exact normalized query and folder, and binds its fingerprint before credentials', async () => {
+  const f = fixture(), query = 'from:colleague@example.invalid subject:"café 日本語" /?a&b#';
+  const input = { ownerId: BINDING.ownerId, accountId: BINDING.accountId, folderId: 'gmail_primary:folder:INBOX', search: `  ${query}  ` };
+  const first = await f.adapter.listMessages(input);
+  const decoded = JSON.parse(Buffer.from(first.nextCursor.slice(4), 'base64url'));
+  assert.equal(decoded.version, 3); assert.match(decoded.searchHash, /^[a-f0-9]{64}$/); assert.equal(JSON.stringify(decoded).includes(query), false);
+  await f.adapter.listMessages({ ...input, search: query, cursor: first.nextCursor });
+  assert.ok(f.calls.filter(call => call.url.pathname.endsWith('/messages')).every(call => call.url.searchParams.get('q') === query && call.url.searchParams.get('labelIds') === 'INBOX'));
+  const before = f.resolved(); f.calls.length = 0;
+  for (const search of [undefined, 'different query', 'x'.repeat(513), 'bad\nquery', '   ']) await assert.rejects(f.adapter.listMessages({ ...input, search, cursor: first.nextCursor }), matchCode(search === undefined || search === 'different query' ? 'invalid_cursor' : 'invalid_input'));
+  assert.equal(f.calls.length, 0); assert.equal(f.resolved(), before);
+});
+
+test('maximum Unicode search keeps a usable bounded cursor without storing search text', async () => {
+  const binding = { ...BINDING, ownerId: 'u'.repeat(128), accountId: 'a'.repeat(128), subject: '界'.repeat(256) }, search = '検索'.repeat(256), token = '頁'.repeat(256);
+  const f = fixture({ bindings: [binding], wire: (url, _init, base) => url.pathname.endsWith('/messages') ? { messages: [], ...(url.searchParams.has('pageToken') ? {} : { nextPageToken: token }) } : base(url) });
+  const first = await f.adapter.listMessages({ ownerId: binding.ownerId, accountId: binding.accountId, search });
+  assert.ok(first.nextCursor.length <= 4096); assert.equal(Buffer.from(first.nextCursor.slice(4), 'base64url').toString('utf8').includes(search), false);
+  assert.equal((await f.adapter.listMessages({ ownerId: binding.ownerId, accountId: binding.accountId, search, cursor: first.nextCursor })).nextCursor, null);
+  assert.equal(f.calls.find(call => call.url.searchParams.has('pageToken')).url.searchParams.get('q'), search);
+});
+
+test('rejected first-page search and stale later page have distinct redacted recovery, no automatic retry', async () => {
+  const first = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages') ? new Response(`SECRET_PROVIDER_BODY ${TOKEN}`, { status: 400 }) : base(url) });
+  await assert.rejects(first.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'rejected query' }), matchCode('search_rejected'));
+  assert.equal(first.calls.filter(call => call.url.pathname.endsWith('/messages')).length, 1);
+  const later = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages') && url.searchParams.has('pageToken') ? new Response(null, { status: 400 }) : base(url) });
+  const page = await later.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'approved query' });
+  await assert.rejects(later.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'approved query', cursor: page.nextCursor }), matchCode('invalid_cursor'));
+  assert.equal(later.calls.filter(call => call.url.pathname.endsWith('/messages')).length, 2);
+  const profile = fixture({ wire: () => new Response(null, { status: 400 }) });
+  await assert.rejects(profile.adapter.listMessages({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, search: 'query' }), matchCode('provider_error'));
+});
+
+
+test('metadata browsing and Task identity reads omit all body/snippet data and use bounded Gmail metadata headers', async () => {
+  const f = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), snippet: 'SECRET_PROVIDER_BODY', payload: { headers: message().payload.headers, mimeType: 'text/plain', body: { data: '%malformed-unread-body' } } } : base(url) });
+  const page = await f.adapter.listMessageSummaries({ ownerId: BINDING.ownerId, accountId: BINDING.accountId });
+  assert.equal(page.messages[0].subject, 'Invented launch');
+  assert.equal(Object.hasOwn(page.messages[0], 'body'), false); assert.equal(Object.hasOwn(page.messages[0], 'snippet'), false);
+  const exact = await f.adapter.getMessageSummary({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' });
+  assert.deepEqual(exact, page.messages[0]);
+  for (const { url } of f.calls.filter(call => call.url.pathname.endsWith('/messages/abc123'))) {
+    assert.equal(url.searchParams.get('format'), 'metadata'); assert.deepEqual(url.searchParams.getAll('metadataHeaders'), ['Subject', 'From', 'To']);
+  }
+  await assert.rejects(f.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' }), matchCode('malformed_response'));
+  const unavailable = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? new Response('SECRET_PROVIDER_BODY', { status: 404 }) : base(url) });
+  await assert.rejects(unavailable.adapter.getMessage({ ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' }), matchCode('message_unavailable'));
+});
+
+test('explicit body reads reject false ASCII and never descend into attached message containers', async () => {
+  const input = { ownerId: BINDING.ownerId, accountId: BINDING.accountId, messageId: 'abc123' };
+  const ascii = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), payload: { mimeType: 'text/plain', headers: [{ name: 'Content-Type', value: 'text/plain; charset=us-ascii' }], body: { data: encode('café') } } } : base(url) });
+  await assert.rejects(ascii.adapter.getMessage(input), matchCode('malformed_response'));
+  const nested = fixture({ wire: (url, _init, base) => url.pathname.endsWith('/messages/abc123') ? { ...message(), payload: { mimeType: 'message/rfc822', parts: [{ mimeType: 'text/plain', body: { data: encode('SECRET_PROVIDER_BODY') } }] } } : base(url) });
+  assert.match((await nested.adapter.getMessage(input)).body, /Plain-text content unavailable/);
+});

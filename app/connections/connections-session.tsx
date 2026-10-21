@@ -1,6 +1,8 @@
 'use client';
 import GoogleConnections from './google-connections';
 import SessionGmail from './session-gmail';
+import { useConnectedMailDrafts } from './connected-mail-drafts';
+import { PendingConnectedMailTasks } from './connected-mail-task';
 import type { GoogleConnectionCatalog } from '../../server/connections/google-state';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -20,10 +22,11 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
     const response = await fetch(`/api/v1/connections${path}`, { method: input ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(input ? { 'content-type': 'application/json' } : {}) }, ...(input ? { body: JSON.stringify(input) } : {}), signal, cache: 'no-store', redirect: 'error' });
     if (!response.ok) {
       const value = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code === 'invalid_cursor' || value?.error?.code === 'folder_unavailable' ? value.error.code : 'connection_unavailable' });
+      throw Object.assign(new Error(response.status === 503 ? 'Connections are not configured. No account has been connected.' : 'Connection unavailable. Refresh status before retrying.'), { code: value?.error?.code && ['invalid_cursor', 'folder_unavailable', 'search_rejected', 'message_unavailable', 'authentication_required', 'consent_required', 'execution_disabled', 'provider_forbidden', 'mail_view_expired', 'forbidden', 'reconnect_required'].includes(value.error.code) ? value.error.code : 'connection_unavailable' });
     }
     return (await response.json() as { data: ConnectionCatalog | GoogleConnectionCatalog | Mail }).data;
   }, [session, signal]);
+  const taskDrafts = useConnectedMailDrafts(request);
   const refresh = useCallback(async () => { setMail(undefined); try { const value = await request(); if (!signal.aborted) setCatalog(value as ConnectionCatalog | GoogleConnectionCatalog); } catch (error) { if (!signal.aborted) setCatalog(undefined); throw error; } }, [request, signal]);
   const completion = useRef<Promise<unknown> | null>(null);
   useEffect(() => {
@@ -43,7 +46,8 @@ export default function ConnectionsSession({ session, signal, onSignOut }: { ses
   return <main className={`${styles.workspace} ${styles.main}`}><h1>Connections</h1><div className={styles.actions}><Link href="/workspaces">Workspaces</Link><Link href="/workspace">Personal work</Link><button onClick={onSignOut}>Sign out</button><button disabled={busy} onClick={() => void act('')}>Refresh status</button></div>
     <SessionGmail session={session} signal={signal} onAvailable={setSessionOnly} />
     {error && !sessionOnly && <p role="alert">{error}</p>}
-    {catalog && catalog.mode !== 'simulated' && <GoogleConnections catalog={catalog} request={request} refresh={refresh} />}
+    {catalog && catalog.mode !== 'simulated' && <GoogleConnections catalog={catalog} request={request} refresh={refresh} taskDrafts={taskDrafts} />}
+    <PendingConnectedMailTasks drafts={taskDrafts} />
     {catalog?.mode === 'simulated' && <><p className={styles.banner}>Simulated onboarding · invented accounts and Mail · no provider access, grants or sending. Approval below runs a local test transport.</p>
       <section className={styles.panel}><h2>Add read-only Mail</h2>{catalog.providers.map(provider => <p key={provider.id}>{provider.id}: {provider.reason}</p>)}
         {!catalog.homes.length ? <p>Create an owned Workspace before choosing a Mail resource home.</p> : <form className={styles.form} onSubmit={event => { event.preventDefault(); void act('', { choiceId: choice, workspaceId: home }); }}>

@@ -384,3 +384,74 @@ and replies remain attached to their exact message even if its labels move.
 CLI: add `--folder <page.folders[].id>` and reuse only the nextCursor from that same
 folder; omit both options to return to All Mail. Old cursors require a first-page
 restart. Folder input is configured-Google only and adds no provider permission.
+
+
+Search Gmail accepts a submitted Gmail query within the selected account and folder.
+Edit the field, then choose Search Mail; changing text alone leaves Next/First on
+the applied query shown below it. Submission and Clear search start page one;
+changing folders retains the applied query. Rejected queries clear old bodies and
+ask for edit/clear; no unfiltered fallback occurs. Finish confirming any pending
+additional Task before changing search or navigation. Authored Task titles remain
+in memory through query changes, and saved Task source/reply links keep their exact
+message independently of the current search.
+
+CLI: `openjob connections mail <id> --search 'subject:proposal'` accepts the same
+optional `--folder <page.folders[].id>` and matching `--cursor <nextCursor>`.
+Only outer whitespace is trimmed; Gmail receives operators, case and Unicode as
+entered. Search must be nonblank, at most512 JavaScript characters, with no control
+characters. Canonical gm3 cursors bind a query hash and selected folder; old or
+mismatched cursors require a first-page restart. Query text is transient and is not
+stored in connection records or cursors. Search remains configured-Google only.
+The local fixture recognizes explicit invented query examples, not Gmail's complete
+parser. This is synthetic connected-flow proof; the completed alternate-only real
+read does not establish integrated live search or saved-work acceptance.
+
+
+Configured web browsing now starts with message summaries, without bodies or snippets.
+Choose Read message to fetch one bounded plain-text body; Close message, paging,
+folder/search changes or disconnect clear the opened body. Opening and closing keep
+the authored Task title and created-Task link. An unavailable body leaves its row and
+Task usable; uncertain additional Task confirmation blocks body opening/navigation.
+Only inert plain text is displayed: HTML, attachments and remote images are not loaded.
+
+API: `GET /api/v1/connections/{id}/mail?view=metadata` applies the same existing
+cursor/folderId/search inputs but omits body from each message. The existing request
+without view retains its full-message response for current native/clients. Explicit
+`GET /api/v1/connections/{id}/mail/{upstreamId}` accepts no queries, rechecks the current
+home/account/credential and returns one full safe message. A deleted message returns
+redacted message_unavailable404 without deleting its Task. Task-source/reply reads
+retain their exact source identity independently of current labels/search.
+
+CLI: `openjob connections mail <id> --metadata-only` and
+`openjob connections message <id> <page.messages[].upstreamId>` use those same paths.
+The new browser path and Task creation request metadata from Gmail; Task creation no
+longer loads a body as a side effect. Existing full-read clients remain eager until
+their own controls move to explicit reads. Bodies stay transient; this fixture proof
+does not establish sync, metadata expiry, live integrated or native lazy acceptance.
+
+
+## Configured Mail freshness and pending work (P-WLK-6 / R32)
+
+Metadata-view responses include freshness.observedAt/staleAt/expiresAt. Observation
+starts before the provider scan; stale is at most60seconds and expiry at most5minutes,
+capped by current credential expiry. These bounds describe observations, not access.
+Every body/Task/refresh request still checks current authority. Full Mail/native and
+standalone-session DTOs remain unchanged. CLI --metadata-only prints the same bounds.
+
+The web shows Last read and stale/unavailable state. Keep the first page refreshed
+checks only the visible first page, sequentially at most once per minute, and pauses
+while hidden/offline, reading a body, confirming a Task or viewing a later page.
+Uncheck it to stop. Any failed read stops automatic refresh and hides content; Refresh
+Mail is an explicit retry using applied search/folder. Invalid cursors restart page
+one. A deleted folder offers Read All Mail while preserving the applied search.
+Metadata and opened bodies expire on either elapsed wall or monotonic time; checks
+also run on interaction/visibility restoration. No body or metadata disk cache.
+
+Pending Mail Tasks keeps only reviewed titles, target references, exact request IDs
+and receipts in the current owner’s Connections memory. Refresh remains available
+during uncertainty, and retry keeps the same frozen title/request. Confirmed retries
+clear pending state. Check Workspace opens another tab so Connections can stay open.
+If access/source cannot recover, Stop retrying this request asks for explicit Forget:
+a Task may already exist, no saved work is undone, and the reviewed title remains.
+Leaving Connections, reloading or signing out clears this ephemeral authoring state.
+This is fixture/browser proof, not complete sync, live integrated or native acceptance.

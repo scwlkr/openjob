@@ -18,6 +18,9 @@ export async function gmailGet(path: string, query: URLSearchParams, token: stri
   const operation = async () => {
     const response = await fetcher(url, { method: "GET", headers: { authorization: `Bearer ${token}`, accept: "application/json" }, redirect: "error", cache: "no-store", signal: controller.signal });
     if (response.redirected || response.status >= 300 && response.status < 400) fail("network_error");
+    if (response.status === 400 && path === "messages" && query.has("pageToken")) fail("invalid_cursor");
+    if (response.status === 400 && path === "messages" && query.has("q")) fail("search_rejected");
+    if (response.status === 404 && path.startsWith("messages/")) fail("message_unavailable");
     if (response.status === 401) fail("authentication_required");
     if (response.status === 429) fail("rate_limited");
     if (response.status >= 500) fail("provider_error");

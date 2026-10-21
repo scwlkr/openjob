@@ -996,6 +996,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connections/{connectionId}/mail/{messageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one connected Gmail message on request
+         * @description Configured Google human-only exact-message read with current owner, home, account and credential checks. Safe bounded plain text only; no query parameters, HTML, attachments, remote images, provider writes or body persistence. A deleted message returns a redacted message_unavailable404.
+         */
+        get: operations["readConnectionMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connections/{connectionId}/mail": {
         parameters: {
             query?: never;
@@ -1248,6 +1271,29 @@ export interface components {
             from: string;
             to: string;
             body: string;
+            /** Format: date-time */
+            receivedAt: string;
+            read: boolean;
+            upstreamThreadId: string;
+        };
+        /** @description Conservative metadata observation bounds, capped by current credential expiry. No access lease. Only metadata view supplies this; no body cache or history synchronization. */
+        ConnectedMailFreshness: {
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            staleAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ProviderMessageSummary: {
+            id: string;
+            accountId: string;
+            upstreamId: string;
+            threadId: string;
+            folderIds: string[];
+            subject: string;
+            from: string;
+            to: string;
             /** Format: date-time */
             receivedAt: string;
             read: boolean;
@@ -5631,13 +5677,56 @@ export interface operations {
             };
         };
     };
+    readConnectionMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fresh authorized message; source identity is independent of the current folder/search. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @enum {unknown} */
+                            mode: "google" | "google-fixture";
+                            workspaceId: string;
+                            message: components["schemas"]["ProviderPreviewMessage"];
+                        };
+                    };
+                };
+            };
+            /** @description Redacted unavailable, forbidden, reconnect or unconfigured response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     readConnectionMail: {
         parameters: {
             query?: {
-                /** @description Opaque nextCursor from this configured Google account and selected folder. Omit for the first page. Simulated Connections reject query parameters. */
+                /** @description Opaque nextCursor from this configured Google account and selected folder and normalized search. Omit for the first page. Simulated Connections reject query parameters. */
                 cursor?: string;
                 /** @description Account-qualified Gmail folder ID from page.folders. Omit for All Mail excluding Spam and Trash. Only configured Google supports this filter. */
                 folderId?: string;
+                /** @description Bounded Gmail query syntax, trimmed and scoped to this account and folder. Keep the same search with its cursor. Omit to clear search. */
+                search?: string;
+                /** @description Configured Google metadata-only browsing; omits bodies and snippets. Omit to retain the existing full-message response. */
+                view?: "metadata";
             };
             header?: never;
             path: {
@@ -5682,6 +5771,19 @@ export interface operations {
                                 nextCursor: string | null;
                                 syncCursor: string | null;
                             };
+                        } | {
+                            /** @enum {unknown} */
+                            mode: "simulated" | "google" | "google-fixture";
+                            workspaceId: string;
+                            page: {
+                                messages: components["schemas"]["ProviderMessageSummary"][];
+                                folders: components["schemas"]["ProviderPreviewFolder"][];
+                                calendars: components["schemas"]["ProviderPreviewCalendar"][];
+                                events: components["schemas"]["ProviderPreviewEvent"][];
+                                nextCursor: string | null;
+                                syncCursor: string | null;
+                            };
+                            freshness: components["schemas"]["ConnectedMailFreshness"];
                         };
                     };
                 };
