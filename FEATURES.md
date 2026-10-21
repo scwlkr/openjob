@@ -11,6 +11,15 @@ Unfinished reply text survives module/context switches and blocks Task deletion
 until saved or discarded. Source bodies are transient; saved reply work stays in
 the authoritative server envelope. Session changes fence requests and private UI.
 
+Connected native Mail now browses metadata-only First/Next pages with Gmail folder
+selection and submitted search. Plain-text bodies load only after Read message and
+clear on close, navigation, background, offline or expiry. Last-read/stale state,
+bounded visible-first-page refresh, Pause and manual recovery share the API's
+freshness limits. Reviewed Task titles and exact uncertain request inputs stay in
+Workspace memory across module switches. Explicit two-step Stop retrying releases
+an unavailable request while preserving its title and previous receipt; it warns
+that a Task may already exist. No automatic mutation retry or navigation occurs.
+
 The existing Personal/offline and Groups surfaces remain available. Configure
 provider consent in the existing Connections app. No native consent flow, offline
 Mail, provider Calendar writes or real sending is added. Rendered and loopback
@@ -74,8 +83,9 @@ the existing full-read contract stays available for current clients. This slice 
 fixture proof. Metadata observations now show last read/stale/expiry, with bounded
 visible-first-page refresh and explicit recovery after failure. Expiry hides provider
 content; reviewed Task requests survive in Connections memory and keep exact retries.
-Current-page polling is not complete mailbox sync. History/tombstones, native lazy/
-freshness controls and integrated live acceptance remain separate.
+Current-page polling is not complete mailbox sync. Native connected Workspaces
+share these metadata/lazy/freshness contracts. History/tombstones and integrated
+live acceptance remain separate.
 [Usage](docs/LOCAL_ACCOUNT_ONBOARDING.md#configured-gmail-pages-p-wlk-6--r32).
 
 ## Connected authored reply drafts (WLK385)

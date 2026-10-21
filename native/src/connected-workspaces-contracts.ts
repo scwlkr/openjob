@@ -2,11 +2,14 @@ import type { OwnedWorkspace, OwnedWorkspaceSnapshot } from '../../shared/owned-
 import type { TaskCalendarCommand } from '../../shared/task-calendar-sync';
 import type { MailTaskResult } from '../../shared/mail-task-source';
 import type { ConnectedReplyDraft, ReplyPreparation, ReplySaveInput } from '../../shared/connected-reply';
-import type { ProviderMessage, ProviderMessagePage } from '../../shared/provider-contracts';
+import type { ProviderMessage, ProviderMessageSummary, ProviderMessageSummaryPage } from '../../shared/provider-contracts';
+import type { MailReadFreshness } from '../../shared/connected-mail-freshness';
 import type { GoogleConnectionCatalog } from '../../shared/google-connection-catalog';
 
-export type { OwnedWorkspace, OwnedWorkspaceSnapshot, ConnectedReplyDraft, ReplyPreparation, ReplySaveInput, ProviderMessage, GoogleConnectionCatalog };
-export type ConnectedMail = { mode: 'google' | 'google-fixture'; workspaceId: string; page: ProviderMessagePage };
+export type { OwnedWorkspace, OwnedWorkspaceSnapshot, ConnectedReplyDraft, ReplyPreparation, ReplySaveInput, ProviderMessage, ProviderMessageSummary, GoogleConnectionCatalog };
+export type ConnectedMail = { mode: 'google' | 'google-fixture'; workspaceId: string; page: ProviderMessageSummaryPage; freshness: MailReadFreshness };
+export type ConnectedMailQuery = { cursor?: string; folderId?: string; search?: string };
+export type ConnectedMessage = { mode: 'google' | 'google-fixture'; workspaceId: string; message: ProviderMessage };
 export type ConnectedSource = { mode: 'google' | 'google-fixture'; workspaceId: string; taskId: string; address: string; message: ProviderMessage };
 export type ConnectedCommand = TaskCalendarCommand & { expectedNotes?: string };
 export type MailTaskInput = { messageId: string; title: string; requestId?: string };
@@ -18,7 +21,8 @@ export type NativeConnectedWorkspaceApi = {
   read(token: string, owner: string, workspaceId: string): Promise<OwnedWorkspaceSnapshot>;
   command(token: string, owner: string, workspaceId: string, input: ConnectedCommand): Promise<OwnedWorkspaceSnapshot>;
   connections(token: string, owner: string): Promise<GoogleConnectionCatalog>;
-  mail(token: string, owner: string, workspaceId: string, connectionId: string): Promise<ConnectedMail>;
+  mail(token: string, owner: string, workspaceId: string, connectionId: string, query?: ConnectedMailQuery): Promise<ConnectedMail>;
+  message(token: string, owner: string, workspaceId: string, connectionId: string, messageId: string): Promise<ConnectedMessage>;
   createMailTask(token: string, owner: string, workspaceId: string, connectionId: string, input: MailTaskInput): Promise<MailTaskResult>;
   source(token: string, owner: string, workspaceId: string, taskId: string): Promise<ConnectedSource>;
   reply(token: string, owner: string, workspaceId: string, taskId: string): Promise<ReplyPreparation>;

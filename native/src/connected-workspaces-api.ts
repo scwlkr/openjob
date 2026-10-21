@@ -1,7 +1,8 @@
 import { OpenJobApiError, ProviderSignInError } from './auth/coordinator';
 import { validateWorkspace, validateOwnedSnapshot, WORKSPACE_ID } from '../../shared/owned-workspaces';
 import { validReplyPlan, validateConnectedReplyDraft, validateReplySave } from '../../shared/connected-reply';
-import type { NativeConnectedWorkspaceApi, ProviderMessage, OwnedWorkspaceSnapshot, GoogleConnectionCatalog, ConnectedMail, ConnectedSource, ReplyPreparation } from './connected-workspaces-contracts';
+import { mailReadWindow } from '../../shared/connected-mail-freshness';
+import type { NativeConnectedWorkspaceApi, ProviderMessage, ProviderMessageSummary, OwnedWorkspaceSnapshot, GoogleConnectionCatalog, ConnectedMail, ConnectedSource, ReplyPreparation } from './connected-workspaces-contracts';
 
 function invalid(): never { throw new OpenJobApiError(502, 'invalid_response', 'OpenJob returned invalid Workspace data.'); }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -14,6 +15,10 @@ function message(value: unknown): ProviderMessage {
   if (!object(value) || Object.keys(value).sort().join(',') !== 'accountId,body,folderIds,from,id,read,receivedAt,subject,threadId,to,upstreamId,upstreamThreadId' || !text(value.accountId, 64) || !/^gmail_[a-f0-9]{32}$/.test(value.accountId) || !text(value.upstreamId, 128) || !/^[A-Za-z0-9_-]+$/.test(value.upstreamId) || !text(value.upstreamThreadId, 128) || !/^[A-Za-z0-9_-]+$/.test(value.upstreamThreadId) || value.id !== `${value.accountId}:message:${value.upstreamId}` || value.threadId !== `${value.accountId}:thread:${value.upstreamThreadId}` || !Array.isArray(value.folderIds) || value.folderIds.length > 500 || value.folderIds.some(id => !text(id, 512) || !id.startsWith(`${value.accountId}:folder:`)) || !text(value.subject) || !text(value.from) || !text(value.to) || !text(value.body, 65536) || !text(value.receivedAt, 64) || !Number.isFinite(Date.parse(value.receivedAt)) || typeof value.read !== 'boolean') invalid();
   return value as unknown as ProviderMessage;
 }
+function summary(value: unknown): ProviderMessageSummary {
+  if (!object(value) || Object.hasOwn(value, 'body') || Object.hasOwn(value, 'snippet')) invalid();
+  const { body, ...metadata } = message({ ...value, body: '' }); void body; return metadata;
+}
 export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementation = fetch }: { apiBaseUrl: string; fetchImplementation?: typeof fetch }): NativeConnectedWorkspaceApi {
   const base = apiBaseUrl.replace(/\/+$/, '');
   async function request(token: string, owner: string, path: string, input?: unknown): Promise<unknown> {
@@ -25,7 +30,7 @@ export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementat
     let body: Record<string, unknown>;
     try { const parsed: unknown = JSON.parse(raw); if (!object(parsed)) invalid(); body = parsed; } catch { return invalid(); }
     if (!response.ok) {
-      const code = object(body.error) && typeof body.error.code === 'string' && ['authentication_required', 'account_deletion_pending', 'sign_in_method_unrecognized', 'forbidden', 'not_configured', 'not_found', 'invalid_input', 'conflict', 'workspace_capacity', 'source_unavailable', 'reconnect_required', 'reply_review_required', 'reply_unavailable'].includes(body.error.code) ? body.error.code : 'request_failed';
+      const code = object(body.error) && typeof body.error.code === 'string' && ['authentication_required', 'account_deletion_pending', 'sign_in_method_unrecognized', 'forbidden', 'not_configured', 'not_found', 'invalid_input', 'conflict', 'workspace_capacity', 'source_unavailable', 'reconnect_required', 'reply_review_required', 'reply_unavailable', 'invalid_cursor', 'folder_unavailable', 'search_rejected', 'message_unavailable', 'mail_view_expired', 'execution_disabled', 'consent_required', 'provider_forbidden'].includes(body.error.code) ? body.error.code : 'request_failed';
       throw new OpenJobApiError(response.status, code, 'Workspace request unavailable. Refresh before retrying.');
     }
     if (Object.keys(body).join(',') !== 'data') invalid();
@@ -50,13 +55,27 @@ export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementat
       if (new Set(value.bindings.map(row => row.id)).size !== value.bindings.length || new Set(value.homes.map(row => row.workspaceId)).size !== value.homes.length) invalid();
       return value;
     },
-    async mail(token, owner, id, connection) {
-      workspaceId(id); const value = await request(token, owner, `/connections/${connectionId(connection)}/mail`) as ConnectedMail;
-      if (!object(value) || Object.keys(value).sort().join(',') !== 'mode,page,workspaceId' || value.workspaceId !== id || !mode(value.mode) || !object(value.page) || Object.keys(value.page).sort().join(',') !== 'calendars,events,folders,messages,nextCursor,syncCursor' || !Array.isArray(value.page.messages) || value.page.messages.length > 10 || !Array.isArray(value.page.folders) || value.page.folders.length > 500 || !Array.isArray(value.page.calendars) || value.page.calendars.length || !Array.isArray(value.page.events) || value.page.events.length || value.page.syncCursor !== null || value.page.nextCursor !== null && !text(value.page.nextCursor, 4096)) invalid();
-      const messages = value.page.messages.map(message);
+    async mail(token, owner, id, connection, query = {}) {
+      const parameters = new URLSearchParams({ view: 'metadata' });
+      if (!object(query) || Object.keys(query).some(key => !['cursor', 'folderId', 'search'].includes(key))) throw new OpenJobApiError(400, 'invalid_input');
+      for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === '') continue;
+        if (typeof value !== 'string' || value.length > (key === 'cursor' ? 4096 : 512) || /[\u0000-\u001f\u007f]/.test(value) || key === 'folderId' && !/^gmail_[a-f0-9]{32}:folder:[A-Za-z0-9_-]{1,128}$/.test(value)) throw new OpenJobApiError(400, 'invalid_input');
+        parameters.set(key, key === 'search' ? value.trim() : value);
+      }
+      workspaceId(id); const value = await request(token, owner, `/connections/${connectionId(connection)}/mail?${parameters}`) as ConnectedMail;
+      if (!object(value) || Object.keys(value).sort().join(',') !== 'freshness,mode,page,workspaceId' || value.workspaceId !== id || !mode(value.mode) || !object(value.page) || Object.keys(value.page).sort().join(',') !== 'calendars,events,folders,messages,nextCursor,syncCursor' || !Array.isArray(value.page.messages) || value.page.messages.length > 10 || !Array.isArray(value.page.folders) || value.page.folders.length > 500 || !Array.isArray(value.page.calendars) || value.page.calendars.length || !Array.isArray(value.page.events) || value.page.events.length || value.page.syncCursor !== null || value.page.nextCursor !== null && !text(value.page.nextCursor, 4096)) invalid();
+      try { mailReadWindow(value.freshness, 0, 0); } catch { invalid(); }
+      const messages = value.page.messages.map(summary);
       for (const folder of value.page.folders) if (!object(folder) || Object.keys(folder).sort().join(',') !== 'accountId,id,name,upstreamId' || !text(folder.accountId, 64) || !/^gmail_[a-f0-9]{32}$/.test(folder.accountId) || !text(folder.upstreamId, 128) || !/^[A-Za-z0-9_-]+$/.test(folder.upstreamId) || folder.id !== `${folder.accountId}:folder:${folder.upstreamId}` || !text(folder.name, 256)) invalid();
       if (new Set([...messages.map(item => item.accountId), ...value.page.folders.map(item => item.accountId)]).size > 1 || new Set(messages.map(item => item.id)).size !== messages.length) invalid();
       return { ...value, page: { ...value.page, messages } };
+    },
+    async message(token, owner, id, connection, upstreamId) {
+      workspaceId(id); const value = await request(token, owner, `/connections/${connectionId(connection)}/mail/${taskId(upstreamId)}`);
+      if (!object(value) || Object.keys(value).sort().join(',') !== 'message,mode,workspaceId' || value.workspaceId !== id || !mode(value.mode)) invalid();
+      const full = message(value.message); if (full.upstreamId !== upstreamId) invalid();
+      return { workspaceId: id, mode: value.mode as 'google' | 'google-fixture', message: full };
     },
     async createMailTask(token, owner, id, connection, input) {
       workspaceId(id); const value = await request(token, owner, `/connections/${connectionId(connection)}/tasks`, input);

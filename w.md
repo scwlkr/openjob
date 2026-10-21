@@ -1,3 +1,43 @@
+# Native Mail follow-up — P-WLK-6 / R32–R53
+
+21 October 2026: native source checkpoint on the existing draft PR120 branch,
+based on 84c502d4af39da53bcd0f03c8d6c4218db84d4b1 and main5b21875.
+Connected Workspaces now use metadata-only First/Next pages, bounded Gmail folder
+selection and submitted search, explicit transient plain-text bodies, last-read/
+stale/expiry state and at-most-minute visible-first-page refresh. Hidden, offline,
+expired or changed contexts discard provider details and late responses; recovery
+is explicit. Pause also fences an already queued refresh callback.
+
+Authored Task titles, immutable uncertain create inputs and receipts remain above
+the disposable reader. Navigation does not auto-open a completed mutation. Exact
+retry preserves an additional Task UUID. Two-step Stop retrying warns about an
+existing Task, drops only that uncertain request and keeps title/previous receipt,
+so deleted sources do not permanently lock folder/search/page controls. Existing
+source/reply editors and normal native authentication remain in place. No package,
+consent, provider Calendar, sending or persistent real-access capability changed.
+
+Native typecheck, affected lint and14 focused rendered UI/API tests pass. Actual
+native HTTP/coordinator, shared freshness and Google scope/revocation/isolation
+checks pass (12), including metadata query-bound cursors and explicit body reads.
+A targeted actual-send403/no-side-effect check passes. Root npm run typecheck and
+brand32 pass in the exact isolated copy. The initial test typecheck caught global
+vs globalThis in the timer test; corrected and rerun. Original26 shared files are
+preserved. Simulator proof is In Progress, not implied by these tests.
+
+Fresh locked native dependencies and development iOS prebuild are in
+/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-native-r32-jkx3l0kk.
+Only that proof's fixture entry changes loopback5213 to5214 to preserve the existing
+Android fixture/Metro; the delta/hash is recorded there. Build Space lease
+60fb2b0fa7739f6dcc186c67 reserves10GiB with20GiB floor. CocoaPods deployment mode
+first rejected absolute-path-derived checksums for ExpoModulesCore and Hermes;
+podspec comparison showed path-only changes. Normal no-repo-update install and
+locked-version comparison follow. No shared dependency tree was repaired.
+
+Next: verify the exact source in the owned iOS simulator, record its artifact and
+practical result, then update this handoff/Linear/PR120. Android UI-method answer,
+real native/provider/device/storage acceptance, full sync and release/distribution
+remain separate. No extra real Mail read or deployment/publication occurred.
+
 # Current native integration — durable operation main
 
 21 October 2026: draft PR120 integrates PR129/main

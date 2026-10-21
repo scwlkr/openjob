@@ -35,7 +35,7 @@ function Fixture() {
         const guarded: NativeConnectedWorkspaceController = {
           list: owner => guard(owner, () => api.list(value.token, owner)), create: (owner, name) => guard(owner, () => api.create(value.token, owner, name)), personal: owner => guard(owner, () => api.personal(value.token, owner)),
           read: (owner, id) => guard(owner, () => api.read(value.token, owner, id)), command: (owner, id, input) => guard(owner, () => api.command(value.token, owner, id, input)), connections: owner => guard(owner, () => api.connections(value.token, owner)),
-          mail: (owner, id, connection) => guard(owner, () => api.mail(value.token, owner, id, connection)), createMailTask: (owner, id, connection, input) => guard(owner, () => api.createMailTask(value.token, owner, id, connection, input)),
+          mail: (owner, id, connection, query) => guard(owner, () => api.mail(value.token, owner, id, connection, query)), message: (owner, id, connection, message) => guard(owner, () => api.message(value.token, owner, id, connection, message)), createMailTask: (owner, id, connection, input) => guard(owner, () => api.createMailTask(value.token, owner, id, connection, input)),
           source: (owner, id, task) => guard(owner, () => api.source(value.token, owner, id, task)), reply: (owner, id, task) => guard(owner, () => api.reply(value.token, owner, id, task)), saveReply: (owner, id, task, input) => guard(owner, () => api.saveReply(value.token, owner, id, task, input)),
         };
         if (active) setSession({ owner: value.userId, controller: guarded });

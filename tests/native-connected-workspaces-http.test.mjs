@@ -38,7 +38,7 @@ test('native connected client/coordinator use actual authenticated HTTP Workspac
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
     const base = `http://127.0.0.1:${server.address().port}/api/v1`, api = createNativeConnectedWorkspaceApi({ apiBaseUrl: base });
     let who = 'alex', stored = null, pause, release;
-    const delayed = { ...api, source: async (...args) => { const result = await api.source(...args); if (pause) { pause(); await new Promise(resolve => { release = resolve; }); } return result; } };
+    const delayed = { ...api, source: async (...args) => { const result = await api.source(...args); if (pause) { pause(); await new Promise(resolve => { release = resolve; }); } return result; }, message: async (...args) => { const result = await api.message(...args); if (pause) { pause(); await new Promise(resolve => { release = resolve; }); } return result; } };
     const noop = async () => undefined;
     const coordinator = new NativeAuthCoordinator({ connectedWorkspaces: delayed,
       readPersonalWorkspace: noop, commandPersonalWorkspace: noop, listPersonalAgents: async () => [], revokePersonalAgent: noop,
@@ -56,7 +56,20 @@ test('native connected client/coordinator use actual authenticated HTTP Workspac
     const begin = await f.call('', { address: BINDING.address, workspaceId: home }), url = new URL(begin.authorizationUrl);
     f.protocol.hooks.claims = { nonce: url.searchParams.get('nonce') }; await f.complete({ ...begin, state: url.searchParams.get('state') });
     const catalog = await controller.connections(f.owner); assert.equal(catalog.mode, 'google-fixture');
-    const mail = await controller.mail(f.owner, home, begin.connectionId); assert.equal(mail.page.messages[0].body, 'Invented connected message.');
+    const traffic = []; f.hooks.mail = url => traffic.push(url);
+    f.hooks.response = url => {
+      if (url.pathname.endsWith('/messages')) return Response.json(url.searchParams.get('q') === 'subject:missing' ? { messages: [] } : url.searchParams.get('pageToken') ? { messages: [{ id: 'm2', threadId: 't2' }] } : { messages: [{ id: 'm1', threadId: 't1' }], nextPageToken: 'native-next' });
+      if (url.pathname.endsWith('/messages/m2')) return Response.json({ id: 'm2', threadId: 't2', internalDate: String(Date.now()), labelIds: ['INBOX'], payload: { mimeType: 'text/plain', headers: [{ name: 'From', value: 'colleague@example.invalid' }, { name: 'To', value: BINDING.address }, { name: 'Subject', value: 'Proposal follow-up' }], body: { data: Buffer.from('Invented follow-up body.').toString('base64url') } } });
+    };
+    const inbox = `${(await f.repository.read(f.owner))[0].accountId}:folder:INBOX`, query = { folderId: inbox, search: 'subject:proposal' };
+    const mail = await controller.mail(f.owner, home, begin.connectionId, query); assert.equal(Object.hasOwn(mail.page.messages[0], 'body'), false); assert.ok(mail.freshness.observedAt); assert.ok(mail.page.nextCursor);
+    assert.equal(traffic.some(url => url.searchParams.get('format') === 'full'), false);
+    const next = await controller.mail(f.owner, home, begin.connectionId, { ...query, cursor: mail.page.nextCursor }); assert.equal(next.page.messages[0].upstreamId, 'm2'); assert.equal(Object.hasOwn(next.page.messages[0], 'body'), false);
+    assert.ok(traffic.some(url => url.searchParams.get('pageToken') === 'native-next' && url.searchParams.get('q') === query.search && url.searchParams.get('labelIds') === 'INBOX'));
+    await assert.rejects(controller.mail(f.owner, home, begin.connectionId, { ...query, search: 'subject:changed', cursor: mail.page.nextCursor }), error => error.code === 'invalid_cursor');
+    assert.equal((await controller.mail(f.owner, home, begin.connectionId, { search: 'subject:missing' })).page.messages.length, 0);
+    assert.equal((await controller.message(f.owner, home, begin.connectionId, 'm1')).message.body, 'Invented connected message.');
+    assert.equal(traffic.filter(url => url.searchParams.get('format') === 'full').length, 1); f.hooks.mail = undefined; f.hooks.response = undefined;
     const task = await controller.createMailTask(f.owner, home, begin.connectionId, { messageId: 'm1', title: 'Native reviewed proposal' });
     assert.equal(task.workspaceId, home); assert.equal(task.created, true);
     assert.deepEqual(await controller.createMailTask(f.owner, home, begin.connectionId, { messageId: 'm1', title: 'Must not overwrite' }), { ...task, created: false });
@@ -79,6 +92,7 @@ test('native connected client/coordinator use actual authenticated HTTP Workspac
     f.hooks.response = () => Response.json({ error: { errors: [{ reason: 'authError' }], message: 'SECRET_PROVIDER_BODY' } }, { status: 401 });
     for (const operation of [
       () => controller.mail(f.owner, home, begin.connectionId),
+      () => controller.message(f.owner, home, begin.connectionId, 'm1'),
       () => controller.source(f.owner, home, task.taskId),
       () => controller.reply(f.owner, home, task.taskId),
       () => controller.saveReply(f.owner, home, task.taskId, { ...input, expectedRevision: 1, body: 'Must not save during reconnect' }),
@@ -86,12 +100,14 @@ test('native connected client/coordinator use actual authenticated HTTP Workspac
     assert.equal((await controller.read(f.owner, home)).work.tasks.find(item => item.id === task.taskId).completed, true);
     f.hooks.response = undefined;
     assert.deepEqual((await controller.reply(f.owner, home, task.taskId)).draft, saved.draft);
-    const readStarted = new Promise(resolve => { pause = resolve; }); const reading = controller.source(f.owner, home, task.taskId); await readStarted;
-    await coordinator.signOut(); who = 'sam'; await coordinator.signIn('google'); release();
-    await assert.rejects(reading, error => error.code === 'revoked');
-    await assert.rejects(controller.saveReply(f.owner, home, task.taskId, input), error => error.code === 'revoked');
-    await assert.rejects(controller.read(f.sessions.sam.user.userId, home), error => error.status === 403);
-    await coordinator.signOut(); who = 'alex'; await coordinator.signIn('google'); pause = null;
+    for (const operation of ['source', 'message']) {
+      const readStarted = new Promise(resolve => { pause = resolve; }); const reading = operation === 'source' ? controller.source(f.owner, home, task.taskId) : controller.message(f.owner, home, begin.connectionId, 'm1'); await readStarted;
+      await coordinator.signOut(); who = 'sam'; await coordinator.signIn('google'); release();
+      await assert.rejects(reading, error => error.code === 'revoked');
+      await assert.rejects(controller.saveReply(f.owner, home, task.taskId, input), error => error.code === 'revoked');
+      await assert.rejects(controller.read(f.sessions.sam.user.userId, home), error => error.status === 403);
+      await coordinator.signOut(); who = 'alex'; await coordinator.signIn('google'); pause = null;
+    }
     await f.flow.act(f.owner, begin.connectionId, 'disconnect');
     await assert.rejects(controller.source(f.owner, home, task.taskId), error => error.code === 'reconnect_required');
     await assert.rejects(controller.saveReply(f.owner, home, task.taskId, input), error => error.code === 'reconnect_required');
