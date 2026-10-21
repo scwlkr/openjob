@@ -1,3 +1,23 @@
+# Current native integration and source delivery checkpoint
+
+21October00:44UTC: PR126 merged as4eb212f65cadc3d7190305e755bba60a4ab10303
+(source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65, head
+a180375256228a66877c8e99abd37a09bddb6a02). Main includes PR125 freshness and the
+provider-auth correction. Draft PR120 now integrates that main; the final merge
+changes only this handoff relative to reviewed integration314752e. All code bytes
+match the isolated final HTTP proof. No additional build/test rerun is necessary
+for this documentation-only ancestry reconciliation. Exact remote head/merge are
+recorded in Linear and the ignored local integration receipt.
+
+Native runtime/package/identity inputs remain unchanged; one recorded HTTP test
+was extended. Original26 files hash-match. Android SDK UI-method authorization,
+live native/provider/device and release gates remain open; PR120 stays Draft.
+No additional real read, provider effect, persistent access or deployment.
+Next source implementation is the accepted owner-only Tasks/Calendar agent-grant
+slice in Linear R22 thread266d9fdf-fa1e-4e9d-9d03-7b234821a591. Its initial empty
+branch was made from7dc3d02; integrate current main before implementation. Keep
+Personal/Groups grants independent and Mail delegation unavailable.
+
 # P-WLK-6 — Mail reconnect preserves OpenJob authentication
 
 21October00:40UTC: source163ffbcb07f0b71ed9eaa55444c2353e53ed7f65 corrects a cross-client P2
@@ -29,7 +49,7 @@ its empty branch starts at main7dc3d02 and source implementation has not begun.
 21October00:35UTC: integrate main7dc3d023939080ebe92023066c5656589109c3aa
 (landed PR123 search, PR124 lazy bodies and PR125 freshness) into draft PR120.
 Only FEATURES.md and this handoff conflicted; both product/delivery records are
-retained without custom source changes. This supersedes the older integration
+retained, with the provider-auth correction described below. This supersedes the older integration
 records below. The native full-read contract stays exact; native paging/search,
 metadata/lazy controls and freshness remain separate. R32 current-page polling is
 bounded, not complete mailbox history sync; integrated live acceptance remains open.
