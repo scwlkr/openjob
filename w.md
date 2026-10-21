@@ -1,3 +1,53 @@
+# Native Agents delivery — P-WLK-6 / R22–R53
+
+21 October 2026 UTC: source `62a8fd34c364e8ce9f4ad59376c22c3e54938254` is pushed
+on draft PR120, based on main `5b21875`. This supersedes the pending simulator
+state below. Native owners can review exact independent-Workspace grants and
+confirmed actions, open current saved items, and confirm revocation. One DELETE,
+exact acknowledgement and current revoked readback precede success; uncertainty
+clears stale access data and requires manual refresh. Issuance remains CLI.
+
+Native types, affected lint and 23 UI/API checks pass, including the fresh locked
+copy. Root native-HTTP/CLI/domain/navigation (12), existing native Mail HTTP (3),
+actual-send denial/no-side-effect (1), root types, brand (32) and secret safety
+(1094 files) pass. Read-only review found no consequential issue. Original 26
+shared files hash-match. No dependency or real-account access changed.
+
+The 759-file source snapshot built in `/tmp/openjob-native-agents-a3tmb9zb`, with
+one recorded proof-only fixture-port 5213→5214 delta. Fresh npm lock and all 201
+locked Pod entries match; ExpoModulesCore/Hermes checksum differences normalize
+to absolute-root paths only. The initial Xcode call timed out while compilation
+continued; its completed log reported two SwiftCompile commands exiting 0 without
+output. One incremental build then explicitly passed in 30.3 seconds (35 warnings,
+zero errors). The verified OpenJobDev/dev.openjob.app.dev embedded Release artifact
+was reinstalled before UI checks on owned OpenJobR53Connected, iOS 27.
+
+Practical native proof passed: retained Personal shows its existing Agents route;
+A displays exact scopes/resources, expiry, last-check time and three confirmed
+actions. Action links opened the exact planned Task and standalone Calendar block.
+An unfinished human Task title survived Agents/Calendar navigation. Cancel left A
+usable through actual CLI. Confirm showed revoked/no effective access; actual CLI
+then exited 3 and HTTP returned 401 for A while independent B remained usable
+(exit 0/HTTP 200). Saved Tasks/Calendar stayed byte-equal. B's own native view showed
+only its grant and no actions; native revocation cleaned it up and HTTP then denied
+it. Both created credential files were removed. Invented-data screenshots,
+source/fixture manifests, artifact hashes and receipts: `output/r53/native-agents/`.
+
+Only the owned app/simulator and fixture 5214 service were stopped. Build Space
+lease `a36660e551508f02aa7f26a8` was released succeeded. Prior Android service 5213,
+Metro 8088, source/build artifacts and foreign simulator were preserved. R53 and
+full R22 stay In Progress; PR120 stays Draft. Android UI-method answer, native live
+login/provider/device/storage, Mail delegation, full sync and release gates remain
+open. No real Mail read was repeated and no real provider effect, persistent real
+access, security/hosting change, deployment or publication occurred.
+
+Next dependency-ready source slice: R41, a default-disabled Gmail reply protocol
+adapter exercised only through an injected fake HTTP transport and the existing
+frozen durable-operation fixture. Keep `reply.simulate` synthetic, normal runtimes
+without a dispatcher, exact read-only OAuth scopes and real `mail.send` denial.
+Continue existing Linear R53 `ba6592c3-b3e1-4908-b830-3532ab70aaf4` and R30
+`7f612b86-7725-46b1-8474-8a2a680da5eb`; do not infer real-send permission.
+
 # Native Agents checkpoint — P-WLK-6 / R22–R53
 
 21 October2026 UTC: existing draft PR120 branch, based on bcfb374/main5b21875.

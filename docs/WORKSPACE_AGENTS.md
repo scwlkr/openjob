@@ -104,8 +104,17 @@ injected revoke failure, revoke, restart and verify denial. An independent grant
 remained valid; Calendar-only access and a second human stayed isolated. All
 synthetic credentials were revoked and their private files removed after proof.
 
+On 21 October 2026, native source `62a8fd34c364e8ce9f4ad59376c22c3e54938254`
+passed an embedded Release fixture build and practical iOS 27 simulator checks.
+The owner reviewed scopes/resources and confirmed actions, opened the exact Task
+and standalone Calendar block, retained an unfinished Task title, canceled then
+confirmed revocation and observed no effective access. Actual CLI/HTTP denied A
+while B remained usable; saved work stayed byte-equal. Both invented grants were
+then revoked and their private files removed. Local evidence is in
+`output/r53/native-agents/`; source inputs and limits are recorded in `w.md`.
+
 This is bounded Tasks/Calendar owner-pilot delivery, not full R22 acceptance.
 Mailbox-set delegation, multi-person sponsoring rights/lifecycle, broader policy
 and integrated live acceptance remain separate. Native review/revocation follows
-the same existing contracts; its checkpoint evidence is in `w.md`. No real
+the same existing contracts. No real
 grant, credential activation, provider effect, deployment or release was performed.

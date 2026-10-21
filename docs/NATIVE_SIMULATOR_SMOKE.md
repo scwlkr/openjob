@@ -42,6 +42,17 @@ stay in Workspace memory separately from that disposable reader. Retry keeps the
 exact request; two-step Stop retrying warns that a Task may exist and preserves
 the title and previous receipt. This is not full mailbox/history sync.
 
+For native Workspace Agents, prepare two independent invented Workspaces and
+temporary CLI grants. Review exact scopes/resources, expiry, last-check time and
+confirmed actions in **Agents**. Open both a Task action and a standalone Calendar
+action and verify the exact saved items. Keep an unfinished Task title while
+switching modules. Cancel revocation and verify the credential still works, then
+confirm revocation and require current revoked readback. The revoked credential
+must fail through CLI/HTTP while the other Workspace's grant still works and saved
+Tasks/Calendar remain unchanged. Retained Personal must direct users to its
+existing Agents view. Revoke both invented grants and remove only their temporary
+private credential files after a passing run.
+
 Before a heavy phase, coordinate the shared Mac lane and reserve headroom with
 Build Space. Use a fresh exact Git source snapshot under `/tmp`, outside synchronized
 Desktop/Documents paths. Install `native` dependencies with `npm ci` from the
