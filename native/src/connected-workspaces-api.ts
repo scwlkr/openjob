@@ -1,3 +1,4 @@
+import { throwIfNativeAborted } from './abort-signal';
 import * as calendarProtocol from '../../shared/calendar-client';
 import type { CalendarWindow } from '../../shared/provider-calendar';
 import { OpenJobApiError, ProviderSignInError } from './auth/coordinator';
@@ -25,12 +26,12 @@ function summary(value: unknown): ProviderMessageSummary {
 export function createNativeConnectedWorkspaceApi({ apiBaseUrl, fetchImplementation = fetch }: { apiBaseUrl: string; fetchImplementation?: typeof fetch }): NativeConnectedWorkspaceApi {
   const base = apiBaseUrl.replace(/\/+$/, '');
   async function request(token: string, owner: string, path: string, input?: unknown, method?: 'DELETE' | 'POST', paginated = false, signal?: AbortSignal): Promise<unknown> {
-    signal?.throwIfAborted();
+    throwIfNativeAborted(signal);
     if (!/^user_[a-f0-9]{32}$/.test(owner)) throw new OpenJobApiError(400, 'invalid_input');
     let response: Response, raw: string;
     try { response = await fetchImplementation(base + path, { method: method ?? (input === undefined ? 'GET' : 'POST'), headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(input === undefined ? {} : { 'content-type': 'application/json' }) }, ...(input === undefined ? {} : { body: JSON.stringify(input) }), signal, cache: 'no-store', redirect: 'error' }); raw = await response.text(); }
     catch { throw new ProviderSignInError('offline'); }
-    signal?.throwIfAborted();
+    throwIfNativeAborted(signal);
     if (raw.length > 2_000_000) invalid();
     let body: Record<string, unknown>;
     try { const parsed: unknown = JSON.parse(raw); if (!object(parsed)) invalid(); body = parsed; } catch { return invalid(); }

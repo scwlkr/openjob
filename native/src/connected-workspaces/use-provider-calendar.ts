@@ -1,3 +1,4 @@
+import { throwIfNativeAborted } from '../abort-signal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from 'expo-network';
@@ -27,7 +28,7 @@ export function useNativeProviderCalendar({ controller: api, owner, workspaceId:
   const writable = ready && !!account?.available && !!selectedCalendar && ['owner', 'writer'].includes(selectedCalendar.access);
   const clearViews = useCallback(() => { setCalendars(undefined); setEvents(undefined); setAvailability(undefined); setOperations([]); setHistoryReady(false); setHistoryCursor(null); }, []);
   const usable = () => { const current = lease.current; if (!current.mounted || !current.foreground || !current.online || current.abort.signal.aborted) throw new Error('Calendar paused'); return current.abort.signal; };
-  async function observe<T>(action: (signal: AbortSignal) => Promise<T>) { const signal = usable(), value = await action(signal); signal.throwIfAborted(); usable(); return value; }
+  async function observe<T>(action: (signal: AbortSignal) => Promise<T>) { const signal = usable(), value = await action(signal); throwIfNativeAborted(signal); usable(); return value; }
   async function refreshPlanning() { const rows = await observe(signal => api.planning(owner, id, signal)); onPlanning(rows); return rows; }
   async function refreshHistory(selected = taskId, cursor?: string) {
     if (!selected) return;
@@ -124,11 +125,11 @@ export function useNativeProviderCalendar({ controller: api, owner, workspaceId:
         drafts.put('intents', selected, { ...current, operation: current.operation ?? operation, rejected: false });
       }
     } catch (failure) { const current = drafts.intent(selected); if (current?.input.requestId === pending.input.requestId && !current.operation && ['invalid_input', 'conflict', 'remote_plan_active', 'review_required', 'workspace_capacity'].includes(String((failure as { code?: string }).code))) drafts.put('intents', selected, { ...current, rejected: true }); throw failure; }
-    signal.throwIfAborted(); usable(); setNotice('Intent accepted. Provider completion is not confirmed.'); await refreshPlanning(); await refreshHistory(selected);
+    throwIfNativeAborted(signal); usable(); setNotice('Intent accepted. Provider completion is not confirmed.'); await refreshPlanning(); await refreshHistory(selected);
   }
-  async function run(operation: CalendarOperationView) { const signal = usable(), checked = await api.runCalendar(owner, id, operation.id); signal.throwIfAborted(); usable(); setNotice(checked.state === 'confirmed' ? 'Calendar simulation confirmed. No real provider changed.' : `Operation ${checked.state}. Inspect before another intent.`); await refreshPlanning(); await refreshHistory(operation.taskId); }
+  async function run(operation: CalendarOperationView) { const signal = usable(), checked = await api.runCalendar(owner, id, operation.id); throwIfNativeAborted(signal); usable(); setNotice(checked.state === 'confirmed' ? 'Calendar simulation confirmed. No real provider changed.' : `Operation ${checked.state}. Inspect before another intent.`); await refreshPlanning(); await refreshHistory(operation.taskId); }
   async function review() {
-    if (!link) return; const signal = usable(), selected = taskId, operation = link.operationId, rows = await api.reviewCalendar(owner, id, selected); signal.throwIfAborted(); usable(); onPlanning(rows);
+    if (!link) return; const signal = usable(), selected = taskId, operation = link.operationId, rows = await api.reviewCalendar(owner, id, selected); throwIfNativeAborted(signal); usable(); onPlanning(rows);
     const pending = drafts.intent(selected); if (!rows.some(row => row.taskId === selected) && pending?.operation?.id === operation && pending.operation.state === 'unknown') drafts.put('intents', selected, { ...pending, reviewedRemoval: operation });
     setNotice('Provider state reviewed. Original operation history and your editor are kept.'); await refreshHistory(selected);
   }
@@ -144,7 +145,7 @@ export function useNativeProviderCalendar({ controller: api, owner, workspaceId:
     if (!link || !['linked', 'review_required'].includes(link.state)) throw new Error();
     const signal = usable(), selected = taskId, input: PlanningDetachInput = drafts.detach(selected) ?? { operationId: link.operationId, eventId: link.eventId, etag: link.confirmed?.etag ?? null, acknowledge: 'leave_provider_event' };
     drafts.put('detaches', selected, input); const receipt = await api.detachCalendar(owner, id, selected, input);
-    if (sameDetach(drafts.detach(selected), input)) { drafts.put('receipts', selected, receipt); drafts.put('detaches', selected, undefined); resolveDetached(selected, receipt.operationId); } signal.throwIfAborted(); usable(); setNotice('Task detached. Provider event left untouched.'); await refreshPlanning();
+    if (sameDetach(drafts.detach(selected), input)) { drafts.put('receipts', selected, receipt); drafts.put('detaches', selected, undefined); resolveDetached(selected, receipt.operationId); } throwIfNativeAborted(signal); usable(); setNotice('Task detached. Provider event left untouched.'); await refreshPlanning();
   }
   async function inspectDetach() { const selected = taskId, input = drafts.detach(selected); if (!input) return; const receipt = await observe(signal => api.calendarDetachReceipt(owner, id, selected, input, signal)); if (sameDetach(drafts.detach(selected), input)) { drafts.put('receipts', selected, receipt); drafts.put('detaches', selected, undefined); resolveDetached(selected, receipt.operationId); } setNotice('Saved detach receipt confirmed. Provider event left untouched.'); await refreshPlanning(); }
   function acceptVersion() { if (editor && link?.confirmed && link.state === 'linked') { edit({ baseEtag: link.confirmed.etag }); setNotice('Your edits are kept. The next intent uses this reviewed provider version.'); } }

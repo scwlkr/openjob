@@ -1,3 +1,4 @@
+import { AbortController as NativeAbortController } from 'abort-controller';
 import { randomUUID } from 'expo-crypto';
 import { useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -11,6 +12,9 @@ import type { NativeConnectedWorkspaceController } from '../src/connected-worksp
 import type { WorkspaceView } from '../src/personal-workspace-contracts';
 import type { CalendarPlanInput, CalendarOperationView, RemotePlanningLink, PlanningDetachReceipt } from '../../shared/remote-planning';
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => '11111111-1111-4111-8111-111111111111') }));
+const originalAbortController = globalThis.AbortController;
+beforeEach(() => { globalThis.AbortController = NativeAbortController as unknown as typeof AbortController; });
+afterEach(() => { globalThis.AbortController = originalAbortController; });
 const owner = `user_${'a'.repeat(32)}`, workspace = `wsp_${'b'.repeat(32)}`, account = 'fixture_calendar', calendar = `${account}:calendar:alex%40example.invalid`, event = `${calendar}:event:oj${'d'.repeat(64)}`;
 function fixture() {
   let links: RemotePlanningLink[] = [], operations: CalendarOperationView[] = [], savedInput: CalendarPlanInput | undefined, effects = 0, detachReceipt: PlanningDetachReceipt | undefined;

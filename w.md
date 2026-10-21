@@ -1,3 +1,35 @@
+# R40 native abort compatibility fix — repeat runtime proof next
+
+21 October 2026 UTC: first native Calendar source `053fbdb` built/installed on
+owned simulator `78BCBFAB-A59F-4E42-91D3-490CBEC91223` with embedded development
+fixture (201 locked Pods, 798 source files verified, only port5213→5215 delta).
+The initial MCP build timed out300s while Xcode continued to success; an
+incremental MCP result passed31s, 35 warnings/zero errors. Final installed binary,
+Info.plist and JS bundle hashes were read back. Build reservation was released.
+
+Actual native Mail read, title retention through Mail expiry and source-linked
+Task `Native Calendar review` creation worked. Calendar reads failed: React
+Native's abort-controller lacks `throwIfAborted`. This run is **not** a native
+Calendar acceptance pass. Source now uses an `aborted`-property guard; the affected
+UI/API tests use the installed controller. Root/native types, lint, all27 affected
+native checks, brand32 and secret safety800 pass after the fix. Read-only review
+found no remaining web-only AbortSignal calls. Repeat native proof is pending.
+
+Failed-run receipt/source manifest/bundle/result:
+`output/r40/native-calendar/first-run-053fbdb/`. Proof root:
+`/var/folders/m4/wq1lz5wj6n5cxzp07hwn9ckh0000gn/T/openjob-native-calendar-8ztxhh8f`.
+The invented fixture state/Task are preserved there. The service is now run from
+the clean managed worktree at port5215: launching Vite from the generated build
+snapshot caused an unresponsive high-memory watcher; only owned PID75069 was
+terminated and its exact stale lock removed after exit. No state was reset.
+
+Next: update the committed JS source in the isolated proof snapshot (native config,
+lock/Pods unchanged), rebuild, then repeat provider planning/completion/reply and
+restart/recovery. PR120 remains Draft at its prior head. Primary446162d and all34
+recorded untracked hashes are unchanged. Existing Android5213/8088/emulator and
+foreign Gub simulator remain untouched. Live Calendar, real send, Android UI/SDK,
+physical-device and release gates remain open.
+
 # R40 native provider Calendar — source checkpoint, runtime pending
 
 21 October 2026 UTC: `codex/p-wlk-6-native-calendar` integrates native

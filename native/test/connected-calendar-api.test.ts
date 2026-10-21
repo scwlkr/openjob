@@ -1,3 +1,4 @@
+import { AbortController as NativeAbortController } from 'abort-controller';
 import { createNativeConnectedWorkspaceApi } from '../src/connected-workspaces-api';
 import * as protocol from '../../shared/calendar-client';
 const owner = `user_${'a'.repeat(32)}`, workspace = `wsp_${'b'.repeat(32)}`, account = 'calendar_fixture', calendar = `${account}:calendar:alex%40example.invalid`, event = `${calendar}:event:oj${'d'.repeat(64)}`, operation = `cop_${'e'.repeat(64)}`;
@@ -31,7 +32,7 @@ test('native rejects wrong operation/Task/window, hidden provider data and extra
   await expect(api.calendarHistory('fixture', owner, workspace, 'task')).rejects.toMatchObject({ code: 'invalid_response' });
 });
 test('Calendar observation cancellation reaches fetch and a late response is rejected', async () => {
-  const abort = new AbortController(); let release!: (value: Response) => void;
+  const abort = new NativeAbortController() as unknown as AbortController; let release!: (value: Response) => void;
   const transport = jest.fn((_url, options) => { expect(options?.signal).toBe(abort.signal); return new Promise<Response>(resolve => { release = resolve; }); });
   const api = createNativeConnectedWorkspaceApi({ apiBaseUrl: 'http://fixture.invalid/api/v1', fetchImplementation: transport });
   const pending = api.calendarAccounts('fixture', owner, workspace, abort.signal); abort.abort(); release(json([]));
