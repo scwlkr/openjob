@@ -2592,13 +2592,11 @@ paths:
           description: Configured Google metadata-only browsing; omits bodies and snippets. Omit to retain the existing full-message response.
           schema:
             type: string
-            enum: [metadata]
+            enum: [ metadata ]
       summary: readConnectionMail
       x-openjob-authorization: authenticated
       x-openjob-retryable: true
-      description: Human-only Connections contract. Normal runtime remains unconfigured503.
-        Explicit injected Google orchestration or simulated fixture only; no
-        provider Calendar, sending or credential DTOs.
+      description: Human-only Connections contract. Normal runtime remains unconfigured503. Explicit injected Google orchestration or simulated fixture only; no provider Calendar, sending or credential DTOs.
       responses:
         "200":
           description: Configured lifecycle result; normal runtime remains unconfigured.
@@ -2611,57 +2609,114 @@ paths:
                   - data
                 properties:
                   data:
-                    type: object
-                    additionalProperties: false
-                    required:
-                      - mode
-                      - workspaceId
-                      - page
-                    properties:
-                      mode:
-                        enum: [simulated, google, google-fixture]
-                      workspaceId:
-                        type: string
-                        pattern: ^wsp_[a-f0-9]{32}$
-                      page:
-                        type: object
+                    oneOf:
+                      - type: object
                         additionalProperties: false
                         required:
-                          - messages
-                          - folders
-                          - calendars
-                          - events
-                          - nextCursor
-                          - syncCursor
+                          - mode
+                          - workspaceId
+                          - page
                         properties:
-                          messages:
-                            type: array
-                            items:
-                              oneOf:
-                                - $ref: "#/components/schemas/ProviderPreviewMessage"
-                                - $ref: "#/components/schemas/ProviderMessageSummary"
-                          folders:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/ProviderPreviewFolder"
-                          calendars:
-                            type: array
-                            maxItems: 0
-                            items:
-                              $ref: "#/components/schemas/ProviderPreviewCalendar"
-                          events:
-                            type: array
-                            maxItems: 0
-                            items:
-                              $ref: "#/components/schemas/ProviderPreviewEvent"
-                          nextCursor:
-                            type:
-                              - string
-                              - "null"
-                          syncCursor:
-                            type:
-                              - string
-                              - "null"
+                          mode:
+                            enum:
+                              - simulated
+                              - google
+                              - google-fixture
+                          workspaceId:
+                            type: string
+                            pattern: ^wsp_[a-f0-9]{32}$
+                          page:
+                            type: object
+                            additionalProperties: false
+                            required:
+                              - messages
+                              - folders
+                              - calendars
+                              - events
+                              - nextCursor
+                              - syncCursor
+                            properties:
+                              messages:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewMessage"
+                              folders:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewFolder"
+                              calendars:
+                                type: array
+                                maxItems: 0
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewCalendar"
+                              events:
+                                type: array
+                                maxItems: 0
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewEvent"
+                              nextCursor:
+                                type:
+                                  - string
+                                  - "null"
+                              syncCursor:
+                                type:
+                                  - string
+                                  - "null"
+                      - type: object
+                        additionalProperties: false
+                        required:
+                          - mode
+                          - workspaceId
+                          - page
+                          - freshness
+                        properties:
+                          mode:
+                            enum:
+                              - simulated
+                              - google
+                              - google-fixture
+                          workspaceId:
+                            type: string
+                            pattern: ^wsp_[a-f0-9]{32}$
+                          page:
+                            type: object
+                            additionalProperties: false
+                            required:
+                              - messages
+                              - folders
+                              - calendars
+                              - events
+                              - nextCursor
+                              - syncCursor
+                            properties:
+                              messages:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ProviderMessageSummary"
+                              folders:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewFolder"
+                              calendars:
+                                type: array
+                                maxItems: 0
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewCalendar"
+                              events:
+                                type: array
+                                maxItems: 0
+                                items:
+                                  $ref: "#/components/schemas/ProviderPreviewEvent"
+                              nextCursor:
+                                type:
+                                  - string
+                                  - "null"
+                              syncCursor:
+                                type:
+                                  - string
+                                  - "null"
+                          freshness:
+                            $ref: "#/components/schemas/ConnectedMailFreshness"
               example:
                 data:
                   mode: simulated
@@ -2682,8 +2737,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalErrorResponse"
         default:
-          description: Redacted failure, including unconfigured503, denied403, conflict409
-            or invalid400.
+          description: Redacted failure, including unconfigured503, denied403, conflict409 or invalid400.
           content:
             application/json:
               schema:
@@ -4452,6 +4506,24 @@ components:
           type: string
           minLength: 1
           maxLength: 256
+    ConnectedMailFreshness:
+      type: object
+      additionalProperties: false
+      required:
+        - observedAt
+        - staleAt
+        - expiresAt
+      description: Conservative metadata observation bounds, capped by current credential expiry. No access lease. Only metadata view supplies this; no body cache or history synchronization.
+      properties:
+        observedAt:
+          type: string
+          format: date-time
+        staleAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
     ProviderMessageSummary:
       type: object
       additionalProperties: false

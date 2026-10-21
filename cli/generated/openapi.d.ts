@@ -1276,6 +1276,15 @@ export interface components {
             read: boolean;
             upstreamThreadId: string;
         };
+        /** @description Conservative metadata observation bounds, capped by current credential expiry. No access lease. Only metadata view supplies this; no body cache or history synchronization. */
+        ConnectedMailFreshness: {
+            /** Format: date-time */
+            observedAt: string;
+            /** Format: date-time */
+            staleAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         ProviderMessageSummary: {
             id: string;
             accountId: string;
@@ -5755,13 +5764,26 @@ export interface operations {
                             mode: "simulated" | "google" | "google-fixture";
                             workspaceId: string;
                             page: {
-                                messages: (components["schemas"]["ProviderPreviewMessage"] | components["schemas"]["ProviderMessageSummary"])[];
+                                messages: components["schemas"]["ProviderPreviewMessage"][];
                                 folders: components["schemas"]["ProviderPreviewFolder"][];
                                 calendars: components["schemas"]["ProviderPreviewCalendar"][];
                                 events: components["schemas"]["ProviderPreviewEvent"][];
                                 nextCursor: string | null;
                                 syncCursor: string | null;
                             };
+                        } | {
+                            /** @enum {unknown} */
+                            mode: "simulated" | "google" | "google-fixture";
+                            workspaceId: string;
+                            page: {
+                                messages: components["schemas"]["ProviderMessageSummary"][];
+                                folders: components["schemas"]["ProviderPreviewFolder"][];
+                                calendars: components["schemas"]["ProviderPreviewCalendar"][];
+                                events: components["schemas"]["ProviderPreviewEvent"][];
+                                nextCursor: string | null;
+                                syncCursor: string | null;
+                            };
+                            freshness: components["schemas"]["ConnectedMailFreshness"];
                         };
                     };
                 };
