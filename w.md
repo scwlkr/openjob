@@ -57,7 +57,8 @@ restart, conflict and disconnect/revoke behavior; then review, push/merge the
 nondeploying completed slice and integrate native draft120 with exact-input proof.
 R40 remains In Progress, not delivered. Full goal/provider/native/release gates stay
 open. Follow existing Linear R30 discussion7f612b86-7725-46b1-8474-8a2a680da5eb;
-R40 start999c9abe-59f2-4aad-9b52-2e0a5d3bee71. Do not create a new backlog.
+R40 start999c9abe-59f2-4aad-9b52-2e0a5d3bee71; pushed backend checkpoint
+a8d5add1-775b-4a4f-80db-633b7f260f2d. Do not create a new backlog.
 
 Primary34 untracked files are hash-identical to
 `/tmp/openjob-r40-primary-untracked.json` (includes original26). Primary tracked
