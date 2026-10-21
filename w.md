@@ -1,4 +1,65 @@
-# R40 Calendar backend checkpoint — unfinished
+# R40 connected Calendar fixture source — reviewed
+
+21 October 2026 UTC: source `723c83da7f1f8b8edc920e02ecf15a5954788470`
+continues backend `4ad9dc8` on `codex/p-wlk-6-google-calendar`, from main
+`0304b6b`. Managed worktree:
+`/Users/shanewalker/.codex/worktrees/p-wlk-6-google-calendar/openjob`.
+Independent read-only critic accepted this exact source with no consequential
+findings. Source PR/delivery readback follows below. R40 remains In Progress.
+
+The explicit invented Google fixture now persists its provider ledger and composes
+Calendar account discovery, list/events/FreeBusy, durable operations and planning
+in the existing pilot. Normal and portable runtimes still configure no Calendar
+service. Mail consent grants no Calendar rights. OpenAPI56 paths/77 operations,
+generated CLI types and shared strict web/CLI response validation cover the source
+surface. CLI enqueue accepts frozen intent; explicit run-fixture alone executes.
+Wrong receipt identity/input and hidden fields fail closed. No write auto-retries.
+
+Tasks show provider relationship state and open the connected Calendar panel.
+Authored time/title fields and exact uncertain requests survive module/Workspace
+navigation; disposable readers abort and discard observations when hidden.
+Timestamp seconds/milliseconds survive title-only edits. Current provider version
+acceptance keeps authored edits. Active remote Tasks cannot be locally scheduled
+or deleted; dirty provider editors/pending requests guard local Task deletion too.
+Explicit editor discard does not discard frozen requests.
+
+Detach leaves the provider event and has its own exact persisted receipt. Review
+also saves a receipt atomically with link changes, recovering a lost successful
+review after deletion. Queued/executing/unresolved unknown links cannot detach.
+Positive resolution can unlock a new intent while the old operation remains
+unknown. Detach and queued provider-delete are separate UI/CLI actions.
+
+Practical synthetic browser proof passed: invented Mail → source-linked Task →
+provider create → title-only update with exact milliseconds → fixture restart →
+restored provider link/history → local completion → saved Reply-all draft. To used
+Reply-To plus teammate; Cc retained observer; self was excluded. Nothing was sent.
+Sam was denied pilot admission and saw no Alex work. Native Chrome confirmation
+controls completed the dirty-editor deletion guard after in-app browser dialog
+control failed. The first date-fill probe had not changed React state; the repeated
+AX field edit visibly set dirty state and passed the guard. No automation failure
+is counted as an application pass.
+
+62 focused checks pass (60 API/provider/actual CLI/reply/contract checks plus two
+editor regressions), with final root types, affected lint, OpenAPI/CLI type check,
+brand generation/check32 and secret scan. The contract audit now explicitly
+inventories existing connected routes and task.notes, preserves legacy
+status-specific checks, and checks connected owner/default-error envelopes. New
+YAML uses no aliases; original path prefix/components remain byte-identical.
+
+Evidence, screenshots, test logs and source hashes (synthetic only):
+`/Users/shanewalker/Desktop/dev/openjob/output/r40/calendar-journey/`.
+Primary remains446162d/PR120 Draft; all34 primary untracked files retain their
+recorded hashes, including the original26. No new native build, deployment,
+publication, live Calendar read/write or persistent real access occurred.
+
+NEXT: deliver the reviewed nondeploying source PR and record exact readback in
+this handoff/Linear R30 discussion. Then reconcile that source with native draft120
+and implement/test the advertised native Calendar fixture flow before claiming
+native parity. Keep ADR0017 simulator/emulator/physical and release gates open;
+the Android SDK/UI-method question remains unanswered. Real Calendar requires
+separately authorized account/resources/scopes and practical provider evidence.
+
+## Historical R40 backend checkpoint — superseded by the source above
 
 21 October 2026 UTC: source `4ad9dc814d62418d2dcbff831028cb9df3effdac` on
 `codex/p-wlk-6-google-calendar`, from main `0304b6b`. Managed worktree:
