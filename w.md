@@ -5,7 +5,11 @@ continues backend `4ad9dc8` on `codex/p-wlk-6-google-calendar`, from main
 `0304b6b`. Managed worktree:
 `/Users/shanewalker/.codex/worktrees/p-wlk-6-google-calendar/openjob`.
 Independent read-only critic accepted this exact source with no consequential
-findings. Source PR/delivery readback follows below. R40 remains In Progress.
+findings. [PR131](https://github.com/scwlkr/openjob/pull/131) merged21 October
+06:18:12 UTC as `e4297d6d98033c77095422e9ab281a5425738f54`; remote main matched.
+No required check/ruleset was configured, the PR was clean/mergeable, and the sole
+repository workflow was verified manual-only/nonpublishing at the exact base.
+No deployment or publication ran. R40 remains In Progress.
 
 The explicit invented Google fixture now persists its provider ledger and composes
 Calendar account discovery, list/events/FreeBusy, durable operations and planning
@@ -52,9 +56,14 @@ Primary remains446162d/PR120 Draft; all34 primary untracked files retain their
 recorded hashes, including the original26. No new native build, deployment,
 publication, live Calendar read/write or persistent real access occurred.
 
-NEXT: deliver the reviewed nondeploying source PR and record exact readback in
-this handoff/Linear R30 discussion. Then reconcile that source with native draft120
-and implement/test the advertised native Calendar fixture flow before claiming
+Post-merge fetch found two invalid copied Git refs with spaces in their names.
+Their exact bytes are preserved under `output/r40/git-ref-recovery/`; commit
+c3770ae5 remains reachable through `refs/codex-recovery/r40-copied-native-ref`.
+Only the invalid duplicate entries moved; active native refs were unchanged.
+Fetch then passed.
+
+NEXT: reconcile this delivered source with native draft120 and implement/test the
+advertised native Calendar fixture flow before claiming
 native parity. Keep ADR0017 simulator/emulator/physical and release gates open;
 the Android SDK/UI-method question remains unanswered. Real Calendar requires
 separately authorized account/resources/scopes and practical provider evidence.
