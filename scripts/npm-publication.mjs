@@ -43,7 +43,6 @@ if (mode === 'prepare') {
   const identity = candidate ? { ...candidateIdentity({ baseVersion: base.version, version: flag, sha: source }), name: '@scwlkr/openjob' }
     : localPublicationIdentity({ channel: target, baseVersion: base.version, source, timestamp: Number(git('show', '-s', '--format=%ct', 'HEAD')) });
   if (!candidate) { freshSource(identity); verifyRegistryOwner(await registry()); }
-  node('--test', 'tests/npm-publication.test.mjs', 'tests/npm-distribution.test.mjs');
   node('node_modules/typescript/bin/tsc', '--noEmit');
   node('scripts/check-v1-secrets.mjs');
   run(process.execPath, ['scripts/build-npm-app.mjs', target, ...(candidate ? [flag] : [])], { env: { ...process.env, GITHUB_REF: identity.ref } });

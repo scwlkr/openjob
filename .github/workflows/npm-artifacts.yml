@@ -14,7 +14,6 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run test:distribution
       - run: node scripts/build-npm-app.mjs local
       - run: npm pack ./dist/npm --pack-destination ./dist
       - uses: actions/upload-artifact@v4

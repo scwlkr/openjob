@@ -21,7 +21,7 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. Use `npm test` before committing larger changes.
+Open <http://localhost:3000>. Run `npm run build`, `npm run typecheck`, and `npm run lint` before committing larger changes.
 
 The coequal Expo iOS/Android shell and its simulator, build, OTA-disabled, and
 embedded-bundle commands are documented in [`native/README.md`](native/README.md).
@@ -114,7 +114,6 @@ rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 - `server/v1-identity.ts` — `/api/v1/me` identity behavior and envelopes
 - `firestore.rules` — browser access is denied; the Worker owns data access
 - `openapi/openapi.yaml` — machine-readable `/api/v1` contract
-- `tests/support/v1-harness.mjs` — isolated Worker HTTP acceptance seam
 - `scripts/legacy-cutover.mjs` — freeze smoke, private snapshot, and zero-count gate
 
 ## Services

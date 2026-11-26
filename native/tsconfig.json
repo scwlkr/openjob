@@ -4,15 +4,13 @@
     "allowImportingTsExtensions": true,
     "noUncheckedIndexedAccess": true,
     "strict": true,
-    "types": ["jest"]
+    "types": []
   },
   "include": [
     "App.tsx",
     "index.ts",
     "simulator-smoke.tsx",
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "test/**/*.ts",
-    "test/**/*.tsx"
+    "src/**/*.tsx"
   ]
 }

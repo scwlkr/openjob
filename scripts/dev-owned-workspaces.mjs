@@ -1,7 +1,7 @@
 import { createConnectionsApi } from '../server/connections/api.ts';
 import { createConnectionsApplication } from '../server/connections/application.ts';
 import { createConnectionOnboardingStore } from '../db/connection-onboarding.ts';
-import { createConsentFixture, fixtureChoices } from '../tests/support/connection-onboarding-fixture.mjs';
+import { createConsentFixture, fixtureChoices } from '../fixtures/support/connection-onboarding-fixture.mjs';
 // Local-only fixture composition of real owner-Workspace repository/API/UI; no deployed route.
 import { createServer as createViteServer } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -9,8 +9,8 @@ import { readFile, writeFile, rename, open, mkdir, unlink, mkdtemp } from 'node:
 import { lstatSync, unlinkSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createFakeFirestore, createPrivateKey } from '../tests/support/fake-firestore.mjs';
-import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens.mjs';
+import { createFakeFirestore, createPrivateKey } from '../fixtures/support/fake-firestore.mjs';
+import { createTestFirebaseAuthority } from '../fixtures/support/firebase-id-tokens.mjs';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
 import { createFirestoreUserStore } from '../db/users.ts';
 import { createOwnedWorkspaceStore } from '../db/owned-workspaces.ts';
@@ -26,11 +26,11 @@ import { createGoogleConnectionsFlow } from '../server/connections/google-flow.t
 import { googleRows } from '../server/connections/google-state.ts';
 import { createReplyOperationRepository } from '../db/reply-operations.ts';
 import { createFixtureReplyOperations } from '../server/reply-operations.ts';
-import { createFixtureGmailReplyDispatch, fixtureGmailState } from '../tests/support/gmail-reply-transport.mjs';
-import { createFixtureGoogleCalendar, fixtureCalendarState } from '../tests/support/google-calendar-transport.mjs';
+import { createFixtureGmailReplyDispatch, fixtureGmailState } from '../fixtures/support/gmail-reply-transport.mjs';
+import { createFixtureGoogleCalendar, fixtureCalendarState } from '../fixtures/support/google-calendar-transport.mjs';
 import { createCalendarPlanningRepository } from '../db/calendar-planning.ts';
 import { createFixtureCalendarPlanning } from '../server/calendar-planning.ts';
-import { fixture as googleProtocolFixture, CLIENT, BINDING, ACCESS, REFRESH } from '../tests/support/google-oauth-transport.mjs';
+import { fixture as googleProtocolFixture, CLIENT, BINDING, ACCESS, REFRESH } from '../fixtures/support/google-oauth-transport.mjs';
 const options = new Map(); const args = process.argv.slice(2);
 while (args.length) { const key = args.shift(); if (key === '--google-fixture' && !options.has(key)) { options.set(key, true); continue; } if (!['--port', '--state-file'].includes(key) || options.has(key) || !args.length) throw new Error('Use [--port N] [--state-file PATH] [--google-fixture].'); options.set(key, args.shift()); }
 const port = Number(options.get('--port') ?? 5202); if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port.');
@@ -136,6 +136,6 @@ try {
     };
     queue = queue.then(run, run);
   }); } };
-  server = await createViteServer({ configFile: false, cacheDir: statePath + '.vite-cache', root: resolve('tests/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], resolve: { alias: { 'next/link': resolve('tests/browser/personal-workspace-fixture/link.tsx') } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfigFor('preview')), __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(nativeIdentities.apple.signInServices.nonproduction.serviceId), __OPENJOB_QA_PASSWORD_AUTH__: 'null' }, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
+  server = await createViteServer({ configFile: false, cacheDir: statePath + '.vite-cache', root: resolve('fixtures/browser/owned-workspaces-fixture'), publicDir: resolve('public'), plugins: [react(), plugin], resolve: { alias: { 'next/link': resolve('fixtures/browser/personal-workspace-fixture/link.tsx') } }, define: { __OPENJOB_FIREBASE_CONFIG__: JSON.stringify(webFirebaseConfigFor('preview')), __OPENJOB_APPLE_SERVICE_ID__: JSON.stringify(nativeIdentities.apple.signInServices.nonproduction.serviceId), __OPENJOB_QA_PASSWORD_AUTH__: 'null' }, server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'warn' });
   await server.listen(); console.log(`Owned Workspace fixture: http://127.0.0.1:${port}/\nSynthetic Alex/Sam; no real sign-in, providers or access changes.\nSaved local fixture (not encrypted): ${statePath}`);
 } catch (error) { await close(); throw error; }

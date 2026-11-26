@@ -237,14 +237,14 @@
     },
     "developerAccountId": "6994653839033844694",
     "developerName": "WLKR LABS",
-    "supportEmail": "dev@wlkrlabs.com",
-    "supportEmailVerified": true,
+    "supportEmail": "hello@openjob.dev",
+    "supportEmailVerified": false,
     "registrationFee": {
       "amountUsd": 25,
       "cadence": "one-time",
       "paid": true
     },
-    "website": "https://wlkrlabs.com"
+    "website": "https://wlkr.si"
   },
   "expo": {
     "account": "openjob",

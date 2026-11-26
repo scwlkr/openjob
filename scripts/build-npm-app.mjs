@@ -26,7 +26,7 @@ if (!['local', 'candidate'].includes(channel)) {
 const output = join(root, 'dist/npm');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-await build({ configFile: join(root, 'tests/browser/personal-workspace-vite.config.ts'), build: { outDir: join(output, 'app/web'), emptyOutDir: true }, logLevel: 'warn' });
+await build({ configFile: join(root, 'fixtures/browser/personal-workspace-vite.config.ts'), build: { outDir: join(output, 'app/web'), emptyOutDir: true }, logLevel: 'warn' });
 await build({ configFile: false, publicDir: false, build: { ssr: join(root, 'scripts/personal-workspace-test-server.mjs'), target: 'node22', outDir: join(output, 'app/api'), emptyOutDir: true, minify: false, rollupOptions: { output: { entryFileNames: 'server.mjs' } } }, ssr: { noExternal: true }, logLevel: 'warn' });
 await build({ configFile: join(root, 'deployment/web-vite.config.ts'), build: { target: 'es2022', outDir: join(output, 'app/service-web'), emptyOutDir: true }, logLevel: 'warn' });
 await build({ configFile: false, publicDir: false, resolve: { alias: { '@': root } }, build: { ssr: join(root, 'deployment/service-server.mjs'), target: 'node22', outDir: join(output, 'app/service'), emptyOutDir: true, minify: false, rollupOptions: { output: { entryFileNames: 'server.mjs' } } }, ssr: { noExternal: true }, logLevel: 'warn' });

@@ -20,7 +20,7 @@ async function stop(code = 0) {
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { void stop(); });
 try {
   console.log('Building isolated personal-workspace demo from this checkout. No credentials or provider setup.');
-  await build({ configFile: resolve('tests/browser/personal-workspace-vite.config.ts'), build: { outDir: directory, emptyOutDir: false }, logLevel: 'warn' });
+  await build({ configFile: resolve('fixtures/browser/personal-workspace-vite.config.ts'), build: { outDir: directory, emptyOutDir: false }, logLevel: 'warn' });
   api = spawn(process.execPath, ['scripts/personal-workspace-test-server.mjs', '--test-only', '--port', '0'], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
   api.on('exit', code => { if (!stopping) void stop(code || 1); });
   const apiPort = await new Promise((accept, reject) => {

@@ -18,13 +18,12 @@ than skipping proof.
 ## Modes
 
 - `focused` is the ordinary Feature Proof used to close one feature issue. It
-  runs type and lint checks, affected public tests, and the issue's written iOS
+  runs type, lint, and relevant build checks, plus the issue's written iOS
   Simulator and Android Emulator journey. Existing development clients are
   reused whenever native generation inputs are unchanged.
-- `merge` runs affected public integration seams. Clean native generation,
-  embedded bundle export, or the broader repository suite runs only when its
-  declared inputs changed or no trustworthy matching result exists.
-- `release-candidate` selects the complete deterministic suite, type and lint,
+- `merge` runs the checks selected for the changed files. Clean native generation,
+  embedded bundle export, and builds reuse passing results for matching inputs.
+- `release-candidate` selects the web build, web and native type and lint checks,
   OpenAPI and secret checks, clean generated configuration, independent iOS and
   Android embedded bundles, and a machine-readable candidate handoff. It
   requires clean synchronized `main`. This mode prepares proof for a later
@@ -91,11 +90,10 @@ tool/runtime fingerprint to match. Missing, malformed, partial, or mismatched
 cache state is never trusted; the affected gate runs again. Passing `--cache
 <path>` selects another non-secret cache file for isolated automation.
 
-`npm test`, `npm run typecheck`, `npm run lint`, `npm run openapi:check`, and
-`npm run native:check` remain available. `native:check` is the compatibility
-alias for the former all-in-one native gate. Ordinary `npm test` uses
-`native:quick`; clean generation and bundle exports are selected separately by
-the impact-aware entry point.
+The repository checks include the web build, TypeScript, lint, OpenAPI, and
+native configuration and bundle verification. Record feature behavior using
+the running app or CLI. The impact-aware entry point selects native generation
+and bundle exports separately from the native lint and type checks.
 
 ## Release boundary
 

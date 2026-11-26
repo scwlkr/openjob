@@ -2,7 +2,7 @@ import { constants } from 'node:fs';
 import { open, mkdir, realpath, rename, unlink, lstat } from 'node:fs/promises';
 import { dirname, basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createFakeFirestore } from '../tests/support/fake-firestore.mjs';
+import { createFakeFirestore } from '../fixtures/support/fake-firestore.mjs';
 import { validateLocalSnapshot, STATE_LIMIT } from './personal-workspace-state-schema.mjs';
 
 export async function writeLocalSnapshot(path, text) {

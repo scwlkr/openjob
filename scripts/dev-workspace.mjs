@@ -41,5 +41,5 @@ const ready = await new Promise(resolve => {
   backend.once("exit", () => { clearTimeout(timer); resolve(false); });
   backend.once("error", () => { clearTimeout(timer); resolve(false); });
 });
-if (ready && !stopping) launch("node_modules/vite/bin/vite.js", ["--config", args.includes("--test") ? "tests/browser/vite.config.ts" : "vite.config.ts", "--host", "127.0.0.1", "--port", port, "--strictPort"]);
+if (ready && !stopping) launch("node_modules/vite/bin/vite.js", ["--config", args.includes("--test") ? "fixtures/browser/vite.config.ts" : "vite.config.ts", "--host", "127.0.0.1", "--port", port, "--strictPort"]);
 else stop(1);
