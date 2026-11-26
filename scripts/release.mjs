@@ -46,21 +46,25 @@ async function writeJson(path, value) {
 function assertReleaseBranch() {
   const repositoryRoot = resolve(output("git", ["rev-parse", "--show-toplevel"]));
   if (repositoryRoot !== root) throw new Error("Run the release command from the repository root.");
-  if (output("git", ["branch", "--show-current"]) !== "main") {
-    throw new Error("Releases must run from main.");
+  const branch = output("git", ["branch", "--show-current"]);
+  if (branch !== "main" && branch !== "release/0.3") {
+    throw new Error("Releases must run from main or the v0.3 hotfix branch.");
+  }
+  if (branch === "release/0.3") {
+    run("git", ["merge-base", "--is-ancestor", "v0.3.7", "HEAD"]);
   }
   if (output("git", ["status", "--porcelain"])) {
     throw new Error("The working tree must be clean before a release.");
   }
-  run("git", ["fetch", "origin", "main"]);
+  run("git", ["fetch", "origin", branch]);
   const [behind, ahead] = output("git", [
     "rev-list",
     "--left-right",
     "--count",
-    "HEAD...origin/main",
+    "HEAD...FETCH_HEAD",
   ]).split(/\s+/u).map(Number);
   if (behind !== 0 || ahead !== 0) {
-    throw new Error("main must be synchronized with origin/main before a release.");
+    throw new Error(`${branch} must be synchronized with origin before a release.`);
   }
 }
 

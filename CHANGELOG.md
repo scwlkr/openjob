@@ -8,6 +8,8 @@ All notable OpenJob changes are recorded here. Releases follow Semantic Versioni
 
 ### Changed
 
+- Publish the current OpenJob support email and WLKR.SI website on the privacy and support pages.
+
 ### Fixed
 
 ### Security
