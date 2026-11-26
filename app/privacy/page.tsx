@@ -59,10 +59,13 @@ export default function PrivacyPage() {
         </p>
         <p><Link href="/account-deletion">Request account deletion</Link></p>
 
-        <h2>Contact</h2>
+        <h2 id="support">Contact</h2>
         <p>
-          Privacy questions can be filed publicly without including personal
-          data at <a href="https://github.com/scwlkr/openjob/issues">OpenJob Issues</a>.
+          For support and privacy questions, email{" "}
+          <a href="mailto:hello@openjob.dev">hello@openjob.dev</a>. You can also
+          file public issues without including personal data at{" "}
+          <a href="https://github.com/scwlkr/openjob/issues">OpenJob Issues</a>.
+          OpenJob is part of <a href="https://wlkr.si">WLKR.SI</a>.
           Account deletion itself never requires contacting support.
         </p>
       </article>

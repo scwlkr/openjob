@@ -104,7 +104,6 @@ rollback; [the cutover runbook](docs/legacy-cutover.md) defines its gates.
 - `server/v1-identity.ts` — `/api/v1/me` identity behavior and envelopes
 - `firestore.rules` — browser access is denied; the Worker owns data access
 - `openapi/openapi.yaml` — machine-readable `/api/v1` contract
-- `tests/support/v1-harness.mjs` — isolated Worker HTTP acceptance seam
 - `scripts/legacy-cutover.mjs` — freeze smoke, private snapshot, and zero-count gate
 
 ## Services
