@@ -6,10 +6,10 @@ import { createV1PersonalWorkspaceApi } from '../server/v1-personal-workspace.ts
 import { createV1PersonalAgentGrantsApi } from '../server/v1-personal-agent-grants.ts';
 import { createV1ProviderPreviewApi } from '../server/v1-provider-preview.ts';
 import { createFirebaseIdTokenVerifier } from '../server/firebase-id-token.ts';
-import { createPrivateKey } from '../tests/support/fake-firestore.mjs';
-import { createTestFirebaseAuthority } from '../tests/support/firebase-id-tokens.mjs';
+import { createPrivateKey } from '../fixtures/support/fake-firestore.mjs';
+import { createTestFirebaseAuthority } from '../fixtures/support/firebase-id-tokens.mjs';
 import { openPersonalWorkspaceState } from './personal-workspace-state.mjs';
-import { createMockProviderConnectionHarness } from '../tests/support/mock-provider-connections.mjs';
+import { createMockProviderConnectionHarness } from '../fixtures/support/mock-provider-connections.mjs';
 
 if (!process.argv.includes('--test-only')) throw new Error('This isolated synthetic server requires --test-only.');
 const portIndex = process.argv.indexOf('--port');

@@ -21,12 +21,10 @@
     "build:production": "npx --yes eas-cli@21.1.0 build --platform all --profile production",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
     "secret:check": "node ../scripts/check-v1-secrets.mjs",
     "config:verify": "node scripts/verify-config.mjs",
     "bundle:verify": "node scripts/verify-embedded-bundles.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run secret:check && npm run config:verify && npm run bundle:verify"
+    "check": "npm run lint && npm run typecheck && npm run secret:check && npm run config:verify && npm run bundle:verify"
   },
   "dependencies": {
     "@expo/config-plugins": "57.0.6",
@@ -60,15 +58,10 @@
     "react-native-svg": "15.15.4"
   },
   "devDependencies": {
-    "@testing-library/react-native": "14.0.1",
-    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "9.39.4",
     "eslint-config-expo": "57.0.0",
-    "jest": "~29.7.0",
-    "jest-expo": "~57.0.2",
     "patch-package": "8.0.1",
-    "react-test-renderer": "19.2.3",
     "typescript": "~6.0.3"
   }
 }

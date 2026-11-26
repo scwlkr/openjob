@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { runV1AcceptanceScenario } from "./v1-acceptance-scenario.mjs";
-import { createOpenApiResponseValidator } from "../tests/support/openapi-response.mjs";
+import { createOpenApiResponseValidator } from "../fixtures/support/openapi-response.mjs";
 
 function requiredEnvironment(name) {
   const value = process.env[name];

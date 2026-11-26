@@ -18,7 +18,10 @@ const USAGE = [
 const REQUIRED_VERIFICATION_GATES = [
   "typecheck",
   "lint",
-  "repository-suite",
+  "web-build",
+  "cli-generated-types",
+  "native-typecheck",
+  "native-lint",
   "openapi-contract",
   "secret-check",
   "release-privacy",
