@@ -135,9 +135,9 @@ the read-only Browser role on both projects.
 
 Google Play developer account `6994653839033844694` is a Personal account
 owned by the OpenJob owner. Its public developer name is `WLKR LABS`, its
-verified public support email is `dev@wlkrlabs.com`, and its website is
-`https://wlkrlabs.com`. The support address is not the private Google account
-used to sign in. The approved one-time US$25 Play registration fee is paid; no
+configured support email is `hello@openjob.dev`, and its website is
+`https://wlkr.si`. Verify both values in Play Console before promoting a
+release. The public support email is separate from the Google sign-in address. The approved one-time US$25 Play registration fee is paid; no
 other Play, Expo, Apple, or recurring expense is authorized. Google currently
 reports the identity, Android-device, and phone checks complete. Both store
 records exist and expose an Internal Testing track that can accept a future
