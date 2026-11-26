@@ -236,9 +236,9 @@
       }
     },
     "developerAccountId": "6994653839033844694",
-    "developerName": "WLKR LABS",
+    "developerName": "WLKR.SI",
     "supportEmail": "hello@openjob.dev",
-    "supportEmailVerified": false,
+    "supportEmailVerified": true,
     "registrationFee": {
       "amountUsd": 25,
       "cadence": "one-time",

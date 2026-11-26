@@ -4,7 +4,7 @@
 
 ## Selected direction: portable Linux services
 
-C11 selects a future rented WLKR LABS Linux host, not a particular purchased server.
+C11 selects a future rented WLKR.SI Linux host, not a particular purchased server.
 Prepare a portable Node app/service and local Docker Compose configuration with
 separate service boundaries. The installed app must carry real assets; retain a
 clearly labeled synthetic profile and a separate real-service composition that

@@ -66,7 +66,7 @@ OpenJob already exists. The owner describes it as bloated, poorly executed, and 
 
 The reviewed repository documents a shared Task List for Groups, authenticated /api/v1 contracts, a real installable openjob CLI, and an Expo iOS/Android shell. Its documented services are Cloudflare Workers and Firebase/Firestore. The CLI is currently documented for macOS and does not have offline task storage. [1]
 
-The manifest also contains existing build, API, CLI, native, verification, and release commands. AGENTS.md names Linear’s WLKR LABS / OpenJob project as the sole execution queue, superseding older GitHub-backlog instructions. [2–3]
+The manifest also contains existing build, API, CLI, native, verification, and release commands. AGENTS.md names Linear’s WLKR.SI / OpenJob project as the sole execution queue, superseding older GitHub-backlog instructions. [2–3]
 
 *This baseline comes from repository documentation and configuration, not a running-system audit. Deployment health, real usage, costs, and working behavior must be verified in the first implementation session.*
 
