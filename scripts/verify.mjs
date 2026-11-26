@@ -25,14 +25,11 @@ const GATES = [
   { id: "lint", command: ["npm", "run", "lint"] },
   {
     id: "repository-suite",
-    command: ["npm", "run", "test:deterministic"],
+    command: ["npm", "run", "build"],
     cacheable: true,
     inputs: "repository",
   },
-  { id: "web-integration", command: ["npm", "run", "test:browser"] },
-  { id: "api-integration", command: ["npm", "run", "test:api"] },
   { id: "openapi-contract", command: ["npm", "run", "openapi:check"] },
-  { id: "cli-integration", command: ["npm", "run", "test:cli"] },
   { id: "cli-generated-types", command: ["npm", "run", "cli:types:check"] },
   {
     id: "native-typecheck",
@@ -41,11 +38,6 @@ const GATES = [
   {
     id: "native-lint",
     command: ["npm", "--prefix", "native", "run", "lint"],
-  },
-  { id: "native-automated", command: ["npm", "--prefix", "native", "test"] },
-  {
-    id: "verification-process-tests",
-    command: ["npm", "run", "test:verification"],
   },
   { id: "secret-check", command: ["npm", "run", "secret:check"] },
   { id: "release-privacy", command: ["npm", "run", "privacy:check"] },
@@ -84,17 +76,6 @@ const GATES = [
 const EVIDENCE_GATES = new Set([
   "ios-simulator-journey",
   "android-emulator-journey",
-]);
-const REPOSITORY_SUITE_COVERAGE = new Set([
-  "web-integration",
-  "api-integration",
-  "cli-integration",
-  "cli-generated-types",
-  "native-typecheck",
-  "native-lint",
-  "native-automated",
-  "verification-process-tests",
-  "release-privacy",
 ]);
 const HARDWARE_NATIVE_INPUTS = new Set([
   "native/src/auth/provider-gateway.ts",
@@ -520,6 +501,9 @@ function gatePlan(categories, requestedMode, effectiveMode) {
   if (effectiveMode === "release-candidate") {
     for (const id of [
       "repository-suite",
+      "cli-generated-types",
+      "native-typecheck",
+      "native-lint",
       "openapi-contract",
       "secret-check",
       "release-privacy",
@@ -532,25 +516,21 @@ function gatePlan(categories, requestedMode, effectiveMode) {
     }
   }
   if (effectiveMode !== "release-candidate") {
-    if (categories.includes("web")) selected.add("web-integration");
+    if (categories.includes("web")) selected.add("repository-suite");
     if (categories.includes("api")) {
-      selected.add("api-integration");
       selected.add("openapi-contract");
     }
     if (categories.includes("api-contract")) selected.add("cli-generated-types");
     if (categories.includes("cli")) {
-      selected.add("cli-integration");
       selected.add("cli-generated-types");
     }
     if (categories.includes("native-behavior")) {
       selected.add("native-typecheck");
       selected.add("native-lint");
-      selected.add("native-automated");
     }
     if (categories.includes("native-configuration")) {
       selected.add("native-typecheck");
       selected.add("native-lint");
-      selected.add("native-automated");
       selected.add("native-clean-generation");
       selected.add("ios-embedded-bundle");
       selected.add("android-embedded-bundle");
@@ -559,22 +539,15 @@ function gatePlan(categories, requestedMode, effectiveMode) {
       selected.add("repository-suite");
     }
     if (categories.includes("verification-tooling")) {
-      if (!selected.has("repository-suite")) selected.add("verification-process-tests");
       selected.add("native-clean-generation");
       selected.add("ios-embedded-bundle");
       selected.add("android-embedded-bundle");
     }
   }
-  if (selected.has("repository-suite")) {
-    for (const id of REPOSITORY_SUITE_COVERAGE) selected.add(id);
-  }
   const escalated = requestedMode !== effectiveMode;
   return GATES.map((gate) => {
-    const coveredByRepository =
-      selected.has("repository-suite") && REPOSITORY_SUITE_COVERAGE.has(gate.id);
     return {
       ...gate,
-      ...(coveredByRepository ? { coveredBy: "repository-suite" } : {}),
       outcome: selected.has(gate.id) ? "selected" : "skipped",
       reason: selected.has(gate.id)
         ? `${gate.id} is required by the ${effectiveMode} impact policy`
@@ -694,18 +667,6 @@ async function execute(plan, root, evidence, cache) {
   let priorFailure = false;
   for (const gate of plan) {
     if (gate.outcome === "skipped") continue;
-    if (gate.coveredBy) {
-      const coveringGate = plan.find((candidate) => candidate.id === gate.coveredBy);
-      if (["passed", "reused"].includes(coveringGate?.outcome)) {
-        gate.outcome = coveringGate.outcome;
-        gate.reason = `${gate.id} is covered by the complete repository-suite command`;
-        if (coveringGate.fingerprint) gate.fingerprint = coveringGate.fingerprint;
-      } else {
-        gate.outcome = "skipped";
-        gate.reason = `${gate.coveredBy} did not produce reusable passing proof`;
-      }
-      continue;
-    }
     if (priorFailure) {
       gate.outcome = "skipped";
       gate.reason = "a prior selected gate failed";

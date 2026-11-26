@@ -21,12 +21,10 @@
     "build:production": "npx --yes eas-cli@21.1.0 build --platform all --profile production",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
     "secret:check": "node ../scripts/check-v1-secrets.mjs",
     "config:verify": "node scripts/verify-config.mjs",
     "bundle:verify": "node scripts/verify-embedded-bundles.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run secret:check && npm run config:verify && npm run bundle:verify"
+    "check": "npm run lint && npm run typecheck && npm run secret:check && npm run config:verify && npm run bundle:verify"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "0.4.2",

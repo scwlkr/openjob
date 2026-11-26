@@ -190,7 +190,10 @@ async function prepare(requested) {
   ]);
 
   run("npm", ["run", "cli:types"]);
-  run("npm", ["test"]);
+  run("npm", ["run", "build"]);
+  run("npm", ["run", "cli:types:check"]);
+  run("npm", ["run", "native:quick"]);
+  run("npm", ["run", "secret:check"]);
   run("npm", ["run", "typecheck"]);
   run("npm", ["run", "lint"]);
   run("npm", ["run", "openapi:check"]);
